@@ -6,6 +6,7 @@ colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: false
+license: mit
 short_description: Autonomous AI data analyst with a self-verifying Critic
 ---
 
