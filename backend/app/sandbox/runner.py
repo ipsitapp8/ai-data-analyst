@@ -209,7 +209,16 @@ def _drop_privileges_kwargs() -> dict:
     if not hasattr(os, "geteuid") or os.geteuid() != 0:
         # Not root -- we can't switch user, and asking would just raise.
         return {}
-    return {"user": user}
+
+    import pwd
+
+    try:
+        entry = pwd.getpwnam(user)
+    except KeyError:
+        return {}
+    # Set the group and clear supplementary groups too: `user=` alone only calls
+    # setuid, which would leave the child sitting in root's groups.
+    return {"user": entry.pw_uid, "group": entry.pw_gid, "extra_groups": []}
 
 
 def _chown_workspace(workspace: Path) -> None:
@@ -219,18 +228,12 @@ def _chown_workspace(workspace: Path) -> None:
     the database, uploads and application source stay owned by us.
     """
     kwargs = _drop_privileges_kwargs()
-    user = kwargs.get("user")
-    if not user:
+    if "user" not in kwargs:
         return
-    import pwd
-
-    try:
-        entry = pwd.getpwnam(user)
-    except KeyError:
-        return
+    uid, gid = kwargs["user"], kwargs["group"]
     for path in [workspace, *workspace.rglob("*")]:
         try:
-            os.chown(path, entry.pw_uid, entry.pw_gid)
+            os.chown(path, uid, gid)
         except OSError:
             pass
 
