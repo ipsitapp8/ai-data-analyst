@@ -1,6 +1,6 @@
 ---
 title: DataSage
-emoji: "⬡"
+emoji: "📊"
 colorFrom: green
 colorTo: gray
 sdk: docker
