@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+backend/data/uploads/*
+backend/data/workspaces/*
+backend/data/app.db
+!backend/data/uploads/.gitkeep
+!backend/data/workspaces/.gitkeep
+.streamlit/

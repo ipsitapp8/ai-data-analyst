@@ -1,0 +1,170 @@
+"""Dashboard-compile node: turns verified step results into KPIs, charts, and narrative."""
+from __future__ import annotations
+
+import json
+import os
+
+from app.agents import llm_client, prompts
+from app.agents.state import AgentState, update_stage
+from app.database import SessionLocal
+from app.models import Dashboard
+from app.storage.audit import record_audit_entry
+
+COMPILE_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kpis": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "value": {"type": "string"},
+                    "source_step_index": {"type": "integer"},
+                },
+                "required": ["label", "value", "source_step_index"],
+            },
+        },
+        "charts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "step_index": {"type": "integer"},
+                    "file": {"type": "string"},
+                    "title": {"type": "string"},
+                },
+                "required": ["step_index", "file", "title"],
+            },
+        },
+        "narrative": {"type": "string"},
+    },
+    "required": ["kpis", "charts", "narrative"],
+}
+
+
+def _steps_for_prompt(step_results: list[dict]) -> str:
+    lines = []
+    for r in step_results:
+        chart_files = [os.path.basename(p) for p in r.get("chart_paths", [])]
+        lines.append(
+            f"Step {r['step_index']}: {r['description']}\n"
+            f"  result: {r.get('result')}\n"
+            f"  available chart files: {chart_files}"
+        )
+    return "\n".join(lines)
+
+
+def dashboard_node(state: AgentState) -> dict:
+    question_id = state["question_id"]
+    update_stage(question_id, "dashboard", "Generating dashboard")
+
+    step_results = [r for r in state["step_results"] if r["success"]]
+    verified = state.get("critic_verdict") == "verified"
+
+    user_content = f"""Business question: {state['question_text']}
+
+Step results:
+{_steps_for_prompt(step_results)}
+
+Critic verdict: {state.get('critic_verdict')}
+Critic summary: {state.get('critic_summary')}
+Critic issues: {state.get('critic_issues')}
+"""
+
+    output = llm_client.call_tool(
+        system=prompts.DASHBOARD_SYSTEM,
+        user_content=user_content,
+        tool_name="compile_dashboard",
+        tool_schema=COMPILE_TOOL_SCHEMA,
+        tool_description="Submit the compiled dashboard.",
+    )
+
+    # Resolve chart file basenames back to full plotly JSON content + absolute path.
+    chart_by_step = {r["step_index"]: r.get("chart_paths", []) for r in step_results}
+    resolved_charts = []
+    for c in output.get("charts", []):
+        candidates = chart_by_step.get(c["step_index"], [])
+        match = next((p for p in candidates if os.path.basename(p) == c["file"]), None)
+        if not match or not os.path.exists(match):
+            continue
+        try:
+            with open(match, "r", encoding="utf-8") as f:
+                plotly_json = json.load(f)
+        except Exception:
+            continue
+        resolved_charts.append({
+            "title": c["title"],
+            "step_index": c["step_index"],
+            "plotly_json": plotly_json,
+        })
+
+    verification_summary = state.get("critic_summary") or (
+        "Not independently verified." if not verified else ""
+    )
+
+    db = SessionLocal()
+    try:
+        dash_row = Dashboard(
+            question_id=question_id,
+            kpis_json=llm_client.pretty(output.get("kpis", [])),
+            charts_json=llm_client.pretty(resolved_charts),
+            narrative=output.get("narrative", ""),
+            verified=verified,
+            verification_summary=verification_summary,
+        )
+        db.add(dash_row)
+        db.commit()
+        db.refresh(dash_row)
+
+        log_id_by_step = {r["step_index"]: r["execution_log_id"] for r in step_results}
+        critic_review_id = state.get("critic_review_id")
+
+        for kpi in output.get("kpis", []):
+            record_audit_entry(
+                db, question_id,
+                element_label=f"KPI: {kpi['label']}",
+                element_type="kpi",
+                reasoning=(
+                    f"Value '{kpi['value']}' taken from step {kpi['source_step_index']} result. "
+                    f"Critic verdict: {state.get('critic_verdict')} — {state.get('critic_summary')}"
+                ),
+                execution_log_id=log_id_by_step.get(kpi["source_step_index"]),
+                critic_review_id=critic_review_id,
+            )
+
+        for chart in resolved_charts:
+            record_audit_entry(
+                db, question_id,
+                element_label=f"Chart: {chart['title']}",
+                element_type="chart",
+                reasoning=(
+                    f"Generated by step {chart['step_index']} code. "
+                    f"Critic verdict: {state.get('critic_verdict')} — {state.get('critic_summary')}"
+                ),
+                execution_log_id=log_id_by_step.get(chart["step_index"]),
+                critic_review_id=critic_review_id,
+            )
+
+        record_audit_entry(
+            db, question_id,
+            element_label="Narrative summary",
+            element_type="narrative",
+            reasoning=f"Synthesized from all successful step results. Critic verdict: {state.get('critic_verdict')} — {state.get('critic_summary')}",
+            execution_log_id=None,
+            critic_review_id=critic_review_id,
+        )
+    finally:
+        db.close()
+
+    dashboard_dict = {
+        "kpis": output.get("kpis", []),
+        "charts": resolved_charts,
+        "narrative": output.get("narrative", ""),
+        "verified": verified,
+        "verification_summary": verification_summary,
+    }
+
+    update_stage(question_id, "done", "Dashboard ready")
+
+    return {"dashboard": dashboard_dict}
