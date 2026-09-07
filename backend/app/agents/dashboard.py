@@ -7,7 +7,7 @@ import os
 from app.agents import llm_client, prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
-from app.models import Dashboard
+from app.models import Dashboard, Question
 from app.storage.audit import record_audit_entry
 
 COMPILE_TOOL_SCHEMA = {
@@ -105,7 +105,9 @@ Critic issues: {state.get('critic_issues')}
 
     db = SessionLocal()
     try:
+        team_id = db.get(Question, question_id).team_id
         dash_row = Dashboard(
+            team_id=team_id,
             question_id=question_id,
             kpis_json=llm_client.pretty(output.get("kpis", [])),
             charts_json=llm_client.pretty(resolved_charts),
@@ -131,6 +133,7 @@ Critic issues: {state.get('critic_issues')}
                 ),
                 execution_log_id=log_id_by_step.get(kpi["source_step_index"]),
                 critic_review_id=critic_review_id,
+                team_id=team_id,
             )
 
         for chart in resolved_charts:
@@ -144,6 +147,7 @@ Critic issues: {state.get('critic_issues')}
                 ),
                 execution_log_id=log_id_by_step.get(chart["step_index"]),
                 critic_review_id=critic_review_id,
+                team_id=team_id,
             )
 
         record_audit_entry(
@@ -153,6 +157,7 @@ Critic issues: {state.get('critic_issues')}
             reasoning=f"Synthesized from all successful step results. Critic verdict: {state.get('critic_verdict')} — {state.get('critic_summary')}",
             execution_log_id=None,
             critic_review_id=critic_review_id,
+            team_id=team_id,
         )
     finally:
         db.close()

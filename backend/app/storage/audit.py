@@ -15,8 +15,10 @@ def record_audit_entry(
     reasoning: str,
     execution_log_id: int | None = None,
     critic_review_id: int | None = None,
+    team_id: int | None = None,
 ) -> AuditTrail:
     entry = AuditTrail(
+        team_id=team_id,
         question_id=question_id,
         element_label=element_label,
         element_type=element_type,
