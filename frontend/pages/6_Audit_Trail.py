@@ -58,6 +58,11 @@ try:
 except ApiError:
     reviews = []
 
+if st.button("←  All analyses", key="au_back"):
+    st.session_state.pop("active_question_id", None)
+    st.rerun()
+html("<div style='height:6px'></div>")
+
 html(f'<div class="ds-page-title">{trail["question_text"]}</div>')
 kind = {"verified": "verified", "unverified": "warn", "rejected": "warn",
         "failed": "error"}.get(status["status"], "running")

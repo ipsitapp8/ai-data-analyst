@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from api_client import ApiError, get_dataset, list_datasets, upload_dataset
-from style.theme import GREEN, html, page_header, page_setup, render_sidebar
+from style.theme import html, page_header, page_setup, render_sidebar
 
 page_setup("Datasets")
 render_sidebar("datasets")
@@ -16,7 +16,7 @@ with head_r:
     html("<div style='height:10px'></div>")
     b1, b2 = st.columns(2)
     with b1:
-        upload_open = st.button("⬆  Upload Data", key="ds_upload_btn")
+        upload_open = st.button("Upload Data", key="ds_upload_btn")
     with b2:
         st.button("＋  Connect Source", type="primary", key="ds_connect_btn",
                   help="Database / cloud sources are not part of this MVP yet.")

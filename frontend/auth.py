@@ -21,17 +21,24 @@ GATE_CSS = """
 <style>
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
 [data-testid="stExpandSidebarButton"] { display: none !important; }
-.stApp { background: #0a0908 !important; }
+.stApp { background: #161616 !important; }
 [data-testid="stAppViewContainer"] { background: transparent !important; }
-.block-container { max-width: 460px !important; padding-top: 14vh !important; }
+.block-container { max-width: 420px !important; padding-top: 16vh !important; }
 .gate-mark {
-  font-size: 30px; letter-spacing: .18em; color: #f2f0ea;
-  font-weight: 600; margin-bottom: 6px;
+  font-size: 22px; color: #e6e6e6; font-weight: 600; margin-bottom: 8px;
 }
-.gate-sub { color: #97968f; font-size: 14px; margin-bottom: 26px; line-height: 1.55; }
-.gate-card {
-  border: 1px solid rgba(255,255,255,.085); border-radius: 14px;
-  background: rgba(17,15,15,.78); padding: 26px 24px 8px 24px;
+.gate-sub {
+  color: #969696; font-size: 13px; margin-bottom: 24px; line-height: 1.6;
+}
+[data-testid="stTextInput"] input {
+  background: #101010 !important; border: 1px solid rgba(255,255,255,0.22) !important;
+  color: #e6e6e6 !important; border-radius: 4px !important;
+}
+.stFormSubmitButton > button {
+  background: #4f8fe0 !important;
+  color: #101010 !important; border: none !important;
+  border-radius: 4px !important; font-weight: 600 !important;
+  box-shadow: none !important;
 }
 </style>
 """
@@ -54,9 +61,8 @@ def require_password() -> None:
 
     st.markdown(GATE_CSS, unsafe_allow_html=True)
     st.markdown(
-        "<div class='gate-mark'>⬡ DATASAGE</div>"
-        "<div class='gate-sub'>This is a private demo deployment. "
-        "Enter the access password to continue.</div>",
+        "<div class='gate-mark'>Silt</div>"
+        "<div class='gate-sub'>Private deployment — enter the access password to continue.</div>",
         unsafe_allow_html=True,
     )
 
