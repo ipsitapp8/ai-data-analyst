@@ -27,6 +27,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Flash, not Pro: the Pro models are not available on the free tier (they return
 # 429 with "limit: 0"). Flash handles the structured tool-calling this app needs.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Bounded retry-with-backoff for the free tier's per-minute rate limit (429),
+# tried before failing over to Llama -- most 429s clear within a retry or two.
+GEMINI_RATE_LIMIT_RETRIES = int(os.getenv("GEMINI_RATE_LIMIT_RETRIES", "2"))
+GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "30"))
 
 # --- Llama (Critic only) ---
 # A second, different model family for the Critic's independent verification --
