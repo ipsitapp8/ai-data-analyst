@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import secrets
+import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -61,6 +63,22 @@ SANDBOX_ADDRESS_SPACE_LIMIT = os.getenv("SANDBOX_ADDRESS_SPACE_LIMIT", "")
 # --- Agent loop ---
 MAX_EXECUTOR_RETRIES = int(os.getenv("MAX_EXECUTOR_RETRIES", "3"))
 MAX_CRITIC_REVISIONS = int(os.getenv("MAX_CRITIC_REVISIONS", "1"))
+
+# --- Auth (per-user login, JWT sessions) ---
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+if not JWT_SECRET_KEY:
+    # Ephemeral per-process secret: fine for local dev (tokens just don't
+    # survive a restart), but every deployment should set a real one --
+    # otherwise a restart invalidates every session, and multiple workers
+    # wouldn't agree on tokens at all.
+    JWT_SECRET_KEY = secrets.token_hex(32)
+    warnings.warn(
+        "JWT_SECRET_KEY is not set -- using a random one for this process only. "
+        "Set JWT_SECRET_KEY in the environment for any real deployment.",
+        stacklevel=2,
+    )
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", str(60 * 24 * 7)))  # 7 days
 
 # --- API ---
 BACKEND_HOST = os.getenv("BACKEND_HOST", "127.0.0.1")
