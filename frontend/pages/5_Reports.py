@@ -82,7 +82,7 @@ with st.container(key="flat_reports"):
         with act:
             html("<div style='height:14px'></div>")
             st.download_button(
-                "⬇ Download",
+                "Download",
                 data=build_report(q),
                 file_name=f"report_{q['id']}.txt",
                 mime="text/plain",

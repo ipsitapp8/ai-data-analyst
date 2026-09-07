@@ -65,8 +65,14 @@ except ApiError as e:
 if status["status"] not in ("verified", "unverified"):
     page_header("Dashboards")
     st.warning(f"This analysis isn't finished yet (status: **{status['status']}**).")
-    if st.button("Watch it run  →", type="primary", key="db_watch"):
-        st.switch_page("pages/3_Analyses.py")
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("Watch it run  →", type="primary", key="db_watch"):
+            st.switch_page("pages/3_Analyses.py")
+    with c2:
+        if st.button("←  All dashboards", key="db_back_pending"):
+            st.session_state.pop("active_question_id", None)
+            st.rerun()
     st.stop()
 
 try:
@@ -74,6 +80,11 @@ try:
 except ApiError as e:
     st.error(f"Could not load dashboard: {e}")
     st.stop()
+
+if st.button("←  All dashboards", key="db_back"):
+    st.session_state.pop("active_question_id", None)
+    st.rerun()
+html("<div style='height:4px'></div>")
 
 verified = dash["verified"]
 head_l, head_r = st.columns([3, 1])

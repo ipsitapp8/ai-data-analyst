@@ -1,7 +1,8 @@
-"""DataSage design system: global CSS + shared UI components.
+"""SILT design system: global CSS + shared UI components.
 
-Near-black surfaces, sage-green primary accent, rose secondary accent.
-Every page imports from here so the app reads as one product.
+Flat, plain, and quiet on purpose: system fonts, one muted accent color, no
+gradients or glow. Every page imports from here so the app reads as one
+product.
 """
 from __future__ import annotations
 
@@ -14,50 +15,58 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
+from api_client import ApiError, health
 from auth import require_password
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 
-# Chart colorway: green first (positive/primary), rose second (negative/secondary),
-# then muted supporting tones. Matches the dashboard mockups.
-CHART_COLORWAY = ["#a9d4a4", "#ef8296", "#c9b6e8", "#e8d5a8", "#8fb8d9", "#8b8b88"]
-GREEN = "#a9d4a4"
-ROSE = "#ef8296"
+# Chart data gets real, distinct color even though the UI chrome around it
+# stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
+# do it): plain chrome, legible/vivid data encoding.
+CHART_COLORWAY = ["#4f8fe0", "#3fb87a", "#e0a83e", "#d1596b", "#9575cd", "#41b8c4"]
+ACCENT = "#4f8fe0"      # clear blue -- the one interactive/positive UI color
+ACCENT_2 = "#8a8a8a"    # plain gray -- in-progress/secondary state
 
 BASE_CSS = """
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
 <style>
 :root {
-  --bg-base: #0b0b0b;
-  --bg-page: #0f0f0f;
-  --bg-card: #151515;
-  --bg-card-hover: #1b1b1b;
+  --bg-base: #161616;
+  --bg-page: #161616;
+  --bg-card: #161616;
+  --bg-card-hover: #1c1c1c;
   --bg-inset: #101010;
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.12);
+  --border: rgba(255,255,255,0.12);
+  --border-strong: rgba(255,255,255,0.22);
 
-  --text-primary: #f2f2f0;
-  --text-secondary: #8b8b88;
-  --text-muted: #63635f;
+  --text-primary: #e6e6e6;
+  --text-secondary: #969696;
+  --text-muted: #666666;
 
-  --green: #a9d4a4;
-  --green-dim: #7fae7a;
-  --green-bg: rgba(169,212,164,0.10);
-  --green-border: rgba(169,212,164,0.28);
+  --accent: #4f8fe0;
+  --accent-dim: #3f72b3;
+  --accent-bg: rgba(79,143,224,0.12);
+  --accent-border: rgba(79,143,224,0.32);
 
-  --rose: #ef8296;
-  --rose-dim: #d06a7d;
-  --rose-bg: rgba(239,130,150,0.10);
+  --accent2: #8a8a8a;
+  --accent2-dim: #6e6e6e;
+  --accent2-bg: rgba(138,138,138,0.12);
+  --accent2-border: rgba(138,138,138,0.3);
 
-  --radius-lg: 14px;
-  --radius-md: 10px;
-  --radius-sm: 7px;
+  --warn: #b6944a;
+  --warn-bg: rgba(182,148,74,0.12);
+  --warn-border: rgba(182,148,74,0.3);
 
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+  --error: #b05a52;
+  --error-bg: rgba(176,90,82,0.12);
+  --error-border: rgba(176,90,82,0.32);
+
+  --radius-lg: 4px;
+  --radius-md: 4px;
+  --radius-sm: 3px;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: var(--font);
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
 html, body, [data-testid="stAppViewContainer"], .stApp {
@@ -68,127 +77,129 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 
 [data-testid="stHeader"] { background: transparent; height: 0; }
 #MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
+/* the sidebar's re-expand button lives inside stToolbar and would otherwise
+   inherit that visibility:hidden -- restore it explicitly, or a collapsed
+   sidebar becomes permanently stuck with no way back */
+[data-testid="stExpandSidebarButton"] { visibility: visible !important; }
+/* native form controls (radio/checkbox/slider) otherwise render in
+   Streamlit's stock red regardless of the rest of the theme */
+:root { accent-color: var(--accent); }
+[data-testid="stSliderThumbValue"], [data-baseweb="radio"] div:first-child {
+  border-color: var(--text-secondary) !important;
+}
+[role="radio"][aria-checked="true"] div:first-child,
+[data-baseweb="radio"] input:checked + div {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+}
 [data-testid="stSidebarNav"] { display: none; }
 
 .block-container {
-  padding-top: 2.4rem;
+  padding-top: 2.6rem;
   padding-bottom: 4rem;
-  max-width: 1400px;
+  max-width: 1360px;
 }
 
-h1,h2,h3,h4,h5 { font-family: var(--font); color: var(--text-primary); letter-spacing: -0.01em; }
+h1,h2,h3,h4,h5 { font-family: var(--font-serif); color: var(--text-primary); font-weight: 600; letter-spacing: -0.005em; }
 p, span, div, label, li { font-family: var(--font); }
+
+::selection { background: var(--accent-bg); color: var(--text-primary); }
 
 /* ============ SIDEBAR ============ */
 [data-testid="stSidebar"] {
   background: var(--bg-base);
   border-right: 1px solid var(--border);
-  width: 260px !important;
-}
-/* The landing page collapses the sidebar, and Streamlit persists that state
-   across page switches -- so workspace pages must force it back open.
-   (Home re-hides it with display:none, which is injected after this rule.) */
-[data-testid="stSidebar"][aria-expanded="false"] {
-  transform: none !important;
-  width: 260px !important;
-  min-width: 260px !important;
-  visibility: visible !important;
+  width: 250px !important;
 }
 [data-testid="stSidebar"] > div { padding-top: 0; }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.15rem; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.1rem; }
 
-.ds-brand {
-  display: flex; align-items: center; gap: 11px;
-  padding: 22px 6px 26px 6px;
+.silt-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 26px 20px 22px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
 }
-.ds-brand-mark {
-  width: 34px; height: 34px; border-radius: 9px;
-  background: var(--bg-card); border: 1px solid var(--border-strong);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+.silt-brand-name {
+  font-family: var(--font-serif); font-size: 1.12rem; font-weight: 600;
+  color: var(--text-primary); line-height: 1; letter-spacing: 0.01em;
 }
-.ds-brand-name { font-size: 0.97rem; font-weight: 700; color: var(--text-primary); line-height: 1.15; }
-.ds-brand-sub  { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3; }
+.silt-brand-sub { font-size: 0.68rem; color: var(--text-muted); letter-spacing: 0.06em;
+                  text-transform: uppercase; margin-top: 3px; }
 
-/* sidebar nav rows */
+/* sidebar nav rows -- plain list, no icon tiles */
+.st-key-nav { padding: 12px 10px 0 10px; }
 .st-key-nav .stButton > button {
   width: 100%;
   display: flex !important;
   justify-content: flex-start !important;
-  align-items: center;
+  align-items: baseline;
   gap: 12px;
   background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: var(--radius-md) !important;
+  border: none !important;
+  border-left: 2px solid transparent !important;
+  border-radius: 0 !important;
   color: var(--text-secondary) !important;
-  font-weight: 500 !important;
-  font-size: 0.9rem !important;
-  padding: 10px 13px !important;
-  margin: 1px 0 !important;
+  font-family: var(--font) !important;
+  font-weight: 400 !important;
+  font-size: 0.87rem !important;
+  padding: 9px 10px 9px 12px !important;
+  margin: 0 !important;
   box-shadow: none !important;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: border-color 0.1s ease, color 0.1s ease, background 0.1s ease;
 }
 .st-key-nav .stButton > button:hover {
-  background: var(--bg-card) !important;
+  background: var(--bg-card-hover) !important;
   color: var(--text-primary) !important;
+  border-left-color: var(--border-strong) !important;
 }
 .st-key-nav .stButton > button:disabled {
-  background: var(--green-bg) !important;
-  border: 1px solid var(--green-border) !important;
-  color: var(--green) !important;
+  background: var(--bg-card-hover) !important;
+  border-left: 2px solid var(--accent) !important;
+  color: var(--text-primary) !important;
   font-weight: 600 !important;
   opacity: 1 !important;
   cursor: default !important;
 }
-.st-key-nav .stButton > button [data-testid="stIconMaterial"] { font-size: 19px !important; }
 
-.ds-workspace {
-  display: flex; align-items: center; gap: 11px;
-  padding: 12px; margin-top: 14px;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+.silt-status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 20px; margin-top: 14px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);
 }
-.ds-workspace-badge {
-  width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0;
-  background: var(--green-bg); border: 1px solid var(--green-border);
-  color: var(--green); font-size: 0.7rem; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-}
-.ds-workspace-label { font-size: 0.68rem; color: var(--text-secondary); line-height: 1.2; }
-.ds-workspace-name  { font-size: 0.86rem; color: var(--text-primary); font-weight: 600; line-height: 1.3; }
+.silt-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.silt-dot-on  { background: var(--accent2); }
+.silt-dot-off { background: var(--error); }
 
 /* ============ BUTTONS ============ */
-/* Not scoped as `.stButton > button` -- a button with help= gets wrapped in an
-   extra tooltip element, which breaks the direct-child selector and leaves it
-   painted in Streamlit's stock red. */
 button[kind="primary"], .stFormSubmitButton > button {
-  background: var(--green) !important;
-  color: #0d1a0c !important;
+  background: var(--accent) !important;
+  color: #101010 !important;
   border: none !important;
   border-radius: var(--radius-md) !important;
   font-weight: 600 !important;
-  font-size: 0.88rem !important;
-  padding: 0.58em 1.25em !important;
+  font-size: 0.87rem !important;
+  padding: 0.55em 1.2em !important;
   box-shadow: none !important;
-  transition: filter 0.12s ease;
 }
 button[kind="primary"]:hover, .stFormSubmitButton > button:hover {
-  filter: brightness(1.08);
-  color: #0d1a0c !important;
+  background: var(--accent-dim) !important;
+  color: #101010 !important;
 }
 button[kind="secondary"] {
-  background: var(--bg-card) !important;
+  background: transparent !important;
   border: 1px solid var(--border-strong) !important;
   color: var(--text-primary) !important;
   border-radius: var(--radius-md) !important;
   font-weight: 500 !important;
-  font-size: 0.88rem !important;
-  padding: 0.55em 1.1em !important;
+  font-size: 0.87rem !important;
+  padding: 0.53em 1.15em !important;
   box-shadow: none !important;
 }
 button[kind="secondary"]:hover {
+  border-color: var(--accent) !important;
   background: var(--bg-card-hover) !important;
-  border-color: var(--border-strong) !important;
-  color: var(--text-primary) !important;
 }
 
 /* ============ CARDS ============ */
@@ -196,13 +207,13 @@ button[kind="secondary"]:hover {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 20px 22px;
+  padding: 18px 20px;
 }
 [class*="st-key-card"] {
   background: var(--bg-card) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
-  padding: 20px 22px !important;
+  padding: 18px 20px !important;
 }
 [class*="st-key-flat"] {
   background: var(--bg-card) !important;
@@ -212,16 +223,20 @@ button[kind="secondary"]:hover {
   overflow: hidden;
 }
 
-.ds-page-title { font-size: 1.7rem; font-weight: 700; margin: 0 0 4px 0; letter-spacing: -0.02em; }
-.ds-page-sub   { color: var(--text-secondary); font-size: 0.93rem; margin-bottom: 26px; }
-.ds-section-title { font-size: 1.02rem; font-weight: 600; margin: 0; }
+.ds-page-title { font-family: var(--font-serif); font-size: 1.5rem; font-weight: 600;
+                 margin: 0 0 4px 0; }
+.ds-page-sub   { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 22px; }
+.ds-section-title { font-family: var(--font-serif); font-size: 0.98rem; font-weight: 600; margin: 0; }
 
 /* stat cards */
-.ds-stat-label { color: var(--text-secondary); font-size: 0.83rem; margin-bottom: 9px; }
-.ds-stat-value { font-size: 2.05rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1; }
-.ds-stat-delta { font-size: 0.79rem; margin-top: 10px; display: flex; align-items: center; gap: 4px; }
-.ds-up   { color: var(--green); }
-.ds-down { color: var(--rose); }
+.ds-stat-label { font-family: var(--font-mono); color: var(--text-secondary);
+                 font-size: 0.74rem; letter-spacing: 0.02em; margin-bottom: 10px; }
+.ds-stat-value { font-family: var(--font-serif); font-size: 1.85rem; font-weight: 600;
+                 line-height: 1; }
+.ds-stat-delta { font-family: var(--font-mono); font-size: 0.78rem; margin-top: 11px;
+                 display: flex; align-items: center; gap: 4px; }
+.ds-up   { color: var(--accent2); }
+.ds-down { color: var(--error); }
 
 /* list rows */
 .ds-row {
@@ -230,36 +245,38 @@ button[kind="secondary"]:hover {
 }
 .ds-row:hover { background: var(--bg-card-hover); }
 .ds-row-icon {
-  width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: var(--radius-sm); flex-shrink: 0;
   background: var(--bg-inset); border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-secondary);
 }
-.ds-row-title { font-size: 0.93rem; font-weight: 600; color: var(--text-primary); line-height: 1.35; }
-.ds-row-meta  { font-size: 0.79rem; color: var(--text-secondary); line-height: 1.35; }
+.ds-row-title { font-size: 0.93rem; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
+.ds-row-meta  { font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; }
 .ds-row-spacer { flex: 1; }
 
 .ds-card-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* badges */
+/* badges -- flat tags, not pills */
 .ds-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 11px; border-radius: 999px;
-  font-size: 0.77rem; font-weight: 600; white-space: nowrap;
+  padding: 3px 8px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500;
+  white-space: nowrap;
 }
-.ds-badge-verified { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
-.ds-badge-warn     { background: rgba(232,213,168,0.10); color: #e8d5a8; border: 1px solid rgba(232,213,168,0.28); }
-.ds-badge-error    { background: var(--rose-bg); color: var(--rose); border: 1px solid rgba(239,130,150,0.28); }
+.ds-badge-verified { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
+.ds-badge-warn     { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+.ds-badge-error    { background: var(--error-bg); color: var(--error); border: 1px solid var(--error-border); }
 .ds-badge-neutral  { background: var(--bg-inset); color: var(--text-secondary); border: 1px solid var(--border); }
-.ds-badge-running  { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.ds-badge-running  { background: var(--accent2-bg); color: var(--accent2); border: 1px solid var(--accent2-border); }
 .ds-badge-running::before {
-  content:''; width:7px; height:7px; border-radius:50%; background: var(--green);
-  animation: dspulse 1.4s infinite ease-in-out;
+  content:''; width:6px; height:6px; border-radius:50%; background: var(--accent2);
+  animation: siltpulse 1.4s infinite ease-in-out;
 }
-@keyframes dspulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+@keyframes siltpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 
 /* ============ INPUTS ============ */
 [data-testid="stTextInputRootElement"],
@@ -273,6 +290,11 @@ button[kind="secondary"]:hover {
   border-radius: var(--radius-md) !important;
   color: var(--text-primary) !important;
   box-shadow: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: none !important;
 }
 .stTextInput input::placeholder, .stTextArea textarea::placeholder { color: var(--text-muted) !important; }
 [data-testid="stFileUploaderDropzone"] { border-style: dashed !important; }
@@ -283,10 +305,10 @@ button[kind="secondary"]:hover {
 }
 [data-testid="stTabs"] [data-baseweb="tab"] {
   background: transparent; color: var(--text-secondary);
-  font-size: 0.9rem; font-weight: 500; padding: 10px 14px;
+  font-family: var(--font-mono); font-size: 0.85rem; font-weight: 500; padding: 10px 14px;
 }
 [data-testid="stTabs"] [aria-selected="true"] { color: var(--text-primary) !important; }
-[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: var(--green) !important; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: var(--accent) !important; height: 2px !important; }
 
 /* alerts */
 [data-testid="stAlert"], [data-testid="stAlertContainer"] {
@@ -308,11 +330,11 @@ button[kind="secondary"]:hover {
   border: 1px solid var(--border) !important;
 }
 
-/* tables (st.table -- real HTML, unlike canvas-based st.dataframe) */
+/* tables */
 [data-testid="stTable"] table { background: transparent !important; border-collapse: collapse; width: 100%; }
 [data-testid="stTable"] th {
   background: transparent !important; color: var(--text-secondary) !important;
-  font-size: 0.79rem; font-weight: 500; text-transform: none;
+  font-family: var(--font) !important; font-size: 0.78rem; font-weight: 500;
   border-bottom: 1px solid var(--border) !important; padding: 12px 16px !important; text-align: left;
 }
 [data-testid="stTable"] td {
@@ -334,36 +356,34 @@ hr { border-color: var(--border) !important; }
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 18px 20px;
 }
-[data-testid="stMetricLabel"] { color: var(--text-secondary) !important; }
-[data-testid="stMetricValue"] { color: var(--text-primary) !important; }
+[data-testid="stMetricLabel"] { color: var(--text-secondary) !important; font-family: var(--font-mono) !important; }
+[data-testid="stMetricValue"] { color: var(--text-primary) !important; font-family: var(--font-serif) !important; }
 
-/* quality bar (datasets table) */
+/* quality bar */
 .ds-quality { display: flex; align-items: center; gap: 10px; }
-/* inline-block/block are required: these are <span>s, and width/height have no
-   effect on inline boxes, so the fill would collapse to nothing */
 .ds-quality-track {
-  display: inline-block; width: 92px; height: 5px; border-radius: 99px;
+  display: inline-block; width: 92px; height: 3px; border-radius: 0;
   background: var(--bg-inset); overflow: hidden;
 }
-.ds-quality-fill { display: block; height: 100%; border-radius: 99px; background: var(--green); }
+.ds-quality-fill { display: block; height: 100%; background: var(--accent); }
 
 /* progress bar */
-.ds-progress-track { width: 100%; height: 6px; border-radius: 99px; background: var(--bg-inset); overflow: hidden; }
-.ds-progress-fill  { height: 100%; border-radius: 99px; background: var(--green); transition: width .3s ease; }
+.ds-progress-track { width: 100%; height: 3px; border-radius: 0; background: var(--bg-inset); overflow: hidden; }
+.ds-progress-fill  { height: 100%; transition: width .3s ease; background: var(--accent); }
 
 /* step list */
-.ds-step { display: flex; gap: 13px; padding: 13px 16px; border-radius: var(--radius-md); align-items: flex-start; }
-.ds-step-active { background: var(--rose-bg); border: 1px solid rgba(239,130,150,0.25); }
+.ds-step { display: flex; gap: 13px; padding: 13px 16px; border-radius: var(--radius-sm); align-items: flex-start; }
+.ds-step-active { background: var(--accent2-bg); border: 1px solid var(--accent2-border); }
 .ds-step-num {
-  width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.75rem; font-weight: 600;
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
   background: var(--bg-inset); border: 1px solid var(--border); color: var(--text-secondary);
 }
-.ds-step-done   { background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
-.ds-step-run    { background: var(--rose-bg); border-color: rgba(239,130,150,0.3); color: var(--rose); }
-.ds-step-title  { font-size: 0.89rem; font-weight: 600; color: var(--text-primary); line-height: 1.35; }
-.ds-step-status { font-size: 0.77rem; color: var(--text-secondary); line-height: 1.35; }
+.ds-step-done   { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+.ds-step-run    { background: var(--accent2-bg); border-color: var(--accent2-border); color: var(--accent2); }
+.ds-step-title  { font-size: 0.89rem; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
+.ds-step-status { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-secondary); line-height: 1.4; }
 
 /* verification checklist */
 .ds-check { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); }
@@ -393,8 +413,8 @@ def inject_base_css() -> None:
 
 def page_setup(title: str, sidebar: bool = True) -> None:
     st.set_page_config(
-        page_title=f"{title} · DataSage",
-        page_icon="⬡",
+        page_title=f"{title} · SILT",
+        page_icon="▤",
         layout="wide",
         initial_sidebar_state="expanded" if sidebar else "collapsed",
     )
@@ -418,52 +438,52 @@ def asset_data_uri(filename: str, mime: str = "image/jpeg") -> str:
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
-HEX_LOGO = """
-<svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-  <path d="M12 2.5 20.5 7.2v9.6L12 21.5 3.5 16.8V7.2z" stroke="#a9d4a4" stroke-width="1.7"
-        stroke-linejoin="round"/>
-</svg>
-"""
-
 NAV_PAGES = [
-    ("overview", "Overview", "home", "pages/1_Overview.py"),
-    ("datasets", "Datasets", "database", "pages/2_Datasets.py"),
-    ("analyses", "Analyses", "monitoring", "pages/3_Analyses.py"),
-    ("dashboards", "Dashboards", "dashboard", "pages/4_Dashboards.py"),
-    ("reports", "Reports", "description", "pages/5_Reports.py"),
-    ("audit", "Audit Trail", "receipt_long", "pages/6_Audit_Trail.py"),
-    ("settings", "Settings", "settings", "pages/7_Settings.py"),
+    ("home", "Home", "Home.py"),
+    ("overview", "Overview", "pages/1_Overview.py"),
+    ("datasets", "Datasets", "pages/2_Datasets.py"),
+    ("analyses", "Analyses", "pages/3_Analyses.py"),
+    ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
+    ("reports", "Reports", "pages/5_Reports.py"),
+    ("audit", "Audit trail", "pages/6_Audit_Trail.py"),
+    ("settings", "Settings", "pages/7_Settings.py"),
 ]
 
 
+@st.cache_data(ttl=5)
+def _backend_alive() -> bool:
+    try:
+        health()
+        return True
+    except ApiError:
+        return False
+    except Exception:  # noqa: BLE001 - sidebar status must never crash the page
+        return False
+
+
 def render_sidebar(current: str) -> None:
-    """Brand mark, nav rows, and the workspace switcher pinned at the bottom."""
+    """Brand mark, numbered nav rail, and a quiet live system-status line."""
     with st.sidebar:
         html(
-            f"""
-            <div class="ds-brand">
-              <div class="ds-brand-mark">{HEX_LOGO}</div>
-              <div>
-                <div class="ds-brand-name">DataSage</div>
-                <div class="ds-brand-sub">AI Data Analyst</div>
-              </div>
+            """
+            <div class="silt-brand">
+              <div class="silt-brand-name">Silt</div>
+              <div class="silt-brand-sub">Data Analyst</div>
             </div>
             """
         )
         with st.container(key="nav"):
-            for key, label, icon, target in NAV_PAGES:
-                if st.button(label, key=f"nav_{key}", icon=f":material/{icon}:",
-                             disabled=(key == current)):
+            for i, (key, label, target) in enumerate(NAV_PAGES, start=1):
+                if st.button(f"{i:02d}  {label}", key=f"nav_{key}", disabled=(key == current)):
                     st.switch_page(target)
 
+        alive = _backend_alive()
+        dot_cls = "silt-dot-on" if alive else "silt-dot-off"
+        status = "backend online" if alive else "backend unreachable"
         html(
-            """
-            <div class="ds-workspace">
-              <div class="ds-workspace-badge">GT</div>
-              <div>
-                <div class="ds-workspace-label">Workspace</div>
-                <div class="ds-workspace-name">Growth Team</div>
-              </div>
+            f"""
+            <div class="silt-status">
+              <span class="silt-dot {dot_cls}"></span>{status}
             </div>
             """
         )
@@ -476,7 +496,7 @@ def page_header(title: str, subtitle: str = "") -> None:
 
 def badge(text: str, kind: str = "neutral") -> str:
     check = (
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none">'
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none">'
         '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>'
         '<path d="M8.5 12.2l2.4 2.4 4.6-4.9" stroke="currentColor" stroke-width="2" '
         'stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -515,26 +535,26 @@ def figure_from_json(payload: dict) -> go.Figure:
 
 
 def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False) -> go.Figure:
-    """Force any figure -- including sandbox-generated ones -- into the DataSage look."""
+    """Force any figure -- including sandbox-generated ones -- into the SILT look."""
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#8b8b88", family="Inter, sans-serif", size=12),
+        font=dict(color="#969696", family="system-ui, sans-serif", size=12),
         colorway=CHART_COLORWAY,
         margin=dict(l=8, r=8, t=8, b=8),
         height=height,
         showlegend=showlegend,
-        legend=dict(font=dict(color="#8b8b88"), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#1b1b1b", bordercolor="rgba(255,255,255,0.12)",
-                        font=dict(color="#f2f2f0", family="Inter")),
+        legend=dict(font=dict(color="#969696"), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#1c1c1c", bordercolor="rgba(255,255,255,0.22)",
+                        font=dict(color="#e6e6e6", family="system-ui, sans-serif")),
         # empty string, not None -- None leaves the title node in place and
         # Plotly renders a literal "undefined" tspan above the plot
         title=dict(text=""),
     )
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.08)",
-                     color="#63635f", showline=False, ticks="")
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.08)",
-                     color="#63635f", showline=False, ticks="")
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.12)",
+                     color="#666666", showline=False, ticks="")
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.12)",
+                     color="#666666", showline=False, ticks="")
     _recolor_traces(fig)
     return fig
 
@@ -545,7 +565,7 @@ def _recolor_traces(fig: go.Figure) -> None:
     `colorway` only supplies colors Plotly would otherwise auto-assign. Plotly
     Express bakes explicit per-trace colors whenever the sandbox code groups by
     a column, which would otherwise leave stock blue/red charts sitting inside
-    the DataSage palette. Array-valued colors (continuous scales) are left
+    the SILT palette. Array-valued colors (continuous scales) are left
     alone -- overwriting those would destroy the encoding.
     """
     for i, trace in enumerate(fig.data):

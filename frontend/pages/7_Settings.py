@@ -37,8 +37,7 @@ sandbox_val = f"Docker · {'image ready' if img_ready else 'image not built'}" \
 with st.container(key="flat_ws"):
     html('<div class="ds-card-head"><div class="ds-section-title">Workspace</div></div>')
     html(
-        row("Workspace name", "Growth Team")
-        + row("Default compute", sandbox_val)
+        row("Default compute", sandbox_val)
         + row("Agent autonomy", "Plan, execute &amp; verify")
         + row("Verification threshold", "Critic must pass")
         + row("Data retention", "Local SQLite (no expiry)", last=True)

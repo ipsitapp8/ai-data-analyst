@@ -14,7 +14,7 @@ from api_client import (
     list_datasets,
     list_questions,
 )
-from style.theme import GREEN, ROSE, badge, html, page_header, page_setup, plot, render_sidebar
+from style.theme import ACCENT, ACCENT_2, badge, html, page_header, page_setup, plot, render_sidebar
 
 page_setup("Analyses")
 render_sidebar("analyses")
@@ -106,6 +106,11 @@ except ApiError as e:
     st.stop()
 
 running = status["status"] not in ("verified", "unverified", "failed", "rejected")
+
+if st.button("←  All analyses", key="an_back"):
+    st.session_state.pop("active_question_id", None)
+    st.rerun()
+html("<div style='height:6px'></div>")
 
 top_l, top_r = st.columns([3, 1])
 with top_l:
@@ -199,7 +204,7 @@ with col_exec:
         html(
             '<div style="display:flex;align-items:center;justify-content:space-between;">'
             '<div class="ds-section-title">Code Execution</div>'
-            '<span class="ds-badge ds-badge-neutral">⬡ Sandbox</span></div>'
+            '<span class="ds-badge ds-badge-neutral">▤ Sandbox</span></div>'
         )
         html("<div style='height:12px'></div>")
 
@@ -246,7 +251,7 @@ with col_prog:
         html('<div class="ds-section-title">Execution Progress</div>')
         html("<div style='height:6px'></div>")
 
-        ring = ROSE if running else GREEN
+        ring = ACCENT_2 if running else ACCENT
         fig = go.Figure(
             go.Pie(
                 values=[overall, max(100 - overall, 0)], hole=0.72, sort=False,
@@ -256,9 +261,9 @@ with col_prog:
             )
         )
         fig.add_annotation(text=f"<b>{overall}%</b>", x=0.5, y=0.55, showarrow=False,
-                           font=dict(size=25, color="#f2f2f0", family="Inter"))
+                           font=dict(size=25, color="#e6e6e6", family="system-ui, sans-serif"))
         fig.add_annotation(text="Overall Progress", x=0.5, y=0.38, showarrow=False,
-                           font=dict(size=11, color="#8b8b88", family="Inter"))
+                           font=dict(size=11, color="#969696", family="system-ui, sans-serif"))
         plot(fig, height=200)
 
         html(

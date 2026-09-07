@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
-from style.theme import GREEN, ROSE, badge, html, page_setup, plot, render_sidebar, stat_card
+from style.theme import ACCENT, badge, html, page_setup, plot, render_sidebar, stat_card
 
 page_setup("Overview")
 render_sidebar("overview")
@@ -32,7 +32,7 @@ verified = [q for q in questions if q["status"] == "verified"]
 head_l, head_r = st.columns([3, 1])
 with head_l:
     html(
-        f'<div class="ds-page-title">{_greeting()}, Ipsita 🌿</div>'
+        f'<div class="ds-page-title">{_greeting()}, Ipsita</div>'
         '<div class="ds-page-sub">Here\'s what\'s happening in your workspace.</div>'
     )
 with head_r:
@@ -105,9 +105,9 @@ with right:
         fig = go.Figure(
             go.Scatter(
                 x=days, y=counts, mode="lines+markers",
-                line=dict(color=ROSE, width=2.4, shape="spline"),
-                marker=dict(color=ROSE, size=7),
-                fill="tozeroy", fillcolor="rgba(239,130,150,0.10)",
+                line=dict(color=ACCENT, width=2.4, shape="spline"),
+                marker=dict(color=ACCENT, size=7),
+                fill="tozeroy", fillcolor="rgba(79,143,224,0.14)",
                 hovertemplate="%{x}: %{y} analyses<extra></extra>",
             )
         )
@@ -126,7 +126,7 @@ with st.container(key="flat_dash"):
         cols = st.columns(min(3, len(verified)), gap="medium")
         bars = ('<svg width="30" height="26" viewBox="0 0 34 26" fill="none">'
                 + "".join(
-                    f'<rect x="{2+i*5}" y="{26-h}" width="3.4" height="{h}" rx="1.2" fill="{GREEN}" '
+                    f'<rect x="{2+i*5}" y="{26-h}" width="3.4" height="{h}" rx="1.2" fill="{ACCENT}" '
                     f'opacity="{0.45 + i*0.09}"/>'
                     for i, h in enumerate([9, 15, 11, 19, 13, 22])
                 )
