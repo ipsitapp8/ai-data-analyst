@@ -8,7 +8,7 @@ import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
 from auth import current_user
-from style.theme import ACCENT, badge, html, page_setup, plot, render_sidebar, stat_card
+from style.theme import ACCENT, badge, esc, html, page_setup, plot, render_sidebar, stat_card
 
 page_setup("Overview")
 render_sidebar("overview")
@@ -36,7 +36,7 @@ first_name = (user["display_name"].split() or [user["display_name"]])[0] if user
 head_l, head_r = st.columns([3, 1])
 with head_l:
     html(
-        f'<div class="ds-page-title">{_greeting()}{", " + first_name if first_name else ""}</div>'
+        f'<div class="ds-page-title">{_greeting()}{", " + esc(first_name) if first_name else ""}</div>'
         '<div class="ds-page-sub">Here\'s what\'s happening in your workspace.</div>'
     )
 with head_r:
@@ -84,8 +84,8 @@ with left:
                 <div class="ds-row">
                   <div class="ds-row-icon">{icon}</div>
                   <div>
-                    <div class="ds-row-title">{q["text"][:58]}</div>
-                    <div class="ds-row-meta">{state} • {q["age"]}</div>
+                    <div class="ds-row-title">{esc(q["text"][:58])}</div>
+                    <div class="ds-row-meta">{esc(state)} • {esc(q["age"])}</div>
                   </div>
                   <div class="ds-row-spacer"></div>
                   {badge(label, kind)}
@@ -142,8 +142,8 @@ with st.container(key="flat_dash"):
                     <div class="ds-card" style="display:flex;align-items:center;gap:14px;">
                       {bars}
                       <div>
-                        <div class="ds-row-title">{q["text"][:30]}</div>
-                        <div class="ds-row-meta">Updated {q["age"]}</div>
+                        <div class="ds-row-title">{esc(q["text"][:30])}</div>
+                        <div class="ds-row-meta">Updated {esc(q["age"])}</div>
                       </div>
                     </div>
                     """

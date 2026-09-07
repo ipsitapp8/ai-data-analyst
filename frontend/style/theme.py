@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import html as _html_stdlib
 import json
 import time
 from pathlib import Path
@@ -437,6 +438,20 @@ hr { border-color: var(--border) !important; }
 """
 
 
+def esc(value) -> str:
+    """Escape a value for safe interpolation into an html()/f-string call.
+
+    Every page builds markup as an f-string and renders it via html(), which
+    goes to st.markdown(unsafe_allow_html=True) with no sanitization of its
+    own. Any user-controlled text embedded unescaped -- a question's text, a
+    dataset filename, a community/team/display name, a chart title -- is a
+    stored XSS: it runs as script in the browser of every other team member
+    who later views that page. Wrap any such value in esc() before it goes
+    into an f-string destined for html().
+    """
+    return _html_stdlib.escape(str(value), quote=True)
+
+
 def html(markup: str) -> None:
     """Render raw HTML.
 
@@ -444,6 +459,9 @@ def html(markup: str) -> None:
     spaces becomes a <pre> code block and the markup shows up as literal text.
     Stripping per-line leading whitespace lets us keep readable indentation in
     the source without it leaking into the page.
+
+    This does NOT escape its input -- markup is meant to contain real tags.
+    Escape untrusted values individually with esc() before interpolating them.
     """
     # join with a space, not "": HTML collapses inter-tag whitespace, but
     # concatenating bare would fuse words split across source lines.
@@ -639,7 +657,7 @@ def render_sidebar(current: str) -> None:
         if user:
             u_l, u_r = st.columns([3, 1])
             with u_l:
-                html(f'<div class="silt-status" style="border-top:none;">{user["display_name"]}</div>')
+                html(f'<div class="silt-status" style="border-top:none;">{esc(user["display_name"])}</div>')
             with u_r:
                 if st.button("⏻", key="nav_logout", help="Log out"):
                     logout()
@@ -647,8 +665,8 @@ def render_sidebar(current: str) -> None:
 
 
 def page_header(title: str, subtitle: str = "") -> None:
-    sub = f'<div class="ds-page-sub">{subtitle}</div>' if subtitle else ""
-    html(f'<div class="ds-page-title">{title}</div>{sub}')
+    sub = f'<div class="ds-page-sub">{esc(subtitle)}</div>' if subtitle else ""
+    html(f'<div class="ds-page-title">{esc(title)}</div>{sub}')
 
 
 def badge(text: str, kind: str = "neutral") -> str:
@@ -659,17 +677,17 @@ def badge(text: str, kind: str = "neutral") -> str:
         'stroke-linecap="round" stroke-linejoin="round"/></svg>'
         if kind == "verified" else ""
     )
-    return f'<span class="ds-badge ds-badge-{kind}">{check}{text}</span>'
+    return f'<span class="ds-badge ds-badge-{kind}">{check}{esc(text)}</span>'
 
 
 def stat_card(label: str, value: str, delta: str = "", direction: str = "up") -> str:
     arrow = "↑" if direction == "up" else "↓"
     cls = "ds-up" if direction == "up" else "ds-down"
-    d = f'<div class="ds-stat-delta {cls}">{arrow} {delta}</div>' if delta else ""
+    d = f'<div class="ds-stat-delta {cls}">{arrow} {esc(delta)}</div>' if delta else ""
     return f"""
     <div class="ds-card">
-      <div class="ds-stat-label">{label}</div>
-      <div class="ds-stat-value">{value}</div>
+      <div class="ds-stat-label">{esc(label)}</div>
+      <div class="ds-stat-value">{esc(value)}</div>
       {d}
     </div>
     """
@@ -812,7 +830,7 @@ def _inspect_dialog() -> None:
 
     html('<div class="ds-section-title" style="margin-top:18px;">Formula</div>')
     html(f'<div style="font-size:0.9rem;color:var(--text-primary);margin-top:6px;line-height:1.6;">'
-         f'{data.get("formula_explanation", "")}</div>')
+         f'{esc(data.get("formula_explanation", ""))}</div>')
 
     html('<div class="ds-section-title" style="margin-top:18px;">Data Used</div>')
     data_slice = data.get("data_slice") or {}

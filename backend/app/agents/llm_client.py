@@ -7,6 +7,7 @@ and doesn't know or care which LLM provider is behind them.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from typing import Any
@@ -16,6 +17,8 @@ from google.genai import errors, types
 
 from app import config
 from app.agents import llm_client_llama
+
+logger = logging.getLogger(__name__)
 
 # Fallback backoff schedule when Gemini's 429 response doesn't carry a
 # RetryInfo delay (it usually does, but don't depend on that). Indexed by
@@ -143,18 +146,18 @@ def call_tool(
                 if e.code == 429 and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
                     wait_s = _retry_delay_seconds(e, attempt)
                     attempt += 1
-                    print(
-                        f"[llm] Gemini rate-limited (429); retrying in {wait_s:.0f}s "
-                        f"(attempt {attempt}/{config.GEMINI_RATE_LIMIT_RETRIES})."
+                    logger.warning(
+                        "Gemini rate-limited (429); retrying in %.0fs (attempt %d/%d)",
+                        wait_s, attempt, config.GEMINI_RATE_LIMIT_RETRIES,
                     )
                     time.sleep(wait_s)
                     continue
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
-                print(f"[llm] Gemini failed ({type(e).__name__}); failing over to Llama.")
+                logger.warning("Gemini failed (%s); failing over to Llama.", type(e).__name__)
                 break
             except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
-                print(f"[llm] Gemini failed ({type(e).__name__}); failing over to Llama.")
+                logger.warning("Gemini failed (%s); failing over to Llama.", type(e).__name__)
                 break
     else:
         failures.append("gemini: no GEMINI_API_KEY set")
@@ -163,7 +166,7 @@ def call_tool(
         try:
             out = llm_client_llama.call_tool(**kwargs)
             LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
-            print(f"[llm] Served by Llama ({config.LLAMA_MODEL}).")
+            logger.info("Served by Llama (%s).", config.LLAMA_MODEL)
             return out
         except Exception as e:  # noqa: BLE001 - report both failures together below
             failures.append(f"llama({config.LLAMA_MODEL}): {e}")

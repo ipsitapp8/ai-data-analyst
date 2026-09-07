@@ -10,7 +10,7 @@ from api_client import (
     get_status,
     list_questions,
 )
-from style.theme import badge, html, page_header, page_setup, render_sidebar
+from style.theme import badge, esc, html, page_header, page_setup, render_sidebar
 
 page_setup("Audit Trail")
 render_sidebar("audit")
@@ -37,8 +37,8 @@ if not qid:
             with c1:
                 html(
                     f'<div class="ds-row" style="border-top:none;">'
-                    f'<div><div class="ds-row-title">{q["text"][:70]}</div>'
-                    f'<div class="ds-row-meta">{q["status"]} • {q["age"]}</div></div></div>'
+                    f'<div><div class="ds-row-title">{esc(q["text"][:70])}</div>'
+                    f'<div class="ds-row-meta">{esc(q["status"])} • {esc(q["age"])}</div></div></div>'
                 )
             with c2:
                 if st.button("Open", key=f"au_open_{q['id']}"):
@@ -63,7 +63,7 @@ if st.button("←  All analyses", key="au_back"):
     st.rerun()
 html("<div style='height:6px'></div>")
 
-html(f'<div class="ds-page-title">{trail["question_text"]}</div>')
+html(f'<div class="ds-page-title">{esc(trail["question_text"])}</div>')
 kind = {"verified": "verified", "unverified": "warn", "rejected": "warn",
         "failed": "error"}.get(status["status"], "running")
 label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable",
@@ -91,8 +91,8 @@ with tab_overview:
             for i, step in enumerate(plan, start=1):
                 html(
                     f'<div class="ds-step"><div class="ds-step-num ds-step-done">{i}</div>'
-                    f'<div><div class="ds-step-title">{step["description"]}</div>'
-                    f'<div class="ds-step-status">{step.get("goal","")[:90]}</div></div></div>'
+                    f'<div><div class="ds-step-title">{esc(step["description"])}</div>'
+                    f'<div class="ds-step-status">{esc(step.get("goal","")[:90])}</div></div></div>'
                 )
     with right:
         with st.container(key="card_elems"):
@@ -105,7 +105,7 @@ with tab_overview:
                 icon = {"kpi": "◆", "chart": "▤", "narrative": "¶"}.get(e["element_type"], "•")
                 html(
                     f'<div class="ds-check"><span class="ds-check-label">'
-                    f'{icon}&nbsp;&nbsp;{e["element_label"]}</span>'
+                    f'{icon}&nbsp;&nbsp;{esc(e["element_label"])}</span>'
                     f'<span class="ds-row-meta">{e["element_type"]}</span></div>'
                 )
 
@@ -156,7 +156,7 @@ with tab_code:
                         f'padding:14px 16px;">'
                         f'{badge("Critic Agent Review", "verified" if ok else "warn")}'
                         f'<div class="ds-row-meta" style="margin-top:9px;line-height:1.6;">'
-                        f'{(sel.get("critic_summary") or "")[:300]}</div></div>'
+                        f'{esc((sel.get("critic_summary") or "")[:300])}</div></div>'
                     )
                     html("<div style='height:12px'></div>")
                     ok_bg, ok_border, ok_color = (
@@ -188,10 +188,10 @@ with tab_lineage:
             )
             html(
                 f'<div class="ds-row" style="border-top:1px solid var(--border);">'
-                f'<div><div class="ds-row-title">{e["element_label"]}</div>'
-                f'<div class="ds-row-meta">{src}</div></div>'
+                f'<div><div class="ds-row-title">{esc(e["element_label"])}</div>'
+                f'<div class="ds-row-meta">{esc(src)}</div></div>'
                 f'<div class="ds-row-spacer"></div>'
-                f'<span class="ds-row-meta">{e["element_type"]}</span></div>'
+                f'<span class="ds-row-meta">{esc(e["element_type"])}</span></div>'
             )
 
 # ---------------------------------------------------------- Verifications --
@@ -207,24 +207,24 @@ with tab_verif:
                 f'{badge(r["verdict"].title(), "verified" if ok else "warn")}'
                 f'<span class="ds-row-meta">confidence {r["confidence"]:.2f}</span></div>'
                 f'<div style="margin-top:11px;line-height:1.7;font-size:0.92rem;">'
-                f'{r["summary"]}</div>'
+                f'{esc(r["summary"])}</div>'
             )
             if r.get("issues"):
                 html('<div class="ds-section-title" style="margin-top:14px;">'
                             "Issues flagged</div>")
                 for issue in r["issues"]:
-                    html(f'<div class="ds-row-meta">• {issue}</div>')
+                    html(f'<div class="ds-row-meta">• {esc(issue)}</div>')
             for chk in r.get("checks", []):
                 html('<div class="ds-section-title" style="margin-top:14px;">'
                             "Independent re-check</div>")
                 html(
                     f'<div class="ds-row-meta" style="margin-bottom:8px;">'
-                    f'{chk.get("what_it_checks","")} '
+                    f'{esc(chk.get("what_it_checks",""))} '
                     f'<span style="opacity:.7;">· model: '
-                    f'{chk.get("verifier_model","n/a")}</span></div>'
+                    f'{esc(chk.get("verifier_model","n/a"))}</span></div>'
                 )
                 with st.expander("Verification code & recomputed values"):
                     st.code(chk.get("code", ""), language="python")
                     html(f'<div class="ds-row-meta">Recomputed: '
-                                f'{chk.get("result")}</div>')
+                                f'{esc(chk.get("result"))}</div>')
         html("<div style='height:12px'></div>")

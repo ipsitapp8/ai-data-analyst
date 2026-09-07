@@ -6,6 +6,7 @@ import streamlit as st
 from api_client import ApiError, get_dashboard, get_status, list_questions
 from style.theme import (
     badge,
+    esc,
     figure_from_json,
     html,
     open_inspect,
@@ -47,7 +48,7 @@ if not qid:
                 label = "Verified" if q["status"] == "verified" else "Needs review"
                 html(
                     f'<div class="ds-row" style="border-top:none;">'
-                    f'<div><div class="ds-row-title">{q["text"][:70]}</div>'
+                    f'<div><div class="ds-row-title">{esc(q["text"][:70])}</div>'
                     f'<div class="ds-row-meta">Updated {q["age"]}</div></div>'
                     f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
                 )
@@ -92,7 +93,7 @@ verified = dash["verified"]
 head_l, head_r = st.columns([3, 1])
 with head_l:
     html(
-        f'<div class="ds-page-title">{status.get("question_text", "Analysis")}</div>'
+        f'<div class="ds-page-title">{esc(status.get("question_text", "Analysis"))}</div>'
     )
     html(
         f'<div style="display:flex;align-items:center;gap:11px;margin-bottom:24px;">'
@@ -131,7 +132,7 @@ if charts:
                 element_id = chart.get("element_id")
                 container_key = f"chartcard_{element_id}" if element_id else f"card_ch{i}_{chart['step_index']}"
                 with st.container(key=container_key):
-                    html(f'<div class="ds-section-title">{chart["title"]}</div>')
+                    html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
                     html("<div style='height:8px'></div>")
                     try:
                         fig = figure_from_json(chart["plotly_json"])
@@ -151,7 +152,7 @@ if dash.get("narrative"):
         html('<div class="ds-section-title">Narrative Summary</div>')
         html(
             f'<div style="font-size:0.97rem;line-height:1.75;color:var(--text-primary);'
-            f'margin-top:10px;">{dash["narrative"]}</div>'
+            f'margin-top:10px;">{esc(dash["narrative"])}</div>'
         )
 
 if dash.get("verification_summary"):
@@ -162,5 +163,5 @@ if dash.get("verification_summary"):
             f'{badge("Verified" if verified else "Needs review", "verified" if verified else "warn")}'
             f'<div class="ds-section-title">Verification</div></div>'
             f'<div class="ds-row-meta" style="margin-top:10px;line-height:1.7;">'
-            f'{dash["verification_summary"]}</div>'
+            f'{esc(dash["verification_summary"])}</div>'
         )

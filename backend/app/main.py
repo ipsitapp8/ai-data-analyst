@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import shutil
 import threading
 import uuid
 from pathlib import Path
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 from app import config
 from app.agents.graph import run_question_graph
 from app.database import get_db, init_db
+from app.logging_config import setup_logging
 from app.models import (
     AuditTrail,
     CriticReview,
@@ -44,9 +44,15 @@ from app.security import get_current_team, get_current_user
 
 app = FastAPI(title="AI Data Analyst API")
 
+# The Streamlit frontend talks to this API server-side (plain `requests`
+# calls), which browsers -- and therefore CORS -- never enter into; this
+# middleware only matters if something calls the API directly from a
+# browser. Configurable so a standalone/exposed deployment can lock it down;
+# defaults to today's open behavior so nothing breaks for the shipped topology.
+_cors_origins = [o.strip() for o in config.CORS_ALLOWED_ORIGINS.split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -58,14 +64,25 @@ app.include_router(inspect_router)
 
 @app.on_event("startup")
 def on_startup() -> None:
+    setup_logging()
     init_db()
 
 
 @app.get("/api/health")
-def health():
+def health(db: Session = Depends(get_db)):
+    from sqlalchemy import text
+
     from app.sandbox.runner import docker_image_available
+
+    try:
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:  # noqa: BLE001 - health check must report, not raise
+        db_ok = False
+
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
+        "database_ok": db_ok,
         "sandbox_backend": config.SANDBOX_BACKEND,
         "sandbox_image_ready": docker_image_available(),
         "gemini_key_configured": bool(config.GEMINI_API_KEY),
@@ -87,8 +104,18 @@ def upload_dataset(
 
     dest_name = f"{uuid.uuid4().hex}_{Path(file.filename).name}"
     dest_path = config.UPLOADS_DIR / dest_name
+    written = 0
+    chunk_size = 1024 * 1024
     with open(dest_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        while chunk := file.file.read(chunk_size):
+            written += len(chunk)
+            if written > config.MAX_UPLOAD_BYTES:
+                f.close()
+                dest_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    413, f"File exceeds the {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB upload limit."
+                )
+            f.write(chunk)
 
     try:
         df, profile = load_and_profile_csv(str(dest_path))

@@ -9,7 +9,7 @@ from __future__ import annotations
 import streamlit as st
 
 from api_client import ApiError, health, list_datasets, list_questions
-from style.theme import html, page_setup
+from style.theme import esc, html, page_setup
 
 page_setup("Home", sidebar=False)
 
@@ -178,8 +178,8 @@ with right:
             else:
                 tag_cls, tag_txt = "h-tag-other", q["status"].replace("_", " ")
             rows += (
-                f'<div class="h-arow"><div class="h-arow-text">{q["text"][:52]}</div>'
-                f'<span class="h-arow-tag {tag_cls}">{tag_txt}</span></div>'
+                f'<div class="h-arow"><div class="h-arow-text">{esc(q["text"][:52])}</div>'
+                f'<span class="h-arow-tag {tag_cls}">{esc(tag_txt)}</span></div>'
             )
         activity_html = f'<div class="h-activity">{rows}</div>'
     else:

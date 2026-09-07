@@ -13,7 +13,7 @@ from api_client import (
     list_members,
     my_invites,
 )
-from style.theme import badge, html, invalidate_workspaces_cache, page_header, page_setup, render_sidebar
+from style.theme import badge, esc, html, invalidate_workspaces_cache, page_header, page_setup, render_sidebar
 
 page_setup("Workspaces")
 render_sidebar("workspaces")
@@ -33,8 +33,8 @@ if invites:
             c1, c2 = st.columns([4, 1])
             with c1:
                 html(
-                    f'<div class="ds-row-title">{inv["team_name"]}</div>'
-                    f'<div class="ds-row-meta">in {inv["community_name"]} · role: {inv["role"]}</div>'
+                    f'<div class="ds-row-title">{esc(inv["team_name"])}</div>'
+                    f'<div class="ds-row-meta">in {esc(inv["community_name"])} · role: {esc(inv["role"])}</div>'
                 )
             with c2:
                 if st.button("Accept", key=f"accept_{inv['team_id']}"):
@@ -66,7 +66,7 @@ with col_l:
             hc1, hc2 = st.columns([4, 1])
             with hc1:
                 html(f'<div class="ds-row" style="padding:12px 0;border-top:1px solid var(--border);">'
-                     f'<div class="ds-row-title">{c["name"]}</div>'
+                     f'<div class="ds-row-title">{esc(c["name"])}</div>'
                      f'<div class="ds-row-spacer"></div>'
                      f'{team_count_badge}</div>')
             with hc2:
@@ -79,7 +79,7 @@ with col_l:
                 cc1, cc2 = st.columns([4, 1])
                 with cc1:
                     html(f'<div class="ds-row-meta" style="padding-left:14px;">'
-                         f'{t["name"]} — {t["role"]}</div>')
+                         f'{esc(t["name"])} — {esc(t["role"])}</div>')
                 with cc2:
                     if st.button("Switch to" if not sel else "Active", key=f"switch_{t['id']}",
                                  disabled=sel):
@@ -114,7 +114,7 @@ with col_r:
         if not active_community:
             html('<div class="ds-row-meta">Pick a community above first.</div>')
         else:
-            html(f'<div class="ds-row-meta">In <b>{active_community["name"]}</b></div>')
+            html(f'<div class="ds-row-meta">In <b>{esc(active_community["name"])}</b></div>')
             with st.form("new_team_form", clear_on_submit=True):
                 name = st.text_input("Team name", label_visibility="collapsed",
                                       placeholder="e.g. Growth")
@@ -144,8 +144,8 @@ with col_r:
                 kind = "verified" if m["status"] == "active" else "warn"
                 html(
                     f'<div class="ds-row" style="padding:10px 0;border-top:1px solid var(--border);">'
-                    f'<div><div class="ds-row-title">{m["display_name"] or m["email"]}</div>'
-                    f'<div class="ds-row-meta">{m["email"]} · {m["role"]}</div></div>'
+                    f'<div><div class="ds-row-title">{esc(m["display_name"] or m["email"])}</div>'
+                    f'<div class="ds-row-meta">{esc(m["email"])} · {esc(m["role"])}</div></div>'
                     f'<div class="ds-row-spacer"></div>{badge(m["status"], kind)}</div>'
                 )
 
