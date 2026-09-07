@@ -661,8 +661,20 @@ def figure_from_json(payload: dict) -> go.Figure:
     return pio.from_json(json.dumps(data))
 
 
-def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False) -> go.Figure:
-    """Force any figure -- including sandbox-generated ones -- into the SILT look."""
+def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
+                 ensure_markers: bool = False) -> go.Figure:
+    """Force any figure -- including sandbox-generated ones -- into the SILT look.
+
+    ensure_markers: sandbox line charts default to mode="lines" (px.line's
+    default), which has no clickable points for Plotly's on_select -- a click
+    anywhere on the bare line doesn't register as a point selection. Pass True
+    (click-to-inspect charts do) to add markers to any bare-line scatter trace
+    so there's something to actually click.
+    """
+    if ensure_markers:
+        for trace in fig.data:
+            if getattr(trace, "type", None) == "scatter" and trace.mode and "markers" not in trace.mode:
+                trace.mode = trace.mode + "+markers"
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -718,8 +730,12 @@ def plot(fig: go.Figure, height: int = 300, showlegend: bool = False,
     st.session_state[on_select_key]) instead of nothing."""
     kwargs = {}
     if on_select_key:
-        kwargs = {"on_select": "rerun", "key": on_select_key}
-    return st.plotly_chart(style_chart(fig, height, showlegend), use_container_width=True,
+        # selection_mode="points" only (not the default points+box+lasso):
+        # a plain click on a marker reliably registers as a point selection
+        # this way, instead of needing an actual box/lasso drag.
+        kwargs = {"on_select": "rerun", "key": on_select_key, "selection_mode": "points"}
+    styled = style_chart(fig, height, showlegend, ensure_markers=bool(on_select_key))
+    return st.plotly_chart(styled, use_container_width=True,
                            config={"displayModeBar": False}, **kwargs)
 
 
