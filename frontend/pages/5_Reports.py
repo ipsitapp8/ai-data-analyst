@@ -81,10 +81,20 @@ with st.container(key="flat_reports"):
             )
         with act:
             html("<div style='height:14px'></div>")
-            st.download_button(
-                "Download",
-                data=build_report(q),
-                file_name=f"report_{q['id']}.txt",
-                mime="text/plain",
-                key=f"rp_dl_{q['id']}",
-            )
+            cache_key = f"report_text_{q['id']}"
+            if cache_key in st.session_state:
+                st.download_button(
+                    "Download",
+                    data=st.session_state[cache_key],
+                    file_name=f"report_{q['id']}.txt",
+                    mime="text/plain",
+                    key=f"rp_dl_{q['id']}",
+                )
+            else:
+                # Deferred until asked for: building a report fetches the full
+                # dashboard, and this list can hold many rows -- doing that
+                # eagerly for every row on every page load meant N reports
+                # cost N dashboard fetches just to render the page at all.
+                if st.button("Prepare", key=f"rp_prep_{q['id']}"):
+                    st.session_state[cache_key] = build_report(q)
+                    st.rerun()

@@ -1,15 +1,16 @@
-"""Settings — workspace and agent configuration (read-only view of live backend config)."""
+"""Settings — account/team context, plus a read-only view of live backend config."""
 from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, health
-from style.theme import badge, html, page_header, page_setup, render_sidebar
+from api_client import ApiError, health, my_workspaces
+from auth import current_user
+from style.theme import badge, esc, html, page_header, page_setup, render_sidebar
 
 page_setup("Settings")
 render_sidebar("settings")
 
-page_header("Settings", "Workspace and agent configuration.")
+page_header("Settings", "Your account, your team, and agent configuration.")
 
 try:
     hz = health()
@@ -28,6 +29,46 @@ def row(label: str, value: str, last: bool = False) -> str:
         f"{value}</span></div>"
     )
 
+
+# ---------------------------------------------------------------- account --
+user = current_user()
+active_team_id = st.session_state.get("active_team_id")
+
+active_community_name, active_team_name, active_team_role = None, None, None
+try:
+    for community in my_workspaces().get("communities", []):
+        for team in community["teams"]:
+            if team["id"] == active_team_id:
+                active_community_name = community["name"]
+                active_team_name = team["name"]
+                active_team_role = team["role"]
+except ApiError:
+    pass
+
+with st.container(key="flat_account"):
+    html('<div class="ds-card-head"><div class="ds-section-title">Account</div></div>')
+    html(
+        row("Name", esc(user["display_name"]) if user else "—")
+        + row("Email", esc(user["email"]) if user else "—")
+    )
+    if active_team_name:
+        html(
+            row(
+                "Active workspace",
+                f"{esc(active_community_name)} / {esc(active_team_name)} "
+                f"{badge(active_team_role, 'neutral')}",
+                last=True,
+            )
+        )
+    else:
+        html(row("Active workspace", "None selected", last=True))
+
+c1, _c2 = st.columns([1, 4])
+with c1:
+    if st.button("Manage workspaces  →", key="settings_go_workspaces"):
+        st.switch_page("pages/8_Workspaces.py")
+
+html("<div style='height:18px'></div>")
 
 sandbox = hz.get("sandbox_backend", "—")
 img_ready = hz.get("sandbox_image_ready", False)
@@ -73,8 +114,10 @@ html("<div style='height:18px'></div>")
 with st.container(key="flat_sys"):
     html('<div class="ds-card-head"><div class="ds-section-title">System</div></div>')
     api_ok = bool(hz)
+    db_ok = hz.get("database_ok", False)
     html(
         row("Backend API", "Reachable" if api_ok else "Unreachable")
+        + row("Database", "Connected" if db_ok else "Unreachable")
         + row("Sandbox backend", sandbox)
         + row("Docker image", "Built" if img_ready else "Not built", last=True)
     )
