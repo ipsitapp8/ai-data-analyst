@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, list_datasets, list_questions
+from api_client import ApiError, health, list_datasets, list_questions
 from style.theme import html, page_setup
 
 page_setup("Home", sidebar=False)
@@ -96,18 +96,29 @@ st.markdown(
 )
 
 try:
-    _datasets = list_datasets()
+    health()
     _backend_ok = True
 except ApiError:
-    _datasets = []
     _backend_ok = False
 
+_has_team = bool(st.session_state.get("active_team_id"))
+
 try:
-    _questions = list_questions()
+    _datasets = list_datasets() if _has_team else []
+except ApiError:
+    _datasets = []
+
+try:
+    _questions = list_questions() if _has_team else []
 except ApiError:
     _questions = []
 
 _verified = [q for q in _questions if q["status"] == "verified"]
+
+if not _has_team:
+    st.info("You're not on a team yet — create or join one to upload data and run analyses.")
+    if st.button("Go to Workspaces  →", type="primary", key="home_go_workspaces"):
+        st.switch_page("pages/8_Workspaces.py")
 
 # ---------------------------------------------------------------- top bar --
 top_l, top_r = st.columns([2, 1.3])
