@@ -26,6 +26,7 @@ from app.models import (
     Question,
 )
 from app.profiling import load_and_profile_csv
+from app.routers.auth import router as auth_router
 from app.schemas import (
     AuditEntry,
     AuditTrailResponse,
@@ -44,6 +45,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 
 @app.on_event("startup")

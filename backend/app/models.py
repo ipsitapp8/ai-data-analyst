@@ -1,11 +1,15 @@
 """SQLAlchemy ORM models — the audit-trail-first schema.
 
-Tables: datasets, questions, plans, execution_logs, critic_reviews,
-dashboards, audit_trail.
+Tables: users, communities, teams, team_members, datasets, questions, plans,
+execution_logs, critic_reviews, dashboards, audit_trail.
 
 Every dashboard output is linked, via audit_trail rows, back to the exact
 execution_log (code + stdout/result) and critic_review that produced /
 verified it. That linkage is what the Audit Trail UI page renders.
+
+datasets/questions/dashboards/audit_trail carry a `team_id` for multi-tenant
+isolation -- see the nullability note on Dataset.team_id for why it isn't a
+DB-level NOT NULL constraint.
 """
 from __future__ import annotations
 
@@ -30,10 +34,66 @@ def utcnow() -> dt.datetime:
     return dt.datetime.utcnow()
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Community(Base):
+    __tablename__ = "communities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    teams = relationship("Team", back_populates="community")
+
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False)
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    community = relationship("Community", back_populates="teams")
+    members = relationship("TeamMember", back_populates="team")
+
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    # Nullable + invited_email: lets an owner invite someone by email before
+    # that person has an account. Claimed (user_id set, status->active) at signup.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    invited_email = Column(String, nullable=True)
+    role = Column(String, default="member")  # owner|admin|member
+    status = Column(String, default="active")  # active|pending
+    joined_at = Column(DateTime, default=utcnow)
+
+    team = relationship("Team", back_populates="members")
+    user = relationship("User")
+
+
 class Dataset(Base):
     __tablename__ = "datasets"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Nullable at the DB level only because SQLite can't cheaply add a NOT NULL
+    # FK to an existing table with rows -- the migration backfills every existing
+    # row to a "Legacy" team, and the app layer treats this as required from here
+    # on (always set on write, always filtered on read).
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     filename = Column(String, nullable=False)
     filepath = Column(String, nullable=False)
     row_count = Column(Integer, default=0)
@@ -48,6 +108,7 @@ class Question(Base):
     __tablename__ = "questions"
 
     id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # see Dataset.team_id note
     dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
     text = Column(Text, nullable=False)
     status = Column(String, default="pending")  # pending|running|verified|failed
@@ -117,6 +178,7 @@ class Dashboard(Base):
     __tablename__ = "dashboards"
 
     id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # see Dataset.team_id note
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     kpis_json = Column(Text, default="[]")
     charts_json = Column(Text, default="[]")  # [{title, plotly_json, source_step_index}]
@@ -132,6 +194,7 @@ class AuditTrail(Base):
     __tablename__ = "audit_trail"
 
     id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # see Dataset.team_id note
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     element_label = Column(String, nullable=False)  # e.g. "KPI: Revenue Drop %"
     element_type = Column(String, default="kpi")  # kpi|chart|narrative
