@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from api_client import ApiError, list_questions
-from style.theme import badge, html, page_header, page_setup, render_sidebar
+from style.theme import badge, esc, html, page_header, page_setup, render_sidebar
 
 page_setup("Team Overview")
 render_sidebar("team_overview")
@@ -46,8 +46,8 @@ with st.container(key="flat_timeline"):
         with c1:
             html(
                 f'<div class="ds-row" style="border-top:1px solid var(--border);">'
-                f'<div><div class="ds-row-title">{q["text"][:80]}</div>'
-                f'<div class="ds-row-meta">{q["age"]} · {q["kpi_count"]} KPI(s)</div></div>'
+                f'<div><div class="ds-row-title">{esc(q["text"][:80])}</div>'
+                f'<div class="ds-row-meta">{esc(q["age"])} · {q["kpi_count"]} KPI(s)</div></div>'
                 f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
             )
         with c2:

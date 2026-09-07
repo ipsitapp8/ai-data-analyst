@@ -12,7 +12,7 @@ from api_client import (
     list_datasets,
     list_questions,
 )
-from style.theme import ACCENT, ACCENT_2, badge, html, page_header, page_setup, plot, render_sidebar
+from style.theme import ACCENT, ACCENT_2, badge, esc, html, page_header, page_setup, plot, render_sidebar
 
 page_setup("Analyses")
 render_sidebar("analyses")
@@ -86,7 +86,7 @@ if not qid:
                 with c1:
                     html(
                         f'<div class="ds-row" style="border-top:none;">'
-                        f'<div><div class="ds-row-title">{h["text"][:64]}</div>'
+                        f'<div><div class="ds-row-title">{esc(h["text"][:64])}</div>'
                         f'<div class="ds-row-meta">{h["age"]}</div></div>'
                         f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
                     )
@@ -120,7 +120,7 @@ def _render_live_run(qid: int) -> None:
     with top_l:
         html(
             f'<div style="display:flex;align-items:center;gap:12px;">'
-            f'<div class="ds-page-title" style="margin:0;">{status.get("question_text", "Analysis")}</div>'
+            f'<div class="ds-page-title" style="margin:0;">{esc(status.get("question_text", "Analysis"))}</div>'
             f"</div>"
         )
     with top_r:
@@ -145,7 +145,7 @@ def _render_live_run(qid: int) -> None:
             html(
                 '<div style="display:flex;align-items:center;gap:11px;margin-bottom:12px;">'
                 '<div class="ds-section-title">We couldn\'t analyze that question</div></div>'
-                f'<div class="ds-row-meta" style="line-height:1.7;font-size:0.93rem;">{reason}</div>'
+                f'<div class="ds-row-meta" style="line-height:1.7;font-size:0.93rem;">{esc(reason)}</div>'
             )
             if tips:
                 html(
@@ -153,7 +153,7 @@ def _render_live_run(qid: int) -> None:
                     "Try asking instead</div>"
                 )
                 for t in tips:
-                    html(f'<div class="ds-check"><span class="ds-check-label">{t}</span></div>')
+                    html(f'<div class="ds-check"><span class="ds-check-label">{esc(t)}</span></div>')
 
         html("<div style='height:16px'></div>")
         if st.button("Ask a different question", type="primary", key="an_retry"):
@@ -198,7 +198,7 @@ def _render_live_run(qid: int) -> None:
                 html(
                     f'<div class="{wrap_cls}">'
                     f'<div class="ds-step-num {num_cls}">{mark}</div>'
-                    f'<div><div class="ds-step-title">{s["description"][:60]}</div>'
+                    f'<div><div class="ds-step-title">{esc(s["description"][:60])}</div>'
                     f'<div class="ds-step-status">{text}</div></div></div>'
                 )
 
@@ -229,7 +229,7 @@ def _render_live_run(qid: int) -> None:
                     f'<div style="background:var(--bg-inset);border:1px solid var(--border);'
                     f'border-radius:10px;padding:16px;font-family:var(--font-mono);'
                     f'font-size:0.83rem;color:var(--text-secondary);line-height:1.75;">'
-                    f'{STAGE_LABELS.get(stage, stage)}…<br/>{status.get("stage_detail","")[:120]}'
+                    f'{esc(STAGE_LABELS.get(stage, stage))}…<br/>{esc(status.get("stage_detail","")[:120])}'
                     f"</div>"
                 )
 

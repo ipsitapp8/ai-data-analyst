@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from api_client import ApiError, get_dataset, list_datasets, upload_dataset
-from style.theme import html, page_header, page_setup, render_sidebar
+from style.theme import esc, html, page_header, page_setup, render_sidebar
 
 page_setup("Datasets")
 render_sidebar("datasets")
@@ -85,7 +85,7 @@ with st.container(key="flat_table"):
                 <div class="ds-row" style="padding:14px 22px;">
                   <div style="flex:2.6;display:flex;align-items:center;gap:11px;">
                     <div class="ds-row-icon" style="width:29px;height:29px;">{FILE_ICON}</div>
-                    <div class="ds-row-title" style="font-weight:500;">{d['filename']}</div>
+                    <div class="ds-row-title" style="font-weight:500;">{esc(d['filename'])}</div>
                   </div>
                   <div style="flex:0.8;" class="ds-row-meta">{d['row_count']:,}</div>
                   <div style="flex:0.8;" class="ds-row-meta">{d['col_count']}</div>
@@ -134,7 +134,7 @@ if datasets:
         with st.container(key="flat_profile"):
             html(
                 f'<div class="ds-card-head"><div class="ds-section-title">'
-                f'Profile — {full["filename"]}</div></div>'
+                f'Profile — {esc(full["filename"])}</div></div>'
             )
             html(
                 """
@@ -154,15 +154,15 @@ if datasets:
                         detail = (f"min {s['min']:.2f} · max {s['max']:.2f} · "
                                   f"mean {s['mean']:.2f}")
                 elif c["kind"] == "categorical" and c.get("top_values"):
-                    detail = ", ".join(f"{t['value']} ({t['count']})"
+                    detail = ", ".join(f"{esc(t['value'])} ({t['count']})"
                                        for t in c["top_values"][:3])
                 elif c["kind"] == "datetime" and c.get("stats"):
-                    detail = f"{c['stats'].get('min')} → {c['stats'].get('max')}"
+                    detail = f"{esc(c['stats'].get('min'))} → {esc(c['stats'].get('max'))}"
                 html(
                     f"""
                     <div class="ds-row" style="padding:11px 22px;">
-                      <div style="flex:1.6;" class="ds-row-title" >{c['name']}</div>
-                      <div style="flex:0.9;" class="ds-row-meta">{c['kind']}</div>
+                      <div style="flex:1.6;" class="ds-row-title" >{esc(c['name'])}</div>
+                      <div style="flex:0.9;" class="ds-row-meta">{esc(c['kind'])}</div>
                       <div style="flex:1.1;" class="ds-row-meta">
                         {c['missing_count']} ({c['missing_pct']}%)</div>
                       <div style="flex:0.8;" class="ds-row-meta">{c['unique_count']}</div>

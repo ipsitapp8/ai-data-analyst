@@ -6,7 +6,7 @@ import json
 import streamlit as st
 
 from api_client import ApiError, get_dashboard, list_questions
-from style.theme import badge, html, page_header, page_setup, render_sidebar
+from style.theme import badge, esc, html, page_header, page_setup, render_sidebar
 
 page_setup("Reports")
 render_sidebar("reports")
@@ -74,7 +74,7 @@ with st.container(key="flat_reports"):
             html(
                 f'<div class="ds-row">'
                 f'<div class="ds-row-icon">{DOC_ICON}</div>'
-                f'<div><div class="ds-row-title">{q["text"][:66]}</div>'
+                f'<div><div class="ds-row-title">{esc(q["text"][:66])}</div>'
                 f'<div class="ds-row-meta">Generated {q["age"]} • '
                 f'{q.get("kpi_count", 0)} KPIs</div></div>'
                 f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
