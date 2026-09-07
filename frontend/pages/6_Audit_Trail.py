@@ -159,10 +159,14 @@ with tab_code:
                         f'{(sel.get("critic_summary") or "")[:300]}</div></div>'
                     )
                     html("<div style='height:12px'></div>")
+                    ok_bg, ok_border, ok_color = (
+                        ("var(--accent-bg)", "var(--accent-border)", "var(--accent)") if ok
+                        else ("var(--warn-bg)", "var(--warn-border)", "var(--warn)")
+                    )
                     html(
-                        f'<div style="text-align:center;padding:16px;border-radius:10px;'
-                        f'background:var(--green-bg);border:1px solid var(--green-border);'
-                        f'color:var(--green);font-weight:700;letter-spacing:0.04em;">'
+                        f'<div style="text-align:center;padding:16px;border-radius:var(--radius-md);'
+                        f'background:{ok_bg};border:1px solid {ok_border};'
+                        f'color:{ok_color};font-weight:700;letter-spacing:0.04em;">'
                         f'{"✓ VERIFIED" if ok else "! NEEDS REVIEW"}</div>'
                     )
                 else:

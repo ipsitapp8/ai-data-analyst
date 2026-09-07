@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
+from auth import current_user
 from style.theme import ACCENT, badge, html, page_setup, plot, render_sidebar, stat_card
 
 page_setup("Overview")
@@ -29,10 +30,13 @@ except ApiError:
 
 verified = [q for q in questions if q["status"] == "verified"]
 
+user = current_user()
+first_name = (user["display_name"].split() or [user["display_name"]])[0] if user else ""
+
 head_l, head_r = st.columns([3, 1])
 with head_l:
     html(
-        f'<div class="ds-page-title">{_greeting()}, Ipsita</div>'
+        f'<div class="ds-page-title">{_greeting()}{", " + first_name if first_name else ""}</div>'
         '<div class="ds-page-sub">Here\'s what\'s happening in your workspace.</div>'
     )
 with head_r:

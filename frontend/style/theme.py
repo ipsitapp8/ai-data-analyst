@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -477,6 +478,35 @@ def page_setup(title: str, sidebar: bool = True) -> None:
         )
 
 
+_WORKSPACES_CACHE_TTL_SECONDS = 8
+
+
+def _cached_my_workspaces() -> dict:
+    """Session-scoped, short-TTL cache for /api/me/workspaces.
+
+    render_sidebar() calls this on every single page render, and the Analyses
+    page's live-run fragment reruns every 2 seconds while an analysis is in
+    progress -- without this, every one of those reruns re-fetched the full
+    workspace list. Deliberately NOT @st.cache_data: that caches globally by
+    function args, and my_workspaces() takes none, so every user would share
+    one cached result -- a cross-tenant leak. session_state is per-browser-
+    session already, so a manual TTL here stays correctly scoped per user.
+    """
+    now = time.monotonic()
+    cached = st.session_state.get("_ws_cache")
+    if cached and now - cached[0] < _WORKSPACES_CACHE_TTL_SECONDS:
+        return cached[1]
+    data = my_workspaces()
+    st.session_state["_ws_cache"] = (now, data)
+    return data
+
+
+def invalidate_workspaces_cache() -> None:
+    """Call after creating/joining a community or team so the switcher and
+    _ensure_active_team() see it on the very next render, not after the TTL."""
+    st.session_state.pop("_ws_cache", None)
+
+
 def _ensure_active_team() -> None:
     """Default to the user's first team so existing pages (which call
     list_datasets()/list_questions()/etc with no team argument) have a valid
@@ -487,7 +517,7 @@ def _ensure_active_team() -> None:
     if st.session_state.get("active_team_id"):
         return
     try:
-        workspaces = my_workspaces()["communities"]
+        workspaces = _cached_my_workspaces()["communities"]
     except ApiError:
         return
     for community in workspaces:
@@ -531,7 +561,7 @@ def _backend_alive() -> bool:
 
 def _render_workspace_switcher() -> None:
     try:
-        communities = my_workspaces()["communities"]
+        communities = _cached_my_workspaces()["communities"]
     except ApiError:
         html('<div class="silt-status">workspaces unavailable</div>')
         return
