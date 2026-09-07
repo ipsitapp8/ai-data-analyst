@@ -33,6 +33,46 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+class CommunityCreate(BaseModel):
+    name: str
+
+
+class TeamCreate(BaseModel):
+    name: str
+
+
+class InviteRequest(BaseModel):
+    email: str
+
+
+class TeamOut(BaseModel):
+    id: int
+    community_id: int
+    name: str
+    role: str  # the caller's own role on this team
+
+    class Config:
+        from_attributes = True
+
+
+class CommunityOut(BaseModel):
+    id: int
+    name: str
+    teams: list[TeamOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+class MemberOut(BaseModel):
+    id: int
+    user_id: int | None
+    email: str
+    display_name: str | None
+    role: str
+    status: str
+
+
 class DatasetProfile(BaseModel):
     id: int
     filename: str

@@ -24,9 +24,12 @@ from app.models import (
     ExecutionLog,
     Plan,
     Question,
+    Team,
+    User,
 )
 from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
+from app.routers.workspaces import router as workspaces_router
 from app.schemas import (
     AuditEntry,
     AuditTrailResponse,
@@ -36,6 +39,7 @@ from app.schemas import (
     QuestionCreated,
     StatusResponse,
 )
+from app.security import get_current_team, get_current_user
 
 app = FastAPI(title="AI Data Analyst API")
 
@@ -47,6 +51,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(workspaces_router)
 
 
 @app.on_event("startup")
@@ -69,7 +74,12 @@ def health():
 # ---------------------------------------------------------------- datasets --
 
 @app.post("/api/datasets/upload", response_model=DatasetProfile)
-def upload_dataset(file: UploadFile, db: Session = Depends(get_db)):
+def upload_dataset(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "Only .csv files are supported right now.")
 
@@ -85,6 +95,7 @@ def upload_dataset(file: UploadFile, db: Session = Depends(get_db)):
         raise HTTPException(400, f"Could not parse CSV: {e}") from e
 
     dataset = Dataset(
+        team_id=team.id,
         filename=file.filename,
         filepath=str(dest_path),
         row_count=profile["row_count"],
@@ -106,9 +117,14 @@ def upload_dataset(file: UploadFile, db: Session = Depends(get_db)):
 
 
 @app.get("/api/datasets/{dataset_id}", response_model=DatasetProfile)
-def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
+def get_dataset(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
     dataset = db.get(Dataset, dataset_id)
-    if not dataset:
+    if not dataset or dataset.team_id != team.id:
         raise HTTPException(404, "Dataset not found")
     return DatasetProfile(
         id=dataset.id,
@@ -121,8 +137,17 @@ def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/datasets", response_model=list[DatasetProfile])
-def list_datasets(db: Session = Depends(get_db)):
-    datasets = db.query(Dataset).order_by(Dataset.uploaded_at.desc()).all()
+def list_datasets(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    datasets = (
+        db.query(Dataset)
+        .filter(Dataset.team_id == team.id)
+        .order_by(Dataset.uploaded_at.desc())
+        .all()
+    )
     return [
         DatasetProfile(
             id=d.id, filename=d.filename, row_count=d.row_count, col_count=d.col_count,
@@ -147,10 +172,32 @@ def _humanize_age(created: dt.datetime) -> str:
     return f"{hours // 24}d ago"
 
 
+def _get_team_question(db: Session, team: Team, question_id: int) -> Question:
+    """Fetch a question and verify it belongs to the caller's active team.
+
+    This re-check (not just trusting the X-Team-Id header) is the actual
+    cross-team isolation guarantee for every question-scoped endpoint.
+    """
+    question = db.get(Question, question_id)
+    if not question or question.team_id != team.id:
+        raise HTTPException(404, "Question not found")
+    return question
+
+
 @app.get("/api/questions")
-def list_questions(db: Session = Depends(get_db)):
+def list_questions(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
     """Recent analyses, newest first — feeds the Overview and Reports pages."""
-    questions = db.query(Question).order_by(Question.created_at.desc()).limit(50).all()
+    questions = (
+        db.query(Question)
+        .filter(Question.team_id == team.id)
+        .order_by(Question.created_at.desc())
+        .limit(50)
+        .all()
+    )
     out = []
     for q in questions:
         dash = (
@@ -176,12 +223,18 @@ def list_questions(db: Session = Depends(get_db)):
 
 
 @app.post("/api/questions", response_model=QuestionCreated)
-def ask_question(payload: QuestionCreate, db: Session = Depends(get_db)):
+def ask_question(
+    payload: QuestionCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
     dataset = db.get(Dataset, payload.dataset_id)
-    if not dataset:
+    if not dataset or dataset.team_id != team.id:
         raise HTTPException(404, "Dataset not found")
 
     question = Question(
+        team_id=team.id,
         dataset_id=payload.dataset_id,
         text=payload.question,
         status="running",
@@ -211,10 +264,13 @@ def _plan_steps_for_question(db: Session, question_id: int) -> tuple[list[dict],
 
 
 @app.get("/api/questions/{question_id}/status", response_model=StatusResponse)
-def get_status(question_id: int, db: Session = Depends(get_db)):
-    question = db.get(Question, question_id)
-    if not question:
-        raise HTTPException(404, "Question not found")
+def get_status(
+    question_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    question = _get_team_question(db, team, question_id)
 
     steps, plan_id = _plan_steps_for_question(db, question_id)
     plan_created_at = None
@@ -267,7 +323,13 @@ def get_status(question_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/questions/{question_id}/dashboard", response_model=DashboardResponse)
-def get_dashboard(question_id: int, db: Session = Depends(get_db)):
+def get_dashboard(
+    question_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    _get_team_question(db, team, question_id)
     dash = (
         db.query(Dashboard)
         .filter(Dashboard.question_id == question_id)
@@ -289,10 +351,13 @@ def get_dashboard(question_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/questions/{question_id}/audit-trail", response_model=AuditTrailResponse)
-def get_audit_trail(question_id: int, db: Session = Depends(get_db)):
-    question = db.get(Question, question_id)
-    if not question:
-        raise HTTPException(404, "Question not found")
+def get_audit_trail(
+    question_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    question = _get_team_question(db, team, question_id)
 
     steps, _ = _plan_steps_for_question(db, question_id)
     entries = (
@@ -333,7 +398,13 @@ def get_audit_trail(question_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/questions/{question_id}/critic-reviews")
-def get_critic_reviews(question_id: int, db: Session = Depends(get_db)):
+def get_critic_reviews(
+    question_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    _get_team_question(db, team, question_id)
     reviews = (
         db.query(CriticReview)
         .filter(CriticReview.question_id == question_id)
