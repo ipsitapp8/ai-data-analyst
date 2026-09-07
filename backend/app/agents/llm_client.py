@@ -7,13 +7,34 @@ and doesn't know or care which LLM provider is behind them.
 from __future__ import annotations
 
 import json
+import re
+import time
 from typing import Any
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from app import config
 from app.agents import llm_client_llama
+
+# Fallback backoff schedule when Gemini's 429 response doesn't carry a
+# RetryInfo delay (it usually does, but don't depend on that). Indexed by
+# attempt number; the last value repeats for any attempt beyond it.
+_DEFAULT_BACKOFF_SECONDS = (15.0, 30.0)
+
+
+def _retry_delay_seconds(error: errors.ClientError, attempt: int) -> float:
+    """How long to wait before retrying a 429, preferring the server's own RetryInfo."""
+    details = getattr(error, "details", None)
+    if isinstance(details, dict):
+        body = details.get("error", details)
+        for item in body.get("details", []) or []:
+            if str(item.get("@type", "")).endswith("RetryInfo"):
+                match = re.match(r"([\d.]+)", str(item.get("retryDelay", "")))
+                if match:
+                    return min(float(match.group(1)), config.GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS)
+    default = _DEFAULT_BACKOFF_SECONDS[min(attempt, len(_DEFAULT_BACKOFF_SECONDS) - 1)]
+    return min(default, config.GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS)
 
 _client: genai.Client | None = None
 
@@ -92,10 +113,13 @@ def call_tool(
 ) -> dict[str, Any]:
     """Gemini first, automatically failing over to Llama.
 
-    Covers both common Gemini failures: a 429 once the free-tier daily cap is
-    hit, and the model replying with prose instead of the required function
-    call. Either way the run continues on the other provider instead of dying
-    mid-pipeline.
+    Covers both common Gemini failures: a 429 once the free-tier per-minute cap
+    is hit, and the model replying with prose instead of the required function
+    call. A 429 gets a bounded, blocking retry first (this call already runs
+    on the graph's background thread, so sleeping here doesn't stall the API) --
+    the free-tier window is short enough that most 429s clear on their own
+    within a retry or two. Once retries are exhausted, or for any other error,
+    the run continues on Llama instead of dying mid-pipeline.
     """
     global LAST_PROVIDER
     kwargs = dict(
@@ -109,13 +133,29 @@ def call_tool(
     failures: list[str] = []
 
     if config.GEMINI_API_KEY:
-        try:
-            out = call_tool_gemini(**kwargs)
-            LAST_PROVIDER = f"gemini:{config.GEMINI_MODEL}"
-            return out
-        except Exception as e:  # noqa: BLE001 - any Gemini failure should try the backup
-            failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
-            print(f"[llm] Gemini failed ({type(e).__name__}); failing over to Llama.")
+        attempt = 0
+        while True:
+            try:
+                out = call_tool_gemini(**kwargs)
+                LAST_PROVIDER = f"gemini:{config.GEMINI_MODEL}"
+                return out
+            except errors.ClientError as e:
+                if e.code == 429 and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
+                    wait_s = _retry_delay_seconds(e, attempt)
+                    attempt += 1
+                    print(
+                        f"[llm] Gemini rate-limited (429); retrying in {wait_s:.0f}s "
+                        f"(attempt {attempt}/{config.GEMINI_RATE_LIMIT_RETRIES})."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+                print(f"[llm] Gemini failed ({type(e).__name__}); failing over to Llama.")
+                break
+            except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
+                failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+                print(f"[llm] Gemini failed ({type(e).__name__}); failing over to Llama.")
+                break
     else:
         failures.append("gemini: no GEMINI_API_KEY set")
 
