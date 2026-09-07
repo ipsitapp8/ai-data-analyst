@@ -11,11 +11,12 @@ import copy
 import json
 from pathlib import Path
 
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-from api_client import ApiError, health, my_workspaces
+from api_client import ApiError, health, inspect_element, my_workspaces
 from auth import current_user, logout, require_login, require_password
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -222,6 +223,48 @@ button[kind="secondary"]:hover {
   padding: 0 !important;
   overflow: hidden;
 }
+
+/* inspectable KPI cards -- a real st.button styled to look like .ds-card,
+   so the whole card is clickable (see pages/4_Dashboards.py) */
+[class*="st-key-kpi_"] .stButton > button {
+  width: 100% !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 18px 20px !important;
+  text-align: left !important;
+  white-space: pre-line !important;
+  box-shadow: none !important;
+  position: relative;
+}
+[class*="st-key-kpi_"] .stButton > button p {
+  font-family: var(--font-mono) !important; color: var(--text-secondary) !important;
+  font-size: 0.74rem !important; letter-spacing: 0.02em; margin: 0 0 10px 0 !important;
+}
+[class*="st-key-kpi_"] .stButton > button strong {
+  font-family: var(--font-serif) !important; color: var(--text-primary) !important;
+  font-size: 1.85rem !important; font-weight: 600 !important;
+}
+[class*="st-key-kpi_"] .stButton > button:hover {
+  border-color: var(--accent) !important;
+  background: var(--bg-card-hover) !important;
+}
+[class*="st-key-kpi_"] .stButton > button::after {
+  content: "🔍"; position: absolute; top: 14px; right: 16px;
+  font-size: 0.8rem; opacity: 0; transition: opacity 0.12s ease;
+}
+[class*="st-key-kpi_"] .stButton > button:hover::after { opacity: 0.6; }
+
+/* inspectable charts -- the hover hint lives on the wrapping container (keyed
+   st.container(key=f"chartcard_{element_id}")) since the chart itself is a
+   plotly iframe/canvas we can't style into directly */
+[class*="st-key-chartcard_"] { position: relative; }
+[class*="st-key-chartcard_"]::after {
+  content: "🔍 click a point to inspect"; position: absolute; top: 16px; right: 18px;
+  font-size: 0.7rem; color: var(--text-muted); opacity: 0; transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+[class*="st-key-chartcard_"]:hover::after { opacity: 0.8; }
 
 .ds-page-title { font-family: var(--font-serif); font-size: 1.5rem; font-weight: 600;
                  margin: 0 0 4px 0; }
@@ -668,6 +711,72 @@ def _recolor_traces(fig: go.Figure) -> None:
                 pass
 
 
-def plot(fig: go.Figure, height: int = 300, showlegend: bool = False) -> None:
-    st.plotly_chart(style_chart(fig, height, showlegend), use_container_width=True,
-                    config={"displayModeBar": False})
+def plot(fig: go.Figure, height: int = 300, showlegend: bool = False,
+         on_select_key: str | None = None):
+    """Render a styled chart. Pass on_select_key to make it clickable -- the
+    click/select event is then returned (and also lands in
+    st.session_state[on_select_key]) instead of nothing."""
+    kwargs = {}
+    if on_select_key:
+        kwargs = {"on_select": "rerun", "key": on_select_key}
+    return st.plotly_chart(style_chart(fig, height, showlegend), use_container_width=True,
+                           config={"displayModeBar": False}, **kwargs)
+
+
+# ---------------------------------------------------------- click-to-inspect --
+# The "Code" / "Formula" / "Data Used" panel for one dashboard element
+# (backend/app/routers/inspect.py). Shared here so any page can open it the
+# same way; today only pages/4_Dashboards.py does.
+
+def open_inspect(dashboard_id: int, element_id: str) -> None:
+    """Call this from a click handler (e.g. inside `if st.button(...):`)."""
+    st.session_state["_inspect_open"] = True
+    st.session_state["_inspect_dashboard_id"] = dashboard_id
+    st.session_state["_inspect_element_id"] = element_id
+
+
+def render_inspect_dialog_if_open() -> None:
+    """Call once, near the end of a page's script. No-op unless open_inspect()
+    was called earlier in this run (or a prior rerun still marks it open)."""
+    if st.session_state.get("_inspect_open"):
+        _inspect_dialog()
+
+
+@st.dialog("Inspect", width="large")
+def _inspect_dialog() -> None:
+    dashboard_id = st.session_state.get("_inspect_dashboard_id")
+    element_id = st.session_state.get("_inspect_element_id")
+
+    cache = st.session_state.setdefault("inspect_cache", {})
+    cache_key = f"{dashboard_id}:{element_id}"
+    if cache_key not in cache:
+        try:
+            cache[cache_key] = inspect_element(dashboard_id, element_id)
+        except ApiError as e:
+            st.error(f"Could not load this element: {e}")
+            if st.button("Close", key="inspect_close_err"):
+                st.session_state["_inspect_open"] = False
+                st.rerun()
+            return
+
+    data = cache[cache_key]
+
+    html('<div class="ds-section-title">Code</div>')
+    st.code(data.get("code") or "No code recorded for this element.", language="python")
+
+    html('<div class="ds-section-title" style="margin-top:18px;">Formula</div>')
+    html(f'<div style="font-size:0.9rem;color:var(--text-primary);margin-top:6px;line-height:1.6;">'
+         f'{data.get("formula_explanation", "")}</div>')
+
+    html('<div class="ds-section-title" style="margin-top:18px;">Data Used</div>')
+    data_slice = data.get("data_slice") or {}
+    columns, rows = data_slice.get("columns") or [], data_slice.get("rows") or []
+    if columns and rows:
+        st.dataframe(pd.DataFrame(rows, columns=columns), use_container_width=True, height=240)
+    else:
+        html('<div class="ds-row-meta" style="margin-top:6px;">No data slice was recorded for this element.</div>')
+
+    html("<div style='height:10px'></div>")
+    if st.button("Close", key="inspect_close"):
+        st.session_state["_inspect_open"] = False
+        st.rerun()

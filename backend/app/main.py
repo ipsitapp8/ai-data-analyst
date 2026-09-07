@@ -342,6 +342,7 @@ def get_dashboard(
         raise HTTPException(404, "Dashboard not ready yet")
 
     return DashboardResponse(
+        id=dash.id,
         question_id=question_id,
         verified=dash.verified,
         verification_summary=dash.verification_summary,
