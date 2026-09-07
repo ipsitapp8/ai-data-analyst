@@ -15,8 +15,8 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-from api_client import ApiError, health
-from auth import require_password
+from api_client import ApiError, health, my_workspaces
+from auth import current_user, logout, require_login, require_password
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 
@@ -418,9 +418,12 @@ def page_setup(title: str, sidebar: bool = True) -> None:
         layout="wide",
         initial_sidebar_state="expanded" if sidebar else "collapsed",
     )
-    # Gate before anything else renders. No-op unless APP_PASSWORD is set, so
-    # this changes nothing for local development.
+    # Two gates, outer to inner. Neither changes local dev: require_password()
+    # is a no-op unless APP_PASSWORD is set, and require_login() always applies
+    # (there are no anonymous accounts) but is fast once a session exists.
     require_password()
+    require_login()
+    _ensure_active_team()
     inject_base_css()
     if not sidebar:
         st.markdown(
@@ -429,6 +432,26 @@ def page_setup(title: str, sidebar: bool = True) -> None:
             ".block-container{max-width:100% !important;padding:0 !important;}</style>",
             unsafe_allow_html=True,
         )
+
+
+def _ensure_active_team() -> None:
+    """Default to the user's first team so existing pages (which call
+    list_datasets()/list_questions()/etc with no team argument) have a valid
+    X-Team-Id as soon as they're logged in. The sidebar switcher can then
+    change it. Leaves both unset if the user belongs to no team yet -- the
+    Workspaces page is where they create or join one.
+    """
+    if st.session_state.get("active_team_id"):
+        return
+    try:
+        workspaces = my_workspaces()["communities"]
+    except ApiError:
+        return
+    for community in workspaces:
+        if community["teams"]:
+            st.session_state["active_community_id"] = community["id"]
+            st.session_state["active_team_id"] = community["teams"][0]["id"]
+            return
 
 
 @st.cache_data
@@ -446,6 +469,8 @@ NAV_PAGES = [
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
     ("audit", "Audit trail", "pages/6_Audit_Trail.py"),
+    ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
+    ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
     ("settings", "Settings", "pages/7_Settings.py"),
 ]
 
@@ -461,8 +486,56 @@ def _backend_alive() -> bool:
         return False
 
 
+def _render_workspace_switcher() -> None:
+    try:
+        communities = my_workspaces()["communities"]
+    except ApiError:
+        html('<div class="silt-status">workspaces unavailable</div>')
+        return
+
+    if not communities:
+        html(
+            '<div class="silt-status" style="border-top:none;">'
+            "No team yet — open Workspaces to create or join one."
+            "</div>"
+        )
+        return
+
+    with st.container(key="ws_switcher"):
+        c_ids = [c["id"] for c in communities]
+        c_labels = {c["id"]: c["name"] for c in communities}
+        active_c = st.session_state.get("active_community_id", c_ids[0])
+        if active_c not in c_ids:
+            active_c = c_ids[0]
+        c_idx = st.selectbox(
+            "Community", range(len(c_ids)), index=c_ids.index(active_c),
+            format_func=lambda i: c_labels[c_ids[i]], key="ws_community_select",
+            label_visibility="collapsed",
+        )
+        chosen_community = communities[c_idx]
+        st.session_state["active_community_id"] = chosen_community["id"]
+
+        teams = chosen_community["teams"]
+        if not teams:
+            html('<div class="silt-status" style="border-top:none;">No teams in this community yet.</div>')
+            return
+
+        t_ids = [t["id"] for t in teams]
+        t_labels = {t["id"]: t["name"] for t in teams}
+        active_t = st.session_state.get("active_team_id")
+        if active_t not in t_ids:
+            active_t = t_ids[0]
+        t_idx = st.selectbox(
+            "Team", range(len(t_ids)), index=t_ids.index(active_t),
+            format_func=lambda i: t_labels[t_ids[i]], key="ws_team_select",
+            label_visibility="collapsed",
+        )
+        st.session_state["active_team_id"] = teams[t_idx]["id"]
+
+
 def render_sidebar(current: str) -> None:
-    """Brand mark, numbered nav rail, and a quiet live system-status line."""
+    """Brand mark, workspace switcher, numbered nav rail, and a quiet live
+    system-status line."""
     with st.sidebar:
         html(
             """
@@ -472,6 +545,7 @@ def render_sidebar(current: str) -> None:
             </div>
             """
         )
+        _render_workspace_switcher()
         with st.container(key="nav"):
             for i, (key, label, target) in enumerate(NAV_PAGES, start=1):
                 if st.button(f"{i:02d}  {label}", key=f"nav_{key}", disabled=(key == current)):
@@ -487,6 +561,16 @@ def render_sidebar(current: str) -> None:
             </div>
             """
         )
+
+        user = current_user()
+        if user:
+            u_l, u_r = st.columns([3, 1])
+            with u_l:
+                html(f'<div class="silt-status" style="border-top:none;">{user["display_name"]}</div>')
+            with u_r:
+                if st.button("⏻", key="nav_logout", help="Log out"):
+                    logout()
+                    st.rerun()
 
 
 def page_header(title: str, subtitle: str = "") -> None:

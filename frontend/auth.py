@@ -81,3 +81,67 @@ def require_password() -> None:
             st.error("Incorrect password.")
 
     st.stop()
+
+
+_USER_SESSION_KEY = "auth_user"
+
+
+def current_user() -> dict | None:
+    return st.session_state.get(_USER_SESSION_KEY)
+
+
+def logout() -> None:
+    for key in (_USER_SESSION_KEY, "auth_token", "active_community_id", "active_team_id"):
+        st.session_state.pop(key, None)
+
+
+def require_login() -> None:
+    """Per-user login/signup, layered on top of require_password()'s shared
+    deployment gate. Halts rendering with a Login/Sign up form until the
+    visitor has a real account and a valid session token.
+    """
+    from api_client import ApiError, login as api_login, signup as api_signup
+
+    if st.session_state.get(_USER_SESSION_KEY) and st.session_state.get("auth_token"):
+        return
+
+    st.markdown(GATE_CSS, unsafe_allow_html=True)
+    st.markdown(
+        "<div class='gate-mark'>Silt</div>"
+        "<div class='gate-sub'>Sign in to your team's workspace, or create an account.</div>",
+        unsafe_allow_html=True,
+    )
+
+    tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
+
+    with tab_login:
+        with st.form("login_form", clear_on_submit=False):
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Log in", type="primary", use_container_width=True)
+        if submitted:
+            try:
+                result = api_login(email.strip().lower(), password)
+                st.session_state[_USER_SESSION_KEY] = result["user"]
+                st.session_state["auth_token"] = result["access_token"]
+                st.rerun()
+            except ApiError as e:
+                st.error(f"Could not log in: {e}")
+
+    with tab_signup:
+        with st.form("signup_form", clear_on_submit=False):
+            name = st.text_input("Display name", key="signup_name")
+            email = st.text_input("Email", key="signup_email")
+            password = st.text_input("Password", type="password", key="signup_password",
+                                      help="At least 8 characters.")
+            submitted = st.form_submit_button("Create account", type="primary", use_container_width=True)
+        if submitted:
+            try:
+                result = api_signup(email.strip().lower(), password, name)
+                st.session_state[_USER_SESSION_KEY] = result["user"]
+                st.session_state["auth_token"] = result["access_token"]
+                st.rerun()
+            except ApiError as e:
+                st.error(f"Could not sign up: {e}")
+
+    st.stop()
