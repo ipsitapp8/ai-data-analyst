@@ -21,9 +21,14 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 
-echo "[start] launching streamlit on 0.0.0.0:${STREAMLIT_SERVER_PORT:-7860}"
+# Render (and most other PaaS Docker platforms) injects PORT and expects the
+# service to bind it; Hugging Face Spaces doesn't set PORT and expects 7860.
+# Preferring PORT when present lets the same image serve either without a
+# platform-specific build.
+listen_port="${PORT:-${STREAMLIT_SERVER_PORT:-7860}}"
+echo "[start] launching streamlit on 0.0.0.0:${listen_port}"
 streamlit run /app/frontend/Home.py \
-  --server.port "${STREAMLIT_SERVER_PORT:-7860}" \
+  --server.port "${listen_port}" \
   --server.address 0.0.0.0 &
 frontend_pid=$!
 
