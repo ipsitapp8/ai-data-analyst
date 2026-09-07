@@ -3,6 +3,9 @@
 Contract the generated code must follow (see agents/prompts.py):
   - Read the dataset from /workspace/data/input.csv
   - Print exactly one line "RESULT_JSON:<json>" with any structured result
+  - Print exactly one line "DATA_SLICE_JSON:<json>" with the {columns, rows}
+    subset of the dataframe the result was computed from (for the
+    click-to-inspect "Data Used" panel)
   - Save any Plotly figures via fig.write_json("/workspace/output/<name>.json")
 
 DockerSandboxRunner is the real, isolated execution path: a `docker run`
@@ -24,6 +27,7 @@ from pathlib import Path
 from app import config
 
 RESULT_MARKER = "RESULT_JSON:"
+DATA_SLICE_MARKER = "DATA_SLICE_JSON:"
 
 
 @dataclass
@@ -35,6 +39,7 @@ class SandboxResult:
     result: dict | None
     chart_paths: list[str] = field(default_factory=list)
     timed_out: bool = False
+    data_slice: dict | None = None
 
 
 class SandboxRunner:
@@ -53,10 +58,10 @@ class SandboxRunner:
             shutil.copyfile(source_csv_path, dest)
         return dest
 
-    def _parse_stdout(self, stdout: str) -> dict | None:
+    def _parse_stdout(self, stdout: str, marker: str = RESULT_MARKER) -> dict | None:
         for line in stdout.splitlines():
-            if line.startswith(RESULT_MARKER):
-                raw = line[len(RESULT_MARKER):].strip()
+            if line.startswith(marker):
+                raw = line[len(marker):].strip()
                 try:
                     return json.loads(raw)
                 except json.JSONDecodeError:
@@ -122,6 +127,7 @@ class DockerSandboxRunner(SandboxRunner):
             result=self._parse_stdout(stdout) if success else None,
             chart_paths=chart_paths,
             timed_out=timed_out,
+            data_slice=self._parse_stdout(stdout, DATA_SLICE_MARKER) if success else None,
         )
 
 
@@ -302,6 +308,7 @@ class SubprocessSandboxRunner(SandboxRunner):
             result=self._parse_stdout(stdout or "") if success else None,
             chart_paths=chart_paths,
             timed_out=timed_out,
+            data_slice=self._parse_stdout(stdout or "", DATA_SLICE_MARKER) if success else None,
         )
 
 

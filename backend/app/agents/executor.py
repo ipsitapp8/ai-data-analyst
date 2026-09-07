@@ -16,12 +16,21 @@ CODE_TOOL_SCHEMA = {
             "type": "string",
             "description": "Brief explanation of the approach this code takes.",
         },
+        "formula_explanation": {
+            "type": "string",
+            "description": (
+                "The calculation this step performs, in one or two plain-English sentences a "
+                "non-technical reader could follow (e.g. 'Revenue growth % = (this month's "
+                "revenue - last month's revenue) / last month's revenue x 100'). Describe the "
+                "actual arithmetic/logic the code below carries out, not a restatement of the goal."
+            ),
+        },
         "code": {
             "type": "string",
             "description": "Complete, self-contained Python script following the sandbox contract.",
         },
     },
-    "required": ["reasoning", "code"],
+    "required": ["reasoning", "formula_explanation", "code"],
 }
 
 
@@ -79,6 +88,7 @@ Fix the root cause and provide corrected code.
     )
     code = output["code"]
     reasoning = output.get("reasoning", "")
+    formula_explanation = output.get("formula_explanation", "")
 
     runner = get_runner()
     runner.seed_input_data(question_id, state["csv_path"])
@@ -98,6 +108,8 @@ Fix the root cause and provide corrected code.
             result_json=llm_client.pretty(sandbox_result.result or {}),
             chart_paths_json=llm_client.pretty(sandbox_result.chart_paths),
             reasoning=reasoning,
+            formula_explanation=formula_explanation,
+            data_slice_json=llm_client.pretty(sandbox_result.data_slice or {}),
         )
         db.add(log_row)
         db.commit()
