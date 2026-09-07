@@ -3,7 +3,7 @@ Critic -> (revision loop, bounded) -> Dashboard-compile."""
 from __future__ import annotations
 
 import json
-import traceback
+import logging
 
 from langgraph.graph import END, StateGraph
 
@@ -16,6 +16,8 @@ from app.agents.state import AgentState, mark_terminal, update_stage
 from app.agents.triage import triage_node
 from app.database import SessionLocal
 from app.models import Dataset, Question
+
+logger = logging.getLogger(__name__)
 
 
 def prepare_revision_node(state: AgentState) -> dict:
@@ -127,8 +129,17 @@ def run_question_graph(question_id: int) -> None:
     try:
         graph = get_compiled_graph()
         final_state = graph.invoke(initial_state, config={"recursion_limit": 150})
-    except Exception as e:  # noqa: BLE001 - top-level job boundary, must not raise
-        mark_terminal(question_id, "failed", f"{e}\n{traceback.format_exc()}")
+    except Exception:  # noqa: BLE001 - top-level job boundary, must not raise
+        # Full traceback goes to the server log only -- surfacing file paths and
+        # library internals to the end user is an information-disclosure risk,
+        # and none of it is actionable for them anyway. The question_id ties
+        # the two together for whoever's debugging.
+        logger.exception("Question %s failed", question_id)
+        mark_terminal(
+            question_id, "failed",
+            "An internal error occurred while running this analysis. "
+            f"If it keeps happening, mention analysis #{question_id} to support.",
+        )
         return
 
     if final_state.get("rejected"):

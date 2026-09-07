@@ -84,5 +84,16 @@ JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", str(60 * 24 * 7)))  # 7
 BACKEND_HOST = os.getenv("BACKEND_HOST", "127.0.0.1")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", f"http://{BACKEND_HOST}:{BACKEND_PORT}")
+# Comma-separated allowlist for browser-originated requests. Empty means "*"
+# (today's default) -- the shipped deployment binds the API to loopback and
+# the Streamlit frontend calls it server-side, so no browser ever makes a
+# cross-origin request to it; this only matters if the API is exposed
+# directly and called from a browser-based client.
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "")
+
+# Max upload size for a single CSV, enforced in main.py before the file is
+# read into memory/disk -- otherwise an arbitrarily large upload can exhaust
+# either.
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))  # 200 MB
 
 DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
