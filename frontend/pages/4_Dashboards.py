@@ -8,9 +8,11 @@ from style.theme import (
     badge,
     figure_from_json,
     html,
+    open_inspect,
     page_header,
     page_setup,
     plot,
+    render_inspect_dialog_if_open,
     render_sidebar,
 )
 
@@ -103,15 +105,20 @@ with head_r:
     if st.button("Audit Trail  →", key="db_audit"):
         st.switch_page("pages/6_Audit_Trail.py")
 
+dashboard_id = dash["id"]
+
 kpis = dash.get("kpis", [])
 if kpis:
     cols = st.columns(min(4, len(kpis)), gap="medium")
     for col, kpi in zip(cols, kpis[:4]):
         with col:
-            html(
-                f'<div class="ds-card"><div class="ds-stat-label">{kpi.get("label","")}</div>'
-                f'<div class="ds-stat-value">{kpi.get("value","")}</div></div>'
-            )
+            element_id = kpi.get("element_id")
+            label = f"{kpi.get('label', '')}  \n**{kpi.get('value', '')}**"
+            with st.container(key=f"kpi_{element_id or kpi.get('label', '')}"):
+                if st.button(label, key=f"kpibtn_{element_id or kpi.get('label', '')}",
+                             use_container_width=True, disabled=not element_id):
+                    open_inspect(dashboard_id, element_id)
+                    st.rerun()
     html("<div style='height:22px'></div>")
 
 charts = dash.get("charts", [])
@@ -121,15 +128,23 @@ if charts:
         cols = st.columns(len(pair), gap="medium")
         for col, chart in zip(cols, pair):
             with col:
-                with st.container(key=f"card_ch{i}_{chart['step_index']}"):
+                element_id = chart.get("element_id")
+                container_key = f"chartcard_{element_id}" if element_id else f"card_ch{i}_{chart['step_index']}"
+                with st.container(key=container_key):
                     html(f'<div class="ds-section-title">{chart["title"]}</div>')
                     html("<div style='height:8px'></div>")
                     try:
                         fig = figure_from_json(chart["plotly_json"])
-                        plot(fig, height=300, showlegend=True)
+                        event = plot(fig, height=300, showlegend=True,
+                                     on_select_key=f"chart_{element_id}" if element_id else None)
+                        if element_id and event and event.selection and event.selection.get("points"):
+                            open_inspect(dashboard_id, element_id)
+                            st.rerun()
                     except Exception as e:  # noqa: BLE001 - render one bad chart, not the page
                         html(f'<div class="ds-row-meta">Could not render: {e}</div>')
         html("<div style='height:8px'></div>")
+
+render_inspect_dialog_if_open()
 
 if dash.get("narrative"):
     with st.container(key="card_narr"):

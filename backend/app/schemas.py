@@ -113,6 +113,7 @@ class StatusResponse(BaseModel):
 
 
 class DashboardResponse(BaseModel):
+    id: int
     question_id: int
     verified: bool
     verification_summary: str

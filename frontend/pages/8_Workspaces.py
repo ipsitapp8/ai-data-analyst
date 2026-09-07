@@ -13,7 +13,7 @@ from api_client import (
     list_members,
     my_invites,
 )
-from style.theme import badge, html, page_header, page_setup, render_sidebar
+from style.theme import badge, html, invalidate_workspaces_cache, page_header, page_setup, render_sidebar
 
 page_setup("Workspaces")
 render_sidebar("workspaces")
@@ -40,6 +40,7 @@ if invites:
                 if st.button("Accept", key=f"accept_{inv['team_id']}"):
                     try:
                         accept_invite(inv["team_id"])
+                        invalidate_workspaces_cache()
                         st.rerun()
                     except ApiError as e:
                         st.error(f"Could not accept: {e}")
@@ -97,6 +98,7 @@ with col_l:
         if submitted and name.strip():
             try:
                 create_community(name.strip())
+                invalidate_workspaces_cache()
                 st.rerun()
             except ApiError as e:
                 st.error(f"Could not create community: {e}")
@@ -121,6 +123,7 @@ with col_r:
                 try:
                     new_team = create_team(active_community["id"], name.strip())
                     st.session_state["active_team_id"] = new_team["id"]
+                    invalidate_workspaces_cache()
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not create team: {e}")

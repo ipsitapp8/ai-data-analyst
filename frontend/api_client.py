@@ -177,3 +177,11 @@ def get_audit_trail(question_id: int) -> dict:
 
 def get_critic_reviews(question_id: int) -> list[dict]:
     return _handle(requests.get(f"{BACKEND_BASE_URL}/api/questions/{question_id}/critic-reviews", headers=_headers(), timeout=TIMEOUT))
+
+
+def inspect_element(dashboard_id: int, element_id: str) -> dict:
+    resp = requests.get(
+        f"{BACKEND_BASE_URL}/api/dashboards/{dashboard_id}/elements/{element_id}/inspect",
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
