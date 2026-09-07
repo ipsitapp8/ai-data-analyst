@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
+from app.routers.inspect import router as inspect_router
 from app.routers.workspaces import router as workspaces_router
 from app.schemas import (
     AuditEntry,
@@ -52,6 +53,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(workspaces_router)
+app.include_router(inspect_router)
 
 
 @app.on_event("startup")

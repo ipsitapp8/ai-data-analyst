@@ -154,6 +154,8 @@ class ExecutionLog(Base):
     result_json = Column(Text, default="{}")  # structured result the code printed
     chart_paths_json = Column(Text, default="[]")  # plotly json files produced
     reasoning = Column(Text, default="")  # executor's explanation of the approach
+    formula_explanation = Column(Text, default="")  # plain-English calculation, for click-to-inspect
+    data_slice_json = Column(Text, default="{}")  # {columns, rows} this step's result was computed from
     created_at = Column(DateTime, default=utcnow)
 
     question = relationship("Question", back_populates="execution_logs")
@@ -198,6 +200,9 @@ class AuditTrail(Base):
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     element_label = Column(String, nullable=False)  # e.g. "KPI: Revenue Drop %"
     element_type = Column(String, default="kpi")  # kpi|chart|narrative
+    # Matches the "element_id" embedded in the dashboard's kpis_json/charts_json,
+    # so the frontend's click-to-inspect can look this row up by that id.
+    element_id = Column(String, nullable=True, index=True)
     execution_log_id = Column(Integer, ForeignKey("execution_logs.id"), nullable=True)
     critic_review_id = Column(Integer, ForeignKey("critic_reviews.id"), nullable=True)
     reasoning = Column(Text, default="")

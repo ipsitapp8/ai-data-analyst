@@ -13,6 +13,14 @@ Base = declarative_base()
 # Tables that predate multi-tenancy and need a backfilled team_id.
 _TEAM_SCOPED_TABLES = ("datasets", "questions", "dashboards", "audit_trail")
 
+# Simple additive columns (no backfill needed -- NULL/default is a fine value
+# for pre-existing rows, which just aren't inspectable via the newer features).
+_ADDITIVE_COLUMNS = (
+    ("execution_logs", "formula_explanation", "TEXT"),
+    ("execution_logs", "data_slice_json", "TEXT"),
+    ("audit_trail", "element_id", "TEXT"),
+)
+
 
 def _table_exists(conn, table: str) -> bool:
     row = conn.execute(
@@ -39,6 +47,10 @@ def _run_migrations() -> None:
         for table in _TEAM_SCOPED_TABLES:
             if _table_exists(conn, table) and not _has_column(conn, table, "team_id"):
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN team_id INTEGER REFERENCES teams(id)"))
+
+        for table, column, sql_type in _ADDITIVE_COLUMNS:
+            if _table_exists(conn, table) and not _has_column(conn, table, column):
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
 
         orphaned = [
             table for table in _TEAM_SCOPED_TABLES

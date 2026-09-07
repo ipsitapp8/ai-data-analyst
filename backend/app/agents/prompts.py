@@ -37,6 +37,12 @@ SANDBOX CODE CONTRACT (follow exactly):
   Use a unique, descriptive <short_name> for each chart. Do not use matplotlib for charts that belong on the dashboard.
   Do not set custom colors, themes, or templates on the figure — leave that to Plotly's defaults.
   The dashboard applies its own consistent dark theme/colorway on top of every chart at render time.
+- So a reviewer can trace this result back to the exact data it came from, ALSO print exactly one
+  more line:
+    print("DATA_SLICE_JSON:" + json.dumps({"columns": [...], "rows": [[...], ...]}))
+  containing the real column names and up to 50 rows of the actual dataframe subset your computation
+  is based on (after your filtering/grouping, before collapsing it into the final printed result) —
+  not a re-description or a fabricated sample.
 - Do not read/write any path outside /workspace. Do not attempt network access, subprocess calls, or file deletion.
 - Keep the script self-contained and runnable top to bottom with no user input.
 """

@@ -73,6 +73,12 @@ class MemberOut(BaseModel):
     status: str
 
 
+class InspectResponse(BaseModel):
+    code: str | None = None
+    formula_explanation: str
+    data_slice: dict[str, Any]
+
+
 class DatasetProfile(BaseModel):
     id: int
     filename: str
