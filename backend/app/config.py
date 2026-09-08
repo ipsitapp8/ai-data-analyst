@@ -96,4 +96,22 @@ CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "")
 # either.
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))  # 200 MB
 
+# --- Outbound email (team invites) ---
+# Gmail SMTP by default: SMTP_USER is the full Gmail address, SMTP_PASSWORD is
+# a 16-character App Password (Google Account -> Security -> 2-Step
+# Verification -> App Passwords) -- NOT the account's login password, and
+# only issuable once 2FA is on. Leave SMTP_USER/SMTP_PASSWORD unset to
+# disable sending entirely: invites still create the pending membership row,
+# they just don't email anyone about it (logged, not raised, so a missing
+# mail config never breaks the invite API call itself).
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
+# Public URL of the Streamlit frontend, used only to build the link inside
+# invite emails -- BACKEND_BASE_URL points at the API, not the UI, so this
+# needs its own setting.
+APP_URL = os.getenv("APP_URL", "http://localhost:8501")
+
 DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"

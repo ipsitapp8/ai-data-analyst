@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.email_sender import send_team_invite_email
 from app.models import Community, Team, TeamMember, User
 from app.schemas import CommunityCreate, CommunityOut, InviteRequest, MemberOut, TeamCreate, TeamOut
 from app.security import get_current_user
@@ -166,6 +167,11 @@ def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get
     if role not in ("owner", "admin"):
         raise HTTPException(403, "Only a team owner or admin can invite members")
 
+    team = db.get(Team, team_id)
+    if team is None:
+        raise HTTPException(404, "Team not found")
+    community = db.get(Community, team.community_id)
+
     email = payload.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(400, "A valid email is required")
@@ -188,6 +194,17 @@ def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get
     db.add(invite)
     db.commit()
     db.refresh(invite)
+
+    # Best-effort: send_team_invite_email logs and returns False on any
+    # failure (including SMTP not being configured at all) rather than
+    # raising, so a broken/missing mail setup never breaks invite creation --
+    # the pending membership row above is already committed regardless.
+    send_team_invite_email(
+        to_email=email,
+        inviter_name=user.display_name,
+        community_name=community.name if community else "",
+        team_name=team.name,
+    )
 
     return MemberOut(
         id=invite.id,
