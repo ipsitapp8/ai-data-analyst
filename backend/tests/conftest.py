@@ -20,6 +20,13 @@ os.environ["UPLOADS_DIR"] = str(_scratch / "data" / "uploads")
 os.environ["WORKSPACES_DIR"] = str(_scratch / "data" / "workspaces")
 os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-production-32b"
 os.environ["SANDBOX_BACKEND"] = "subprocess"
+# Explicitly blank, not just "unset": dotenv doesn't override a key that's
+# already present in os.environ (even set to ""), so this is what actually
+# stops a developer's real SMTP_USER/SMTP_PASSWORD in their local .env from
+# leaking into the test run and sending real mail to fake @test.example
+# addresses.
+os.environ["SMTP_USER"] = ""
+os.environ["SMTP_PASSWORD"] = ""
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

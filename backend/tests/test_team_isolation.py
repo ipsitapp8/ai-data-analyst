@@ -93,7 +93,8 @@ def test_invite_of_unregistered_email_auto_activates_on_signup(client, unique_em
         headers={"Authorization": f"Bearer {owner}"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "pending"
+    assert r.json()["member"]["status"] == "pending"
+    assert r.json()["email_sent"] is False  # no SMTP configured in tests
 
     invitee = _signup(client, invitee_email)
     invitee_headers = {"Authorization": f"Bearer {invitee}", "X-Team-Id": str(team_id)}
@@ -124,7 +125,7 @@ def test_invite_of_existing_user_requires_explicit_accept(client, unique_email):
         headers={"Authorization": f"Bearer {owner}"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "pending"
+    assert r.json()["member"]["status"] == "pending"
 
     r = client.get("/api/me/invites", headers=invitee_headers)
     assert r.status_code == 200

@@ -13,6 +13,7 @@ from api_client import (
     list_members,
     my_invites,
 )
+from config import APP_URL
 from style.theme import badge, esc, html, invalidate_workspaces_cache, page_header, page_setup, render_sidebar
 
 page_setup("Workspaces")
@@ -150,13 +151,34 @@ with col_r:
                 )
 
             html("<div style='height:12px'></div>")
+
+            # Persisted in session_state rather than a bare st.success() right
+            # before st.rerun(): a message shown immediately before a rerun
+            # gets wiped before it's ever visible. This is also exactly the
+            # spot that needs to survive the rerun -- "did the email actually
+            # send" was previously impossible to tell from the UI at all.
+            last = st.session_state.get("last_invite_result")
+            if last and last["team_id"] == active_team_id:
+                if last["email_sent"]:
+                    st.success(f"Invited {last['email']} — confirmation email sent.")
+                else:
+                    st.warning(
+                        f"Invited {last['email']} — the row was created, but the email "
+                        f"couldn't be sent (SMTP not configured or delivery failed). "
+                        f"Share this link with them yourself: {APP_URL}"
+                    )
+
             with st.form("invite_form", clear_on_submit=True):
                 email = st.text_input("Invite by email", placeholder="teammate@company.com")
                 submitted = st.form_submit_button("Send invite", type="primary")
             if submitted and email.strip():
                 try:
-                    invite_member(active_team_id, email.strip())
-                    st.success(f"Invited {email.strip()}.")
+                    result = invite_member(active_team_id, email.strip())
+                    st.session_state["last_invite_result"] = {
+                        "team_id": active_team_id,
+                        "email": email.strip(),
+                        "email_sent": result["email_sent"],
+                    }
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not invite: {e}")

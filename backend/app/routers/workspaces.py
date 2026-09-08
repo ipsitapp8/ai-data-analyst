@@ -15,7 +15,15 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.email_sender import send_team_invite_email
 from app.models import Community, Team, TeamMember, User
-from app.schemas import CommunityCreate, CommunityOut, InviteRequest, MemberOut, TeamCreate, TeamOut
+from app.schemas import (
+    CommunityCreate,
+    CommunityOut,
+    InviteRequest,
+    InviteResponse,
+    MemberOut,
+    TeamCreate,
+    TeamOut,
+)
 from app.security import get_current_user
 
 router = APIRouter(prefix="/api", tags=["workspaces"])
@@ -161,7 +169,7 @@ def accept_invite(team_id: int, user: User = Depends(get_current_user), db: Sess
     return {"status": "joined"}
 
 
-@router.post("/teams/{team_id}/invite", response_model=MemberOut)
+@router.post("/teams/{team_id}/invite", response_model=InviteResponse)
 def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     role = _my_role(db, team_id, user.id)
     if role not in ("owner", "admin"):
@@ -199,20 +207,25 @@ def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get
     # failure (including SMTP not being configured at all) rather than
     # raising, so a broken/missing mail setup never breaks invite creation --
     # the pending membership row above is already committed regardless.
-    send_team_invite_email(
+    # The frontend surfaces email_sent so "was an email actually sent" is
+    # never silently unclear the way it was before this field existed.
+    email_sent = send_team_invite_email(
         to_email=email,
         inviter_name=user.display_name,
         community_name=community.name if community else "",
         team_name=team.name,
     )
 
-    return MemberOut(
-        id=invite.id,
-        user_id=invite.user_id,
-        email=email,
-        display_name=existing_user.display_name if existing_user else None,
-        role=invite.role,
-        status=invite.status,
+    return InviteResponse(
+        member=MemberOut(
+            id=invite.id,
+            user_id=invite.user_id,
+            email=email,
+            display_name=existing_user.display_name if existing_user else None,
+            role=invite.role,
+            status=invite.status,
+        ),
+        email_sent=email_sent,
     )
 
 

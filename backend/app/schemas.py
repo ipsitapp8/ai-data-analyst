@@ -73,6 +73,11 @@ class MemberOut(BaseModel):
     status: str
 
 
+class InviteResponse(BaseModel):
+    member: MemberOut
+    email_sent: bool
+
+
 class InspectResponse(BaseModel):
     code: str | None = None
     formula_explanation: str

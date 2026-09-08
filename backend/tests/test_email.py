@@ -77,4 +77,5 @@ def test_invite_endpoint_succeeds_even_without_smtp_configured(client, unique_em
         f"/api/teams/{team_id}/invite", json={"email": f"invitee-{unique_email}"}, headers=headers
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "pending"
+    assert r.json()["member"]["status"] == "pending"
+    assert r.json()["email_sent"] is False

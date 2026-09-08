@@ -10,3 +10,6 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT_DIR / ".env")
 
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000")
+# Public URL of this Streamlit app itself -- used only for the "share this
+# link" fallback shown when an invite email couldn't be sent.
+APP_URL = os.getenv("APP_URL", "http://localhost:8501")
