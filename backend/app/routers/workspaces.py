@@ -25,6 +25,7 @@ from app.schemas import (
     TeamOut,
 )
 from app.security import get_current_user
+from app.validation import is_valid_email
 
 router = APIRouter(prefix="/api", tags=["workspaces"])
 
@@ -181,8 +182,8 @@ def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get
     community = db.get(Community, team.community_id)
 
     email = payload.email.strip().lower()
-    if not email or "@" not in email:
-        raise HTTPException(400, "A valid email is required")
+    if not is_valid_email(email):
+        raise HTTPException(400, "That doesn't look like a valid email address")
 
     existing_user = db.query(User).filter(User.email == email).first()
     already = db.query(TeamMember).filter(

@@ -11,6 +11,7 @@ from app.models import Team, TeamMember, User
 from app.rate_limit import enforce as rate_limit
 from app.schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
 from app.security import create_access_token, get_current_user, hash_password, verify_password
+from app.validation import is_valid_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -23,7 +24,7 @@ def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_d
     rate_limit(f"signup:{request.client.host}", max_attempts=10, window_seconds=60)
 
     email = payload.email.strip().lower()
-    if not email or "@" not in email:
+    if not is_valid_email(email):
         raise HTTPException(400, "A valid email is required")
     if len(payload.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
