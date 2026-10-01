@@ -10,6 +10,7 @@ from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
 from app.models import Dashboard, Question
 from app.storage.audit import record_audit_entry
+from app.verdict import compute_verdict_state
 
 COMPILE_TOOL_SCHEMA = {
     "type": "object",
@@ -62,6 +63,7 @@ def dashboard_node(state: AgentState) -> dict:
 
     step_results = [r for r in state["step_results"] if r["success"]]
     verified = state.get("critic_verdict") == "verified"
+    verdict_state = compute_verdict_state(state.get("critic_verdict"), state.get("revision_count", 0))
 
     user_content = f"""Business question: {state['question_text']}
 
@@ -119,10 +121,11 @@ Critic issues: {state.get('critic_issues')}
         dash_row = Dashboard(
             team_id=team_id,
             question_id=question_id,
-            kpis_json=llm_client.pretty(kpis),
-            charts_json=llm_client.pretty(resolved_charts),
+            kpis_json=kpis,
+            charts_json=resolved_charts,
             narrative=output.get("narrative", ""),
             verified=verified,
+            verdict_state=verdict_state,
             verification_summary=verification_summary,
         )
         db.add(dash_row)
@@ -166,6 +169,7 @@ Critic issues: {state.get('critic_issues')}
             db, question_id,
             element_label="Narrative summary",
             element_type="narrative",
+            element_id=uuid.uuid4().hex,
             reasoning=f"Synthesized from all successful step results. Critic verdict: {state.get('critic_verdict')} — {state.get('critic_summary')}",
             execution_log_id=None,
             critic_review_id=critic_review_id,
@@ -179,6 +183,7 @@ Critic issues: {state.get('critic_issues')}
         "charts": resolved_charts,
         "narrative": output.get("narrative", ""),
         "verified": verified,
+        "verdict_state": verdict_state,
         "verification_summary": verification_summary,
     }
 

@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, get_dataset, list_datasets, upload_dataset
-from style.theme import esc, html, page_header, page_setup, render_sidebar
+from api_client import ApiError, get_dataset, list_datasets, replace_dataset_data, upload_dataset
+from style.theme import esc, html, page_header, page_setup, render_sidebar, require_active_team
 
 page_setup("Datasets")
 render_sidebar("datasets")
+require_active_team("Datasets")
 
 head_l, head_r = st.columns([2.4, 1])
 with head_l:
@@ -90,7 +91,7 @@ with st.container(key="flat_table"):
                   <div style="flex:0.8;" class="ds-row-meta">{d['row_count']:,}</div>
                   <div style="flex:0.8;" class="ds-row-meta">{d['col_count']}</div>
                   <div style="flex:0.9;" class="ds-row-meta">CSV</div>
-                  <div style="flex:1.1;" class="ds-row-meta">#{d['id']}</div>
+                  <div style="flex:1.1;" class="ds-row-meta">#{d['id']} · v{d.get('version', 1)}</div>
                   <div style="flex:1.3;">
                     <div class="ds-quality">
                       <span class="ds-row-meta" style="min-width:38px;">{quality}%</span>
@@ -121,6 +122,23 @@ if datasets:
 
     chosen = datasets[idx]
     st.session_state["active_dataset_id"] = chosen["id"]
+
+    with st.expander(f"Replace data  ·  currently v{chosen.get('version', 1)} "
+                     f"({chosen.get('version_count', 1)} version(s))"):
+        st.caption("Uploads a new version into this dataset. Existing dashboards keep the "
+                   "version they were computed from; new and scheduled runs use the latest.")
+        new_file = st.file_uploader("New CSV", type=["csv"], key=f"replace_{chosen['id']}",
+                                    label_visibility="collapsed")
+        if new_file is not None and st.button("Upload as new version", type="primary",
+                                              key=f"do_replace_{chosen['id']}"):
+            with st.spinner("Uploading & profiling…"):
+                try:
+                    res = replace_dataset_data(chosen["id"], new_file.name, new_file.getvalue())
+                    st.success(f"Now on **v{res['version']}** — {res['row_count']:,} rows, "
+                               f"{res['col_count']} columns.")
+                    st.rerun()
+                except ApiError as e:
+                    st.error(f"Upload failed: {e}")
 
     try:
         full = get_dataset(chosen["id"])

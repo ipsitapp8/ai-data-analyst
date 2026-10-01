@@ -10,10 +10,11 @@ from api_client import (
     get_status,
     list_questions,
 )
-from style.theme import badge, esc, html, page_header, page_setup, render_sidebar
+from style.theme import badge, esc, html, page_header, page_setup, render_sidebar, require_active_team
 
 page_setup("Audit Trail")
 render_sidebar("audit")
+require_active_team("Audit Trail")
 
 qid = st.session_state.get("active_question_id")
 

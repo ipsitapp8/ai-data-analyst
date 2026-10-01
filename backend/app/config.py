@@ -114,4 +114,13 @@ SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
 # needs its own setting.
 APP_URL = os.getenv("APP_URL", "http://localhost:8501")
 
-DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
+# An explicit DATABASE_URL (e.g. postgresql://...) always wins -- production
+# points this at Postgres. Unset falls back to the SQLite file at DB_PATH, so
+# local dev and the existing test suite behave exactly as before.
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{DB_PATH.as_posix()}"
+
+# --- Scheduled re-runs ---
+# How often the in-process scheduler checks for due scheduled_analyses. The
+# daily/weekly intervals themselves are fixed; this is only the polling tick.
+SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() in ("1", "true", "yes")
+SCHEDULER_TICK_SECONDS = int(os.getenv("SCHEDULER_TICK_SECONDS", "60"))

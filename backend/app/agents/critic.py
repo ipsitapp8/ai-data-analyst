@@ -163,8 +163,8 @@ verification recomputed result: {sandbox_result.result}
             question_id=question_id,
             verdict=review_output["verdict"],
             confidence=review_output.get("confidence", 0.0),
-            issues_json=llm_client.pretty(review_output.get("issues", [])),
-            checks_json=llm_client.pretty(checks),
+            issues_json=review_output.get("issues", []),
+            checks_json=checks,
             summary=summary,
         )
         db.add(review_row)

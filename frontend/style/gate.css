@@ -1,0 +1,117 @@
+/* Login / password gate, in the Silt gold skin. Self-contained: it runs before the
+   main theme is injected, so it can't rely on theme tokens. */
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="stExpandSidebarButton"], [data-testid="stHeader"] { display: none !important; }
+.stApp {
+  background:
+    radial-gradient(760px 420px at 78% 18%, rgba(201,161,90,0.16), transparent 62%),
+    radial-gradient(520px 320px at 8% 100%, rgba(201,161,90,0.07), transparent 60%),
+    #0d0c0a !important;
+  font-family: "Inter", -apple-system, "Segoe UI", sans-serif;
+}
+[data-testid="stAppViewContainer"] { background: transparent !important; }
+.block-container { max-width: 440px !important; padding-top: 11vh !important; }
+.gate-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 34px; }
+.gate-mark { font-family: "Newsreader", Georgia, serif; font-size: 2.4rem; line-height: 1; color: #efe8db; font-weight: 400; }
+.gate-eyebrow { font-size: 0.7rem; letter-spacing: 0.26em; text-transform: uppercase; color: #a39b8c; display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.gate-eyebrow::after { content: ""; width: 34px; border-top: 1px solid rgba(201,161,90,0.38); }
+.gate-title { font-family: "Newsreader", Georgia, serif; font-size: 2.5rem; line-height: 1.1; color: #efe8db; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 12px; }
+.gate-sub { color: #a39b8c; font-size: 0.95rem; margin-bottom: 26px; line-height: 1.65; font-family: "Newsreader", Georgia, serif; }
+.gate-foot { margin-top: 30px; font-size: 0.64rem; letter-spacing: 0.22em; text-transform: uppercase; color: #6f695e; }
+
+/* tabs: gold, not Streamlit red */
+[data-baseweb="tab-list"] { gap: 6px; }
+[data-baseweb="tab"] { color: #a39b8c !important; }
+button[aria-selected="true"][data-baseweb="tab"], button[aria-selected="true"][data-baseweb="tab"] p { color: #efe8db !important; }
+[data-baseweb="tab-highlight"] { background-color: #c9a15a !important; }
+[data-baseweb="tab-border"] { background-color: rgba(232,214,180,0.12) !important; }
+
+/* form card + inputs */
+[data-testid="stForm"] { background: rgba(19,18,16,0.85); border: 1px solid rgba(232,214,180,0.16) !important; border-radius: 14px !important; padding: 8px 6px; }
+[data-testid="stTextInput"] label p { color: #a39b8c !important; font-size: 0.82rem !important; }
+[data-testid="stTextInput"] input, [data-testid="stTextInputRootElement"] {
+  background: #0a0908 !important; color: #efe8db !important; border-radius: 8px !important;
+  border-color: rgba(232,214,180,0.2) !important;
+}
+[data-testid="stTextInputRootElement"]:focus-within { border-color: #c9a15a !important; box-shadow: 0 0 0 1px rgba(201,161,90,0.4) !important; }
+[data-testid="stTextInputRootElement"] button { background: transparent !important; color: #a39b8c !important; }
+.stFormSubmitButton > button {
+  background: #f1d9b5 !important; color: #17130a !important; border: none !important;
+  border-radius: 999px !important; font-weight: 600 !important; padding: 0.7em 1.4em !important; box-shadow: none !important;
+}
+.stFormSubmitButton > button:hover { background: #f7e6cb !important; color: #17130a !important; }
+[data-testid="stAlert"] { border-radius: 10px; }
+
+/* ===== split-panel login: sign-up left, log-in right, gold panel slides over the inactive side ===== */
+.st-key-auth_stage {
+  position: relative; overflow: hidden; padding: 0 !important; min-height: 600px;
+  border: 1px solid rgba(232,214,180,0.16); border-radius: 20px; background: rgba(19,18,16,0.88);
+}
+.st-key-auth_stage [data-testid="stHorizontalBlock"] { gap: 0 !important; }
+.st-key-auth_stage [data-testid="stColumn"] { padding: 48px 44px 40px; }
+.st-key-auth_stage [data-testid="stForm"] { border: none !important; background: transparent !important; padding: 0 !important; }
+.st-key-auth_stage .stElementContainer:has(.auth-overlay), .st-key-auth_stage [data-testid="stMarkdown"], .st-key-auth_stage [data-testid="stMarkdownContainer"] { position: static !important; }
+.auth-panel-title { font-family: "Newsreader", Georgia, serif; font-size: 2.1rem; line-height: 1.1; color: #efe8db; letter-spacing: -0.02em; margin-bottom: 8px; }
+.auth-panel-sub { color: #a39b8c; font-size: 0.88rem; margin-bottom: 22px; }
+.auth-overlay {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 50%; z-index: 5; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center; padding: 52px 48px;
+  background: radial-gradient(420px 320px at 70% 20%, rgba(201,161,90,0.30), transparent 65%), linear-gradient(150deg, #1d1810 0%, #0b0a08 100%);
+  border-right: 1px solid rgba(201,161,90,0.38);
+  transition: transform 0.85s cubic-bezier(0.32, 0.72, 0, 1); will-change: transform;
+}
+body.auth-mode-signup .auth-overlay { transform: translateX(100%); border-right: none; border-left: 1px solid rgba(201,161,90,0.38); }
+.auth-ov-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
+.auth-ov-list { list-style: none; margin: 26px 0 0; padding: 0; }
+.auth-ov-list li { color: #efe8db; font-size: 0.92rem; padding: 7px 0; display: flex; gap: 12px; }
+.auth-ov-list li::before { content: "\2713"; color: #c9a15a; }
+.auth-switch { display: inline-block; margin-top: 10px; color: #c9a15a; font-size: 0.86rem; cursor: pointer; text-decoration: none; }
+.auth-switch:hover { color: #e6c88f; text-decoration: underline; }
+[data-testid="stCustomComponentV1"], iframe[height="0"] { position: absolute; width: 0; height: 0; border: 0; overflow: hidden; }
+
+/* ===== moving gold light: two soft patches orbit the login box ===== */
+.stApp::before, .stApp::after {
+  content: ""; position: fixed; top: 50%; left: 50%; border-radius: 50%;
+  pointer-events: none; z-index: 0; filter: blur(46px); will-change: transform;
+  animation: siltOrbit 22s linear infinite;
+}
+.stApp::before { width: 520px; height: 520px; margin: -260px 0 0 -260px;
+  background: radial-gradient(circle, rgba(226,183,104,0.55) 0%, rgba(201,161,90,0.22) 45%, transparent 70%); }
+.stApp::after { width: 380px; height: 380px; margin: -190px 0 0 -190px; animation-delay: -11s; animation-duration: 28s; animation-direction: reverse;
+  background: radial-gradient(circle, rgba(241,217,181,0.38) 0%, rgba(201,161,90,0.14) 50%, transparent 72%); }
+.block-container, [data-testid="stMain"] section { position: relative; z-index: 1; }
+@keyframes siltOrbit {
+  0%    { transform: translate(540px, 0); }
+  12.5% { transform: translate(380px, 250px); }
+  25%   { transform: translate(0, 340px); }
+  37.5% { transform: translate(-380px, 250px); }
+  50%   { transform: translate(-540px, 0); }
+  62.5% { transform: translate(-380px, -250px); }
+  75%   { transform: translate(0, -340px); }
+  87.5% { transform: translate(380px, -250px); }
+  100%  { transform: translate(540px, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .stApp::before, .stApp::after { animation: none; } }
+
+
+/* ===== Apple-style motion: the panel glides on a spring-like curve, the form that leaves
+   drops away (down + fade + slight shrink) and the form that arrives rises into place ===== */
+.st-key-auth_stage [data-testid="stColumn"] {
+  transform-origin: 50% 100%; will-change: transform, opacity;
+  visibility: visible; opacity: 1; transform: translateY(0) scale(1);
+  transition: opacity 0.55s cubic-bezier(0.32, 0.72, 0, 1) 0.18s, transform 0.85s cubic-bezier(0.32, 0.72, 0, 1) 0.12s, visibility 0s linear 0s;
+}
+/* default = log-in mode: the sign-up column (1st) is tucked away */
+.st-key-auth_stage [data-testid="stColumn"]:nth-child(1) { visibility: hidden; opacity: 0; transform: translateY(34px) scale(0.97); pointer-events: none;
+  transition: opacity 0.3s ease 0s, transform 0.6s cubic-bezier(0.32, 0.72, 0, 1) 0s, visibility 0s linear 0.6s; }
+/* sign-up mode: swap */
+body.auth-mode-signup .st-key-auth_stage [data-testid="stColumn"]:nth-child(1) { visibility: visible; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto;
+  transition: opacity 0.55s cubic-bezier(0.32, 0.72, 0, 1) 0.18s, transform 0.85s cubic-bezier(0.32, 0.72, 0, 1) 0.12s, visibility 0s linear 0s; }
+body.auth-mode-signup .st-key-auth_stage [data-testid="stColumn"]:nth-child(2) { visibility: hidden; opacity: 0; transform: translateY(34px) scale(0.97); pointer-events: none;
+  transition: opacity 0.3s ease 0s, transform 0.6s cubic-bezier(0.32, 0.72, 0, 1) 0s, visibility 0s linear 0.6s; }
+
+/* parallax: the panel's copy trails the panel slightly, which reads as depth */
+.auth-overlay > * { transition: transform 0.95s cubic-bezier(0.32, 0.72, 0, 1); }
+body.auth-mode-signup .auth-overlay > * { transform: translateX(-36px); }
+@media (prefers-reduced-motion: reduce) {
+  .auth-overlay, .auth-overlay > *, .st-key-auth_stage [data-testid="stColumn"] { transition-duration: 0.01s !important; transition-delay: 0s !important; }
+}

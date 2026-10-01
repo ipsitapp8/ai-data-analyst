@@ -1,10 +1,12 @@
 # Render Blueprint. Connect this repo on Render (New > Blueprint) and it
 # reads this file automatically.
 #
-# Free plan has an EPHEMERAL disk: app.db, uploads, and workspaces are wiped
-# on every deploy and on every idle spin-down/restart. That's a deliberate
-# tradeoff for a free/testing deployment -- add a persistent disk (needs a
-# paid plan) under this service if you want data to survive restarts:
+# The database is managed Postgres (below), not the app's local disk -- so
+# uploads/workspaces are still ephemeral on the free plan's disk (wiped on
+# deploy/idle spin-down), but the actual data (datasets, questions, dashboards,
+# audit trail) survives, since it now lives in Postgres rather than a SQLite
+# file on that disk. Add a persistent disk under this service only if you also
+# want uploaded CSVs/sandbox workspaces to survive restarts:
 #   disk:
 #     name: data
 #     mountPath: /app/data
@@ -38,3 +40,13 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-data-analyst-db
+          property: connectionString
+
+databases:
+  - name: ai-data-analyst-db
+    plan: free
+    databaseName: silt
+    user: silt

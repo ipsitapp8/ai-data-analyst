@@ -72,7 +72,7 @@ Produce a revised plan that addresses these issues directly.
     try:
         plan_row = Plan(
             question_id=question_id,
-            steps_json=llm_client.pretty(steps),
+            steps_json=steps,
             reasoning=output.get("reasoning", ""),
             revision=state.get("revision_count", 0),
         )

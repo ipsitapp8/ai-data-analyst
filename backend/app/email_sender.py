@@ -65,3 +65,32 @@ def send_team_invite_email(
     except Exception:  # noqa: BLE001 - email delivery must never break the invite endpoint
         logger.exception("Failed to send invite email to %s", to_email)
         return False
+
+
+def send_email(to_emails: list[str], subject: str, text_body: str, html_body: str) -> bool:
+    """Send one message per recipient over a single SMTP session, through the
+    same Gmail SMTP config as invites. Best-effort like the invite path:
+    returns False (never raises) so a mail problem can't break a scheduled run."""
+    if not to_emails:
+        return False
+    if not email_configured():
+        logger.info("SMTP not configured -- skipping email %r to %d recipient(s)", subject, len(to_emails))
+        return False
+
+    try:
+        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            for to_email in to_emails:
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = subject
+                msg["From"] = config.SMTP_FROM
+                msg["To"] = to_email
+                msg.attach(MIMEText(text_body, "plain"))
+                msg.attach(MIMEText(html_body, "html"))
+                server.sendmail(config.SMTP_FROM, [to_email], msg.as_string())
+        logger.info("Sent %r to %d recipient(s)", subject, len(to_emails))
+        return True
+    except Exception:  # noqa: BLE001 - email delivery must never break the caller
+        logger.exception("Failed to send email %r", subject)
+        return False

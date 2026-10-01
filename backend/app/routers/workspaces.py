@@ -16,6 +16,9 @@ from app.database import get_db
 from app.email_sender import send_team_invite_email
 from app.models import Community, Team, TeamMember, User
 from app.schemas import (
+    BulkInviteRequest,
+    BulkInviteResponse,
+    BulkInviteResult,
     CommunityCreate,
     CommunityOut,
     InviteRequest,
@@ -170,39 +173,40 @@ def accept_invite(team_id: int, user: User = Depends(get_current_user), db: Sess
     return {"status": "joined"}
 
 
-@router.post("/teams/{team_id}/invite", response_model=InviteResponse)
-def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    role = _my_role(db, team_id, user.id)
-    if role not in ("owner", "admin"):
-        raise HTTPException(403, "Only a team owner or admin can invite members")
-
-    team = db.get(Team, team_id)
-    if team is None:
-        raise HTTPException(404, "Team not found")
-    community = db.get(Community, team.community_id)
-
-    email = payload.email.strip().lower()
+def _invite_or_resend(db: Session, team: Team, community: Community | None, user: User, raw_email: str) -> InviteResponse:
+    """Shared by the single and bulk invite endpoints. A second invite to an
+    email already `pending` for this team is treated as a resend (refreshes
+    and re-emails the same row) rather than a 409 -- that's what makes
+    re-invite work without a separate endpoint. An email already `active` on
+    the team still raises, since there's nothing useful to resend there."""
+    email = raw_email.strip().lower()
     if not is_valid_email(email):
         raise HTTPException(400, "That doesn't look like a valid email address")
 
     existing_user = db.query(User).filter(User.email == email).first()
     already = db.query(TeamMember).filter(
-        TeamMember.team_id == team_id,
+        TeamMember.team_id == team.id,
         (TeamMember.user_id == existing_user.id) if existing_user else (TeamMember.invited_email == email),
     ).first()
-    if already:
-        raise HTTPException(409, "This person is already a member or has a pending invite")
 
-    invite = TeamMember(
-        team_id=team_id,
-        user_id=existing_user.id if existing_user else None,
-        invited_email=email,
-        role="member",
-        status="pending",
-    )
-    db.add(invite)
-    db.commit()
-    db.refresh(invite)
+    resent = False
+    if already:
+        if already.status == "active":
+            raise HTTPException(409, "This person is already a member of this team")
+        # status == "pending" -> resend: reuse the row, just re-send the email.
+        invite = already
+        resent = True
+    else:
+        invite = TeamMember(
+            team_id=team.id,
+            user_id=existing_user.id if existing_user else None,
+            invited_email=email,
+            role="member",
+            status="pending",
+        )
+        db.add(invite)
+        db.commit()
+        db.refresh(invite)
 
     # Best-effort: send_team_invite_email logs and returns False on any
     # failure (including SMTP not being configured at all) rather than
@@ -227,7 +231,80 @@ def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get
             status=invite.status,
         ),
         email_sent=email_sent,
+        resent=resent,
     )
+
+
+@router.post("/teams/{team_id}/invite", response_model=InviteResponse)
+def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    role = _my_role(db, team_id, user.id)
+    if role not in ("owner", "admin"):
+        raise HTTPException(403, "Only a team owner or admin can invite members")
+
+    team = db.get(Team, team_id)
+    if team is None:
+        raise HTTPException(404, "Team not found")
+    community = db.get(Community, team.community_id)
+
+    return _invite_or_resend(db, team, community, user, payload.email)
+
+
+@router.post("/teams/{team_id}/invite/bulk", response_model=BulkInviteResponse)
+def invite_members_bulk(team_id: int, payload: BulkInviteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    role = _my_role(db, team_id, user.id)
+    if role not in ("owner", "admin"):
+        raise HTTPException(403, "Only a team owner or admin can invite members")
+
+    team = db.get(Team, team_id)
+    if team is None:
+        raise HTTPException(404, "Team not found")
+    community = db.get(Community, team.community_id)
+
+    # Dedupe case-insensitively while preserving the order the user typed
+    # them in, and cap the batch so one paste can't hammer SMTP or the DB.
+    seen: set[str] = set()
+    emails: list[str] = []
+    for raw in payload.emails:
+        e = raw.strip().lower()
+        if e and e not in seen:
+            seen.add(e)
+            emails.append(e)
+    if not emails:
+        raise HTTPException(400, "No email addresses given")
+    if len(emails) > 100:
+        raise HTTPException(400, "Too many addresses in one batch (max 100) -- split into smaller batches")
+
+    results: list[BulkInviteResult] = []
+    for raw_email in emails:
+        try:
+            resp = _invite_or_resend(db, team, community, user, raw_email)
+            action = "resent" if resp.resent else "invited"
+            message = f"{action} -- " + ("email sent" if resp.email_sent else "email not sent (link only)")
+            results.append(BulkInviteResult(email=resp.member.email, ok=True, message=message, email_sent=resp.email_sent))
+        except HTTPException as e:
+            results.append(BulkInviteResult(email=raw_email.strip().lower(), ok=False, message=str(e.detail)))
+
+    return BulkInviteResponse(results=results)
+
+
+@router.delete("/teams/{team_id}/members/{member_id}")
+def revoke_invite(team_id: int, member_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Cancel a pending invite. Deliberately scoped to pending rows only --
+    removing an already-active member is a different, higher-stakes action
+    (loses them their history/access) that wasn't asked for here."""
+    role = _my_role(db, team_id, user.id)
+    if role not in ("owner", "admin"):
+        raise HTTPException(403, "Only a team owner or admin can revoke invites")
+
+    member = db.query(TeamMember).filter(TeamMember.id == member_id, TeamMember.team_id == team_id).first()
+    if member is None:
+        raise HTTPException(404, "Invite not found")
+    if member.status != "pending":
+        raise HTTPException(400, "Only a pending invite can be revoked")
+
+    db.delete(member)
+    db.commit()
+    return {"status": "revoked"}
 
 
 @router.get("/teams/{team_id}/members", response_model=list[MemberOut])

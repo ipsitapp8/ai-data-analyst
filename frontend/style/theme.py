@@ -11,6 +11,7 @@ import copy
 import html as _html_stdlib
 import json
 import time
+import urllib.parse
 from pathlib import Path
 
 import pandas as pd
@@ -26,9 +27,9 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 # Chart data gets real, distinct color even though the UI chrome around it
 # stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
 # do it): plain chrome, legible/vivid data encoding.
-CHART_COLORWAY = ["#4f8fe0", "#3fb87a", "#e0a83e", "#d1596b", "#9575cd", "#41b8c4"]
-ACCENT = "#4f8fe0"      # clear blue -- the one interactive/positive UI color
-ACCENT_2 = "#8a8a8a"    # plain gray -- in-progress/secondary state
+CHART_COLORWAY = ["#c9a15a", "#86b58a", "#7fa8c9", "#d4675c", "#a58fc9", "#d9c7a0"]
+ACCENT = "#c9a15a"      # gold -- the one interactive/brand UI color
+ACCENT_2 = "#a39b8c"    # warm gray -- in-progress/secondary state
 
 BASE_CSS = """
 <style>
@@ -434,6 +435,24 @@ hr { border-color: var(--border) !important; }
 .ds-check { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); }
 .ds-check:last-child { border-bottom: none; }
 .ds-check-label { font-size: 0.87rem; color: var(--text-primary); }
+
+/* ============ VERDICT BANNER ============ */
+.ds-verdict { width: 100%; border-radius: var(--radius-sm); margin: 0 0 20px 0; border: 1px solid; }
+.ds-verdict > summary, .ds-verdict > .ds-verdict-head {
+  list-style: none; display: flex; align-items: center; gap: 12px;
+  padding: 15px 20px; font-size: 1.02rem; font-weight: 600;
+}
+.ds-verdict > summary { cursor: pointer; }
+.ds-verdict > summary::-webkit-details-marker { display: none; }
+.ds-verdict-hint { margin-left: auto; font-size: 0.78rem; font-weight: 400; opacity: 0.85; }
+.ds-verdict-body { padding: 4px 20px 18px 20px; font-size: 0.9rem; line-height: 1.65; color: var(--text-primary); }
+.ds-verdict-body ul { margin: 6px 0 12px 18px; padding: 0; }
+.ds-verdict-ok   { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
+.ds-verdict-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+.ds-verdict-bad  { background: var(--error-bg); color: var(--error); border-color: var(--error-border); }
+.ds-flag { color: var(--warn); font-weight: 700; }
+.ds-flag-bad { color: var(--error); font-weight: 700; }
+.ds-trend-up { color: var(--accent); } .ds-trend-down { color: var(--error); } .ds-trend-flat { color: var(--text-secondary); }
 </style>
 """
 
@@ -469,8 +488,48 @@ def html(markup: str) -> None:
     st.markdown(flat, unsafe_allow_html=True)
 
 
+_FONTS_LINK = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600'
+    '&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap" rel="stylesheet">'
+)
+
+# Line icons for the sidebar nav, drawn as CSS masks so they inherit the row's colour.
+_NAV_ICONS = {
+    "home": '<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/>',
+    "overview": '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
+    "datasets": '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+    "analyses": '<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>',
+    "scheduled": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    "dashboards": '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+    "reports": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M8.5 13h7M8.5 17h5"/>',
+    "audit": '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2"/>',
+    "workspaces": '<path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/>',
+    "team_overview": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3 3 0 0 1 0 6M18 14c1.8.6 3 2.4 3 4.5"/>',
+    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+}
+
+
+def _nav_icon_css() -> str:
+    rules = []
+    for key, body in _NAV_ICONS.items():
+        svg = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' "
+               "stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>" + body.replace('"', "'") + "</svg>")
+        uri = "data:image/svg+xml;utf8," + urllib.parse.quote(svg, safe="/:=' ,.-()")
+        rules.append(f'.st-key-nav_{key} button {{ --icon: url("{uri}"); }}')
+    return " ".join(rules)
+
+
 def inject_base_css() -> None:
+    skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8")
+    # Flatten to one line: markdown ends an HTML block at the first blank line,
+    # which would spill the rest of the stylesheet onto the page as text.
+    skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())
     st.markdown(BASE_CSS, unsafe_allow_html=True)
+    st.markdown(_FONTS_LINK, unsafe_allow_html=True)
+    st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
 
 
 def page_setup(title: str, sidebar: bool = True) -> None:
@@ -557,6 +616,7 @@ NAV_PAGES = [
     ("overview", "Overview", "pages/1_Overview.py"),
     ("datasets", "Datasets", "pages/2_Datasets.py"),
     ("analyses", "Analyses", "pages/3_Analyses.py"),
+    ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
     ("audit", "Audit trail", "pages/6_Audit_Trail.py"),
@@ -624,44 +684,76 @@ def _render_workspace_switcher() -> None:
         st.session_state["active_team_id"] = teams[t_idx]["id"]
 
 
+def _active_workspace_name(user: dict | None) -> str:
+    try:
+        communities = _cached_my_workspaces()["communities"]
+    except ApiError:
+        communities = []
+    active_team = st.session_state.get("active_team_id")
+    for c in communities:
+        if any(t["id"] == active_team for t in c["teams"]):
+            return c["name"]
+    return (user or {}).get("display_name", "Workspace")
+
+
+def render_topbar() -> None:
+    """Fixed top strip, right-aligned: live backend status and the active workspace."""
+    user = current_user()
+    alive = _backend_alive()
+    name = _active_workspace_name(user)
+    initials = "".join(w[0] for w in (user or {}).get("display_name", name).split()[:2]).upper() or "•"
+    html(
+        f"""
+        <div class="silt-topbar">
+          <div class="silt-tb-status"><span class="silt-dot {'silt-dot-on' if alive else 'silt-dot-off'}"></span>
+            {'Backend online' if alive else 'Backend unreachable'}</div>
+          <div class="silt-tb-user"><div class="silt-tb-avatar">{esc(initials)}</div>
+            <div class="silt-tb-ws">{esc(name)}</div></div>
+        </div>
+        """
+    )
+
+
+_LOGO = (
+    '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f1d9b5" stroke-width="1.7" '
+    'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
+)
+
+
 def render_sidebar(current: str) -> None:
-    """Brand mark, workspace switcher, numbered nav rail, and a quiet live
-    system-status line."""
+    """Logo, icon nav rail, workspace switcher, log-out; plus the top status strip."""
+    render_topbar()
     with st.sidebar:
-        html(
-            """
-            <div class="silt-brand">
-              <div class="silt-brand-name">Silt</div>
-              <div class="silt-brand-sub">Data Analyst</div>
-            </div>
-            """
-        )
-        _render_workspace_switcher()
+        html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
         with st.container(key="nav"):
-            for i, (key, label, target) in enumerate(NAV_PAGES, start=1):
-                if st.button(f"{i:02d}  {label}", key=f"nav_{key}", disabled=(key == current)):
+            for key, label, target in NAV_PAGES:
+                if st.button(label, key=f"nav_{key}", disabled=(key == current)):
                     st.switch_page(target)
+            if current_user() and st.button("Log out", key="nav_logout"):
+                logout()
+                st.rerun()
 
-        alive = _backend_alive()
-        dot_cls = "silt-dot-on" if alive else "silt-dot-off"
-        status = "backend online" if alive else "backend unreachable"
+        html('<div class="silt-ws-label">Workspace</div>')
+        _render_workspace_switcher()
+
         html(
-            f"""
-            <div class="silt-status">
-              <span class="silt-dot {dot_cls}"></span>{status}
-            </div>
-            """
+            '<div class="silt-tagline"></div>'
+            '<div class="silt-tagline-text">Turning your data<br>into decisions.</div>'
         )
 
-        user = current_user()
-        if user:
-            u_l, u_r = st.columns([3, 1])
-            with u_l:
-                html(f'<div class="silt-status" style="border-top:none;">{esc(user["display_name"])}</div>')
-            with u_r:
-                if st.button("⏻", key="nav_logout", help="Log out"):
-                    logout()
-                    st.rerun()
+
+def require_active_team(title: str = "") -> None:
+    """Stop the page with a pointer to Workspaces when the user has no active
+    team. Team-scoped API calls need an X-Team-Id, so without one they fail
+    with a 400 that would otherwise be shown as "Backend unreachable"."""
+    if st.session_state.get("active_team_id"):
+        return
+    if title:
+        page_header(title)
+    st.info("You're not in a team yet. Create a workspace or accept an invite to use this page.")
+    if st.button("Go to Workspaces  →", type="primary", key="need_team_go"):
+        st.switch_page("pages/8_Workspaces.py")
+    st.stop()
 
 
 def page_header(title: str, subtitle: str = "") -> None:
@@ -678,6 +770,61 @@ def badge(text: str, kind: str = "neutral") -> str:
         if kind == "verified" else ""
     )
     return f'<span class="ds-badge ds-badge-{kind}">{check}{esc(text)}</span>'
+
+
+VERDICT_META = {
+    "VERIFIED": ("verified", "Verified"),
+    "VERIFIED_WITH_CAVEATS": ("warn", "Verified with caveats"),
+    "UNVERIFIED": ("error", "Unverified"),
+}
+
+
+def verdict_badge(state: str | None) -> str:
+    kind, label = VERDICT_META.get(state or "", ("neutral", "No verdict"))
+    return badge(label, kind)
+
+
+def _rejections_html(rejections: list[dict]) -> str:
+    parts = []
+    for r in rejections:
+        issues = "".join(f"<li>{esc(i)}</li>" for i in r.get("issues") or [])
+        parts.append(
+            f'<div><b>Critic&#39;s reasoning:</b> {esc(r.get("summary") or "No summary given.")}'
+            f'{"<ul>" + issues + "</ul>" if issues else ""}</div>'
+        )
+    return "".join(parts)
+
+
+def render_verdict_banner(dash: dict) -> None:
+    """Full-width trust banner; call before any KPI. Amber/red expand inline to
+    the Critic's actual rejection reasoning."""
+    state = dash.get("verdict_state") or ("VERIFIED" if dash.get("verified") else "UNVERIFIED")
+    rejections = dash.get("rejections") or []
+    if state == "VERIFIED":
+        html('<div class="ds-verdict ds-verdict-ok"><div class="ds-verdict-head">✓ Fully Verified</div></div>')
+        return
+    if state == "VERIFIED_WITH_CAVEATS":
+        cls, icon = "ds-verdict-warn", "⚠"
+        n = dash.get("flagged_count", 0)
+        title = f"Verified with caveats — {n} item(s) flagged"
+    else:
+        cls, icon = "ds-verdict-bad", "⛔"
+        title = "Unverified — Critic could not confirm this analysis"
+    body = _rejections_html(rejections) or esc(dash.get("verification_summary") or "No reasoning was recorded.")
+    html(
+        f'<details class="ds-verdict {cls}"><summary><span>{icon}</span><span>{esc(title)}</span>'
+        f'<span class="ds-verdict-hint">Show Critic reasoning ▾</span></summary>'
+        f'<div class="ds-verdict-body">{body}</div></details>'
+    )
+
+
+def trend_html(trend: str | None) -> str:
+    arrow = {"up": "▲ Up", "down": "▼ Down", "flat": "▬ Flat"}.get(trend or "")
+    return f'<span class="ds-trend-{trend}">{arrow}</span>' if arrow else '<span class="ds-row-meta">—</span>'
+
+
+def trigger_badge(trigger: str | None) -> str:
+    return badge("Scheduled", "running") if trigger == "scheduled" else badge("Manual", "neutral")
 
 
 def stat_card(label: str, value: str, delta: str = "", direction: str = "up") -> str:
@@ -839,6 +986,13 @@ def _inspect_dialog() -> None:
         st.dataframe(pd.DataFrame(rows, columns=columns), use_container_width=True, height=240)
     else:
         html('<div class="ds-row-meta" style="margin-top:6px;">No data slice was recorded for this element.</div>')
+
+    if data.get("flagged"):
+        html('<div class="ds-section-title ds-flag-bad" style="margin-top:18px;">⚠ Critic reasoning</div>')
+        issues = "".join(f"<li>{esc(i)}</li>" for i in data.get("critic_issues") or [])
+        html(f'<div style="font-size:0.9rem;color:var(--text-primary);margin-top:6px;line-height:1.6;">'
+             f'{esc(data.get("critic_reasoning") or "")}'
+             f'{"<ul>" + issues + "</ul>" if issues else ""}</div>')
 
     html("<div style='height:10px'></div>")
     if st.button("Close", key="inspect_close"):

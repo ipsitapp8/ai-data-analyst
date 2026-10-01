@@ -2,8 +2,6 @@
 formula, and data slice that produced it -- the audit trail surfaced inline."""
 from __future__ import annotations
 
-import json
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -35,18 +33,24 @@ def inspect_element(
     if not entry:
         raise HTTPException(404, "Element not found")
 
+    review = entry.critic_review
+    flagged = review is not None and review.verdict == "rejected"
+    critic = {
+        "flagged": flagged,
+        "critic_reasoning": (review.summary or "The Critic rejected this result.") if flagged else None,
+        "critic_issues": list(review.issues_json or []) if flagged else [],
+    }
+
     log = entry.execution_log
     if log is None:
         return InspectResponse(
             code=None,
             formula_explanation="Synthesized from all verified step results — no single formula.",
             data_slice={"columns": [], "rows": []},
+            **critic,
         )
 
-    try:
-        data_slice = json.loads(log.data_slice_json) if log.data_slice_json else {}
-    except json.JSONDecodeError:
-        data_slice = {}
+    data_slice = log.data_slice_json or {}
     if not data_slice.get("columns"):
         data_slice = {"columns": [], "rows": []}
 
@@ -54,4 +58,5 @@ def inspect_element(
         code=log.code,
         formula_explanation=log.formula_explanation or "No formula was recorded for this step.",
         data_slice=data_slice,
+        **critic,
     )

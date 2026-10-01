@@ -261,7 +261,10 @@ class SubprocessSandboxRunner(SandboxRunner):
         before = {p.name for p in output_dir.glob("*")}
 
         script_path = ws / f"step{step_index}_attempt{attempt}.py"
-        script_path.write_text(code, encoding="utf-8")
+        # Generated scripts use the container mount point. Map it to the real
+        # workspace when the development fallback runs directly on the host.
+        host_code = code.replace("/workspace", ws.as_posix())
+        script_path.write_text(host_code, encoding="utf-8")
         _chown_workspace(ws)
 
         popen_kwargs = {

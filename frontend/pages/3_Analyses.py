@@ -12,10 +12,11 @@ from api_client import (
     list_datasets,
     list_questions,
 )
-from style.theme import ACCENT, ACCENT_2, badge, esc, html, page_header, page_setup, plot, render_sidebar
+from style.theme import ACCENT, ACCENT_2, badge, esc, html, page_header, page_setup, plot, render_sidebar, require_active_team
 
 page_setup("Analyses")
 render_sidebar("analyses")
+require_active_team("New Analysis")
 
 STAGE_LABELS = {
     "queued": "Queued",
@@ -54,6 +55,7 @@ if not qid:
                            format_func=lambda i: labels[i])
 
         question = st.text_area("Question", height=110,
+                                value=st.session_state.pop("prefill_question", ""),
                                 placeholder="Why did revenue drop in Q3?",
                                 label_visibility="collapsed")
         if st.button("Run Analysis  →", type="primary", key="an_run",

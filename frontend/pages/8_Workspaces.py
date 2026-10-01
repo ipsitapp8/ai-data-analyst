@@ -9,9 +9,11 @@ from api_client import (
     create_community,
     create_team,
     invite_member,
+    invite_members_bulk,
     list_communities,
     list_members,
     my_invites,
+    revoke_invite,
 )
 from config import APP_URL
 from style.theme import badge, esc, html, invalidate_workspaces_cache, page_header, page_setup, render_sidebar
@@ -109,6 +111,13 @@ with col_r:
     active_team_id = st.session_state.get("active_team_id")
     active_community = next((c for c in communities if c["id"] == active_community_id), None)
 
+    active_role = None
+    for c in communities:
+        for t in c["teams"]:
+            if t["id"] == active_team_id:
+                active_role = t["role"]
+    can_manage_members = active_role in ("owner", "admin")
+
     with st.container(key="card_new_team"):
         html('<div class="ds-section-title">Create a team</div>')
         html("<div style='height:8px'></div>")
@@ -143,12 +152,39 @@ with col_r:
                 st.error(f"Could not load members: {e}")
             for m in members:
                 kind = "verified" if m["status"] == "active" else "warn"
+                # Pending invites have no display_name yet, so title falls
+                # back to the email -- don't also repeat it on the meta line.
+                title = m["display_name"] or m["email"]
+                meta = f'{esc(m["email"])} · {esc(m["role"])}' if m["display_name"] else esc(m["role"])
                 html(
                     f'<div class="ds-row" style="padding:10px 0;border-top:1px solid var(--border);">'
-                    f'<div><div class="ds-row-title">{esc(m["display_name"] or m["email"])}</div>'
-                    f'<div class="ds-row-meta">{esc(m["email"])} · {esc(m["role"])}</div></div>'
+                    f'<div><div class="ds-row-title">{esc(title)}</div>'
+                    f'<div class="ds-row-meta">{meta}</div></div>'
                     f'<div class="ds-row-spacer"></div>{badge(m["status"], kind)}</div>'
                 )
+                if m["status"] == "pending" and can_manage_members:
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("Resend", key=f"resend_{m['id']}", use_container_width=True):
+                            try:
+                                result = invite_member(active_team_id, m["email"])
+                                st.session_state["last_invite_result"] = {
+                                    "team_id": active_team_id,
+                                    "email": m["email"],
+                                    "email_sent": result["email_sent"],
+                                    "resent": result["resent"],
+                                }
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not resend: {e}")
+                    with b2:
+                        if st.button("Revoke", key=f"revoke_{m['id']}", use_container_width=True):
+                            try:
+                                revoke_invite(active_team_id, m["id"])
+                                invalidate_workspaces_cache()
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not revoke: {e}")
 
             html("<div style='height:12px'></div>")
 
@@ -159,26 +195,68 @@ with col_r:
             # send" was previously impossible to tell from the UI at all.
             last = st.session_state.get("last_invite_result")
             if last and last["team_id"] == active_team_id:
+                verb = "Resent invite to" if last.get("resent") else "Invited"
                 if last["email_sent"]:
-                    st.success(f"Invited {last['email']} — confirmation email sent.")
+                    st.success(f"{verb} {last['email']} — confirmation email sent.")
                 else:
                     st.warning(
-                        f"Invited {last['email']} — the row was created, but the email "
+                        f"{verb} {last['email']} — the row was created, but the email "
                         f"couldn't be sent (SMTP not configured or delivery failed). "
                         f"Share this link with them yourself: {APP_URL}"
                     )
 
-            with st.form("invite_form", clear_on_submit=True):
-                email = st.text_input("Invite by email", placeholder="teammate@company.com")
-                submitted = st.form_submit_button("Send invite", type="primary")
-            if submitted and email.strip():
-                try:
-                    result = invite_member(active_team_id, email.strip())
-                    st.session_state["last_invite_result"] = {
-                        "team_id": active_team_id,
-                        "email": email.strip(),
-                        "email_sent": result["email_sent"],
-                    }
-                    st.rerun()
-                except ApiError as e:
-                    st.error(f"Could not invite: {e}")
+            bulk_result = st.session_state.get("last_bulk_invite_result")
+            if bulk_result and bulk_result["team_id"] == active_team_id:
+                ok = [r for r in bulk_result["results"] if r["ok"]]
+                failed = [r for r in bulk_result["results"] if not r["ok"]]
+                if ok:
+                    st.success(f"{len(ok)} invited/resent: " + ", ".join(r["email"] for r in ok))
+                if failed:
+                    st.warning(
+                        f"{len(failed)} skipped: "
+                        + ", ".join(f"{r['email']} ({r['message']})" for r in failed)
+                    )
+
+            tab_one, tab_many = st.tabs(["Invite one", "Invite many at once"])
+            with tab_one:
+                with st.form("invite_form", clear_on_submit=True):
+                    email = st.text_input("Invite by email", placeholder="teammate@company.com")
+                    submitted = st.form_submit_button("Send invite", type="primary")
+                if submitted and email.strip():
+                    try:
+                        result = invite_member(active_team_id, email.strip())
+                        st.session_state["last_invite_result"] = {
+                            "team_id": active_team_id,
+                            "email": email.strip(),
+                            "email_sent": result["email_sent"],
+                            "resent": result["resent"],
+                        }
+                        st.session_state.pop("last_bulk_invite_result", None)
+                        st.rerun()
+                    except ApiError as e:
+                        st.error(f"Could not invite: {e}")
+            with tab_many:
+                html(
+                    "<div class='ds-row-meta'>Paste your whole company's addresses at once — "
+                    "one per line, or separated by commas. Each gets its own invite email; "
+                    "nobody needs to be entered one at a time.</div>"
+                )
+                with st.form("bulk_invite_form", clear_on_submit=True):
+                    bulk_text = st.text_area(
+                        "Emails", label_visibility="collapsed", height=120,
+                        placeholder="alice@company.com\nbob@company.com, carol@company.com",
+                    )
+                    bulk_submitted = st.form_submit_button("Send invites", type="primary")
+                if bulk_submitted and bulk_text.strip():
+                    raw = bulk_text.replace(",", "\n").replace(";", "\n").splitlines()
+                    emails = [e.strip() for e in raw if e.strip()]
+                    try:
+                        result = invite_members_bulk(active_team_id, emails)
+                        st.session_state["last_bulk_invite_result"] = {
+                            "team_id": active_team_id,
+                            "results": result["results"],
+                        }
+                        st.session_state.pop("last_invite_result", None)
+                        st.rerun()
+                    except ApiError as e:
+                        st.error(f"Could not send bulk invites: {e}")

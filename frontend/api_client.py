@@ -126,6 +126,22 @@ def invite_member(team_id: int, email: str) -> dict:
     return _handle(resp)
 
 
+def invite_members_bulk(team_id: int, emails: list[str]) -> dict:
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/teams/{team_id}/invite/bulk", json={"emails": emails},
+        headers=_headers(with_team=False), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def revoke_invite(team_id: int, member_id: int) -> dict:
+    resp = requests.delete(
+        f"{BACKEND_BASE_URL}/api/teams/{team_id}/members/{member_id}",
+        headers=_headers(with_team=False), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
 def list_members(team_id: int) -> list[dict]:
     resp = requests.get(
         f"{BACKEND_BASE_URL}/api/teams/{team_id}/members",
@@ -183,5 +199,45 @@ def inspect_element(dashboard_id: int, element_id: str) -> dict:
     resp = requests.get(
         f"{BACKEND_BASE_URL}/api/dashboards/{dashboard_id}/elements/{element_id}/inspect",
         headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def replace_dataset_data(dataset_id: int, filename: str, file_bytes: bytes) -> dict:
+    files = {"file": (filename, file_bytes, "text/csv")}
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/versions", files=files, headers=_headers(), timeout=TIMEOUT
+    )
+    return _handle(resp)
+
+
+# ---------------------------------------------------------------- scheduled --
+
+def list_scheduled() -> list[dict]:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/scheduled-analyses", headers=_headers(), timeout=TIMEOUT))
+
+
+def create_scheduled(dataset_id: int, question: str, interval: str = "daily",
+                     change_threshold_pct: float = 10.0) -> dict:
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/scheduled-analyses",
+        json={"dataset_id": dataset_id, "question": question, "interval": interval,
+              "change_threshold_pct": change_threshold_pct},
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def update_scheduled(scheduled_id: int, **fields) -> dict:
+    resp = requests.patch(
+        f"{BACKEND_BASE_URL}/api/scheduled-analyses/{scheduled_id}", json=fields,
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def delete_scheduled(scheduled_id: int) -> dict:
+    resp = requests.delete(
+        f"{BACKEND_BASE_URL}/api/scheduled-analyses/{scheduled_id}", headers=_headers(), timeout=TIMEOUT,
     )
     return _handle(resp)

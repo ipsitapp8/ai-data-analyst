@@ -4,17 +4,22 @@ from __future__ import annotations
 import streamlit as st
 
 from api_client import ApiError, list_questions
-from style.theme import badge, esc, html, page_header, page_setup, render_sidebar
+from style.theme import (
+    require_active_team,
+    badge,
+    esc,
+    html,
+    page_header,
+    page_setup,
+    render_sidebar,
+    trigger_badge,
+    verdict_badge,
+)
 
 page_setup("Team Overview")
 render_sidebar("team_overview")
 
-if not st.session_state.get("active_team_id"):
-    page_header("Team Overview")
-    st.info("No active team selected yet.")
-    if st.button("Go to Workspaces  →", type="primary", key="tov_go_ws"):
-        st.switch_page("pages/8_Workspaces.py")
-    st.stop()
+require_active_team("Team Overview")
 
 page_header("Team Overview", "Every analysis this team has run, newest first.")
 
@@ -33,8 +38,8 @@ with st.container(key="flat_timeline"):
             "</div>"
         )
     for q in questions:
-        if q["status"] == "verified":
-            kind, label = "verified", "Verified"
+        if q.get("verdict_state"):
+            kind, label = None, None  # rendered via verdict_badge below
         elif q["status"] in ("planning", "executing", "critic", "dashboard", "queued", "running"):
             kind, label = "running", "Running"
         elif q["status"] == "rejected":
@@ -48,7 +53,8 @@ with st.container(key="flat_timeline"):
                 f'<div class="ds-row" style="border-top:1px solid var(--border);">'
                 f'<div><div class="ds-row-title">{esc(q["text"][:80])}</div>'
                 f'<div class="ds-row-meta">{esc(q["age"])} · {q["kpi_count"]} KPI(s)</div></div>'
-                f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
+                f'<div class="ds-row-spacer"></div>{trigger_badge(q.get("trigger"))}&nbsp;'
+                f'{verdict_badge(q["verdict_state"]) if q.get("verdict_state") else badge(label, kind)}</div>'
             )
         with c2:
             if q.get("has_dashboard") and st.button("Open", key=f"tov_open_{q['id']}"):

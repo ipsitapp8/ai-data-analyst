@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, get_dashboard, get_status, list_questions
+from api_client import ApiError, create_scheduled, get_dashboard, get_status, list_questions
 from style.theme import (
-    badge,
+    require_active_team,
     esc,
     figure_from_json,
     html,
@@ -15,10 +15,19 @@ from style.theme import (
     plot,
     render_inspect_dialog_if_open,
     render_sidebar,
+    render_verdict_banner,
+    verdict_badge,
 )
 
 page_setup("Dashboards")
 render_sidebar("dashboards")
+require_active_team("Dashboards")
+
+# Deep link from alert emails: /Dashboards?question=<id>
+_linked = st.query_params.get("question")
+if _linked and str(_linked).isdigit():
+    st.session_state["active_question_id"] = int(_linked)
+    st.query_params.clear()
 
 qid = st.session_state.get("active_question_id")
 
@@ -44,13 +53,11 @@ if not qid:
         for q in ready:
             c1, c2 = st.columns([5, 1])
             with c1:
-                kind = "verified" if q["status"] == "verified" else "warn"
-                label = "Verified" if q["status"] == "verified" else "Needs review"
                 html(
                     f'<div class="ds-row" style="border-top:none;">'
                     f'<div><div class="ds-row-title">{esc(q["text"][:70])}</div>'
                     f'<div class="ds-row-meta">Updated {q["age"]}</div></div>'
-                    f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
+                    f'<div class="ds-row-spacer"></div>{verdict_badge(q.get("verdict_state"))}</div>'
                 )
             with c2:
                 if st.button("Open", key=f"db_open_{q['id']}"):
@@ -89,7 +96,7 @@ if st.button("←  All dashboards", key="db_back"):
     st.rerun()
 html("<div style='height:4px'></div>")
 
-verified = dash["verified"]
+verdict_state = dash.get("verdict_state")
 head_l, head_r = st.columns([3, 1])
 with head_l:
     html(
@@ -98,13 +105,32 @@ with head_l:
     html(
         f'<div style="display:flex;align-items:center;gap:11px;margin-bottom:24px;">'
         f'<span class="ds-row-meta">Analysis #{qid}</span>'
-        f'{badge("Verified" if verified else "Needs review", "verified" if verified else "warn")}'
-        f"</div>"
+        f'{verdict_badge(verdict_state)}'
+        + (f'<span class="ds-row-meta">Data v{dash["dataset_version"]}</span>' if dash.get("dataset_version") else "")
+        + "</div>"
     )
 with head_r:
     html("<div style='height:12px'></div>")
     if st.button("Audit Trail  →", key="db_audit"):
         st.switch_page("pages/6_Audit_Trail.py")
+    with st.popover("Track this question", use_container_width=True):
+        interval = st.radio("Re-run", ["daily", "weekly"], horizontal=True, key="track_interval")
+        threshold = st.number_input("Alert when a KPI changes by more than (%)", min_value=0.0,
+                                    value=10.0, step=1.0, key="track_threshold")
+        if st.button("Start tracking", type="primary", key="track_go"):
+            src = next((q for q in questions if q["id"] == qid), None)
+            if not src:
+                st.error("Could not find this question's dataset.")
+            else:
+                try:
+                    create_scheduled(src["dataset_id"], status.get("question_text") or src["text"],
+                                     interval, threshold)
+                    st.success("Tracking started — see the Scheduled page.")
+                except ApiError as e:
+                    st.error(f"Could not schedule: {e}")
+
+# The trust signal: first thing on the page, above every KPI.
+render_verdict_banner(dash)
 
 dashboard_id = dash["id"]
 
@@ -114,7 +140,8 @@ if kpis:
     for col, kpi in zip(cols, kpis[:4]):
         with col:
             element_id = kpi.get("element_id")
-            label = f"{kpi.get('label', '')}  \n**{kpi.get('value', '')}**"
+            flag = "⚠️ " if kpi.get("flagged") else ""
+            label = f"{flag}{kpi.get('label', '')}  \n**{kpi.get('value', '')}**"
             with st.container(key=f"kpi_{element_id or kpi.get('label', '')}"):
                 if st.button(label, key=f"kpibtn_{element_id or kpi.get('label', '')}",
                              use_container_width=True, disabled=not element_id):
@@ -132,7 +159,16 @@ if charts:
                 element_id = chart.get("element_id")
                 container_key = f"chartcard_{element_id}" if element_id else f"card_ch{i}_{chart['step_index']}"
                 with st.container(key=container_key):
-                    html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
+                    if chart.get("flagged") and element_id:
+                        t_col, f_col = st.columns([5, 1])
+                        with t_col:
+                            html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
+                        with f_col:
+                            if st.button("⚠️", key=f"flag_{element_id}", help="Flagged by the Critic — see why"):
+                                open_inspect(dashboard_id, element_id)
+                                st.rerun()
+                    else:
+                        html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
                     html("<div style='height:8px'></div>")
                     try:
                         fig = figure_from_json(chart["plotly_json"])
@@ -149,7 +185,17 @@ render_inspect_dialog_if_open()
 
 if dash.get("narrative"):
     with st.container(key="card_narr"):
-        html('<div class="ds-section-title">Narrative Summary</div>')
+        n_col, nf_col = st.columns([6, 1])
+        with n_col:
+            html('<div class="ds-section-title">Narrative Summary</div>')
+        with nf_col:
+            if dash.get("narrative_flagged"):
+                if dash.get("narrative_element_id"):
+                    if st.button("⚠️", key="flag_narrative", help="Flagged by the Critic — see why"):
+                        open_inspect(dashboard_id, dash["narrative_element_id"])
+                        st.rerun()
+                else:
+                    html('<span class="ds-flag" title="Flagged by the Critic">⚠️</span>')
         html(
             f'<div style="font-size:0.97rem;line-height:1.75;color:var(--text-primary);'
             f'margin-top:10px;">{esc(dash["narrative"])}</div>'
@@ -160,7 +206,7 @@ if dash.get("verification_summary"):
     with st.container(key="card_verif"):
         html(
             f'<div style="display:flex;align-items:center;gap:10px;">'
-            f'{badge("Verified" if verified else "Needs review", "verified" if verified else "warn")}'
+            f'{verdict_badge(verdict_state)}'
             f'<div class="ds-section-title">Verification</div></div>'
             f'<div class="ds-row-meta" style="margin-top:10px;line-height:1.7;">'
             f'{esc(dash["verification_summary"])}</div>'

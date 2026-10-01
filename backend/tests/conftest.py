@@ -25,8 +25,17 @@ os.environ["SANDBOX_BACKEND"] = "subprocess"
 # stops a developer's real SMTP_USER/SMTP_PASSWORD in their local .env from
 # leaking into the test run and sending real mail to fake @test.example
 # addresses.
+# Tests drive the scheduler tick by hand; a live background tick would race them.
+os.environ["SCHEDULER_ENABLED"] = "false"
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASSWORD"] = ""
+# Same reasoning as SMTP above: a developer's real local .env DATABASE_URL
+# must never leak into a test run and point tests at real Postgres by
+# accident. TEST_DATABASE_URL is a distinctly-named opt-in for when a
+# Postgres-backed test run is actually wanted (e.g. the CI job that verifies
+# the Postgres/Alembic path) -- nobody's real .env coincidentally has this
+# exact name set, so it's never accidentally picked up.
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

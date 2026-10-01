@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -25,9 +26,15 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+# Portable JSON column type: native JSONB on Postgres, SQLite's built-in JSON
+# handling everywhere else. Either way SQLAlchemy (de)serializes automatically --
+# callers get/set a plain dict/list, no manual json.loads/json.dumps needed.
+JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 def utcnow() -> dt.datetime:
@@ -98,10 +105,55 @@ class Dataset(Base):
     filepath = Column(String, nullable=False)
     row_count = Column(Integer, default=0)
     col_count = Column(Integer, default=0)
-    profile_json = Column(Text, default="{}")  # column types, missing values, stats
+    profile_json = Column(JSONVariant, default=dict)  # column types, missing values, stats
     uploaded_at = Column(DateTime, default=utcnow)
 
     questions = relationship("Question", back_populates="dataset")
+    versions = relationship(
+        "DatasetVersion", back_populates="dataset", order_by="DatasetVersion.version_number"
+    )
+
+
+class DatasetVersion(Base):
+    """One uploaded file within a dataset "slot". The Dataset row keeps its id
+    (and mirrors the latest version's file/profile so existing readers keep
+    working); each "Replace data" upload adds a row here instead of creating an
+    unrelated dataset. Questions pin the version they ran against, so an old
+    dashboard never silently changes when newer data arrives."""
+
+    __tablename__ = "dataset_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False)
+    filename = Column(String, nullable=False)
+    filepath = Column(String, nullable=False)
+    row_count = Column(Integer, default=0)
+    col_count = Column(Integer, default=0)
+    profile_json = Column(JSONVariant, default=dict)
+    uploaded_at = Column(DateTime, default=utcnow)
+
+    dataset = relationship("Dataset", back_populates="versions")
+
+
+class ScheduledAnalysis(Base):
+    """A question saved to be re-run on an interval; see app/scheduler.py."""
+
+    __tablename__ = "scheduled_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    question_text = Column(Text, nullable=False)
+    interval = Column(String, nullable=False, default="daily")  # daily|weekly
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    last_run_at = Column(DateTime, nullable=True)
+    last_dashboard_id = Column(Integer, ForeignKey("dashboards.id"), nullable=True)
+    change_threshold_pct = Column(Float, nullable=False, default=10.0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    last_trend = Column(String, nullable=True)  # up|down|flat, since the previous run
+    last_change_summary = Column(Text, default="")
 
 
 class Question(Base):
@@ -115,6 +167,13 @@ class Question(Base):
     current_stage = Column(String, default="queued")
     stage_detail = Column(Text, default="")  # short human-readable status line
     error = Column(Text, nullable=True)
+    # Additive: the exact dataset version this run analyzed (NULL on legacy
+    # rows), and whether a person or the scheduler started it.
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    trigger = Column(String, nullable=False, default="manual", server_default="manual")  # manual|scheduled
+    # Deliberately not an FK: scheduled_analyses.last_dashboard_id -> dashboards
+    # -> questions would make the FK graph circular, which SQLite can't create.
+    scheduled_analysis_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -131,7 +190,7 @@ class Plan(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
-    steps_json = Column(Text, nullable=False)  # list[{id, description, goal}]
+    steps_json = Column(JSONVariant, nullable=False)  # list[{id, description, goal}]
     reasoning = Column(Text, default="")  # planner's rationale for this breakdown
     revision = Column(Integer, default=0)  # 0 = initial plan, 1+ = critic-triggered revision
     created_at = Column(DateTime, default=utcnow)
@@ -151,11 +210,11 @@ class ExecutionLog(Base):
     stdout = Column(Text, default="")
     stderr = Column(Text, default="")
     success = Column(Boolean, default=False)
-    result_json = Column(Text, default="{}")  # structured result the code printed
-    chart_paths_json = Column(Text, default="[]")  # plotly json files produced
+    result_json = Column(JSONVariant, default=dict)  # structured result the code printed
+    chart_paths_json = Column(JSONVariant, default=list)  # plotly json files produced
     reasoning = Column(Text, default="")  # executor's explanation of the approach
     formula_explanation = Column(Text, default="")  # plain-English calculation, for click-to-inspect
-    data_slice_json = Column(Text, default="{}")  # {columns, rows} this step's result was computed from
+    data_slice_json = Column(JSONVariant, default=dict)  # {columns, rows} this step's result was computed from
     created_at = Column(DateTime, default=utcnow)
 
     question = relationship("Question", back_populates="execution_logs")
@@ -168,8 +227,8 @@ class CriticReview(Base):
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     verdict = Column(String, nullable=False)  # verified|rejected
     confidence = Column(Float, default=0.0)
-    issues_json = Column(Text, default="[]")  # list of flagged problems
-    checks_json = Column(Text, default="[]")  # independent re-checks the critic ran
+    issues_json = Column(JSONVariant, default=list)  # list of flagged problems
+    checks_json = Column(JSONVariant, default=list)  # independent re-checks the critic ran
     summary = Column(Text, default="")
     created_at = Column(DateTime, default=utcnow)
 
@@ -182,11 +241,14 @@ class Dashboard(Base):
     id = Column(Integer, primary_key=True, index=True)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # see Dataset.team_id note
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
-    kpis_json = Column(Text, default="[]")
-    charts_json = Column(Text, default="[]")  # [{title, plotly_json, source_step_index}]
+    kpis_json = Column(JSONVariant, default=list)
+    charts_json = Column(JSONVariant, default=list)  # [{title, plotly_json, source_step_index}]
     narrative = Column(Text, default="")
     verified = Column(Boolean, default=False)
     verification_summary = Column(Text, default="")
+    # VERIFIED | VERIFIED_WITH_CAVEATS | UNVERIFIED (see app/verdict.py). NULL on
+    # dashboards created before this column existed; readers resolve those.
+    verdict_state = Column(String, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     question = relationship("Question", back_populates="dashboards")
