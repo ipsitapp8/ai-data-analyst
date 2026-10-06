@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
+from app.routers.chart_views import router as chart_views_router
 from app.routers.inspect import router as inspect_router
 from app.routers.workspaces import router as workspaces_router
 from app.schemas import (
@@ -60,6 +61,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(inspect_router)
+app.include_router(chart_views_router)
 
 
 @app.on_event("startup")
@@ -376,8 +378,17 @@ def get_dashboard(
         kpis=json.loads(dash.kpis_json),
         charts=json.loads(dash.charts_json),
         narrative=dash.narrative,
+        view_overrides=_load_json_object(dash.view_overrides_json),
         created_at=dash.created_at,
     )
+
+
+def _load_json_object(raw: str | None) -> dict:
+    try:
+        value = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 @app.get("/api/questions/{question_id}/audit-trail", response_model=AuditTrailResponse)

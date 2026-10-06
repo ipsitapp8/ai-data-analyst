@@ -7,8 +7,9 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.csv_lines import match_csv_lines
 from app.database import get_db
-from app.models import AuditTrail, Dashboard, Team, User
+from app.models import AuditTrail, Dashboard, Question, Team, User
 from app.schemas import InspectResponse
 from app.security import get_current_team, get_current_user
 
@@ -50,8 +51,16 @@ def inspect_element(
     if not data_slice.get("columns"):
         data_slice = {"columns": [], "rows": []}
 
+    question = db.get(Question, dashboard.question_id)
+    dataset = question.dataset if question else None
+    csv_lines = match_csv_lines(
+        dataset.filepath if dataset else None, data_slice["columns"], data_slice.get("rows") or []
+    )
+
     return InspectResponse(
         code=log.code,
         formula_explanation=log.formula_explanation or "No formula was recorded for this step.",
         data_slice=data_slice,
+        csv_lines=csv_lines,
+        csv_filename=dataset.filename if dataset else None,
     )

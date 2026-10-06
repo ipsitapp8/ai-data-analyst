@@ -19,6 +19,7 @@ _ADDITIVE_COLUMNS = (
     ("execution_logs", "formula_explanation", "TEXT"),
     ("execution_logs", "data_slice_json", "TEXT"),
     ("audit_trail", "element_id", "TEXT"),
+    ("dashboards", "view_overrides_json", "TEXT"),
 )
 
 

@@ -185,3 +185,20 @@ def inspect_element(dashboard_id: int, element_id: str) -> dict:
         headers=_headers(), timeout=TIMEOUT,
     )
     return _handle(resp)
+
+
+def save_chart_view(dashboard_id: int, chart_key: str, chart_type: str | None, style: dict) -> dict:
+    resp = requests.put(
+        f"{BACKEND_BASE_URL}/api/dashboards/{dashboard_id}/charts/{chart_key}/view",
+        json={"chart_type": chart_type, "style": style},
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def reset_chart_view(dashboard_id: int, chart_key: str) -> dict:
+    resp = requests.delete(
+        f"{BACKEND_BASE_URL}/api/dashboards/{dashboard_id}/charts/{chart_key}/view",
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)

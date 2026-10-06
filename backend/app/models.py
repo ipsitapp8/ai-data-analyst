@@ -187,6 +187,10 @@ class Dashboard(Base):
     narrative = Column(Text, default="")
     verified = Column(Boolean, default=False)
     verification_summary = Column(Text, default="")
+    # Chart Studio overrides, keyed by chart element_id (or "idx<n>" for charts
+    # that predate element ids): {"chart_type": str | None, "style": {...}}.
+    # Shared by the whole team, like the dashboard itself.
+    view_overrides_json = Column(Text, default="{}")
     created_at = Column(DateTime, default=utcnow)
 
     question = relationship("Question", back_populates="dashboards")

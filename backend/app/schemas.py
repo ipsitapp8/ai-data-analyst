@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class SignupRequest(BaseModel):
@@ -82,6 +83,22 @@ class InspectResponse(BaseModel):
     code: str | None = None
     formula_explanation: str
     data_slice: dict[str, Any]
+    # 1-based line in the uploaded CSV (header = line 1) for each data_slice
+    # row; None where the row isn't a verbatim CSV row (e.g. an aggregate).
+    csv_lines: list[int | None] = []
+    csv_filename: str | None = None
+
+
+class ChartViewIn(BaseModel):
+    chart_type: str | None = Field(None, max_length=40, pattern=r"^[a-z0-9_]+$")
+    style: dict[str, Any] = {}
+
+    @field_validator("style")
+    @classmethod
+    def _style_is_small(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if len(json.dumps(v, default=str)) > 4000:
+            raise ValueError("style is too large")
+        return v
 
 
 class DatasetProfile(BaseModel):
@@ -125,6 +142,7 @@ class DashboardResponse(BaseModel):
     kpis: list[dict[str, Any]]
     charts: list[dict[str, Any]]
     narrative: str
+    view_overrides: dict[str, Any] = {}
     created_at: dt.datetime | None = None
 
 
