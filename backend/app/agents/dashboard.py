@@ -5,6 +5,7 @@ import json
 import os
 import uuid
 
+from app import memory
 from app.agents import llm_client, prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
@@ -175,6 +176,7 @@ Critic issues: {state.get('critic_issues')}
             critic_review_id=critic_review_id,
             team_id=team_id,
         )
+        memory.index_dashboard(db, dash_row)
     finally:
         db.close()
 

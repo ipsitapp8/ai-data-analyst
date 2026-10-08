@@ -124,3 +124,23 @@ DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{DB_PATH.as_posix()}"
 # daily/weekly intervals themselves are fixed; this is only the polling tick.
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() in ("1", "true", "yes")
 SCHEDULER_TICK_SECONDS = int(os.getenv("SCHEDULER_TICK_SECONDS", "60"))
+
+# --- RAG over past analyses ---
+# Completed dashboards are embedded (Gemini) and the Planner retrieves the most
+# similar earlier analyses (same team + dataset) as context. Disable with false.
+RAG_ENABLED = os.getenv("RAG_ENABLED", "true").lower() in ("1", "true", "yes")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+# Fixed vector width of the pgvector column (HNSW indexes cap at 2000 dims, so
+# the 3072-d default is truncated via Gemini output_dimensionality). Changing
+# it needs a new migration.
+EMBEDDING_DIM = 768
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
+RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.6"))
+
+# --- Dataset knowledge + lessons (see app/knowledge.py) ---
+# Knowledge notes are always given to the Planner (newest first, capped);
+# lessons are retrieved by similarity like past analyses.
+KNOWLEDGE_MAX_IN_PROMPT = int(os.getenv("KNOWLEDGE_MAX_IN_PROMPT", "25"))
+LESSON_TOP_K = int(os.getenv("LESSON_TOP_K", "3"))
+NOTE_MAX_CHARS = 1000
+NOTES_MAX_PER_DATASET = 200

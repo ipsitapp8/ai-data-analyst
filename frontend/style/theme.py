@@ -1,7 +1,7 @@
 """SILT design system: global CSS + shared UI components.
 
-Flat, plain, and quiet on purpose: system fonts, one muted accent color, no
-gradients or glow. Every page imports from here so the app reads as one
+Light, airy, and minimal on purpose: Inter, white surfaces, hairline borders,
+one indigo accent, no gradients or glow. Every page imports from here so the app reads as one
 product.
 """
 from __future__ import annotations
@@ -27,48 +27,50 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 # Chart data gets real, distinct color even though the UI chrome around it
 # stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
 # do it): plain chrome, legible/vivid data encoding.
-CHART_COLORWAY = ["#c9a15a", "#86b58a", "#7fa8c9", "#d4675c", "#a58fc9", "#d9c7a0"]
-ACCENT = "#c9a15a"      # gold -- the one interactive/brand UI color
-ACCENT_2 = "#a39b8c"    # warm gray -- in-progress/secondary state
+CHART_COLORWAY = ["#4f46e5", "#0ea5a4", "#f59e0b", "#e11d48", "#8b5cf6", "#64748b"]
+ACCENT = "#4f46e5"      # indigo -- the one interactive/brand UI color
+ACCENT_2 = "#94a3b8"    # slate -- in-progress/secondary state
 
 BASE_CSS = """
 <style>
 :root {
-  --bg-base: #161616;
-  --bg-page: #161616;
-  --bg-card: #161616;
-  --bg-card-hover: #1c1c1c;
-  --bg-inset: #101010;
-  --border: rgba(255,255,255,0.12);
-  --border-strong: rgba(255,255,255,0.22);
+  --bg-base: #ffffff;
+  --bg-page: #fafafa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f4f5;
+  --bg-inset: #f4f4f5;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
 
-  --text-primary: #e6e6e6;
-  --text-secondary: #969696;
-  --text-muted: #666666;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
 
-  --accent: #4f8fe0;
-  --accent-dim: #3f72b3;
-  --accent-bg: rgba(79,143,224,0.12);
-  --accent-border: rgba(79,143,224,0.32);
+  --accent: #4f46e5;
+  --accent-dim: #4338ca;
+  --accent-bg: #eef2ff;
+  --accent-border: #c7d2fe;
 
-  --accent2: #8a8a8a;
-  --accent2-dim: #6e6e6e;
-  --accent2-bg: rgba(138,138,138,0.12);
-  --accent2-border: rgba(138,138,138,0.3);
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --ok-border: #bbf7d0;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+  --error: #dc2626;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
 
-  --warn: #b6944a;
-  --warn-bg: rgba(182,148,74,0.12);
-  --warn-border: rgba(182,148,74,0.3);
+  --accent2: #64748b;
+  --accent2-dim: #475569;
+  --accent2-bg: #f1f5f9;
+  --accent2-border: #e2e8f0;
 
-  --error: #b05a52;
-  --error-bg: rgba(176,90,82,0.12);
-  --error-border: rgba(176,90,82,0.32);
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
 
-  --radius-lg: 4px;
-  --radius-md: 4px;
-  --radius-sm: 3px;
-
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: var(--font);
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
@@ -173,13 +175,13 @@ p, span, div, label, li { font-family: var(--font); }
   font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);
 }
 .silt-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.silt-dot-on  { background: var(--accent2); }
+.silt-dot-on  { background: var(--ok); }
 .silt-dot-off { background: var(--error); }
 
 /* ============ BUTTONS ============ */
 button[kind="primary"], .stFormSubmitButton > button {
   background: var(--accent) !important;
-  color: #101010 !important;
+  color: #ffffff !important;
   border: none !important;
   border-radius: var(--radius-md) !important;
   font-weight: 600 !important;
@@ -189,7 +191,7 @@ button[kind="primary"], .stFormSubmitButton > button {
 }
 button[kind="primary"]:hover, .stFormSubmitButton > button:hover {
   background: var(--accent-dim) !important;
-  color: #101010 !important;
+  color: #ffffff !important;
 }
 button[kind="secondary"] {
   background: transparent !important;
@@ -281,7 +283,7 @@ button[kind="secondary"]:hover {
                  line-height: 1; }
 .ds-stat-delta { font-family: var(--font-mono); font-size: 0.78rem; margin-top: 11px;
                  display: flex; align-items: center; gap: 4px; }
-.ds-up   { color: var(--accent2); }
+.ds-up   { color: var(--ok); }
 .ds-down { color: var(--error); }
 
 /* list rows */
@@ -313,13 +315,13 @@ button[kind="secondary"]:hover {
   font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500;
   white-space: nowrap;
 }
-.ds-badge-verified { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
+.ds-badge-verified { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-border); }
 .ds-badge-warn     { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
 .ds-badge-error    { background: var(--error-bg); color: var(--error); border: 1px solid var(--error-border); }
 .ds-badge-neutral  { background: var(--bg-inset); color: var(--text-secondary); border: 1px solid var(--border); }
-.ds-badge-running  { background: var(--accent2-bg); color: var(--accent2); border: 1px solid var(--accent2-border); }
+.ds-badge-running  { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
 .ds-badge-running::before {
-  content:''; width:6px; height:6px; border-radius:50%; background: var(--accent2);
+  content:''; width:6px; height:6px; border-radius:50%; background: var(--accent);
   animation: siltpulse 1.4s infinite ease-in-out;
 }
 @keyframes siltpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
@@ -419,15 +421,15 @@ hr { border-color: var(--border) !important; }
 
 /* step list */
 .ds-step { display: flex; gap: 13px; padding: 13px 16px; border-radius: var(--radius-sm); align-items: flex-start; }
-.ds-step-active { background: var(--accent2-bg); border: 1px solid var(--accent2-border); }
+.ds-step-active { background: var(--accent-bg); border: 1px solid var(--accent-border); }
 .ds-step-num {
   width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
   background: var(--bg-inset); border: 1px solid var(--border); color: var(--text-secondary);
 }
-.ds-step-done   { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
-.ds-step-run    { background: var(--accent2-bg); border-color: var(--accent2-border); color: var(--accent2); }
+.ds-step-done   { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+.ds-step-run    { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
 .ds-step-title  { font-size: 0.89rem; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
 .ds-step-status { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-secondary); line-height: 1.4; }
 
@@ -447,12 +449,12 @@ hr { border-color: var(--border) !important; }
 .ds-verdict-hint { margin-left: auto; font-size: 0.78rem; font-weight: 400; opacity: 0.85; }
 .ds-verdict-body { padding: 4px 20px 18px 20px; font-size: 0.9rem; line-height: 1.65; color: var(--text-primary); }
 .ds-verdict-body ul { margin: 6px 0 12px 18px; padding: 0; }
-.ds-verdict-ok   { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
+.ds-verdict-ok   { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
 .ds-verdict-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
 .ds-verdict-bad  { background: var(--error-bg); color: var(--error); border-color: var(--error-border); }
 .ds-flag { color: var(--warn); font-weight: 700; }
 .ds-flag-bad { color: var(--error); font-weight: 700; }
-.ds-trend-up { color: var(--accent); } .ds-trend-down { color: var(--error); } .ds-trend-flat { color: var(--text-secondary); }
+.ds-trend-up { color: var(--ok); } .ds-trend-down { color: var(--error); } .ds-trend-flat { color: var(--text-secondary); }
 </style>
 """
 
@@ -492,7 +494,7 @@ _FONTS_LINK = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600'
-    '&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap" rel="stylesheet">'
+    '&display=swap" rel="stylesheet">'
 )
 
 # Line icons for the sidebar nav, drawn as CSS masks so they inherit the row's colour.
@@ -715,7 +717,7 @@ def render_topbar() -> None:
 
 
 _LOGO = (
-    '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f1d9b5" stroke-width="1.7" '
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 
@@ -735,11 +737,6 @@ def render_sidebar(current: str) -> None:
 
         html('<div class="silt-ws-label">Workspace</div>')
         _render_workspace_switcher()
-
-        html(
-            '<div class="silt-tagline"></div>'
-            '<div class="silt-tagline-text">Turning your data<br>into decisions.</div>'
-        )
 
 
 def require_active_team(title: str = "") -> None:
@@ -873,22 +870,22 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#969696", family="system-ui, sans-serif", size=12),
+        font=dict(color="#52525b", family="Inter, system-ui, sans-serif", size=12),
         colorway=CHART_COLORWAY,
         margin=dict(l=8, r=8, t=8, b=8),
         height=height,
         showlegend=showlegend,
-        legend=dict(font=dict(color="#969696"), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#1c1c1c", bordercolor="rgba(255,255,255,0.22)",
-                        font=dict(color="#e6e6e6", family="system-ui, sans-serif")),
+        legend=dict(font=dict(color="#52525b"), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d4d4d8",
+                        font=dict(color="#18181b", family="Inter, system-ui, sans-serif")),
         # empty string, not None -- None leaves the title node in place and
         # Plotly renders a literal "undefined" tspan above the plot
         title=dict(text=""),
     )
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.12)",
-                     color="#666666", showline=False, ticks="")
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.12)",
-                     color="#666666", showline=False, ticks="")
+    fig.update_xaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
+                     color="#71717a", showline=False, ticks="")
+    fig.update_yaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
+                     color="#71717a", showline=False, ticks="")
     _recolor_traces(fig)
     return fig
 

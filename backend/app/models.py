@@ -26,9 +26,11 @@ from sqlalchemy import (
     String,
     Text,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
+from app.config import EMBEDDING_DIM
 from app.database import Base
 
 # Portable JSON column type: native JSONB on Postgres, SQLite's built-in JSON
@@ -252,6 +254,50 @@ class Dashboard(Base):
     created_at = Column(DateTime, default=utcnow)
 
     question = relationship("Question", back_populates="dashboards")
+
+
+class AnalysisMemory(Base):
+    """One finished analysis, embedded for retrieval by the Planner (see
+    app/memory.py). Scoped by team_id + dataset_id; never read across teams."""
+
+    __tablename__ = "analysis_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, unique=True)
+    question_text = Column(Text, nullable=False)
+    summary = Column(Text, default="")  # KPIs + narrative, what the Planner sees
+    verdict_state = Column(String, nullable=True)
+    # pgvector column on Postgres (indexed, searched in SQL); JSON list on SQLite.
+    embedding = Column(JSON().with_variant(Vector(EMBEDDING_DIM), "postgresql"), nullable=False)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class KnowledgeNote(Base):
+    """A short, team-owned fact the Planner is given about one dataset.
+
+    kind="knowledge": what the data means (column definitions, units, quirks) --
+    always included in planning. kind="lesson": a past mistake to avoid, written
+    by a user or auto-captured from a Critic rejection (source="critic") --
+    retrieved by similarity. Scoped by team_id + dataset_id; never read across
+    teams. See app/knowledge.py.
+    """
+
+    __tablename__ = "knowledge_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)  # "knowledge" | "lesson"
+    source = Column(String, nullable=False, default="user")  # "user" | "critic"
+    text = Column(Text, nullable=False)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Nullable: a note is still saved (and, for knowledge, still used) if the
+    # embedding call fails; only lesson retrieval needs the vector.
+    embedding = Column(JSON().with_variant(Vector(EMBEDDING_DIM), "postgresql"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
 
 
 class AuditTrail(Base):

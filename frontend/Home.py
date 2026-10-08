@@ -47,29 +47,19 @@ I_SPARK = _icon('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1
 # Drawn stand-in for a hero photo: a tilted dashboard tablet, a CSV tile, and warm light arcs.
 HERO_SVG = """
 <svg viewBox="0 0 640 380" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d1a15"/><stop offset="1" stop-color="#0d0c0a"/></linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9a15a" stop-opacity="0"/><stop offset="1" stop-color="#e6c88f"/></linearGradient>
-  </defs>
-  <path d="M40 360 C 120 120, 330 10, 620 40" fill="none" stroke="url(#gold)" stroke-width="1.4"/>
-  <path d="M90 372 C 190 160, 380 40, 630 90" fill="none" stroke="url(#gold)" stroke-width="0.8" opacity="0.6"/>
-  <g transform="translate(70 60) skewY(-5) rotate(-2)">
-    <rect width="400" height="250" rx="16" fill="#0a0908" stroke="#3a3225" stroke-width="2"/>
-    <rect x="8" y="8" width="384" height="234" rx="10" fill="url(#scr)"/>
-    <text x="26" y="34" fill="#efe8db" font-size="11" font-family="sans-serif">Sales Overview</text>
-    <polyline points="26,120 70,104 110,112 150,86 190,92 230,64 262,56" fill="none" stroke="#e6c88f" stroke-width="1.6"/>
-    <rect x="26" y="52" width="250" height="90" rx="6" fill="none" stroke="#2c261d"/>
-    <circle cx="332" cy="92" r="30" fill="none" stroke="#3a3225" stroke-width="14"/>
-    <circle cx="332" cy="92" r="30" fill="none" stroke="#c9a15a" stroke-width="14" stroke-dasharray="110 200" transform="rotate(-90 332 92)"/>
-    <g fill="#8c7448"><rect x="36" y="186" width="9" height="20"/><rect x="52" y="178" width="9" height="28"/><rect x="68" y="168" width="9" height="38"/><rect x="84" y="160" width="9" height="46"/><rect x="100" y="150" width="9" height="56"/><rect x="116" y="142" width="9" height="64"/></g>
-    <text x="216" y="166" fill="#a39b8c" font-size="10" font-family="sans-serif">Forecast</text>
-    <polyline points="216,214 250,204 284,196 318,180 352,164" fill="none" stroke="#e6c88f" stroke-width="1.4" stroke-dasharray="3 4"/>
+  <rect x="40" y="40" width="470" height="290" rx="14" fill="#ffffff" stroke="#e4e4e7"/>
+  <text x="68" y="76" fill="#18181b" font-size="14" font-weight="600" font-family="Inter, sans-serif">Sales overview</text>
+  <rect x="68" y="96" width="130" height="64" rx="8" fill="#fafafa" stroke="#e4e4e7"/>
+  <rect x="212" y="96" width="130" height="64" rx="8" fill="#fafafa" stroke="#e4e4e7"/>
+  <rect x="356" y="96" width="130" height="64" rx="8" fill="#eef2ff" stroke="#c7d2fe"/>
+  <polyline points="68,290 130,262 190,272 250,232 310,242 370,200 430,190 486,170" fill="none" stroke="#4f46e5" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <polyline points="68,300 130,290 190,294 250,274 310,282 370,262 430,256 486,248" fill="none" stroke="#0ea5a4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <g transform="translate(470 250)">
+    <rect width="130" height="96" rx="12" fill="#ffffff" stroke="#e4e4e7"/>
+    <circle cx="28" cy="30" r="12" fill="#dcfce7"/><path d="M22 30l4 4 8-8" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="48" y="35" fill="#18181b" font-size="12" font-weight="600" font-family="Inter, sans-serif">Verified</text>
+    <rect x="18" y="58" width="94" height="6" rx="3" fill="#f0f0f2"/><rect x="18" y="72" width="64" height="6" rx="3" fill="#f0f0f2"/>
   </g>
-  <g transform="translate(500 52) rotate(6)">
-    <rect width="96" height="104" rx="14" fill="#1a1712" stroke="#4a3f2c"/>
-    <path d="M30 22h24l14 14v42H30z" fill="#efe8db"/><text x="48" y="70" text-anchor="middle" font-size="13" font-weight="700" fill="#17130a" font-family="sans-serif">CSV</text>
-  </g>
-  <path d="M470 130 C 490 130, 486 100, 500 110" fill="none" stroke="#c9a15a" stroke-dasharray="3 4"/>
 </svg>
 """
 

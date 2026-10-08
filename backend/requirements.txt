@@ -16,3 +16,4 @@ matplotlib==3.11.1
 alembic==1.19.2
 psycopg2-binary==2.9.12
 apscheduler==3.11.0
+pgvector==0.4.1

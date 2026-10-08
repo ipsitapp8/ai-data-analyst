@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt -r frontend/requireme
 
 COPY backend/ backend/
 COPY frontend/ frontend/
+COPY .streamlit/ .streamlit/
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 

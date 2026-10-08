@@ -166,6 +166,24 @@ def get_dataset(dataset_id: int) -> dict:
     return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}", headers=_headers(), timeout=TIMEOUT))
 
 
+def list_notes(dataset_id: int, kind: str | None = None) -> list[dict]:
+    params = {"kind": kind} if kind else None
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/notes",
+                                params=params, headers=_headers(), timeout=TIMEOUT))
+
+
+def create_note(dataset_id: int, kind: str, text: str) -> dict:
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/notes",
+                                 json={"kind": kind, "text": text}, headers=_headers(), timeout=TIMEOUT))
+
+
+def delete_note(dataset_id: int, note_id: int) -> None:
+    resp = requests.delete(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/notes/{note_id}",
+                           headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
 def list_questions() -> list[dict]:
     return _handle(requests.get(f"{BACKEND_BASE_URL}/api/questions", headers=_headers(), timeout=TIMEOUT))
 

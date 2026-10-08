@@ -112,7 +112,7 @@ with right:
                 x=days, y=counts, mode="lines+markers",
                 line=dict(color=ACCENT, width=2.4, shape="spline"),
                 marker=dict(color=ACCENT, size=7),
-                fill="tozeroy", fillcolor="rgba(79,143,224,0.14)",
+                fill="tozeroy", fillcolor="rgba(79,70,229,0.10)",
                 hovertemplate="%{x}: %{y} analyses<extra></extra>",
             )
         )

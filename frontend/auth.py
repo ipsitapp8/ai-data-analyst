@@ -30,10 +30,10 @@ _GATE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600'
-    '&family=Newsreader:opsz,wght@6..72,300..600&display=swap" rel="stylesheet">'
+    '&display=swap" rel="stylesheet">'
 )
 _GATE_LOGO = (
-    '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f1d9b5" stroke-width="1.7" '
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#4f46e5" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 
@@ -138,7 +138,7 @@ def require_login() -> None:
         # flips its class, and the CSS transition slides it across.
         st.markdown(
             '<div class="auth-overlay">'
-            f'<div class="auth-ov-brand">{_GATE_LOGO}<div class="gate-mark">Silt</div></div>'
+            f'<div class="auth-ov-brand">{_GATE_LOGO.replace("#4f46e5", "#ffffff")}<div class="gate-mark">Silt</div></div>'
             '<div class="gate-eyebrow">Your data. Our analysis.</div>'
             '<div class="gate-title">Ask a question in plain English.</div>'
             '<div class="gate-sub">An agent plans, runs and explains the analysis, and an independent '
