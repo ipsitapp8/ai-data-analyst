@@ -324,3 +324,10 @@ def chat_dashboard(question_id: int, message: str, history: list[dict]) -> dict:
     return _handle(requests.post(f"{BACKEND_BASE_URL}/api/questions/{question_id}/chat",
                                  json={"message": message, "history": history},
                                  headers=_headers(), timeout=120))
+
+
+# ------------------------------------------------------------ correlations --
+
+def get_correlations(dataset_id: int, min_abs: float = 0.5) -> dict:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/correlations",
+                                params={"min_abs": min_abs}, headers=_headers(), timeout=TIMEOUT))

@@ -336,3 +336,28 @@ def test_chat_context_includes_dashboard_and_notes(client, ws):
         db.close()
     assert "Revenue: $100" in ctx and "Revenue grew." in ctx and "amounts are in USD" in ctx
     assert "Verification verdict" in ctx
+
+
+# ---- correlations ---------------------------------------------------------
+
+def test_top_correlations_finds_real_link_and_skips_noise():
+    import pandas as pd
+    from app.correlations import top_correlations
+    df = pd.DataFrame({"x": range(30), "y": [2 * i + 1 for i in range(30)],
+                       "z": [(i * 7) % 5 for i in range(30)], "const": [1] * 30})
+    pairs = top_correlations(df)
+    assert pairs and pairs[0]["a"] == "x" and pairs[0]["b"] == "y"
+    assert pairs[0]["direction"] == "positive" and pairs[0]["strength"] == "very strong"
+    assert all("const" not in (p["a"], p["b"]) for p in pairs)
+
+
+def test_top_correlations_needs_enough_rows():
+    import pandas as pd
+    from app.correlations import top_correlations
+    assert top_correlations(pd.DataFrame({"a": [1, 2, 3], "b": [2, 4, 6]})) == []
+
+
+def test_correlations_endpoint_scoped_to_team(client, ws, other):
+    r = client.get(f"/api/datasets/{ws['ds']}/correlations", headers=ws["h"])
+    assert r.status_code == 200 and "pairs" in r.json()
+    assert client.get(f"/api/datasets/{ws['ds']}/correlations", headers=other).status_code == 404

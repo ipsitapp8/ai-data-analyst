@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import (ApiError, ask_question, create_note, delete_note, generate_insights, get_dataset,
+from api_client import (ApiError, ask_question, create_note, delete_note, generate_insights, get_correlations, get_dataset,
                         get_insights, list_datasets, list_notes, replace_dataset_data, upload_dataset)
 from style.theme import badge, esc, html, page_header, page_setup, render_sidebar, require_active_team
 
@@ -193,6 +193,20 @@ if datasets:
                     </div>
                     """
                 )
+
+    # ------------------------------------------------------- correlations --
+    html("<div style='height:20px'></div>")
+    with st.container(key="card_correlations"):
+        html('<div class="ds-section-title">Strongest relationships</div>')
+        try:
+            pairs = get_correlations(chosen["id"])["pairs"]
+        except ApiError:
+            pairs = []
+        if not pairs:
+            html('<div class="ds-row-meta" style="padding:6px 0;">No strong numeric relationships found.</div>')
+        for p in pairs:
+            html(f'<div style="padding:5px 0;font-size:0.86rem;"><b>{esc(p["a"])}</b> ↔ <b>{esc(p["b"])}</b> · '
+                 f'{p["strength"]} {p["direction"]} (r = {p["pearson"]}, n = {p["n"]})</div>')
 
     # ------------------------------------------------------- auto-insights --
     html("<div style='height:20px'></div>")
