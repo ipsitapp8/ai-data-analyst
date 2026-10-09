@@ -265,7 +265,7 @@ button[kind="secondary"]:hover {
    plotly iframe/canvas we can't style into directly */
 [class*="st-key-chartcard_"] { position: relative; }
 [class*="st-key-chartcard_"]::after {
-  content: "🔍 click a point to inspect"; position: absolute; top: 16px; right: 18px;
+  content: "🔍 click a point to inspect"; position: absolute; bottom: 8px; right: 18px;
   font-size: 0.7rem; color: var(--text-muted); opacity: 0; transition: opacity 0.12s ease;
   pointer-events: none;
 }
@@ -455,6 +455,27 @@ hr { border-color: var(--border) !important; }
 .ds-flag { color: var(--warn); font-weight: 700; }
 .ds-flag-bad { color: var(--error); font-weight: 700; }
 .ds-trend-up { color: var(--ok); } .ds-trend-down { color: var(--error); } .ds-trend-flat { color: var(--text-secondary); }
+/* ============ CHART STUDIO (pages/4_Dashboards.py) ============ */
+.st-key-card_studio { border-color: var(--border-strong) !important; }
+.ds-studio-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted);
+                   letter-spacing: 0.06em; text-transform: uppercase; margin: 2px 0 6px 0; }
+.st-key-card_studio [data-testid="stButtonGroup"] button { font-size: 0.8rem !important; }
+.st-key-card_studio [data-testid="stButtonGroup"] button[aria-checked="true"],
+.st-key-card_studio [data-testid="stButtonGroup"] button[kind*="Active"] {
+  border-color: var(--accent) !important; color: var(--text-primary) !important;
+  background: var(--accent-bg) !important;
+}
+[class*="st-key-cs_edit_"] .stButton > button {
+  padding: 2px 10px !important; font-size: 0.74rem !important; float: right;
+}
+@keyframes cs-fade  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes cs-grow  { from { opacity: 0; transform: scaleY(0.2) } to { opacity: 1; transform: scaleY(1) } }
+@keyframes cs-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+@keyframes cs-sheen { 0% { left: -60% } 55%,100% { left: 130% } }
+@media (prefers-reduced-motion: reduce) {
+  [class*="st-key-chartcard_"], [class*="st-key-chartcard_"] *,
+  [class*="st-key-card_ch"], [class*="st-key-card_ch"] * { animation: none !important; }
+}
 </style>
 """
 
@@ -891,7 +912,7 @@ def figure_from_json(payload: dict) -> go.Figure:
 
 
 def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
-                 ensure_markers: bool = False) -> go.Figure:
+                 ensure_markers: bool = False, recolor: bool = True) -> go.Figure:
     """Force any figure -- including sandbox-generated ones -- into the SILT look.
 
     ensure_markers: sandbox line charts default to mode="lines" (px.line's
@@ -923,8 +944,62 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
                      color="#71717a", showline=False, ticks="")
     fig.update_yaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
                      color="#71717a", showline=False, ticks="")
-    _recolor_traces(fig)
+    if recolor:
+        _recolor_traces(fig)
     return fig
+
+
+def chart_card_css(container_key: str, style: dict, selected: bool = False) -> str:
+    """Scoped CSS for one chart card: Chart Studio's card-level effects
+    (glass/neon) and animations, plus the 'selected in the studio bar'
+    outline. `style` must already be chart_studio.normalize_style()d -- its
+    color is then a validated #rrggbb, and container_key is ours (a hex
+    element id), so nothing user-controlled reaches the stylesheet raw."""
+    from chart_studio import palette_colors, rgba
+
+    sel = f".st-key-{container_key}"
+    accent = palette_colors(style, 1)[0]
+    rules = []
+    if selected:
+        rules.append(f"{sel} {{ border-color: var(--accent) !important; }}")
+    effect, anim = style.get("effect"), style.get("animation")
+    if effect == "glass" or anim == "shimmer":
+        rules.append(
+            f"{sel} {{ background: linear-gradient(135deg, {rgba(accent, 0.10)}, rgba(255,255,255,0.015) 60%) !important;"
+            f" border-color: {rgba(accent, 0.35)} !important; backdrop-filter: blur(14px);"
+            f" box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.35);"
+            f" overflow: hidden; }}"
+        )
+    if effect == "neon":
+        rules.append(f"{sel} {{ border-color: {rgba(accent, 0.6)} !important;"
+                     f" box-shadow: 0 0 18px {rgba(accent, 0.25)}, inset 0 0 12px {rgba(accent, 0.08)}; }}")
+    if anim == "fade":
+        rules.append(f"{sel} .stPlotlyChart {{ animation: cs-fade 0.9s ease both; }}")
+    elif anim == "grow":
+        rules.append(f"{sel} .stPlotlyChart {{ transform-origin: bottom; animation: cs-grow 0.8s cubic-bezier(.2,.8,.2,1) both; }}")
+    elif anim == "float":
+        rules.append(f"{sel} .stPlotlyChart {{ animation: cs-float 4s ease-in-out infinite; }}")
+    elif anim == "pulse":
+        name = f"cs-pulse-{container_key}"
+        rules.append(f"@keyframes {name} {{ 0%,100% {{ box-shadow: 0 0 0 {rgba(accent, 0)}; }}"
+                     f" 50% {{ box-shadow: 0 0 22px {rgba(accent, 0.45)}; }} }}")
+        rules.append(f"{sel} {{ animation: {name} 2.6s ease-in-out infinite; }}")
+    elif anim == "shimmer":
+        rules.append(f"{sel} {{ position: relative; overflow: hidden; }}")
+        rules.append(
+            f"{sel}::before {{ content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 45%;"
+            f" background: linear-gradient(100deg, transparent, {rgba(shade_hex(accent), 0.16)}, transparent);"
+            f" transform: skewX(-18deg); animation: cs-sheen 3.6s ease-in-out infinite;"
+            f" pointer-events: none; z-index: 2; }}"
+        )
+    if not rules:
+        return ""
+    return "<style>" + "\n".join(rules) + "</style>"
+
+
+def shade_hex(hex_color: str) -> str:
+    from chart_studio import shade
+    return shade(hex_color, 0.6)
 
 
 def _recolor_traces(fig: go.Figure) -> None:
@@ -953,17 +1028,21 @@ def _recolor_traces(fig: go.Figure) -> None:
 
 
 def plot(fig: go.Figure, height: int = 300, showlegend: bool = False,
-         on_select_key: str | None = None):
+         on_select_key: str | None = None, restyle_traces: bool = True):
     """Render a styled chart. Pass on_select_key to make it clickable -- the
     click/select event is then returned (and also lands in
-    st.session_state[on_select_key]) instead of nothing."""
+    st.session_state[on_select_key]) instead of nothing.
+
+    restyle_traces=False keeps the figure's own trace colors/modes (Chart
+    Studio figures were already styled exactly as the user picked)."""
     kwargs = {}
     if on_select_key:
         # selection_mode="points" only (not the default points+box+lasso):
         # a plain click on a marker reliably registers as a point selection
         # this way, instead of needing an actual box/lasso drag.
         kwargs = {"on_select": "rerun", "key": on_select_key, "selection_mode": "points"}
-    styled = style_chart(fig, height, showlegend, ensure_markers=bool(on_select_key))
+    styled = style_chart(fig, height, showlegend, ensure_markers=bool(on_select_key) and restyle_traces,
+                         recolor=restyle_traces)
     return st.plotly_chart(styled, use_container_width=True,
                            config={"displayModeBar": False}, **kwargs)
 
@@ -973,11 +1052,16 @@ def plot(fig: go.Figure, height: int = 300, showlegend: bool = False,
 # (backend/app/routers/inspect.py). Shared here so any page can open it the
 # same way; today only pages/4_Dashboards.py does.
 
-def open_inspect(dashboard_id: int, element_id: str) -> None:
-    """Call this from a click handler (e.g. inside `if st.button(...):`)."""
+def open_inspect(dashboard_id: int, element_id: str, studio: dict | None = None) -> None:
+    """Call this from a click handler (e.g. inside `if st.button(...):`).
+
+    studio: for a chart re-drawn in Chart Studio -- {"label", "code",
+    "formula", "calc" (DataFrame), "calc_caption", "plotted" (DataFrame)} --
+    so the panel explains the chart as currently shown, not as generated."""
     st.session_state["_inspect_open"] = True
     st.session_state["_inspect_dashboard_id"] = dashboard_id
     st.session_state["_inspect_element_id"] = element_id
+    st.session_state["_inspect_studio"] = studio
 
 
 def render_inspect_dialog_if_open() -> None:
@@ -1005,21 +1089,65 @@ def _inspect_dialog() -> None:
             return
 
     data = cache[cache_key]
+    studio = st.session_state.get("_inspect_studio")
+    sub_title = 'style="font-size:0.86rem;color:var(--text-secondary);margin-top:12px;"'
+    body = 'style="font-size:0.9rem;color:var(--text-primary);margin-top:6px;line-height:1.6;"'
+
+    if studio:
+        html(f'<div class="ds-row-meta" style="margin-bottom:10px;">Shown as <b>{esc(studio["label"])}</b> '
+             f'(Chart Studio). The numbers are unchanged — only how they are drawn.</div>')
 
     html('<div class="ds-section-title">Code</div>')
-    st.code(data.get("code") or "No code recorded for this element.", language="python")
+    analysis_code = data.get("code") or "# No analysis code was recorded for this element."
+    if studio:
+        code = (
+            "# ===== Step 1 · Analysis — ran in the sandbox on your uploaded CSV =====\n"
+            f"{analysis_code.rstrip()}\n\n\n"
+            f"# ===== Step 2 · {studio['label']} chart — Chart Studio =====\n"
+            "# Rebuilds the chart from the values step 1 produced (run on its own, it needs only pandas/plotly).\n"
+            f"{studio['code']}"
+        )
+    else:
+        code = analysis_code
+    st.code(code, language="python")
+    st.download_button("Download .py", code, file_name=f"chart_{element_id[:8]}.py",
+                       mime="text/x-python", key="inspect_dl")
 
     html('<div class="ds-section-title" style="margin-top:18px;">Formula</div>')
-    html(f'<div style="font-size:0.9rem;color:var(--text-primary);margin-top:6px;line-height:1.6;">'
-         f'{esc(data.get("formula_explanation", ""))}</div>')
+    if studio:
+        html(f'<div {sub_title}>How the numbers were calculated from your CSV</div>')
+    html(f'<div {body}>{esc(data.get("formula_explanation", ""))}</div>')
+    if studio:
+        html(f'<div {sub_title}>How the {esc(studio["label"].lower())} chart uses them</div>')
+        html(f'<div {body}>{esc(studio["formula"])}</div>')
+        calc = studio.get("calc")
+        if calc is not None and len(calc):
+            html(f'<div class="ds-row-meta" style="margin:8px 0 4px 0;">Calculation · {esc(studio.get("calc_caption", ""))}</div>')
+            st.dataframe(calc, use_container_width=True, hide_index=True, height=min(240, 38 + 35 * len(calc)))
 
     html('<div class="ds-section-title" style="margin-top:18px;">Data Used</div>')
     data_slice = data.get("data_slice") or {}
     columns, rows = data_slice.get("columns") or [], data_slice.get("rows") or []
     if columns and rows:
-        st.dataframe(pd.DataFrame(rows, columns=columns), use_container_width=True, height=240)
+        frame = pd.DataFrame(rows, columns=columns)
+        lines = data.get("csv_lines") or []
+        traced = sum(1 for n in lines if n)
+        source = esc(data.get("csv_filename") or "the uploaded CSV")
+        if traced:
+            padded = (list(lines) + [None] * len(frame))[:len(frame)]
+            frame.insert(0, "CSV line", pd.array([n or None for n in padded], dtype="Int64"))
+            note = (f"{traced} of {len(frame)} rows traced to their exact line in <b>{source}</b> "
+                    f"(line 1 is the header).")
+        else:
+            note = (f"Rows the analysis computed from <b>{source}</b>. They contain derived/aggregated "
+                    f"values, so they don't map to single CSV lines.")
+        html(f'<div class="ds-row-meta" style="margin:6px 0;">{note}</div>')
+        st.dataframe(frame, use_container_width=True, height=240, hide_index=True)
     else:
         html('<div class="ds-row-meta" style="margin-top:6px;">No data slice was recorded for this element.</div>')
+    if studio and studio.get("plotted") is not None:
+        html(f'<div {sub_title}>Values plotted in this chart</div>')
+        st.dataframe(studio["plotted"], use_container_width=True, hide_index=True, height=200)
 
     if data.get("flagged"):
         html('<div class="ds-section-title ds-flag-bad" style="margin-top:18px;">⚠ Critic reasoning</div>')

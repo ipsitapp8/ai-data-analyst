@@ -9,3 +9,4 @@ backend/data/
 .streamlit/
 *.md
 !README.md
+web/

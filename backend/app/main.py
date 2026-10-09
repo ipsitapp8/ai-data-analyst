@@ -3,6 +3,7 @@ status polling, dashboard retrieval, and audit trail retrieval."""
 from __future__ import annotations
 
 import datetime as dt
+import json
 import threading
 import uuid
 from pathlib import Path
@@ -34,6 +35,7 @@ from app.routers.alerts import router as alerts_router
 from app.routers.chat import router as chat_router
 from app.routers.insights import router as insights_router
 from app.routers.correlations import router as correlations_router
+from app.routers.chart_views import router as chart_views_router
 from app.routers.inspect import router as inspect_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.sharing import router as sharing_router
@@ -83,6 +85,7 @@ app.include_router(correlations_router)
 app.include_router(alerts_router)
 app.include_router(chat_router)
 app.include_router(scheduled_router)
+app.include_router(chart_views_router)
 
 
 @app.on_event("startup")
@@ -442,8 +445,17 @@ def get_dashboard(
         kpis=[{**k, "flagged": k.get("element_id") in flagged} for k in dash.kpis_json],
         charts=[{**c, "flagged": c.get("element_id") in flagged} for c in dash.charts_json],
         narrative=dash.narrative,
+        view_overrides=_load_json_object(dash.view_overrides_json),
         created_at=dash.created_at,
     )
+
+
+def _load_json_object(raw: str | None) -> dict:
+    try:
+        value = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 @app.get("/api/questions/{question_id}/audit-trail", response_model=AuditTrailResponse)

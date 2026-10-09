@@ -57,6 +57,7 @@ _ADDITIVE_COLUMNS = (
     ("questions", "trigger", "TEXT NOT NULL DEFAULT 'manual'"),
     ("questions", "scheduled_analysis_id", "INTEGER"),
     ("dashboards", "verdict_state", "TEXT"),
+    ("dashboards", "view_overrides_json", "TEXT"),
 )
 
 

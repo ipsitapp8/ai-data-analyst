@@ -1,11 +1,19 @@
-"""Dashboards — verified KPI cards, agent-generated charts, and the narrative."""
+"""Dashboards — verified KPI cards, agent-generated charts, and the narrative.
+
+The Chart Studio bar above the dashboard lets the user swap any chart for one
+of 40 chart types and restyle it (see chart_studio.py). Only the presentation
+changes and is saved per team; the verified numbers are never recomputed.
+"""
 from __future__ import annotations
 
 import streamlit as st
 
+import chart_studio as cs
 from api_client import (ApiError, ask_question, chat_dashboard, create_scheduled, create_share, get_dashboard,
-                        get_status, list_questions, list_shares, revoke_share)
+                        get_status, list_questions, list_shares, reset_chart_view, revoke_share, save_chart_view)
 from style.theme import (
+    badge,
+    chart_card_css,
     require_active_team,
     esc,
     figure_from_json,
@@ -165,6 +173,227 @@ render_verdict_banner(dash)
 
 dashboard_id = dash["id"]
 
+# ---------------------------------------------------------- chart studio --
+# Session keys, all scoped to this dashboard + chart:
+#   cs_view_<d>_<chart>     {"chart_type": str | None, "style": {...}} as shown
+#   cs_<d>_<chart>_<field>  the studio bar's widgets for that chart
+# Widgets write through on_change callbacks (which run before the script),
+# so a change is saved and visible on the same rerun.
+
+_STYLE_FIELDS = [("palette", "palette"), ("color", "color"), ("effect", "effect"),
+                 ("animation", "anim"), ("opacity", "opacity"), ("corner_radius", "radius"),
+                 ("line_width", "lw"), ("marker_size", "ms"), ("labels", "labels"),
+                 ("legend", "legend"), ("sort", "sort")]
+
+
+def _view_key(chart_key: str) -> str:
+    return f"cs_view_{dashboard_id}_{chart_key}"
+
+
+def _widget_prefix(chart_key: str) -> str:
+    return f"cs_{dashboard_id}_{chart_key}_"
+
+
+def _commit_view(chart_key: str, view: dict) -> None:
+    st.session_state[_view_key(chart_key)] = view
+    try:
+        if view["chart_type"] is None and view["style"] == cs.DEFAULT_STYLE:
+            reset_chart_view(dashboard_id, chart_key)
+        else:
+            save_chart_view(dashboard_id, chart_key, view["chart_type"], view["style"])
+    except ApiError as e:
+        st.session_state["cs_error"] = f"Couldn't save this chart's look: {e}"
+
+
+def _on_type_pick(chart_key: str, widget_key: str) -> None:
+    picked = st.session_state.get(widget_key)
+    if picked in cs.CHART_TYPES:  # None = the active pill was clicked again: keep it
+        view = dict(st.session_state[_view_key(chart_key)])
+        view["chart_type"] = picked
+        _commit_view(chart_key, view)
+
+
+def _on_style_change(chart_key: str, changed: str | None = None) -> None:
+    w = _widget_prefix(chart_key)
+    if changed == "color":  # picking a color means "use my color"
+        st.session_state[w + "palette"] = cs.CUSTOM_PALETTE
+    view = dict(st.session_state[_view_key(chart_key)])
+    raw = dict(view["style"])
+    for field, suffix in _STYLE_FIELDS:
+        value = st.session_state.get(w + suffix)
+        if value is not None:
+            raw[field] = value
+    view["style"] = cs.normalize_style(raw)
+    if st.session_state.get(w + "effect") is None:  # segmented control was deselected
+        st.session_state[w + "effect"] = view["style"]["effect"]
+    _commit_view(chart_key, view)
+
+
+def _on_reset(chart_key: str) -> None:
+    try:
+        reset_chart_view(dashboard_id, chart_key)
+    except ApiError as e:
+        st.session_state["cs_error"] = f"Couldn't reset this chart: {e}"
+        return
+    st.session_state.pop(_view_key(chart_key), None)
+    prefix = _widget_prefix(chart_key)
+    for k in [k for k in st.session_state if isinstance(k, str) and k.startswith(prefix)]:
+        del st.session_state[k]
+
+
+def _on_customize(chart_key: str) -> None:
+    st.session_state[f"cs_target_{dashboard_id}"] = chart_key
+
+
+def _studio_info(entry: dict) -> dict | None:
+    """What the Inspect panel needs to explain a Chart Studio chart."""
+    if not entry["build"]:
+        return None
+    t, style = entry["shown_type"], entry["view"]["style"]
+    try:
+        calc, caption = cs.calculation_table(entry["data"], t, style)
+    except Exception:  # noqa: BLE001 - the explanation table is optional
+        calc, caption = None, ""
+    plotted = entry["data"].df.rename(columns={
+        "series": "Series", "x": entry["data"].x_label or "x", "y": entry["data"].y_label or "y"})
+    return {"label": cs.CHART_TYPES[t]["label"], "code": entry["build"].code,
+            "formula": cs.formula_for(t), "calc": calc, "calc_caption": caption, "plotted": plotted}
+
+
+charts = dash.get("charts", [])
+saved_views = dash.get("view_overrides") or {}
+entries: list[dict] = []
+for i, chart in enumerate(charts):
+    chart_key = chart.get("element_id") or f"idx{i}"
+    vk = _view_key(chart_key)
+    if vk not in st.session_state:
+        saved = saved_views.get(chart_key) or {}
+        chart_type = saved.get("chart_type")
+        st.session_state[vk] = {
+            "chart_type": chart_type if chart_type in cs.CHART_TYPES else None,
+            "style": cs.normalize_style(saved.get("style")),
+        }
+    view = st.session_state[vk]
+    try:
+        data = cs.extract_chart_data(chart["plotly_json"])
+    except Exception:  # noqa: BLE001 - an unreadable figure just can't be re-charted
+        data = None
+    detected = cs.detect_studio_type(data) if data is not None else None
+    # Style-only changes re-draw the original type through the studio too.
+    shown_type = view["chart_type"] or (detected if view["style"] != cs.DEFAULT_STYLE else None)
+    build, build_error = None, None
+    if shown_type and data is not None:
+        try:
+            build = cs.build_chart(data, shown_type, view["style"], chart["title"])
+        except ValueError as e:
+            build_error = str(e)
+    entries.append({"key": chart_key, "chart": chart, "index": i, "view": view, "data": data,
+                    "detected": detected, "shown_type": shown_type if build else None,
+                    "build": build, "error": build_error})
+
+if entries:
+    target_key = f"cs_target_{dashboard_id}"
+    keys = [e["key"] for e in entries]
+    if st.session_state.get(target_key) not in keys:
+        st.session_state[target_key] = keys[0]
+    by_key = {e["key"]: e for e in entries}
+
+    with st.container(key="card_studio"):
+        head_l, head_b1, head_b2 = st.columns([4, 1.1, 1.1], vertical_alignment="center")
+        with head_l:
+            html('<div class="ds-section-title">Chart Studio</div>'
+                 '<div class="ds-row-meta" style="margin-top:3px;">Pick a chart, swap it for any of '
+                 f'{len(cs.CHART_TYPES)} chart types and restyle it. The verified numbers never change; '
+                 'the look is saved for your team.</div>')
+        target = by_key[st.session_state[target_key]]
+        ck, w = target["key"], _widget_prefix(target["key"])
+        view = target["view"]
+        with head_b1:
+            if st.button("🔍  Code & data", key="cs_inspect", use_container_width=True,
+                         disabled=not target["chart"].get("element_id")):
+                open_inspect(dashboard_id, target["chart"]["element_id"], _studio_info(target))
+                st.rerun()
+        with head_b2:
+            st.button("↺  Reset chart", key="cs_reset", use_container_width=True,
+                      on_click=_on_reset, args=(ck,),
+                      disabled=view["chart_type"] is None and view["style"] == cs.DEFAULT_STYLE)
+
+        if st.session_state.get("cs_error"):
+            st.error(st.session_state.pop("cs_error"))
+
+        html("<div style='height:8px'></div>")
+        pick_l, pick_r = st.columns([1.5, 3.5], gap="medium")
+        with pick_l:
+            html('<div class="ds-studio-label">Chart</div>')
+            st.selectbox("Chart", keys, key=target_key, label_visibility="collapsed",
+                         format_func=lambda k: by_key[k]["chart"]["title"])
+        current = view["chart_type"] or target["detected"]
+        with pick_r:
+            html(f'<div class="ds-studio-label">Chart type · {len(cs.CHART_TYPES)} options</div>')
+            st.session_state.setdefault(
+                w + "group", cs.CHART_TYPES[current]["group"] if current else cs.GROUPS[0])
+            group = st.segmented_control("Chart family", cs.GROUPS, key=w + "group",
+                                         label_visibility="collapsed") or cs.GROUPS[0]
+
+        if target["data"] is None or target["data"].df.empty:
+            html('<div class="ds-row-meta">This chart has no plotted values that can be re-charted.</div>')
+        else:
+            pills_key = f"{w}type_{group}"
+            in_group = cs.types_in_group(group)
+            # keep the pills in sync with the chart as shown (the pick itself was
+            # already saved by _on_type_pick before this run started)
+            st.session_state[pills_key] = current if current in in_group else None
+            st.pills("Chart type", in_group, key=pills_key, label_visibility="collapsed",
+                     format_func=lambda t: f":material/{cs.CHART_TYPES[t]['icon']}: {cs.CHART_TYPES[t]['label']}",
+                     on_change=_on_type_pick, args=(ck, pills_key))
+            original = cs.CHART_TYPES[target["detected"]]["label"] if target["detected"] else target["data"].source_type
+            showing = cs.CHART_TYPES[current]["label"] if view["chart_type"] else f"{original} (as generated)"
+            html(f'<div class="ds-row-meta" style="margin:2px 0 10px 0;">Showing: <b>{esc(showing)}</b>'
+                 f' · originally {esc(original)}</div>')
+
+            style = view["style"]
+            for field, suffix in _STYLE_FIELDS:
+                st.session_state.setdefault(w + suffix, style[field])
+            s1, s2, s3, s4, s5 = st.columns([1.35, 0.75, 2.6, 1.3, 1.0], gap="small",
+                                            vertical_alignment="bottom")
+            with s1:
+                html('<div class="ds-studio-label">Palette</div>')
+                st.selectbox("Palette", cs.PALETTE_NAMES, key=w + "palette", label_visibility="collapsed",
+                             on_change=_on_style_change, args=(ck,))
+            with s2:
+                html('<div class="ds-studio-label">Color</div>')
+                st.color_picker("Color", key=w + "color", label_visibility="collapsed",
+                                on_change=_on_style_change, args=(ck, "color"))
+            with s3:
+                html('<div class="ds-studio-label">Effect</div>')
+                st.segmented_control("Effect", list(cs.EFFECTS), key=w + "effect",
+                                     format_func=cs.EFFECTS.get, label_visibility="collapsed",
+                                     on_change=_on_style_change, args=(ck,))
+            with s4:
+                html('<div class="ds-studio-label">Animation</div>')
+                st.selectbox("Animation", list(cs.ANIMATIONS), key=w + "anim", format_func=cs.ANIMATIONS.get,
+                             label_visibility="collapsed", on_change=_on_style_change, args=(ck,))
+            with s5:
+                with st.popover("Fine-tune", use_container_width=True):
+                    st.slider("Opacity", 0.2, 1.0, step=0.05, key=w + "opacity",
+                              on_change=_on_style_change, args=(ck,))
+                    st.slider("Bar corner radius", 0, 20, key=w + "radius",
+                              on_change=_on_style_change, args=(ck,))
+                    st.slider("Line width", 0.5, 8.0, step=0.5, key=w + "lw",
+                              on_change=_on_style_change, args=(ck,))
+                    st.slider("Marker size", 2, 24, key=w + "ms",
+                              on_change=_on_style_change, args=(ck,))
+                    st.selectbox("Sort values", list(cs.SORTS), key=w + "sort", format_func=cs.SORTS.get,
+                                 on_change=_on_style_change, args=(ck,))
+                    st.toggle("Data labels", key=w + "labels", on_change=_on_style_change, args=(ck,))
+                    st.toggle("Legend", key=w + "legend", on_change=_on_style_change, args=(ck,))
+            if target["error"]:
+                st.warning(target["error"])
+            elif view["style"] != cs.DEFAULT_STYLE and not target["build"]:
+                html('<div class="ds-row-meta" style="margin-top:8px;">This chart\'s original type can\'t be '
+                     'restyled directly; pick a chart type above to apply the style.</div>')
+    html("<div style='height:22px'></div>")
+
 kpis = dash.get("kpis", [])
 if kpis:
     cols = st.columns(min(4, len(kpis)), gap="medium")
@@ -180,36 +409,53 @@ if kpis:
                     st.rerun()
     html("<div style='height:22px'></div>")
 
-charts = dash.get("charts", [])
-if charts:
-    for i in range(0, len(charts), 2):
-        pair = charts[i:i + 2]
+if entries:
+    selected_key = st.session_state.get(f"cs_target_{dashboard_id}")
+    for i in range(0, len(entries), 2):
+        pair = entries[i:i + 2]
         cols = st.columns(len(pair), gap="medium")
-        for col, chart in zip(cols, pair):
+        for col, entry in zip(cols, pair):
+            chart = entry["chart"]
             with col:
                 element_id = chart.get("element_id")
                 container_key = f"chartcard_{element_id}" if element_id else f"card_ch{i}_{chart['step_index']}"
+                css = chart_card_css(container_key, entry["view"]["style"] if entry["build"] else cs.DEFAULT_STYLE,
+                                     selected=entry["key"] == selected_key and len(entries) > 1)
+                if css:
+                    html(css)
                 with st.container(key=container_key):
-                    if chart.get("flagged") and element_id:
-                        t_col, f_col = st.columns([5, 1])
-                        with t_col:
+                    t_l, t_r = st.columns([5, 1.3], vertical_alignment="center")
+                    with t_l:
+                        if chart.get("flagged") and element_id:
+                            f_l, f_r = st.columns([5, 1])
+                            with f_l:
+                                html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
+                            with f_r:
+                                if st.button("⚠️", key=f"flag_{element_id}", help="Flagged by the Critic — see why"):
+                                    open_inspect(dashboard_id, element_id)
+                                    st.rerun()
+                        else:
                             html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
-                        with f_col:
-                            if st.button("⚠️", key=f"flag_{element_id}", help="Flagged by the Critic — see why"):
-                                open_inspect(dashboard_id, element_id)
-                                st.rerun()
-                    else:
-                        html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
-                    html("<div style='height:8px'></div>")
+                    with t_r:
+                        with st.container(key=f"cs_edit_{entry['key']}"):
+                            st.button("✎ Customize", key=f"cs_edit_btn_{entry['key']}",
+                                      on_click=_on_customize, args=(entry["key"],))
+                    html("<div style='height:4px'></div>")
                     try:
-                        fig = figure_from_json(chart["plotly_json"])
-                        event = plot(fig, height=300, showlegend=True,
-                                     on_select_key=f"chart_{element_id}" if element_id else None)
+                        if entry["build"]:
+                            fig = entry["build"].fig
+                            event = plot(fig, height=300, showlegend=entry["view"]["style"]["legend"],
+                                         on_select_key=f"chart_{element_id}" if element_id else None,
+                                         restyle_traces=False)
+                        else:
+                            fig = figure_from_json(chart["plotly_json"])
+                            event = plot(fig, height=300, showlegend=True,
+                                         on_select_key=f"chart_{element_id}" if element_id else None)
                         if element_id and event and event.selection and event.selection.get("points"):
-                            open_inspect(dashboard_id, element_id)
+                            open_inspect(dashboard_id, element_id, _studio_info(entry))
                             st.rerun()
                     except Exception as e:  # noqa: BLE001 - render one bad chart, not the page
-                        html(f'<div class="ds-row-meta">Could not render: {e}</div>')
+                        html(f'<div class="ds-row-meta">Could not render: {esc(e)}</div>')
         html("<div style='height:8px'></div>")
 
 render_inspect_dialog_if_open()

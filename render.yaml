@@ -50,3 +50,18 @@ databases:
     plan: free
     databaseName: silt
     user: silt
+
+  # Next.js marketing site. Separate service from the Docker app above: it
+  # deploys on its own cadence and its build doesn't touch the Python image.
+  # NEXT_PUBLIC_APP_URL is where every "Launch app" CTA points -- set it to the
+  # ai-data-analyst service's URL in the Render dashboard.
+  - type: web
+    name: datasage-web
+    env: node
+    rootDir: web
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false

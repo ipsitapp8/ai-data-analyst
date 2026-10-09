@@ -251,6 +251,10 @@ class Dashboard(Base):
     # VERIFIED | VERIFIED_WITH_CAVEATS | UNVERIFIED (see app/verdict.py). NULL on
     # dashboards created before this column existed; readers resolve those.
     verdict_state = Column(String, nullable=True)
+    # Chart Studio overrides, keyed by chart element_id (or "idx<n>" for charts
+    # that predate element ids): {"chart_type": str | None, "style": {...}}.
+    # Shared by the whole team, like the dashboard itself.
+    view_overrides_json = Column(Text, default="{}")
     created_at = Column(DateTime, default=utcnow)
 
     question = relationship("Question", back_populates="dashboards")
