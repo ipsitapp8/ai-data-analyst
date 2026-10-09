@@ -30,8 +30,12 @@ from app.models import (
 )
 from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
+from app.routers.alerts import router as alerts_router
+from app.routers.chat import router as chat_router
+from app.routers.insights import router as insights_router
 from app.routers.inspect import router as inspect_router
 from app.routers.knowledge import router as knowledge_router
+from app.routers.sharing import router as sharing_router
 from app.routers.scheduled import router as scheduled_router
 from app.routers.workspaces import router as workspaces_router
 from app.schemas import (
@@ -72,6 +76,10 @@ app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(inspect_router)
 app.include_router(knowledge_router)
+app.include_router(sharing_router)
+app.include_router(insights_router)
+app.include_router(alerts_router)
+app.include_router(chat_router)
 app.include_router(scheduled_router)
 
 

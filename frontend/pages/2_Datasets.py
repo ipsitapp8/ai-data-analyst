@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import (ApiError, create_note, delete_note, get_dataset, list_datasets, list_notes,
-                        replace_dataset_data, upload_dataset)
+from api_client import (ApiError, ask_question, create_note, delete_note, generate_insights, get_dataset,
+                        get_insights, list_datasets, list_notes, replace_dataset_data, upload_dataset)
 from style.theme import badge, esc, html, page_header, page_setup, render_sidebar, require_active_team
 
 page_setup("Datasets")
@@ -36,6 +36,10 @@ if st.session_state.get("show_uploader"):
                 try:
                     res = upload_dataset(f.name, f.getvalue())
                     st.session_state["active_dataset_id"] = res["id"]
+                    try:  # starter questions + data-quality warnings; never blocks the upload
+                        generate_insights(res["id"])
+                    except ApiError:
+                        pass
                     st.session_state["show_uploader"] = False
                     st.success(f"Profiled **{res['filename']}** — "
                                f"{res['row_count']:,} rows, {res['col_count']} columns.")
@@ -189,6 +193,54 @@ if datasets:
                     </div>
                     """
                 )
+
+    # ------------------------------------------------------- auto-insights --
+    html("<div style='height:20px'></div>")
+    with st.container(key="card_insights"):
+        head_i, btn_i = st.columns([4, 1])
+        with head_i:
+            html('<div class="ds-section-title">Suggested questions &amp; data checks</div>')
+        try:
+            ins = get_insights(chosen["id"])
+        except ApiError as e:
+            ins = {"generated": False, "questions": [], "warnings": []}
+            st.error(f"Could not load insights: {e}")
+        with btn_i:
+            if st.button("Regenerate" if ins["generated"] else "Generate", key=f"ins_gen_{chosen['id']}"):
+                with st.spinner("Looking at your data…"):
+                    try:
+                        generate_insights(chosen["id"])
+                        st.rerun()
+                    except ApiError as e:
+                        st.error(f"Could not generate: {e}")
+
+        if not ins["generated"]:
+            html('<div class="ds-row-meta" style="padding:6px 0;">Generate starter questions and a data-quality '
+                 'check for this dataset.</div>')
+        else:
+            for w in ins["warnings"]:
+                kind = {"high": "error", "warn": "warn"}.get(w["severity"], "neutral")
+                col = f'<b>{esc(w["column"])}</b> · ' if w.get("column") else ""
+                html(f'<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:0.86rem;">'
+                     f'{badge(w["severity"].title(), kind)}<span>{col}{esc(w["message"])}</span></div>')
+            if not ins["questions"]:
+                html('<div class="ds-row-meta" style="padding:6px 0;">No question suggestions this time '
+                     '(the model was unavailable). Try Regenerate.</div>')
+            for i, item in enumerate(ins["questions"]):
+                qc, bc = st.columns([6, 1])
+                with qc:
+                    html(f'<div style="padding:6px 0;"><div class="ds-row-title">{esc(item["question"])}</div>'
+                         f'<div class="ds-row-meta">{esc(item.get("why", ""))}</div></div>')
+                with bc:
+                    if st.button("Run  →", key=f"ins_run_{chosen['id']}_{i}"):
+                        try:
+                            res_q = ask_question(chosen["id"], item["question"])
+                            st.session_state["active_dataset_id"] = chosen["id"]
+                            st.session_state["active_question_id"] = res_q["question_id"]
+                            st.session_state["question_running"] = True
+                            st.switch_page("pages/3_Analyses.py")
+                        except ApiError as e:
+                            st.error(f"Could not start analysis: {e}")
 
     # ------------------------------------------------ knowledge & lessons --
     html("<div style='height:20px'></div>")

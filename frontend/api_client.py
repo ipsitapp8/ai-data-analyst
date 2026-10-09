@@ -259,3 +259,68 @@ def delete_scheduled(scheduled_id: int) -> dict:
         f"{BACKEND_BASE_URL}/api/scheduled-analyses/{scheduled_id}", headers=_headers(), timeout=TIMEOUT,
     )
     return _handle(resp)
+
+
+# ------------------------------------------------------------- share links --
+
+def create_share(question_id: int, expires_in_days: int = 7) -> dict:
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/questions/{question_id}/share",
+                                 json={"expires_in_days": expires_in_days}, headers=_headers(), timeout=TIMEOUT))
+
+
+def list_shares(question_id: int) -> list[dict]:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/questions/{question_id}/shares",
+                                headers=_headers(), timeout=TIMEOUT))
+
+
+def revoke_share(share_id: int) -> None:
+    resp = requests.delete(f"{BACKEND_BASE_URL}/api/shares/{share_id}", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+def get_public_dashboard(token: str) -> dict:
+    """No auth headers on purpose: this is what an anonymous viewer of a share link sees."""
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/public/shared/{token}", timeout=TIMEOUT))
+
+
+# ---------------------------------------------------------- auto-insights --
+
+def get_insights(dataset_id: int) -> dict:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/insights",
+                                headers=_headers(), timeout=TIMEOUT))
+
+
+def generate_insights(dataset_id: int) -> dict:
+    # Generous timeout: one LLM call, which may wait out a rate-limit backoff.
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/insights",
+                                 headers=_headers(), timeout=120))
+
+
+# ------------------------------------------------------------------ alerts --
+
+def list_alerts(unread_only: bool = False, limit: int = 50) -> dict:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/alerts",
+                                params={"unread_only": unread_only, "limit": limit},
+                                headers=_headers(), timeout=TIMEOUT))
+
+
+def mark_alert_read(alert_id: int) -> None:
+    resp = requests.post(f"{BACKEND_BASE_URL}/api/alerts/{alert_id}/read", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+def mark_all_alerts_read() -> None:
+    resp = requests.post(f"{BACKEND_BASE_URL}/api/alerts/read-all", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+# -------------------------------------------------------------------- chat --
+
+def chat_dashboard(question_id: int, message: str, history: list[dict]) -> dict:
+    # Two LLM calls (answer + independent check) -- allow for slow providers.
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/questions/{question_id}/chat",
+                                 json={"message": message, "history": history},
+                                 headers=_headers(), timeout=120))

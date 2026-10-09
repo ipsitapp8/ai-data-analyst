@@ -19,7 +19,7 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-from api_client import ApiError, health, inspect_element, my_workspaces
+from api_client import ApiError, health, inspect_element, list_alerts, my_workspaces
 from auth import current_user, logout, require_login, require_password
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -534,13 +534,24 @@ def inject_base_css() -> None:
     st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
 
 
-def page_setup(title: str, sidebar: bool = True) -> None:
+def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
     st.set_page_config(
         page_title=f"{title} · SILT",
         page_icon="▤",
         layout="wide",
         initial_sidebar_state="expanded" if sidebar else "collapsed",
     )
+    if public:
+        # Anonymous read-only pages (share links): no gates, no team, no nav.
+        # The page itself may only call endpoints that need no login.
+        inject_base_css()
+        st.markdown(
+            "<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
+            "[data-testid='stExpandSidebarButton']{display:none !important;}"
+            ".block-container{padding-top:2.2rem !important;max-width:980px !important;}</style>",
+            unsafe_allow_html=True,
+        )
+        return
     # Two gates, outer to inner. Neither changes local dev: require_password()
     # is a no-op unless APP_PASSWORD is set, and require_login() always applies
     # (there are no anonymous accounts) but is fast once a session exists.
@@ -686,6 +697,30 @@ def _render_workspace_switcher() -> None:
         st.session_state["active_team_id"] = teams[t_idx]["id"]
 
 
+_ALERTS_CACHE_TTL_SECONDS = 8
+
+
+def _unread_alert_count() -> int:
+    """Unread in-app alerts for the active team, short-TTL cached per session
+    (same reasoning as _cached_my_workspaces: the sidebar renders on every rerun)."""
+    if not st.session_state.get("active_team_id"):
+        return 0
+    now = time.monotonic()
+    cached = st.session_state.get("_alerts_cache")
+    if cached and now - cached[0] < _ALERTS_CACHE_TTL_SECONDS and cached[2] == st.session_state["active_team_id"]:
+        return cached[1]
+    try:
+        n = int(list_alerts(unread_only=True, limit=1).get("unread", 0))
+    except Exception:  # noqa: BLE001 - a badge must never break a page
+        n = 0
+    st.session_state["_alerts_cache"] = (now, n, st.session_state["active_team_id"])
+    return n
+
+
+def invalidate_alerts_cache() -> None:
+    st.session_state.pop("_alerts_cache", None)
+
+
 def _active_workspace_name(user: dict | None) -> str:
     try:
         communities = _cached_my_workspaces()["communities"]
@@ -728,8 +763,10 @@ def render_sidebar(current: str) -> None:
     with st.sidebar:
         html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
         with st.container(key="nav"):
+            unread = _unread_alert_count()
             for key, label, target in NAV_PAGES:
-                if st.button(label, key=f"nav_{key}", disabled=(key == current)):
+                shown = f"{label}  ·  {unread}" if key == "scheduled" and unread else label
+                if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
                     st.switch_page(target)
             if current_user() and st.button("Log out", key="nav_logout"):
                 logout()

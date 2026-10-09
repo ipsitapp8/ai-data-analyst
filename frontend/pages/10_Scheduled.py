@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, delete_scheduled, list_scheduled, update_scheduled
+from api_client import (ApiError, delete_scheduled, list_alerts, list_scheduled, mark_alert_read,
+                        mark_all_alerts_read, update_scheduled)
 from style.theme import (
+    badge,
+    invalidate_alerts_cache,
     require_active_team,
     esc,
     html,
@@ -22,6 +25,60 @@ render_sidebar("scheduled")
 require_active_team("Scheduled Analyses")
 
 page_header("Scheduled Analyses", "Tracked questions, re-run automatically on the latest data.")
+
+# ---- alert feed: what changed, went unusual, or failed verification ----
+try:
+    feed = list_alerts(limit=20)
+except ApiError:
+    feed = {"unread": 0, "alerts": []}
+
+ALERT_KIND = {"change": ("Changed", "warn"), "anomaly": ("Unusual", "running"), "unverified": ("Unverified", "error")}
+with st.container(key="card_alerts"):
+    a_head, a_btn = st.columns([4, 1])
+    with a_head:
+        unread_note = f" · {feed['unread']} unread" if feed["unread"] else ""
+        html(f'<div class="ds-section-title">Alerts{unread_note}</div>')
+    with a_btn:
+        if feed["unread"] and st.button("Mark all read", key="alerts_read_all"):
+            try:
+                mark_all_alerts_read()
+            except ApiError as e:
+                st.error(str(e))
+            invalidate_alerts_cache()
+            st.rerun()
+    if not feed["alerts"]:
+        html('<div class="ds-row-meta" style="padding:8px 0;">No alerts yet. They appear here when a tracked '
+             'metric moves past its threshold, behaves unusually against its own history, or fails verification.</div>')
+    for al in feed["alerts"]:
+        label, kind = ALERT_KIND.get(al["kind"], ("Alert", "neutral"))
+        c1, c2 = st.columns([6, 1.4])
+        with c1:
+            html(f'<div style="padding:8px 0;{"" if al["read"] else "font-weight:600;"}">'
+                 f'<div style="display:flex;gap:10px;align-items:center;">{badge(label, kind)}'
+                 f'<span class="ds-row-title">{esc(al["title"])}</span></div>'
+                 f'<div class="ds-row-meta" style="margin-top:3px;">{esc(al["created_at"].replace("T", " ")[:16])} UTC'
+                 f'{" · " + esc(al["detail"].splitlines()[0][:140]) if al["detail"] else ""}</div></div>')
+        with c2:
+            b1, b2 = st.columns(2)
+            with b1:
+                if al.get("question_id") and st.button("Open", key=f"al_open_{al['id']}"):
+                    if not al["read"]:
+                        try:
+                            mark_alert_read(al["id"])
+                        except ApiError:
+                            pass
+                        invalidate_alerts_cache()
+                    st.session_state["active_question_id"] = al["question_id"]
+                    st.switch_page("pages/4_Dashboards.py")
+            with b2:
+                if not al["read"] and st.button("✓", key=f"al_read_{al['id']}", help="Mark as read"):
+                    try:
+                        mark_alert_read(al["id"])
+                    except ApiError as e:
+                        st.error(str(e))
+                    invalidate_alerts_cache()
+                    st.rerun()
+html("<div style='height:16px'></div>")
 
 try:
     rows = list_scheduled()

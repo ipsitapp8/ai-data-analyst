@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, create_scheduled, get_dashboard, get_status, list_questions
+from api_client import (ApiError, ask_question, chat_dashboard, create_scheduled, create_share, get_dashboard,
+                        get_status, list_questions, list_shares, revoke_share)
 from style.theme import (
     require_active_team,
     esc,
@@ -113,6 +114,36 @@ with head_r:
     html("<div style='height:12px'></div>")
     if st.button("Audit Trail  →", key="db_audit"):
         st.switch_page("pages/6_Audit_Trail.py")
+    with st.popover("Share", use_container_width=True):
+        if verdict_state == "UNVERIFIED":
+            st.caption("The Critic could not verify this analysis, so it can't be shared publicly.")
+        else:
+            st.caption("Anyone with the link can view a read-only copy. No login needed.")
+            days = st.selectbox("Link expires after", [1, 7, 30, 90], index=1,
+                                format_func=lambda d: f"{d} day{'s' if d != 1 else ''}", key="share_days")
+            if st.button("Create link", type="primary", key="share_create"):
+                try:
+                    st.session_state["_new_share_url"] = create_share(qid, days)["url"]
+                except ApiError as e:
+                    st.error(f"Could not create link: {e}")
+            if st.session_state.get("_new_share_url"):
+                st.code(st.session_state["_new_share_url"], language=None)
+            try:
+                active_links = list_shares(qid)
+            except ApiError:
+                active_links = []
+            for link in active_links:
+                lc1, lc2 = st.columns([3, 1])
+                with lc1:
+                    st.caption(f"Expires {link['expires_at'][:10]}")
+                with lc2:
+                    if st.button("Revoke", key=f"share_rev_{link['id']}"):
+                        try:
+                            revoke_share(link["id"])
+                            st.session_state.pop("_new_share_url", None)
+                            st.rerun()
+                        except ApiError as e:
+                            st.error(str(e))
     with st.popover("Track this question", use_container_width=True):
         interval = st.radio("Re-run", ["daily", "weekly"], horizontal=True, key="track_interval")
         threshold = st.number_input("Alert when a KPI changes by more than (%)", min_value=0.0,
@@ -211,3 +242,56 @@ if dash.get("verification_summary"):
             f'<div class="ds-row-meta" style="margin-top:10px;line-height:1.7;">'
             f'{esc(dash["verification_summary"])}</div>'
         )
+
+
+# ------------------------------------------------------- ask your dashboard --
+html("<div style='height:22px'></div>")
+chat_key = f"chat_{qid}"
+history = st.session_state.setdefault(chat_key, [])
+with st.container(key="card_chat"):
+    html('<div class="ds-section-title">Ask this dashboard</div>')
+    html('<div class="ds-page-sub" style="margin:4px 0 12px 0;">Follow-up questions are answered only from '
+         'this analysis, and every answer is fact-checked by a second model. Anything it cannot answer, '
+         'you can run as a new, fully verified analysis.</div>')
+    for i, turn in enumerate(history):
+        with st.chat_message(turn["role"]):
+            st.markdown(turn["content"])
+            if turn["role"] == "assistant":
+                if turn.get("verified") is True:
+                    html(f'<span class="ds-badge ds-badge-verified">Checked against this analysis</span>')
+                elif turn.get("verified") is False:
+                    claims = "".join(f"<li>{esc(c)}</li>" for c in turn.get("unsupported_claims") or [])
+                    html(f'<span class="ds-badge ds-badge-warn">Not fully supported</span>'
+                         f'<div class="ds-row-meta" style="margin-top:6px;">The checker could not confirm:'
+                         f'<ul style="margin:4px 0 0 18px;">{claims}</ul></div>')
+                elif turn.get("needs_new_analysis") is not True:
+                    html('<span class="ds-badge ds-badge-neutral">Not independently checked</span>')
+                if turn.get("sources"):
+                    st.caption("Based on: " + " · ".join(turn["sources"]))
+                if turn.get("needs_new_analysis") and turn.get("suggested_question"):
+                    st.caption("This needs a new calculation.")
+                    if st.button(f"Run as new analysis: {turn['suggested_question']}", key=f"chat_run_{qid}_{i}"):
+                        src = next((q for q in questions if q["id"] == qid), None)
+                        if src:
+                            try:
+                                res = ask_question(src["dataset_id"], turn["suggested_question"])
+                                st.session_state["active_question_id"] = res["question_id"]
+                                st.session_state["question_running"] = True
+                                st.switch_page("pages/3_Analyses.py")
+                            except ApiError as e:
+                                st.error(f"Could not start analysis: {e}")
+
+prompt = st.chat_input("Ask a follow-up about this analysis…", max_chars=600, key=f"chat_input_{qid}")
+if prompt:
+    sent = [{"role": t["role"], "content": t["content"]} for t in history][-8:]
+    history.append({"role": "user", "content": prompt})
+    with st.spinner("Reading the analysis and checking the answer…"):
+        try:
+            reply = chat_dashboard(qid, prompt, sent)
+            history.append({"role": "assistant", "content": reply["answer"], **{
+                k: reply.get(k) for k in ("verified", "unsupported_claims", "sources",
+                                           "needs_new_analysis", "suggested_question")}})
+        except ApiError as e:
+            history.append({"role": "assistant", "content": f"Sorry, I couldn't answer that: {e}",
+                            "verified": None, "needs_new_analysis": True})
+    st.rerun()

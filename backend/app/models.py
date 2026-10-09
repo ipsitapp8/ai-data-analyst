@@ -300,6 +300,56 @@ class KnowledgeNote(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class ShareLink(Base):
+    """A revocable, expiring read-only link to one finished dashboard (see
+    app/routers/sharing.py). The token is the only credential."""
+
+    __tablename__ = "share_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, nullable=False, unique=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
+    dashboard_id = Column(Integer, ForeignKey("dashboards.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class DatasetInsight(Base):
+    """Auto-generated starter questions + data-quality warnings for one dataset
+    version (see app/insights.py)."""
+
+    __tablename__ = "dataset_insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    questions_json = Column(JSONVariant, default=list)  # [{question, why}]
+    warnings_json = Column(JSONVariant, default=list)  # [{severity, column, message}]
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Alert(Base):
+    """In-app alert raised by a scheduled run (see app/scheduler.py), shown on the
+    Scheduled page whether or not email is configured. Read state is shared by
+    the whole team."""
+
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    scheduled_analysis_id = Column(Integer, ForeignKey("scheduled_analyses.id"), nullable=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=True)
+    kind = Column(String, nullable=False)  # change | anomaly | unverified
+    title = Column(String, nullable=False)
+    detail = Column(Text, default="")
+    created_at = Column(DateTime, default=utcnow)
+    read_at = Column(DateTime, nullable=True)
+
+
 class AuditTrail(Base):
     __tablename__ = "audit_trail"
 

@@ -19,11 +19,11 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app import config
-from app.change_detection import KpiChange, diff_kpis, trend_of
+from app.change_detection import Anomaly, KpiChange, detect_anomalies, diff_kpis, trend_of
 from app.database import SessionLocal
 from app.dataset_versions import latest_version
 from app.email_sender import send_email
-from app.models import Dashboard, Dataset, Question, ScheduledAnalysis, TeamMember, User
+from app.models import Alert, Dashboard, Dataset, Question, ScheduledAnalysis, TeamMember, User
 from app.verdict import UNVERIFIED, rejected_reviews, resolve_verdict_state
 
 logger = logging.getLogger(__name__)
@@ -134,7 +134,8 @@ def _recipients(db: Session, team_id: int) -> list[str]:
     return sorted({r[0] for r in rows})
 
 
-def _build_email(question: Question, verdict: str, changes: list[KpiChange], rejection_text: str):
+def _build_email(question: Question, verdict: str, changes: list[KpiChange], rejection_text: str,
+                anomalies: list[Anomaly] | None = None):
     link = f"{config.APP_URL.rstrip('/')}/Dashboards?question={question.id}"
     crossed = [c for c in changes if c.crossed]
     q_short = question.text if len(question.text) <= 70 else question.text[:67] + "..."
@@ -142,17 +143,22 @@ def _build_email(question: Question, verdict: str, changes: list[KpiChange], rej
     if verdict == UNVERIFIED:
         subject = f"[DataSage] Could not verify tracked analysis: {q_short}"
         headline = "The Critic could not confirm this scheduled analysis."
-    else:
+    elif crossed:
         first = crossed[0]
         more = f" (+{len(crossed) - 1} more)" if len(crossed) > 1 else ""
         subject = f"[DataSage] {first.describe()}{more}"
         headline = f"A tracked metric changed by more than your threshold: {q_short}"
+    else:
+        subject = f"[DataSage] Unusual value: {anomalies[0].label}"
+        headline = f"A tracked metric is out of line with its history: {q_short}"
 
     lines = [headline, ""]
     if rejection_text:
         lines += ["Critic's reasoning:", rejection_text, ""]
     if changes:
         lines += ["Changes since the last run:"] + [f"- {c.describe()}" for c in changes] + [""]
+    if anomalies:
+        lines += ["Unusual compared with history:"] + [f"- {a.describe()}" for a in anomalies] + [""]
     lines.append(f"View the new dashboard: {link}")
     text_body = "\n".join(lines)
 
@@ -162,8 +168,47 @@ def _build_email(question: Question, verdict: str, changes: list[KpiChange], rej
         html_body += f"<p style='color:#b42318;'><b>Critic's reasoning:</b><br>{esc(rejection_text)}</p>"
     if changes:
         html_body += "<ul>" + "".join(f"<li>{esc(c.describe())}</li>" for c in changes) + "</ul>"
+    if anomalies:
+        html_body += "<p><b>Unusual compared with history:</b></p><ul>" + "".join(
+            f"<li>{esc(a.describe())}</li>" for a in anomalies) + "</ul>"
     html_body += f"<p><a href='{esc(link)}'>View the new dashboard</a></p></div>"
     return subject, text_body, html_body
+
+
+def _kpi_history(db: Session, sa_id: int, exclude_question_id: int, limit: int = 20) -> list[list[dict]]:
+    """KPI lists of this schedule's earlier runs, oldest first."""
+    qids = [
+        r[0] for r in db.query(Question.id)
+        .filter(Question.scheduled_analysis_id == sa_id, Question.id != exclude_question_id)
+        .order_by(Question.id.desc()).limit(limit).all()
+    ]
+    history = []
+    for qid in reversed(qids):
+        d = (db.query(Dashboard).filter(Dashboard.question_id == qid)
+             .order_by(Dashboard.created_at.desc()).first())
+        if d is not None:
+            history.append(d.kpis_json or [])
+    return history
+
+
+def _record_alerts(db: Session, sa: ScheduledAnalysis, question: Question, verdict: str,
+                   changes: list[KpiChange], anomalies: list[Anomaly], rejection_text: str) -> None:
+    """Persist the in-app alert(s) for this run. Independent of email: a team with
+    no SMTP configured still sees them on the Scheduled page."""
+    def add(kind: str, title: str, detail: str) -> None:
+        db.add(Alert(team_id=sa.workspace_id, scheduled_analysis_id=sa.id, question_id=question.id,
+                     kind=kind, title=title[:200], detail=detail))
+
+    q_short = question.text if len(question.text) <= 60 else question.text[:57] + "..."
+    if verdict == UNVERIFIED:
+        add("unverified", f"Could not verify: {q_short}", rejection_text or "The Critic could not confirm this run.")
+    crossed = [c for c in changes if c.crossed]
+    if crossed:
+        more = f" (+{len(crossed) - 1} more)" if len(crossed) > 1 else ""
+        add("change", f"{crossed[0].describe()}{more}", "\n".join(c.describe() for c in changes))
+    for a in anomalies:
+        add("anomaly", f"Unusual {a.label}: {a.value}", a.describe())
+    db.commit()
 
 
 def process_completed_run(question_id: int) -> str:
@@ -191,6 +236,7 @@ def process_completed_run(question_id: int) -> str:
 
         changes = diff_kpis(previous.kpis_json, dash.kpis_json, sa.change_threshold_pct) if previous else []
         crossed = any(c.crossed for c in changes)
+        anomalies = detect_anomalies(_kpi_history(db, sa.id, question_id), dash.kpis_json)
 
         sa.last_dashboard_id = dash.id
         sa.last_trend = trend_of(changes) if previous else None
@@ -199,7 +245,7 @@ def process_completed_run(question_id: int) -> str:
 
         # A verification failure is itself the signal, so it notifies regardless
         # of threshold (and even on a first run with nothing to diff against).
-        if verdict != UNVERIFIED and not crossed:
+        if verdict != UNVERIFIED and not crossed and not anomalies:
             logger.info("Scheduled analysis %s run %s: no KPI crossed %.1f%%; no email",
                         sa.id, question_id, sa.change_threshold_pct)
             return "baseline" if previous is None else "silent"
@@ -208,7 +254,12 @@ def process_completed_run(question_id: int) -> str:
         if verdict == UNVERIFIED and rejections:
             last = rejections[-1]
             rejection_text = " ".join([last.summary or ""] + [f"[{i}]" for i in (last.issues_json or [])]).strip()
-        subject, text_body, html_body = _build_email(question, verdict, changes, rejection_text)
+        try:
+            _record_alerts(db, sa, question, verdict, changes, anomalies, rejection_text)
+        except Exception:  # noqa: BLE001 - the in-app feed must never block the email
+            db.rollback()
+            logger.exception("Could not record in-app alerts for question %s", question_id)
+        subject, text_body, html_body = _build_email(question, verdict, changes, rejection_text, anomalies)
         ok = send_email(_recipients(db, sa.workspace_id), subject, text_body, html_body)
         return "alerted" if ok else "alert_failed"
     finally:
