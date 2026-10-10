@@ -21,9 +21,8 @@ def _team_dashboard_and_overrides(db: Session, team: Team, dashboard_id: int, ch
     if not dashboard or dashboard.team_id != team.id:
         raise HTTPException(404, "Dashboard not found")
 
-    try:
-        charts = json.loads(dashboard.charts_json or "[]")
-    except json.JSONDecodeError:
+    charts = dashboard.charts_json or []  # native JSON column (see models.JSONVariant)
+    if not isinstance(charts, list):
         charts = []
     valid_keys = {c.get("element_id") for c in charts if isinstance(c, dict) and c.get("element_id")}
     valid_keys |= {f"idx{i}" for i in range(len(charts))}

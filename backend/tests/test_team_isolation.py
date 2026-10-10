@@ -36,6 +36,40 @@ def test_dataset_upload_and_listing_scoped_to_own_team(client, unique_email):
     assert any(d["id"] == dataset_id for d in r.json())
 
 
+def test_dataset_profile_json_round_trips_with_real_content(client, unique_email):
+    """profile_json is a native JSON/JSONB column (not hand-serialized TEXT) --
+    this exercises the full write-then-read round trip with real nested
+    structure (not just an empty dict) to catch a missed json.loads/json.dumps
+    call site regressing to double-encoded or raw-string data."""
+    alice = _signup(client, f"alice-{unique_email}")
+    team_a = _create_team(client, alice, "A Co", "Team A")
+    headers = {"Authorization": f"Bearer {alice}", "X-Team-Id": str(team_a)}
+
+    csv = b"name,age\nAda,30\nGrace,\nAlan,45\n"
+    files = {"file": ("people.csv", csv, "text/csv")}
+    r = client.post("/api/datasets/upload", files=files, headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    dataset_id = body["id"]
+
+    profile = body["profile"]
+    assert profile["row_count"] == 3
+    assert profile["col_count"] == 2
+    columns = {c["name"]: c for c in profile["columns"]}
+    assert columns["name"]["kind"] == "categorical"
+    assert columns["age"]["kind"] == "numeric"
+    assert columns["age"]["missing_count"] == 1
+
+    # Re-fetch via GET (a separate read path than the upload response) --
+    # must be the identical structure, not a JSON-encoded string of it.
+    r = client.get(f"/api/datasets/{dataset_id}", headers=headers)
+    assert r.status_code == 200
+    refetched = r.json()["profile"]
+    assert isinstance(refetched, dict)
+    assert refetched["row_count"] == 3
+    assert {c["name"] for c in refetched["columns"]} == {"name", "age"}
+
+
 def test_cross_team_dataset_access_is_404(client, unique_email):
     alice = _signup(client, f"alice-{unique_email}")
     bob = _signup(client, f"bob-{unique_email}")

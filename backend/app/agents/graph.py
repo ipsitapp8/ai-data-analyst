@@ -2,7 +2,6 @@
 Critic -> (revision loop, bounded) -> Dashboard-compile."""
 from __future__ import annotations
 
-import json
 import logging
 
 from langgraph.graph import END, StateGraph
@@ -15,7 +14,8 @@ from app.agents.planner import planner_node
 from app.agents.state import AgentState, mark_terminal, update_stage
 from app.agents.triage import triage_node
 from app.database import SessionLocal
-from app.models import Dataset, Question
+from app.dataset_versions import latest_version
+from app.models import Dataset, DatasetVersion, Question
 
 logger = logging.getLogger(__name__)
 
@@ -107,13 +107,24 @@ def run_question_graph(question_id: int) -> None:
             mark_terminal(question_id, "failed", "Dataset not found")
             return
 
-        profile = json.loads(dataset.profile_json)
+        # Pin the run to a dataset version: the one the scheduler/caller already
+        # chose, else whatever is latest right now. Pinning (rather than reading
+        # dataset.filepath at each node) is what keeps an old dashboard tied to
+        # the data it was actually computed from.
+        version = db.get(DatasetVersion, question.dataset_version_id) if question.dataset_version_id else None
+        if version is None:
+            version = latest_version(db, dataset)
+            if version is not None:
+                question.dataset_version_id = version.id
+                db.commit()
+        csv_path = version.filepath if version else dataset.filepath
+        profile = version.profile_json if version else dataset.profile_json
 
         initial_state: AgentState = {
             "question_id": question_id,
             "dataset_id": dataset.id,
             "question_text": question.text,
-            "csv_path": dataset.filepath,
+            "csv_path": csv_path,
             "profile": profile,
             "plan": [],
             "step_index": 0,

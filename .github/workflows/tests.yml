@@ -8,6 +8,20 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: silt
+          POSTGRES_USER: silt
+          POSTGRES_PASSWORD: silt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U silt -d silt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -22,5 +36,10 @@ jobs:
           pip install -r frontend/requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run tests
+      - name: Run tests (SQLite)
+        run: pytest -v
+
+      - name: Run tests (Postgres)
+        env:
+          TEST_DATABASE_URL: postgresql://silt:silt@localhost:5432/silt
         run: pytest -v

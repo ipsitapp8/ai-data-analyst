@@ -10,13 +10,13 @@ model re-checking its own work.
 """
 from __future__ import annotations
 
-from app import config
+from app import config, knowledge
 from app.agents import llm_client
 from app.agents import llm_client_llama as llama_client
 from app.agents import prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
-from app.models import CriticReview
+from app.models import CriticReview, Question
 from app.sandbox.runner import get_runner
 
 
@@ -163,14 +163,19 @@ verification recomputed result: {sandbox_result.result}
             question_id=question_id,
             verdict=review_output["verdict"],
             confidence=review_output.get("confidence", 0.0),
-            issues_json=llm_client.pretty(review_output.get("issues", [])),
-            checks_json=llm_client.pretty(checks),
+            issues_json=review_output.get("issues", []),
+            checks_json=checks,
             summary=summary,
         )
         db.add(review_row)
         db.commit()
         db.refresh(review_row)
         review_id = review_row.id
+        if review_output["verdict"] == "rejected":
+            knowledge.record_critic_lesson(
+                db, question=db.get(Question, question_id), summary=summary,
+                issues=review_output.get("issues", []),
+            )
     finally:
         db.close()
 

@@ -1,7 +1,7 @@
 """SILT design system: global CSS + shared UI components.
 
-Flat, plain, and quiet on purpose: system fonts, one muted accent color, no
-gradients or glow. Every page imports from here so the app reads as one
+Light, airy, and minimal on purpose: Inter, white surfaces, hairline borders,
+one indigo accent, no gradients or glow. Every page imports from here so the app reads as one
 product.
 """
 from __future__ import annotations
@@ -11,6 +11,7 @@ import copy
 import html as _html_stdlib
 import json
 import time
+import urllib.parse
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +19,7 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-from api_client import ApiError, health, inspect_element, my_workspaces
+from api_client import ApiError, health, inspect_element, list_alerts, my_workspaces
 from auth import current_user, logout, require_login, require_password
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -26,48 +27,50 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 # Chart data gets real, distinct color even though the UI chrome around it
 # stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
 # do it): plain chrome, legible/vivid data encoding.
-CHART_COLORWAY = ["#4f8fe0", "#3fb87a", "#e0a83e", "#d1596b", "#9575cd", "#41b8c4"]
-ACCENT = "#4f8fe0"      # clear blue -- the one interactive/positive UI color
-ACCENT_2 = "#8a8a8a"    # plain gray -- in-progress/secondary state
+CHART_COLORWAY = ["#4f46e5", "#0ea5a4", "#f59e0b", "#e11d48", "#8b5cf6", "#64748b"]
+ACCENT = "#4f46e5"      # indigo -- the one interactive/brand UI color
+ACCENT_2 = "#94a3b8"    # slate -- in-progress/secondary state
 
 BASE_CSS = """
 <style>
 :root {
-  --bg-base: #161616;
-  --bg-page: #161616;
-  --bg-card: #161616;
-  --bg-card-hover: #1c1c1c;
-  --bg-inset: #101010;
-  --border: rgba(255,255,255,0.12);
-  --border-strong: rgba(255,255,255,0.22);
+  --bg-base: #ffffff;
+  --bg-page: #fafafa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f4f5;
+  --bg-inset: #f4f4f5;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
 
-  --text-primary: #e6e6e6;
-  --text-secondary: #969696;
-  --text-muted: #666666;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
 
-  --accent: #4f8fe0;
-  --accent-dim: #3f72b3;
-  --accent-bg: rgba(79,143,224,0.12);
-  --accent-border: rgba(79,143,224,0.32);
+  --accent: #4f46e5;
+  --accent-dim: #4338ca;
+  --accent-bg: #eef2ff;
+  --accent-border: #c7d2fe;
 
-  --accent2: #8a8a8a;
-  --accent2-dim: #6e6e6e;
-  --accent2-bg: rgba(138,138,138,0.12);
-  --accent2-border: rgba(138,138,138,0.3);
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --ok-border: #bbf7d0;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+  --error: #dc2626;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
 
-  --warn: #b6944a;
-  --warn-bg: rgba(182,148,74,0.12);
-  --warn-border: rgba(182,148,74,0.3);
+  --accent2: #64748b;
+  --accent2-dim: #475569;
+  --accent2-bg: #f1f5f9;
+  --accent2-border: #e2e8f0;
 
-  --error: #b05a52;
-  --error-bg: rgba(176,90,82,0.12);
-  --error-border: rgba(176,90,82,0.32);
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
 
-  --radius-lg: 4px;
-  --radius-md: 4px;
-  --radius-sm: 3px;
-
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: var(--font);
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
@@ -172,13 +175,13 @@ p, span, div, label, li { font-family: var(--font); }
   font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);
 }
 .silt-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.silt-dot-on  { background: var(--accent2); }
+.silt-dot-on  { background: var(--ok); }
 .silt-dot-off { background: var(--error); }
 
 /* ============ BUTTONS ============ */
 button[kind="primary"], .stFormSubmitButton > button {
   background: var(--accent) !important;
-  color: #101010 !important;
+  color: #ffffff !important;
   border: none !important;
   border-radius: var(--radius-md) !important;
   font-weight: 600 !important;
@@ -188,7 +191,7 @@ button[kind="primary"], .stFormSubmitButton > button {
 }
 button[kind="primary"]:hover, .stFormSubmitButton > button:hover {
   background: var(--accent-dim) !important;
-  color: #101010 !important;
+  color: #ffffff !important;
 }
 button[kind="secondary"] {
   background: transparent !important;
@@ -280,7 +283,7 @@ button[kind="secondary"]:hover {
                  line-height: 1; }
 .ds-stat-delta { font-family: var(--font-mono); font-size: 0.78rem; margin-top: 11px;
                  display: flex; align-items: center; gap: 4px; }
-.ds-up   { color: var(--accent2); }
+.ds-up   { color: var(--ok); }
 .ds-down { color: var(--error); }
 
 /* list rows */
@@ -312,13 +315,13 @@ button[kind="secondary"]:hover {
   font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500;
   white-space: nowrap;
 }
-.ds-badge-verified { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
+.ds-badge-verified { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-border); }
 .ds-badge-warn     { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
 .ds-badge-error    { background: var(--error-bg); color: var(--error); border: 1px solid var(--error-border); }
 .ds-badge-neutral  { background: var(--bg-inset); color: var(--text-secondary); border: 1px solid var(--border); }
-.ds-badge-running  { background: var(--accent2-bg); color: var(--accent2); border: 1px solid var(--accent2-border); }
+.ds-badge-running  { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
 .ds-badge-running::before {
-  content:''; width:6px; height:6px; border-radius:50%; background: var(--accent2);
+  content:''; width:6px; height:6px; border-radius:50%; background: var(--accent);
   animation: siltpulse 1.4s infinite ease-in-out;
 }
 @keyframes siltpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
@@ -418,15 +421,15 @@ hr { border-color: var(--border) !important; }
 
 /* step list */
 .ds-step { display: flex; gap: 13px; padding: 13px 16px; border-radius: var(--radius-sm); align-items: flex-start; }
-.ds-step-active { background: var(--accent2-bg); border: 1px solid var(--accent2-border); }
+.ds-step-active { background: var(--accent-bg); border: 1px solid var(--accent-border); }
 .ds-step-num {
   width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
   background: var(--bg-inset); border: 1px solid var(--border); color: var(--text-secondary);
 }
-.ds-step-done   { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
-.ds-step-run    { background: var(--accent2-bg); border-color: var(--accent2-border); color: var(--accent2); }
+.ds-step-done   { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+.ds-step-run    { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
 .ds-step-title  { font-size: 0.89rem; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
 .ds-step-status { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-secondary); line-height: 1.4; }
 
@@ -435,6 +438,23 @@ hr { border-color: var(--border) !important; }
 .ds-check:last-child { border-bottom: none; }
 .ds-check-label { font-size: 0.87rem; color: var(--text-primary); }
 
+/* ============ VERDICT BANNER ============ */
+.ds-verdict { width: 100%; border-radius: var(--radius-sm); margin: 0 0 20px 0; border: 1px solid; }
+.ds-verdict > summary, .ds-verdict > .ds-verdict-head {
+  list-style: none; display: flex; align-items: center; gap: 12px;
+  padding: 15px 20px; font-size: 1.02rem; font-weight: 600;
+}
+.ds-verdict > summary { cursor: pointer; }
+.ds-verdict > summary::-webkit-details-marker { display: none; }
+.ds-verdict-hint { margin-left: auto; font-size: 0.78rem; font-weight: 400; opacity: 0.85; }
+.ds-verdict-body { padding: 4px 20px 18px 20px; font-size: 0.9rem; line-height: 1.65; color: var(--text-primary); }
+.ds-verdict-body ul { margin: 6px 0 12px 18px; padding: 0; }
+.ds-verdict-ok   { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
+.ds-verdict-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+.ds-verdict-bad  { background: var(--error-bg); color: var(--error); border-color: var(--error-border); }
+.ds-flag { color: var(--warn); font-weight: 700; }
+.ds-flag-bad { color: var(--error); font-weight: 700; }
+.ds-trend-up { color: var(--ok); } .ds-trend-down { color: var(--error); } .ds-trend-flat { color: var(--text-secondary); }
 /* ============ CHART STUDIO (pages/4_Dashboards.py) ============ */
 .st-key-card_studio { border-color: var(--border-strong) !important; }
 .ds-studio-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted);
@@ -491,17 +511,68 @@ def html(markup: str) -> None:
     st.markdown(flat, unsafe_allow_html=True)
 
 
+_FONTS_LINK = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600'
+    '&display=swap" rel="stylesheet">'
+)
+
+# Line icons for the sidebar nav, drawn as CSS masks so they inherit the row's colour.
+_NAV_ICONS = {
+    "home": '<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/>',
+    "overview": '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
+    "datasets": '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+    "analyses": '<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>',
+    "scheduled": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    "dashboards": '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+    "reports": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M8.5 13h7M8.5 17h5"/>',
+    "audit": '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2"/>',
+    "workspaces": '<path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/>',
+    "team_overview": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3 3 0 0 1 0 6M18 14c1.8.6 3 2.4 3 4.5"/>',
+    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+}
+
+
+def _nav_icon_css() -> str:
+    rules = []
+    for key, body in _NAV_ICONS.items():
+        svg = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' "
+               "stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>" + body.replace('"', "'") + "</svg>")
+        uri = "data:image/svg+xml;utf8," + urllib.parse.quote(svg, safe="/:=' ,.-()")
+        rules.append(f'.st-key-nav_{key} button {{ --icon: url("{uri}"); }}')
+    return " ".join(rules)
+
+
 def inject_base_css() -> None:
+    skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8")
+    # Flatten to one line: markdown ends an HTML block at the first blank line,
+    # which would spill the rest of the stylesheet onto the page as text.
+    skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())
     st.markdown(BASE_CSS, unsafe_allow_html=True)
+    st.markdown(_FONTS_LINK, unsafe_allow_html=True)
+    st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
 
 
-def page_setup(title: str, sidebar: bool = True) -> None:
+def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
     st.set_page_config(
         page_title=f"{title} · SILT",
         page_icon="▤",
         layout="wide",
         initial_sidebar_state="expanded" if sidebar else "collapsed",
     )
+    if public:
+        # Anonymous read-only pages (share links): no gates, no team, no nav.
+        # The page itself may only call endpoints that need no login.
+        inject_base_css()
+        st.markdown(
+            "<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
+            "[data-testid='stExpandSidebarButton']{display:none !important;}"
+            ".block-container{padding-top:2.2rem !important;max-width:980px !important;}</style>",
+            unsafe_allow_html=True,
+        )
+        return
     # Two gates, outer to inner. Neither changes local dev: require_password()
     # is a no-op unless APP_PASSWORD is set, and require_login() always applies
     # (there are no anonymous accounts) but is fast once a session exists.
@@ -579,6 +650,7 @@ NAV_PAGES = [
     ("overview", "Overview", "pages/1_Overview.py"),
     ("datasets", "Datasets", "pages/2_Datasets.py"),
     ("analyses", "Analyses", "pages/3_Analyses.py"),
+    ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
     ("audit", "Audit trail", "pages/6_Audit_Trail.py"),
@@ -646,44 +718,97 @@ def _render_workspace_switcher() -> None:
         st.session_state["active_team_id"] = teams[t_idx]["id"]
 
 
+_ALERTS_CACHE_TTL_SECONDS = 8
+
+
+def _unread_alert_count() -> int:
+    """Unread in-app alerts for the active team, short-TTL cached per session
+    (same reasoning as _cached_my_workspaces: the sidebar renders on every rerun)."""
+    if not st.session_state.get("active_team_id"):
+        return 0
+    now = time.monotonic()
+    cached = st.session_state.get("_alerts_cache")
+    if cached and now - cached[0] < _ALERTS_CACHE_TTL_SECONDS and cached[2] == st.session_state["active_team_id"]:
+        return cached[1]
+    try:
+        n = int(list_alerts(unread_only=True, limit=1).get("unread", 0))
+    except Exception:  # noqa: BLE001 - a badge must never break a page
+        n = 0
+    st.session_state["_alerts_cache"] = (now, n, st.session_state["active_team_id"])
+    return n
+
+
+def invalidate_alerts_cache() -> None:
+    st.session_state.pop("_alerts_cache", None)
+
+
+def _active_workspace_name(user: dict | None) -> str:
+    try:
+        communities = _cached_my_workspaces()["communities"]
+    except ApiError:
+        communities = []
+    active_team = st.session_state.get("active_team_id")
+    for c in communities:
+        if any(t["id"] == active_team for t in c["teams"]):
+            return c["name"]
+    return (user or {}).get("display_name", "Workspace")
+
+
+def render_topbar() -> None:
+    """Fixed top strip, right-aligned: live backend status and the active workspace."""
+    user = current_user()
+    alive = _backend_alive()
+    name = _active_workspace_name(user)
+    initials = "".join(w[0] for w in (user or {}).get("display_name", name).split()[:2]).upper() or "•"
+    html(
+        f"""
+        <div class="silt-topbar">
+          <div class="silt-tb-status"><span class="silt-dot {'silt-dot-on' if alive else 'silt-dot-off'}"></span>
+            {'Backend online' if alive else 'Backend unreachable'}</div>
+          <div class="silt-tb-user"><div class="silt-tb-avatar">{esc(initials)}</div>
+            <div class="silt-tb-ws">{esc(name)}</div></div>
+        </div>
+        """
+    )
+
+
+_LOGO = (
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" '
+    'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
+)
+
+
 def render_sidebar(current: str) -> None:
-    """Brand mark, workspace switcher, numbered nav rail, and a quiet live
-    system-status line."""
+    """Logo, icon nav rail, workspace switcher, log-out; plus the top status strip."""
+    render_topbar()
     with st.sidebar:
-        html(
-            """
-            <div class="silt-brand">
-              <div class="silt-brand-name">Silt</div>
-              <div class="silt-brand-sub">Data Analyst</div>
-            </div>
-            """
-        )
-        _render_workspace_switcher()
+        html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
         with st.container(key="nav"):
-            for i, (key, label, target) in enumerate(NAV_PAGES, start=1):
-                if st.button(f"{i:02d}  {label}", key=f"nav_{key}", disabled=(key == current)):
+            unread = _unread_alert_count()
+            for key, label, target in NAV_PAGES:
+                shown = f"{label}  ·  {unread}" if key == "scheduled" and unread else label
+                if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
                     st.switch_page(target)
+            if current_user() and st.button("Log out", key="nav_logout"):
+                logout()
+                st.rerun()
 
-        alive = _backend_alive()
-        dot_cls = "silt-dot-on" if alive else "silt-dot-off"
-        status = "backend online" if alive else "backend unreachable"
-        html(
-            f"""
-            <div class="silt-status">
-              <span class="silt-dot {dot_cls}"></span>{status}
-            </div>
-            """
-        )
+        html('<div class="silt-ws-label">Workspace</div>')
+        _render_workspace_switcher()
 
-        user = current_user()
-        if user:
-            u_l, u_r = st.columns([3, 1])
-            with u_l:
-                html(f'<div class="silt-status" style="border-top:none;">{esc(user["display_name"])}</div>')
-            with u_r:
-                if st.button("⏻", key="nav_logout", help="Log out"):
-                    logout()
-                    st.rerun()
+
+def require_active_team(title: str = "") -> None:
+    """Stop the page with a pointer to Workspaces when the user has no active
+    team. Team-scoped API calls need an X-Team-Id, so without one they fail
+    with a 400 that would otherwise be shown as "Backend unreachable"."""
+    if st.session_state.get("active_team_id"):
+        return
+    if title:
+        page_header(title)
+    st.info("You're not in a team yet. Create a workspace or accept an invite to use this page.")
+    if st.button("Go to Workspaces  →", type="primary", key="need_team_go"):
+        st.switch_page("pages/8_Workspaces.py")
+    st.stop()
 
 
 def page_header(title: str, subtitle: str = "") -> None:
@@ -700,6 +825,61 @@ def badge(text: str, kind: str = "neutral") -> str:
         if kind == "verified" else ""
     )
     return f'<span class="ds-badge ds-badge-{kind}">{check}{esc(text)}</span>'
+
+
+VERDICT_META = {
+    "VERIFIED": ("verified", "Verified"),
+    "VERIFIED_WITH_CAVEATS": ("warn", "Verified with caveats"),
+    "UNVERIFIED": ("error", "Unverified"),
+}
+
+
+def verdict_badge(state: str | None) -> str:
+    kind, label = VERDICT_META.get(state or "", ("neutral", "No verdict"))
+    return badge(label, kind)
+
+
+def _rejections_html(rejections: list[dict]) -> str:
+    parts = []
+    for r in rejections:
+        issues = "".join(f"<li>{esc(i)}</li>" for i in r.get("issues") or [])
+        parts.append(
+            f'<div><b>Critic&#39;s reasoning:</b> {esc(r.get("summary") or "No summary given.")}'
+            f'{"<ul>" + issues + "</ul>" if issues else ""}</div>'
+        )
+    return "".join(parts)
+
+
+def render_verdict_banner(dash: dict) -> None:
+    """Full-width trust banner; call before any KPI. Amber/red expand inline to
+    the Critic's actual rejection reasoning."""
+    state = dash.get("verdict_state") or ("VERIFIED" if dash.get("verified") else "UNVERIFIED")
+    rejections = dash.get("rejections") or []
+    if state == "VERIFIED":
+        html('<div class="ds-verdict ds-verdict-ok"><div class="ds-verdict-head">✓ Fully Verified</div></div>')
+        return
+    if state == "VERIFIED_WITH_CAVEATS":
+        cls, icon = "ds-verdict-warn", "⚠"
+        n = dash.get("flagged_count", 0)
+        title = f"Verified with caveats — {n} item(s) flagged"
+    else:
+        cls, icon = "ds-verdict-bad", "⛔"
+        title = "Unverified — Critic could not confirm this analysis"
+    body = _rejections_html(rejections) or esc(dash.get("verification_summary") or "No reasoning was recorded.")
+    html(
+        f'<details class="ds-verdict {cls}"><summary><span>{icon}</span><span>{esc(title)}</span>'
+        f'<span class="ds-verdict-hint">Show Critic reasoning ▾</span></summary>'
+        f'<div class="ds-verdict-body">{body}</div></details>'
+    )
+
+
+def trend_html(trend: str | None) -> str:
+    arrow = {"up": "▲ Up", "down": "▼ Down", "flat": "▬ Flat"}.get(trend or "")
+    return f'<span class="ds-trend-{trend}">{arrow}</span>' if arrow else '<span class="ds-row-meta">—</span>'
+
+
+def trigger_badge(trigger: str | None) -> str:
+    return badge("Scheduled", "running") if trigger == "scheduled" else badge("Manual", "neutral")
 
 
 def stat_card(label: str, value: str, delta: str = "", direction: str = "up") -> str:
@@ -748,22 +928,22 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#969696", family="system-ui, sans-serif", size=12),
+        font=dict(color="#52525b", family="Inter, system-ui, sans-serif", size=12),
         colorway=CHART_COLORWAY,
         margin=dict(l=8, r=8, t=8, b=8),
         height=height,
         showlegend=showlegend,
-        legend=dict(font=dict(color="#969696"), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#1c1c1c", bordercolor="rgba(255,255,255,0.22)",
-                        font=dict(color="#e6e6e6", family="system-ui, sans-serif")),
+        legend=dict(font=dict(color="#52525b"), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d4d4d8",
+                        font=dict(color="#18181b", family="Inter, system-ui, sans-serif")),
         # empty string, not None -- None leaves the title node in place and
         # Plotly renders a literal "undefined" tspan above the plot
         title=dict(text=""),
     )
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.12)",
-                     color="#666666", showline=False, ticks="")
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.12)",
-                     color="#666666", showline=False, ticks="")
+    fig.update_xaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
+                     color="#71717a", showline=False, ticks="")
+    fig.update_yaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
+                     color="#71717a", showline=False, ticks="")
     if recolor:
         _recolor_traces(fig)
     return fig
@@ -968,6 +1148,13 @@ def _inspect_dialog() -> None:
     if studio and studio.get("plotted") is not None:
         html(f'<div {sub_title}>Values plotted in this chart</div>')
         st.dataframe(studio["plotted"], use_container_width=True, hide_index=True, height=200)
+
+    if data.get("flagged"):
+        html('<div class="ds-section-title ds-flag-bad" style="margin-top:18px;">⚠ Critic reasoning</div>')
+        issues = "".join(f"<li>{esc(i)}</li>" for i in data.get("critic_issues") or [])
+        html(f'<div style="font-size:0.9rem;color:var(--text-primary);margin-top:6px;line-height:1.6;">'
+             f'{esc(data.get("critic_reasoning") or "")}'
+             f'{"<ul>" + issues + "</ul>" if issues else ""}</div>')
 
     html("<div style='height:10px'></div>")
     if st.button("Close", key="inspect_close"):

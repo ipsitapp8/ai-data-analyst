@@ -1,12 +1,46 @@
-"""SQLAlchemy engine/session setup for the SQLite store."""
+"""SQLAlchemy engine/session setup.
+
+Dialect-branched: SQLite (default, local dev/tests) keeps the exact behavior
+this app has always had -- single-file, additive hand-rolled migrations below.
+Postgres (set DATABASE_URL) gets real connection pooling and Alembic-managed
+migrations instead. Nothing about the SQLite path changes when DATABASE_URL
+is unset, which is the backward-compatibility guarantee for this module.
+"""
 from __future__ import annotations
 
+import json
+from functools import partial
+
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import DATABASE_URL
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+_dialect = make_url(DATABASE_URL).get_backend_name()
+_IS_POSTGRES = _dialect == "postgresql"
+
+# Same fallback the old json.dumps(profile, default=str) call relied on for
+# stray non-JSON-native values (e.g. numpy scalars) -- applied engine-wide now
+# that JSON columns serialize automatically instead of at each call site.
+_json_serializer = partial(json.dumps, default=str)
+
+if _IS_POSTGRES:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,  # managed Postgres closes idle connections; avoids a stale-connection error on first use after idle
+        pool_recycle=1800,
+        json_serializer=_json_serializer,
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        json_serializer=_json_serializer,
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -19,6 +53,10 @@ _ADDITIVE_COLUMNS = (
     ("execution_logs", "formula_explanation", "TEXT"),
     ("execution_logs", "data_slice_json", "TEXT"),
     ("audit_trail", "element_id", "TEXT"),
+    ("questions", "dataset_version_id", "INTEGER REFERENCES dataset_versions(id)"),
+    ("questions", "trigger", "TEXT NOT NULL DEFAULT 'manual'"),
+    ("questions", "scheduled_analysis_id", "INTEGER"),
+    ("dashboards", "verdict_state", "TEXT"),
     ("dashboards", "view_overrides_json", "TEXT"),
 )
 
@@ -82,12 +120,35 @@ def _run_migrations() -> None:
             )
 
 
+def _run_alembic_upgrade() -> None:
+    """Postgres path: apply pending Alembic migrations up to head. Runs on every
+    startup, same operational shape as the SQLite path's auto-migration below --
+    no separate manual migration step needed to deploy."""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    cfg = Config(str(backend_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+    command.upgrade(cfg, "head")
+
+
 def init_db() -> None:
-    """Create all tables if they don't already exist, then migrate older ones."""
+    """Bring the schema up to date. SQLite: create-all + the additive migrations
+    below (unchanged). Postgres: Alembic upgrade to head."""
     from app import models  # noqa: F401  (ensure models are registered on Base)
 
-    Base.metadata.create_all(bind=engine)
-    _run_migrations()
+    if _IS_POSTGRES:
+        _run_alembic_upgrade()
+    else:
+        Base.metadata.create_all(bind=engine)
+        _run_migrations()
+
+    from app.dataset_versions import backfill_dataset_versions
+
+    backfill_dataset_versions()
 
 
 def get_db():

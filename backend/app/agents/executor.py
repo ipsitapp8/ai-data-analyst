@@ -105,11 +105,11 @@ Fix the root cause and provide corrected code.
             stdout=sandbox_result.stdout,
             stderr=sandbox_result.stderr,
             success=sandbox_result.success,
-            result_json=llm_client.pretty(sandbox_result.result or {}),
-            chart_paths_json=llm_client.pretty(sandbox_result.chart_paths),
+            result_json=sandbox_result.result or {},
+            chart_paths_json=sandbox_result.chart_paths,
             reasoning=reasoning,
             formula_explanation=formula_explanation,
-            data_slice_json=llm_client.pretty(sandbox_result.data_slice or {}),
+            data_slice_json=sandbox_result.data_slice or {},
         )
         db.add(log_row)
         db.commit()

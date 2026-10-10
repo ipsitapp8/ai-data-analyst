@@ -126,6 +126,22 @@ def invite_member(team_id: int, email: str) -> dict:
     return _handle(resp)
 
 
+def invite_members_bulk(team_id: int, emails: list[str]) -> dict:
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/teams/{team_id}/invite/bulk", json={"emails": emails},
+        headers=_headers(with_team=False), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def revoke_invite(team_id: int, member_id: int) -> dict:
+    resp = requests.delete(
+        f"{BACKEND_BASE_URL}/api/teams/{team_id}/members/{member_id}",
+        headers=_headers(with_team=False), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
 def list_members(team_id: int) -> list[dict]:
     resp = requests.get(
         f"{BACKEND_BASE_URL}/api/teams/{team_id}/members",
@@ -148,6 +164,24 @@ def list_datasets() -> list[dict]:
 
 def get_dataset(dataset_id: int) -> dict:
     return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}", headers=_headers(), timeout=TIMEOUT))
+
+
+def list_notes(dataset_id: int, kind: str | None = None) -> list[dict]:
+    params = {"kind": kind} if kind else None
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/notes",
+                                params=params, headers=_headers(), timeout=TIMEOUT))
+
+
+def create_note(dataset_id: int, kind: str, text: str) -> dict:
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/notes",
+                                 json={"kind": kind, "text": text}, headers=_headers(), timeout=TIMEOUT))
+
+
+def delete_note(dataset_id: int, note_id: int) -> None:
+    resp = requests.delete(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/notes/{note_id}",
+                           headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
 
 
 def list_questions() -> list[dict]:
@@ -186,6 +220,120 @@ def inspect_element(dashboard_id: int, element_id: str) -> dict:
     )
     return _handle(resp)
 
+
+def replace_dataset_data(dataset_id: int, filename: str, file_bytes: bytes) -> dict:
+    files = {"file": (filename, file_bytes, "text/csv")}
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/versions", files=files, headers=_headers(), timeout=TIMEOUT
+    )
+    return _handle(resp)
+
+
+# ---------------------------------------------------------------- scheduled --
+
+def list_scheduled() -> list[dict]:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/scheduled-analyses", headers=_headers(), timeout=TIMEOUT))
+
+
+def create_scheduled(dataset_id: int, question: str, interval: str = "daily",
+                     change_threshold_pct: float = 10.0) -> dict:
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/scheduled-analyses",
+        json={"dataset_id": dataset_id, "question": question, "interval": interval,
+              "change_threshold_pct": change_threshold_pct},
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def update_scheduled(scheduled_id: int, **fields) -> dict:
+    resp = requests.patch(
+        f"{BACKEND_BASE_URL}/api/scheduled-analyses/{scheduled_id}", json=fields,
+        headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+def delete_scheduled(scheduled_id: int) -> dict:
+    resp = requests.delete(
+        f"{BACKEND_BASE_URL}/api/scheduled-analyses/{scheduled_id}", headers=_headers(), timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
+# ------------------------------------------------------------- share links --
+
+def create_share(question_id: int, expires_in_days: int = 7) -> dict:
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/questions/{question_id}/share",
+                                 json={"expires_in_days": expires_in_days}, headers=_headers(), timeout=TIMEOUT))
+
+
+def list_shares(question_id: int) -> list[dict]:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/questions/{question_id}/shares",
+                                headers=_headers(), timeout=TIMEOUT))
+
+
+def revoke_share(share_id: int) -> None:
+    resp = requests.delete(f"{BACKEND_BASE_URL}/api/shares/{share_id}", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+def get_public_dashboard(token: str) -> dict:
+    """No auth headers on purpose: this is what an anonymous viewer of a share link sees."""
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/public/shared/{token}", timeout=TIMEOUT))
+
+
+# ---------------------------------------------------------- auto-insights --
+
+def get_insights(dataset_id: int) -> dict:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/insights",
+                                headers=_headers(), timeout=TIMEOUT))
+
+
+def generate_insights(dataset_id: int) -> dict:
+    # Generous timeout: one LLM call, which may wait out a rate-limit backoff.
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/insights",
+                                 headers=_headers(), timeout=120))
+
+
+# ------------------------------------------------------------------ alerts --
+
+def list_alerts(unread_only: bool = False, limit: int = 50) -> dict:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/alerts",
+                                params={"unread_only": unread_only, "limit": limit},
+                                headers=_headers(), timeout=TIMEOUT))
+
+
+def mark_alert_read(alert_id: int) -> None:
+    resp = requests.post(f"{BACKEND_BASE_URL}/api/alerts/{alert_id}/read", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+def mark_all_alerts_read() -> None:
+    resp = requests.post(f"{BACKEND_BASE_URL}/api/alerts/read-all", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+# -------------------------------------------------------------------- chat --
+
+def chat_dashboard(question_id: int, message: str, history: list[dict]) -> dict:
+    # Two LLM calls (answer + independent check) -- allow for slow providers.
+    return _handle(requests.post(f"{BACKEND_BASE_URL}/api/questions/{question_id}/chat",
+                                 json={"message": message, "history": history},
+                                 headers=_headers(), timeout=120))
+
+
+# ------------------------------------------------------------ correlations --
+
+def get_correlations(dataset_id: int, min_abs: float = 0.5) -> dict:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}/api/datasets/{dataset_id}/correlations",
+                                params={"min_abs": min_abs}, headers=_headers(), timeout=TIMEOUT))
+
+
+# -------------------------------------------------------------- chart studio --
 
 def save_chart_view(dashboard_id: int, chart_key: str, chart_type: str | None, style: dict) -> dict:
     resp = requests.put(

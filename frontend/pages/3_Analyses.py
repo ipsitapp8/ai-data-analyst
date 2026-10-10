@@ -12,10 +12,11 @@ from api_client import (
     list_datasets,
     list_questions,
 )
-from style.theme import ACCENT, ACCENT_2, badge, esc, html, page_header, page_setup, plot, render_sidebar
+from style.theme import ACCENT, ACCENT_2, badge, esc, html, page_header, page_setup, plot, render_sidebar, require_active_team
 
 page_setup("Analyses")
 render_sidebar("analyses")
+require_active_team("New Analysis")
 
 STAGE_LABELS = {
     "queued": "Queued",
@@ -54,6 +55,7 @@ if not qid:
                            format_func=lambda i: labels[i])
 
         question = st.text_area("Question", height=110,
+                                value=st.session_state.pop("prefill_question", ""),
                                 placeholder="Why did revenue drop in Q3?",
                                 label_visibility="collapsed")
         if st.button("Run Analysis  →", type="primary", key="an_run",
@@ -260,14 +262,14 @@ def _render_live_run(qid: int) -> None:
                 go.Pie(
                     values=[overall, max(100 - overall, 0)], hole=0.72, sort=False,
                     direction="clockwise", rotation=0,
-                    marker=dict(colors=[ring, "rgba(255,255,255,0.06)"], line=dict(width=0)),
+                    marker=dict(colors=[ring, "#f0f0f2"], line=dict(width=0)),
                     textinfo="none", hoverinfo="skip",
                 )
             )
             fig.add_annotation(text=f"<b>{overall}%</b>", x=0.5, y=0.55, showarrow=False,
-                               font=dict(size=25, color="#e6e6e6", family="system-ui, sans-serif"))
+                               font=dict(size=25, color="#18181b", family="system-ui, sans-serif"))
             fig.add_annotation(text="Overall Progress", x=0.5, y=0.38, showarrow=False,
-                               font=dict(size=11, color="#969696", family="system-ui, sans-serif"))
+                               font=dict(size=11, color="#71717a", family="system-ui, sans-serif"))
             plot(fig, height=200)
 
             html(

@@ -15,12 +15,14 @@ from sqlalchemy.orm import Session
 from app import config
 from app.agents.graph import run_question_graph
 from app.database import get_db, init_db
+from app.dataset_versions import add_version, latest_version, version_count
 from app.logging_config import setup_logging
 from app.models import (
     AuditTrail,
     CriticReview,
     Dashboard,
     Dataset,
+    DatasetVersion,
     ExecutionLog,
     Plan,
     Question,
@@ -29,8 +31,15 @@ from app.models import (
 )
 from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
+from app.routers.alerts import router as alerts_router
+from app.routers.chat import router as chat_router
+from app.routers.insights import router as insights_router
+from app.routers.correlations import router as correlations_router
 from app.routers.chart_views import router as chart_views_router
 from app.routers.inspect import router as inspect_router
+from app.routers.knowledge import router as knowledge_router
+from app.routers.sharing import router as sharing_router
+from app.routers.scheduled import router as scheduled_router
 from app.routers.workspaces import router as workspaces_router
 from app.schemas import (
     AuditEntry,
@@ -42,6 +51,14 @@ from app.schemas import (
     StatusResponse,
 )
 from app.security import get_current_team, get_current_user
+from app.verdict import (
+    flagged_element_ids,
+    flagged_item_count,
+    narrative_audit,
+    rejected_reviews,
+    rejection_payload,
+    resolve_verdict_state,
+)
 
 app = FastAPI(title="AI Data Analyst API")
 
@@ -61,6 +78,13 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(inspect_router)
+app.include_router(knowledge_router)
+app.include_router(sharing_router)
+app.include_router(insights_router)
+app.include_router(correlations_router)
+app.include_router(alerts_router)
+app.include_router(chat_router)
+app.include_router(scheduled_router)
 app.include_router(chart_views_router)
 
 
@@ -68,6 +92,16 @@ app.include_router(chart_views_router)
 def on_startup() -> None:
     setup_logging()
     init_db()
+    from app.scheduler import start_scheduler
+
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    from app.scheduler import stop_scheduler
+
+    stop_scheduler()
 
 
 @app.get("/api/health")
@@ -94,13 +128,8 @@ def health(db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- datasets --
 
-@app.post("/api/datasets/upload", response_model=DatasetProfile)
-def upload_dataset(
-    file: UploadFile,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    team: Team = Depends(get_current_team),
-):
+def _save_and_profile_upload(file: UploadFile) -> tuple[Path, dict]:
+    """Stream an uploaded CSV to disk (size-capped) and profile it."""
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "Only .csv files are supported right now.")
 
@@ -120,10 +149,35 @@ def upload_dataset(
             f.write(chunk)
 
     try:
-        df, profile = load_and_profile_csv(str(dest_path))
+        _, profile = load_and_profile_csv(str(dest_path))
     except Exception as e:
         dest_path.unlink(missing_ok=True)
         raise HTTPException(400, f"Could not parse CSV: {e}") from e
+    return dest_path, profile
+
+
+def _dataset_out(db: Session, d: Dataset) -> DatasetProfile:
+    latest = latest_version(db, d)
+    return DatasetProfile(
+        id=d.id,
+        filename=d.filename,
+        row_count=d.row_count,
+        col_count=d.col_count,
+        profile=d.profile_json,
+        uploaded_at=latest.uploaded_at if latest else d.uploaded_at,
+        version=latest.version_number if latest else 1,
+        version_count=version_count(db, d.id),
+    )
+
+
+@app.post("/api/datasets/upload", response_model=DatasetProfile)
+def upload_dataset(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    dest_path, profile = _save_and_profile_upload(file)
 
     dataset = Dataset(
         team_id=team.id,
@@ -131,20 +185,30 @@ def upload_dataset(
         filepath=str(dest_path),
         row_count=profile["row_count"],
         col_count=profile["col_count"],
-        profile_json=json.dumps(profile, default=str),
+        profile_json=profile,
     )
     db.add(dataset)
     db.commit()
     db.refresh(dataset)
+    add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    return _dataset_out(db, dataset)
 
-    return DatasetProfile(
-        id=dataset.id,
-        filename=dataset.filename,
-        row_count=dataset.row_count,
-        col_count=dataset.col_count,
-        profile=profile,
-        uploaded_at=dataset.uploaded_at,
-    )
+
+@app.post("/api/datasets/{dataset_id}/versions", response_model=DatasetProfile)
+def replace_dataset_data(
+    dataset_id: int,
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    """Upload a new version into an existing dataset slot ("Replace data")."""
+    dataset = db.get(Dataset, dataset_id)
+    if not dataset or dataset.team_id != team.id:
+        raise HTTPException(404, "Dataset not found")
+    dest_path, profile = _save_and_profile_upload(file)
+    add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    return _dataset_out(db, dataset)
 
 
 @app.get("/api/datasets/{dataset_id}", response_model=DatasetProfile)
@@ -157,14 +221,7 @@ def get_dataset(
     dataset = db.get(Dataset, dataset_id)
     if not dataset or dataset.team_id != team.id:
         raise HTTPException(404, "Dataset not found")
-    return DatasetProfile(
-        id=dataset.id,
-        filename=dataset.filename,
-        row_count=dataset.row_count,
-        col_count=dataset.col_count,
-        profile=json.loads(dataset.profile_json),
-        uploaded_at=dataset.uploaded_at,
-    )
+    return _dataset_out(db, dataset)
 
 
 @app.get("/api/datasets", response_model=list[DatasetProfile])
@@ -179,13 +236,7 @@ def list_datasets(
         .order_by(Dataset.uploaded_at.desc())
         .all()
     )
-    return [
-        DatasetProfile(
-            id=d.id, filename=d.filename, row_count=d.row_count, col_count=d.col_count,
-            profile=json.loads(d.profile_json), uploaded_at=d.uploaded_at,
-        )
-        for d in datasets
-    ]
+    return [_dataset_out(db, d) for d in datasets]
 
 
 # ---------------------------------------------------------------- questions --
@@ -237,7 +288,7 @@ def list_questions(
             .order_by(Dashboard.created_at.desc())
             .first()
         )
-        kpi_count = len(json.loads(dash.kpis_json)) if dash else 0
+        kpi_count = len(dash.kpis_json) if dash else 0
         out.append({
             "id": q.id,
             "dataset_id": q.dataset_id,
@@ -249,6 +300,10 @@ def list_questions(
             "weekday": q.created_at.weekday(),
             "kpi_count": kpi_count,
             "has_dashboard": dash is not None,
+            "trigger": q.trigger or "manual",
+            "verdict_state": (
+                resolve_verdict_state(dash, rejected_reviews(db, q.id)) if dash else None
+            ),
         })
     return out
 
@@ -264,9 +319,11 @@ def ask_question(
     if not dataset or dataset.team_id != team.id:
         raise HTTPException(404, "Dataset not found")
 
+    latest = latest_version(db, dataset)
     question = Question(
         team_id=team.id,
         dataset_id=payload.dataset_id,
+        dataset_version_id=latest.id if latest else None,
         text=payload.question,
         status="running",
         current_stage="queued",
@@ -291,7 +348,7 @@ def _plan_steps_for_question(db: Session, question_id: int) -> tuple[list[dict],
     )
     if not plan:
         return [], None
-    return json.loads(plan.steps_json), plan.id
+    return plan.steps_json, plan.id
 
 
 @app.get("/api/questions/{question_id}/status", response_model=StatusResponse)
@@ -360,7 +417,7 @@ def get_dashboard(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    _get_team_question(db, team, question_id)
+    question = _get_team_question(db, team, question_id)
     dash = (
         db.query(Dashboard)
         .filter(Dashboard.question_id == question_id)
@@ -370,13 +427,23 @@ def get_dashboard(
     if not dash:
         raise HTTPException(404, "Dashboard not ready yet")
 
+    rejections = rejected_reviews(db, question_id)
+    flagged = flagged_element_ids(db, question_id)
+    narr_flagged, narr_element_id = narrative_audit(db, question_id)
+    version = db.get(DatasetVersion, question.dataset_version_id) if question.dataset_version_id else None
     return DashboardResponse(
         id=dash.id,
         question_id=question_id,
         verified=dash.verified,
+        verdict_state=resolve_verdict_state(dash, rejections),
+        flagged_count=flagged_item_count(rejections),
+        rejections=rejection_payload(rejections),
+        narrative_flagged=narr_flagged,
+        narrative_element_id=narr_element_id,
+        dataset_version=version.version_number if version else None,
         verification_summary=dash.verification_summary,
-        kpis=json.loads(dash.kpis_json),
-        charts=json.loads(dash.charts_json),
+        kpis=[{**k, "flagged": k.get("element_id") in flagged} for k in dash.kpis_json],
+        charts=[{**c, "flagged": c.get("element_id") in flagged} for c in dash.charts_json],
         narrative=dash.narrative,
         view_overrides=_load_json_object(dash.view_overrides_json),
         created_at=dash.created_at,
@@ -412,7 +479,7 @@ def get_audit_trail(
     for e in entries:
         code = e.execution_log.code if e.execution_log else None
         stdout = e.execution_log.stdout if e.execution_log else None
-        result = json.loads(e.execution_log.result_json) if e.execution_log else None
+        result = e.execution_log.result_json if e.execution_log else None
         critic_verdict = e.critic_review.verdict if e.critic_review else None
         critic_summary = e.critic_review.summary if e.critic_review else None
         out_entries.append(
@@ -457,8 +524,8 @@ def get_critic_reviews(
             "id": r.id,
             "verdict": r.verdict,
             "confidence": r.confidence,
-            "issues": json.loads(r.issues_json),
-            "checks": json.loads(r.checks_json),
+            "issues": r.issues_json,
+            "checks": r.checks_json,
             "summary": r.summary,
             "created_at": r.created_at,
         }

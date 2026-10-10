@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, get_dataset, list_datasets, upload_dataset
-from style.theme import esc, html, page_header, page_setup, render_sidebar
+from api_client import (ApiError, ask_question, create_note, delete_note, generate_insights, get_correlations, get_dataset,
+                        get_insights, list_datasets, list_notes, replace_dataset_data, upload_dataset)
+from style.theme import badge, esc, html, page_header, page_setup, render_sidebar, require_active_team
 
 page_setup("Datasets")
 render_sidebar("datasets")
+require_active_team("Datasets")
 
 head_l, head_r = st.columns([2.4, 1])
 with head_l:
@@ -34,6 +36,10 @@ if st.session_state.get("show_uploader"):
                 try:
                     res = upload_dataset(f.name, f.getvalue())
                     st.session_state["active_dataset_id"] = res["id"]
+                    try:  # starter questions + data-quality warnings; never blocks the upload
+                        generate_insights(res["id"])
+                    except ApiError:
+                        pass
                     st.session_state["show_uploader"] = False
                     st.success(f"Profiled **{res['filename']}** — "
                                f"{res['row_count']:,} rows, {res['col_count']} columns.")
@@ -90,7 +96,7 @@ with st.container(key="flat_table"):
                   <div style="flex:0.8;" class="ds-row-meta">{d['row_count']:,}</div>
                   <div style="flex:0.8;" class="ds-row-meta">{d['col_count']}</div>
                   <div style="flex:0.9;" class="ds-row-meta">CSV</div>
-                  <div style="flex:1.1;" class="ds-row-meta">#{d['id']}</div>
+                  <div style="flex:1.1;" class="ds-row-meta">#{d['id']} · v{d.get('version', 1)}</div>
                   <div style="flex:1.3;">
                     <div class="ds-quality">
                       <span class="ds-row-meta" style="min-width:38px;">{quality}%</span>
@@ -121,6 +127,23 @@ if datasets:
 
     chosen = datasets[idx]
     st.session_state["active_dataset_id"] = chosen["id"]
+
+    with st.expander(f"Replace data  ·  currently v{chosen.get('version', 1)} "
+                     f"({chosen.get('version_count', 1)} version(s))"):
+        st.caption("Uploads a new version into this dataset. Existing dashboards keep the "
+                   "version they were computed from; new and scheduled runs use the latest.")
+        new_file = st.file_uploader("New CSV", type=["csv"], key=f"replace_{chosen['id']}",
+                                    label_visibility="collapsed")
+        if new_file is not None and st.button("Upload as new version", type="primary",
+                                              key=f"do_replace_{chosen['id']}"):
+            with st.spinner("Uploading & profiling…"):
+                try:
+                    res = replace_dataset_data(chosen["id"], new_file.name, new_file.getvalue())
+                    st.success(f"Now on **v{res['version']}** — {res['row_count']:,} rows, "
+                               f"{res['col_count']} columns.")
+                    st.rerun()
+                except ApiError as e:
+                    st.error(f"Upload failed: {e}")
 
     try:
         full = get_dataset(chosen["id"])
@@ -170,3 +193,119 @@ if datasets:
                     </div>
                     """
                 )
+
+    # ------------------------------------------------------- correlations --
+    html("<div style='height:20px'></div>")
+    with st.container(key="card_correlations"):
+        html('<div class="ds-section-title">Strongest relationships</div>')
+        try:
+            pairs = get_correlations(chosen["id"])["pairs"]
+        except ApiError:
+            pairs = []
+        if not pairs:
+            html('<div class="ds-row-meta" style="padding:6px 0;">No strong numeric relationships found.</div>')
+        for p in pairs:
+            html(f'<div style="padding:5px 0;font-size:0.86rem;"><b>{esc(p["a"])}</b> ↔ <b>{esc(p["b"])}</b> · '
+                 f'{p["strength"]} {p["direction"]} (r = {p["pearson"]}, n = {p["n"]})</div>')
+
+    # ------------------------------------------------------- auto-insights --
+    html("<div style='height:20px'></div>")
+    with st.container(key="card_insights"):
+        head_i, btn_i = st.columns([4, 1])
+        with head_i:
+            html('<div class="ds-section-title">Suggested questions &amp; data checks</div>')
+        try:
+            ins = get_insights(chosen["id"])
+        except ApiError as e:
+            ins = {"generated": False, "questions": [], "warnings": []}
+            st.error(f"Could not load insights: {e}")
+        with btn_i:
+            if st.button("Regenerate" if ins["generated"] else "Generate", key=f"ins_gen_{chosen['id']}"):
+                with st.spinner("Looking at your data…"):
+                    try:
+                        generate_insights(chosen["id"])
+                        st.rerun()
+                    except ApiError as e:
+                        st.error(f"Could not generate: {e}")
+
+        if not ins["generated"]:
+            html('<div class="ds-row-meta" style="padding:6px 0;">Generate starter questions and a data-quality '
+                 'check for this dataset.</div>')
+        else:
+            for w in ins["warnings"]:
+                kind = {"high": "error", "warn": "warn"}.get(w["severity"], "neutral")
+                col = f'<b>{esc(w["column"])}</b> · ' if w.get("column") else ""
+                html(f'<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:0.86rem;">'
+                     f'{badge(w["severity"].title(), kind)}<span>{col}{esc(w["message"])}</span></div>')
+            if not ins["questions"]:
+                html('<div class="ds-row-meta" style="padding:6px 0;">No question suggestions this time '
+                     '(the model was unavailable). Try Regenerate.</div>')
+            for i, item in enumerate(ins["questions"]):
+                qc, bc = st.columns([6, 1])
+                with qc:
+                    html(f'<div style="padding:6px 0;"><div class="ds-row-title">{esc(item["question"])}</div>'
+                         f'<div class="ds-row-meta">{esc(item.get("why", ""))}</div></div>')
+                with bc:
+                    if st.button("Run  →", key=f"ins_run_{chosen['id']}_{i}"):
+                        try:
+                            res_q = ask_question(chosen["id"], item["question"])
+                            st.session_state["active_dataset_id"] = chosen["id"]
+                            st.session_state["active_question_id"] = res_q["question_id"]
+                            st.session_state["question_running"] = True
+                            st.switch_page("pages/3_Analyses.py")
+                        except ApiError as e:
+                            st.error(f"Could not start analysis: {e}")
+
+    # ------------------------------------------------ knowledge & lessons --
+    html("<div style='height:20px'></div>")
+    with st.container(key="card_knowledge"):
+        html('<div class="ds-section-title">Knowledge &amp; lessons</div>')
+        html('<div class="ds-page-sub" style="margin:4px 0 6px 0;">Notes the planner reads before every '
+             'analysis of this dataset. They guide it, but results are still computed and verified '
+             'from the data.</div>')
+
+        NOTE_KINDS = {
+            "knowledge": ("Knowledge", "What the data means: column definitions, units, quirks.",
+                          "e.g. “amount” is in cents. “status = 9” means test account, exclude it."),
+            "lesson": ("Lessons", "Mistakes to avoid. Rejections by the Critic are added here automatically.",
+                       "e.g. Revenue must exclude refunds, which appear as negative amounts."),
+        }
+        tabs = st.tabs([v[0] for v in NOTE_KINDS.values()])
+        for tab, (kind, (_label, blurb, placeholder)) in zip(tabs, NOTE_KINDS.items()):
+            with tab:
+                st.caption(blurb)
+                try:
+                    notes = list_notes(chosen["id"], kind)
+                except ApiError as e:
+                    notes = []
+                    st.error(f"Could not load notes: {e}")
+
+                form_key = f"note_form_{kind}_{chosen['id']}"
+                with st.form(form_key, clear_on_submit=True):
+                    text = st.text_area("New note", placeholder=placeholder, max_chars=1000,
+                                        label_visibility="collapsed", key=f"note_text_{kind}_{chosen['id']}")
+                    if st.form_submit_button("Add note", type="primary"):
+                        if not text.strip():
+                            st.warning("Write something first.")
+                        else:
+                            try:
+                                create_note(chosen["id"], kind, text)
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not save note: {e}")
+
+                if not notes:
+                    html('<div class="ds-row-meta" style="padding:6px 0;">Nothing here yet.</div>')
+                for n in notes:
+                    left, right = st.columns([12, 1])
+                    with left:
+                        tag = badge("Critic", "warn") if n["source"] == "critic" else ""
+                        html(f'<div style="font-size:0.88rem;line-height:1.55;padding:6px 0;">'
+                             f'{tag} {esc(n["text"])}</div>')
+                    with right:
+                        if st.button("✕", key=f"del_note_{n['id']}", help="Delete this note"):
+                            try:
+                                delete_note(chosen["id"], n["id"])
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not delete: {e}")

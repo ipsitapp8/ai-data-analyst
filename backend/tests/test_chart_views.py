@@ -33,7 +33,7 @@ def _seed_dashboard(client, headers: dict) -> tuple[int, int, str]:
         db.add(q)
         db.commit()
         d = Dashboard(team_id=team_id, question_id=q.id,
-                      charts_json=json.dumps([{"title": "c", "plotly_json": {}, "element_id": element_id}]))
+                      charts_json=[{"title": "c", "plotly_json": {}, "element_id": element_id}])
         db.add(d)
         db.commit()
         return q.id, d.id, element_id

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: silt
+      POSTGRES_USER: silt
+      POSTGRES_PASSWORD: silt
+    ports:
+      # Host port 5433, not 5432 -- avoids colliding with a native Postgres
+      # service that may already be running on the host's default port.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silt -d silt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

@@ -9,17 +9,12 @@ from __future__ import annotations
 import streamlit as st
 
 import chart_studio as cs
-from api_client import (
-    ApiError,
-    get_dashboard,
-    get_status,
-    list_questions,
-    reset_chart_view,
-    save_chart_view,
-)
+from api_client import (ApiError, ask_question, chat_dashboard, create_scheduled, create_share, get_dashboard,
+                        get_status, list_questions, list_shares, reset_chart_view, revoke_share, save_chart_view)
 from style.theme import (
     badge,
     chart_card_css,
+    require_active_team,
     esc,
     figure_from_json,
     html,
@@ -29,10 +24,19 @@ from style.theme import (
     plot,
     render_inspect_dialog_if_open,
     render_sidebar,
+    render_verdict_banner,
+    verdict_badge,
 )
 
 page_setup("Dashboards")
 render_sidebar("dashboards")
+require_active_team("Dashboards")
+
+# Deep link from alert emails: /Dashboards?question=<id>
+_linked = st.query_params.get("question")
+if _linked and str(_linked).isdigit():
+    st.session_state["active_question_id"] = int(_linked)
+    st.query_params.clear()
 
 qid = st.session_state.get("active_question_id")
 
@@ -58,13 +62,11 @@ if not qid:
         for q in ready:
             c1, c2 = st.columns([5, 1])
             with c1:
-                kind = "verified" if q["status"] == "verified" else "warn"
-                label = "Verified" if q["status"] == "verified" else "Needs review"
                 html(
                     f'<div class="ds-row" style="border-top:none;">'
                     f'<div><div class="ds-row-title">{esc(q["text"][:70])}</div>'
                     f'<div class="ds-row-meta">Updated {q["age"]}</div></div>'
-                    f'<div class="ds-row-spacer"></div>{badge(label, kind)}</div>'
+                    f'<div class="ds-row-spacer"></div>{verdict_badge(q.get("verdict_state"))}</div>'
                 )
             with c2:
                 if st.button("Open", key=f"db_open_{q['id']}"):
@@ -103,7 +105,7 @@ if st.button("←  All dashboards", key="db_back"):
     st.rerun()
 html("<div style='height:4px'></div>")
 
-verified = dash["verified"]
+verdict_state = dash.get("verdict_state")
 head_l, head_r = st.columns([3, 1])
 with head_l:
     html(
@@ -112,13 +114,62 @@ with head_l:
     html(
         f'<div style="display:flex;align-items:center;gap:11px;margin-bottom:24px;">'
         f'<span class="ds-row-meta">Analysis #{qid}</span>'
-        f'{badge("Verified" if verified else "Needs review", "verified" if verified else "warn")}'
-        f"</div>"
+        f'{verdict_badge(verdict_state)}'
+        + (f'<span class="ds-row-meta">Data v{dash["dataset_version"]}</span>' if dash.get("dataset_version") else "")
+        + "</div>"
     )
 with head_r:
     html("<div style='height:12px'></div>")
     if st.button("Audit Trail  →", key="db_audit"):
         st.switch_page("pages/6_Audit_Trail.py")
+    with st.popover("Share", use_container_width=True):
+        if verdict_state == "UNVERIFIED":
+            st.caption("The Critic could not verify this analysis, so it can't be shared publicly.")
+        else:
+            st.caption("Anyone with the link can view a read-only copy. No login needed.")
+            days = st.selectbox("Link expires after", [1, 7, 30, 90], index=1,
+                                format_func=lambda d: f"{d} day{'s' if d != 1 else ''}", key="share_days")
+            if st.button("Create link", type="primary", key="share_create"):
+                try:
+                    st.session_state["_new_share_url"] = create_share(qid, days)["url"]
+                except ApiError as e:
+                    st.error(f"Could not create link: {e}")
+            if st.session_state.get("_new_share_url"):
+                st.code(st.session_state["_new_share_url"], language=None)
+            try:
+                active_links = list_shares(qid)
+            except ApiError:
+                active_links = []
+            for link in active_links:
+                lc1, lc2 = st.columns([3, 1])
+                with lc1:
+                    st.caption(f"Expires {link['expires_at'][:10]}")
+                with lc2:
+                    if st.button("Revoke", key=f"share_rev_{link['id']}"):
+                        try:
+                            revoke_share(link["id"])
+                            st.session_state.pop("_new_share_url", None)
+                            st.rerun()
+                        except ApiError as e:
+                            st.error(str(e))
+    with st.popover("Track this question", use_container_width=True):
+        interval = st.radio("Re-run", ["daily", "weekly"], horizontal=True, key="track_interval")
+        threshold = st.number_input("Alert when a KPI changes by more than (%)", min_value=0.0,
+                                    value=10.0, step=1.0, key="track_threshold")
+        if st.button("Start tracking", type="primary", key="track_go"):
+            src = next((q for q in questions if q["id"] == qid), None)
+            if not src:
+                st.error("Could not find this question's dataset.")
+            else:
+                try:
+                    create_scheduled(src["dataset_id"], status.get("question_text") or src["text"],
+                                     interval, threshold)
+                    st.success("Tracking started — see the Scheduled page.")
+                except ApiError as e:
+                    st.error(f"Could not schedule: {e}")
+
+# The trust signal: first thing on the page, above every KPI.
+render_verdict_banner(dash)
 
 dashboard_id = dash["id"]
 
@@ -349,7 +400,8 @@ if kpis:
     for col, kpi in zip(cols, kpis[:4]):
         with col:
             element_id = kpi.get("element_id")
-            label = f"{kpi.get('label', '')}  \n**{kpi.get('value', '')}**"
+            flag = "⚠️ " if kpi.get("flagged") else ""
+            label = f"{flag}{kpi.get('label', '')}  \n**{kpi.get('value', '')}**"
             with st.container(key=f"kpi_{element_id or kpi.get('label', '')}"):
                 if st.button(label, key=f"kpibtn_{element_id or kpi.get('label', '')}",
                              use_container_width=True, disabled=not element_id):
@@ -374,7 +426,16 @@ if entries:
                 with st.container(key=container_key):
                     t_l, t_r = st.columns([5, 1.3], vertical_alignment="center")
                     with t_l:
-                        html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
+                        if chart.get("flagged") and element_id:
+                            f_l, f_r = st.columns([5, 1])
+                            with f_l:
+                                html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
+                            with f_r:
+                                if st.button("⚠️", key=f"flag_{element_id}", help="Flagged by the Critic — see why"):
+                                    open_inspect(dashboard_id, element_id)
+                                    st.rerun()
+                        else:
+                            html(f'<div class="ds-section-title">{esc(chart["title"])}</div>')
                     with t_r:
                         with st.container(key=f"cs_edit_{entry['key']}"):
                             st.button("✎ Customize", key=f"cs_edit_btn_{entry['key']}",
@@ -401,7 +462,17 @@ render_inspect_dialog_if_open()
 
 if dash.get("narrative"):
     with st.container(key="card_narr"):
-        html('<div class="ds-section-title">Narrative Summary</div>')
+        n_col, nf_col = st.columns([6, 1])
+        with n_col:
+            html('<div class="ds-section-title">Narrative Summary</div>')
+        with nf_col:
+            if dash.get("narrative_flagged"):
+                if dash.get("narrative_element_id"):
+                    if st.button("⚠️", key="flag_narrative", help="Flagged by the Critic — see why"):
+                        open_inspect(dashboard_id, dash["narrative_element_id"])
+                        st.rerun()
+                else:
+                    html('<span class="ds-flag" title="Flagged by the Critic">⚠️</span>')
         html(
             f'<div style="font-size:0.97rem;line-height:1.75;color:var(--text-primary);'
             f'margin-top:10px;">{esc(dash["narrative"])}</div>'
@@ -412,8 +483,61 @@ if dash.get("verification_summary"):
     with st.container(key="card_verif"):
         html(
             f'<div style="display:flex;align-items:center;gap:10px;">'
-            f'{badge("Verified" if verified else "Needs review", "verified" if verified else "warn")}'
+            f'{verdict_badge(verdict_state)}'
             f'<div class="ds-section-title">Verification</div></div>'
             f'<div class="ds-row-meta" style="margin-top:10px;line-height:1.7;">'
             f'{esc(dash["verification_summary"])}</div>'
         )
+
+
+# ------------------------------------------------------- ask your dashboard --
+html("<div style='height:22px'></div>")
+chat_key = f"chat_{qid}"
+history = st.session_state.setdefault(chat_key, [])
+with st.container(key="card_chat"):
+    html('<div class="ds-section-title">Ask this dashboard</div>')
+    html('<div class="ds-page-sub" style="margin:4px 0 12px 0;">Follow-up questions are answered only from '
+         'this analysis, and every answer is fact-checked by a second model. Anything it cannot answer, '
+         'you can run as a new, fully verified analysis.</div>')
+    for i, turn in enumerate(history):
+        with st.chat_message(turn["role"]):
+            st.markdown(turn["content"])
+            if turn["role"] == "assistant":
+                if turn.get("verified") is True:
+                    html(f'<span class="ds-badge ds-badge-verified">Checked against this analysis</span>')
+                elif turn.get("verified") is False:
+                    claims = "".join(f"<li>{esc(c)}</li>" for c in turn.get("unsupported_claims") or [])
+                    html(f'<span class="ds-badge ds-badge-warn">Not fully supported</span>'
+                         f'<div class="ds-row-meta" style="margin-top:6px;">The checker could not confirm:'
+                         f'<ul style="margin:4px 0 0 18px;">{claims}</ul></div>')
+                elif turn.get("needs_new_analysis") is not True:
+                    html('<span class="ds-badge ds-badge-neutral">Not independently checked</span>')
+                if turn.get("sources"):
+                    st.caption("Based on: " + " · ".join(turn["sources"]))
+                if turn.get("needs_new_analysis") and turn.get("suggested_question"):
+                    st.caption("This needs a new calculation.")
+                    if st.button(f"Run as new analysis: {turn['suggested_question']}", key=f"chat_run_{qid}_{i}"):
+                        src = next((q for q in questions if q["id"] == qid), None)
+                        if src:
+                            try:
+                                res = ask_question(src["dataset_id"], turn["suggested_question"])
+                                st.session_state["active_question_id"] = res["question_id"]
+                                st.session_state["question_running"] = True
+                                st.switch_page("pages/3_Analyses.py")
+                            except ApiError as e:
+                                st.error(f"Could not start analysis: {e}")
+
+prompt = st.chat_input("Ask a follow-up about this analysis…", max_chars=600, key=f"chat_input_{qid}")
+if prompt:
+    sent = [{"role": t["role"], "content": t["content"]} for t in history][-8:]
+    history.append({"role": "user", "content": prompt})
+    with st.spinner("Reading the analysis and checking the answer…"):
+        try:
+            reply = chat_dashboard(qid, prompt, sent)
+            history.append({"role": "assistant", "content": reply["answer"], **{
+                k: reply.get(k) for k in ("verified", "unsupported_claims", "sources",
+                                           "needs_new_analysis", "suggested_question")}})
+        except ApiError as e:
+            history.append({"role": "assistant", "content": f"Sorry, I couldn't answer that: {e}",
+                            "verified": None, "needs_new_analysis": True})
+    st.rerun()

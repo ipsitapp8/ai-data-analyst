@@ -14,12 +14,21 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app import database
 
 
+@pytest.mark.skipif(
+    database._IS_POSTGRES,
+    reason="_run_migrations() is the SQLite-only additive-migration path -- "
+    "orthogonal to whether the app under test targets Postgres. init_db() "
+    "branches on dialect globally (module-level), so swapping in a scratch "
+    "SQLite engine here wouldn't route through it anyway when the process's "
+    "real DATABASE_URL is postgresql.",
+)
 def test_legacy_backfill_on_pre_existing_data():
     """Simulates upgrading a pre-multi-tenancy database: rows exist with no
     team_id, and the migration must backfill them into an auto-created

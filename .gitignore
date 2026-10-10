@@ -9,4 +9,4 @@ backend/data/app.db
 backend/data/app.db.bak-*
 !backend/data/uploads/.gitkeep
 !backend/data/workspaces/.gitkeep
-.streamlit/
+.streamlit/secrets.toml

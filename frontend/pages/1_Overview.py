@@ -8,10 +8,11 @@ import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
 from auth import current_user
-from style.theme import ACCENT, badge, esc, html, page_setup, plot, render_sidebar, stat_card
+from style.theme import ACCENT, badge, esc, html, page_setup, plot, render_sidebar, stat_card, require_active_team
 
 page_setup("Overview")
 render_sidebar("overview")
+require_active_team("Overview")
 
 
 def _greeting() -> str:
@@ -111,7 +112,7 @@ with right:
                 x=days, y=counts, mode="lines+markers",
                 line=dict(color=ACCENT, width=2.4, shape="spline"),
                 marker=dict(color=ACCENT, size=7),
-                fill="tozeroy", fillcolor="rgba(79,143,224,0.14)",
+                fill="tozeroy", fillcolor="rgba(79,70,229,0.10)",
                 hovertemplate="%{x}: %{y} analyses<extra></extra>",
             )
         )

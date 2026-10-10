@@ -1,0 +1,80 @@
+/* Login / password gate, light skin. Self-contained: it runs before the main
+   theme is injected, so it can't rely on theme tokens. */
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="stExpandSidebarButton"], [data-testid="stHeader"] { display: none !important; }
+.stApp { background: #fafafa !important; font-family: "Inter", -apple-system, "Segoe UI", sans-serif; color: #18181b; }
+[data-testid="stAppViewContainer"] { background: transparent !important; }
+.block-container { max-width: 420px !important; padding-top: 11vh !important; }
+.gate-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+.gate-mark { font-size: 1.3rem; line-height: 1; color: #18181b; font-weight: 650; letter-spacing: -0.02em; }
+.gate-eyebrow { font-size: 0.78rem; color: #4f46e5; font-weight: 550; margin-bottom: 10px; }
+.gate-title { font-size: 1.9rem; line-height: 1.15; color: #18181b; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 10px; }
+.gate-sub { color: #52525b; font-size: 0.95rem; margin-bottom: 24px; line-height: 1.65; }
+.gate-foot { margin-top: 28px; font-size: 0.75rem; color: #a1a1aa; }
+
+/* tabs */
+[data-baseweb="tab-list"] { gap: 6px; }
+[data-baseweb="tab"] { color: #52525b !important; }
+button[aria-selected="true"][data-baseweb="tab"], button[aria-selected="true"][data-baseweb="tab"] p { color: #18181b !important; }
+[data-baseweb="tab-highlight"] { background-color: #4f46e5 !important; }
+[data-baseweb="tab-border"] { background-color: #e4e4e7 !important; }
+
+/* form card + inputs */
+[data-testid="stForm"] { background: #fff; border: 1px solid #e4e4e7 !important; border-radius: 12px !important; padding: 8px 6px; box-shadow: 0 1px 2px rgba(24,24,27,0.04); }
+[data-testid="stTextInput"] label p { color: #52525b !important; font-size: 0.82rem !important; }
+[data-testid="stTextInput"] input, [data-testid="stTextInputRootElement"] {
+  background: #fff !important; color: #18181b !important; border-radius: 8px !important; border-color: #d4d4d8 !important;
+}
+[data-testid="stTextInputRootElement"]:focus-within { border-color: #4f46e5 !important; box-shadow: 0 0 0 3px #eef2ff !important; }
+[data-testid="stTextInputRootElement"] button { background: transparent !important; color: #52525b !important; }
+.stFormSubmitButton > button {
+  background: #4f46e5 !important; color: #fff !important; border: none !important;
+  border-radius: 8px !important; font-weight: 600 !important; padding: 0.65em 1.4em !important; box-shadow: none !important;
+}
+.stFormSubmitButton > button:hover { background: #4338ca !important; color: #fff !important; }
+[data-testid="stAlert"] { border-radius: 10px; }
+
+/* ===== split-panel login: sign-up left, log-in right, accent panel slides over the inactive side ===== */
+.st-key-auth_stage {
+  position: relative; overflow: hidden; padding: 0 !important; min-height: 580px;
+  border: 1px solid #e4e4e7; border-radius: 16px; background: #fff; box-shadow: 0 8px 30px rgba(24,24,27,0.06);
+}
+.st-key-auth_stage [data-testid="stHorizontalBlock"] { gap: 0 !important; }
+.st-key-auth_stage [data-testid="stColumn"] { padding: 48px 44px 40px; }
+.st-key-auth_stage [data-testid="stForm"] { border: none !important; background: transparent !important; padding: 0 !important; box-shadow: none; }
+.st-key-auth_stage .stElementContainer:has(.auth-overlay), .st-key-auth_stage [data-testid="stMarkdown"], .st-key-auth_stage [data-testid="stMarkdownContainer"] { position: static !important; }
+.auth-panel-title { font-size: 1.7rem; line-height: 1.15; color: #18181b; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 6px; }
+.auth-panel-sub { color: #52525b; font-size: 0.88rem; margin-bottom: 22px; }
+.auth-overlay {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 50%; z-index: 5; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center; padding: 52px 48px;
+  background: #4f46e5; color: #fff;
+  transition: transform 0.85s cubic-bezier(0.32, 0.72, 0, 1); will-change: transform;
+}
+body.auth-mode-signup .auth-overlay { transform: translateX(100%); }
+.auth-ov-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
+.auth-overlay .gate-mark, .auth-overlay .gate-title { color: #fff; }
+.auth-overlay .gate-eyebrow { color: #c7d2fe; }
+.auth-overlay .gate-sub { color: #e0e7ff; }
+.auth-ov-list { list-style: none; margin: 22px 0 0; padding: 0; }
+.auth-ov-list li { color: #fff; font-size: 0.92rem; padding: 6px 0; display: flex; gap: 12px; }
+.auth-ov-list li::before { content: "\2713"; color: #c7d2fe; }
+.auth-switch { display: inline-block; margin-top: 10px; color: #4f46e5; font-size: 0.86rem; cursor: pointer; text-decoration: none; font-weight: 500; }
+.auth-switch:hover { color: #4338ca; text-decoration: underline; }
+[data-testid="stCustomComponentV1"], iframe[height="0"] { position: absolute; width: 0; height: 0; border: 0; overflow: hidden; }
+
+/* forms cross-fade as the panel slides: the one that leaves fades down, the one that arrives rises in */
+.st-key-auth_stage [data-testid="stColumn"] {
+  transform-origin: 50% 100%; will-change: transform, opacity;
+  visibility: visible; opacity: 1; transform: translateY(0);
+  transition: opacity 0.5s cubic-bezier(0.32, 0.72, 0, 1) 0.15s, transform 0.8s cubic-bezier(0.32, 0.72, 0, 1) 0.1s, visibility 0s linear 0s;
+}
+/* default = log-in mode: the sign-up column (1st) is tucked away */
+.st-key-auth_stage [data-testid="stColumn"]:nth-child(1) { visibility: hidden; opacity: 0; transform: translateY(24px); pointer-events: none;
+  transition: opacity 0.3s ease 0s, transform 0.6s cubic-bezier(0.32, 0.72, 0, 1) 0s, visibility 0s linear 0.6s; }
+body.auth-mode-signup .st-key-auth_stage [data-testid="stColumn"]:nth-child(1) { visibility: visible; opacity: 1; transform: translateY(0); pointer-events: auto;
+  transition: opacity 0.5s cubic-bezier(0.32, 0.72, 0, 1) 0.15s, transform 0.8s cubic-bezier(0.32, 0.72, 0, 1) 0.1s, visibility 0s linear 0s; }
+body.auth-mode-signup .st-key-auth_stage [data-testid="stColumn"]:nth-child(2) { visibility: hidden; opacity: 0; transform: translateY(24px); pointer-events: none;
+  transition: opacity 0.3s ease 0s, transform 0.6s cubic-bezier(0.32, 0.72, 0, 1) 0s, visibility 0s linear 0.6s; }
+@media (prefers-reduced-motion: reduce) {
+  .auth-overlay, .st-key-auth_stage [data-testid="stColumn"] { transition-duration: 0.01s !important; transition-delay: 0s !important; }
+}

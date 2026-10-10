@@ -1,10 +1,11 @@
 """Planner node: turns the question + dataset profile into ordered analysis steps."""
 from __future__ import annotations
 
+from app import knowledge, memory
 from app.agents import llm_client, prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
-from app.models import Plan
+from app.models import Plan, Question
 
 PLAN_TOOL_SCHEMA = {
     "type": "object",
@@ -50,6 +51,26 @@ def planner_node(state: AgentState) -> dict:
 Dataset profile:
 {llm_client.pretty(state['profile'])}
 """
+    # Scheduled re-runs watch for change, so they plan fresh instead of
+    # anchoring on their own earlier results.
+    db = SessionLocal()
+    try:
+        question = db.get(Question, question_id)
+        if question is not None:
+            # Definitions and lessons apply to every run, scheduled or not --
+            # unlike past analyses they don't anchor the planner on old results.
+            user_content += knowledge.format_for_prompt(
+                knowledge.get_knowledge(db, team_id=question.team_id, dataset_id=question.dataset_id),
+                knowledge.retrieve_lessons(db, team_id=question.team_id, dataset_id=question.dataset_id,
+                                           question_text=question.text),
+            )
+        if question is not None and question.trigger != "scheduled":
+            user_content += memory.format_for_prompt(memory.retrieve(
+                db, team_id=question.team_id, dataset_id=question.dataset_id,
+                question_text=question.text, exclude_question_id=question_id,
+            ))
+    finally:
+        db.close()
     if is_revision:
         user_content += f"""
 A previous attempt at this analysis was reviewed and REJECTED by the Critic agent with this feedback:
@@ -72,7 +93,7 @@ Produce a revised plan that addresses these issues directly.
     try:
         plan_row = Plan(
             question_id=question_id,
-            steps_json=llm_client.pretty(steps),
+            steps_json=steps,
             reasoning=output.get("reasoning", ""),
             revision=state.get("revision_count", 0),
         )
