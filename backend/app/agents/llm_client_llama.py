@@ -15,9 +15,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import time
+
 from openai import OpenAI
 
-from app import config
+from app import config, runtime
 
 _client: OpenAI | None = None
 
@@ -40,8 +42,21 @@ def call_tool(
     tool_schema: dict[str, Any],
     tool_description: str,
     max_tokens: int = 4096,
+    _fallback: bool = False,
 ) -> dict[str, Any]:
-    """Force the Llama model to respond via a single named tool call and return its args dict."""
+    """Force the Llama model to respond via a single named tool call and return its args dict.
+
+    `_fallback` marks a call made because the primary provider failed, so the
+    run trace shows the switch instead of hiding it."""
+    runtime.checkpoint(about_to="llm")
+    started = time.monotonic()
+    override = runtime.get_provider_override()
+    if override is not None:
+        out = override("llama", system=system, user_content=user_content, tool_name=tool_name,
+                       tool_schema=tool_schema, tool_description=tool_description, max_tokens=max_tokens)
+        runtime.note_llm_call("scripted", "scripted", tool_name, 0, 0,
+                              int((time.monotonic() - started) * 1000))
+        return dict(out)
     client = get_client()
     response = client.chat.completions.create(
         model=config.LLAMA_MODEL,
@@ -63,11 +78,20 @@ def call_tool(
         tool_choice={"type": "function", "function": {"name": tool_name}},
     )
 
+    usage = getattr(response, "usage", None)
+    tokens_in = getattr(usage, "prompt_tokens", None)
+    tokens_out = getattr(usage, "completion_tokens", None)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
     message = response.choices[0].message
     for call in message.tool_calls or []:
         if call.function.name == tool_name:
-            return json.loads(call.function.arguments)
+            args = json.loads(call.function.arguments)
+            runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,
+                                  fallback=_fallback)
+            return args
 
+    runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,
+                          fallback=_fallback, ok=False)
     raise RuntimeError(f"Llama did not return the expected '{tool_name}' tool call")
 
 

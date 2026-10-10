@@ -4,25 +4,25 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import threading
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import config
-from app.agents.graph import run_question_graph
+from app import config, data_quality, jobs, provenance
 from app.database import get_db, init_db
 from app.dataset_versions import add_version, latest_version, version_count
 from app.logging_config import setup_logging
 from app.models import (
+    AnalysisJob,
     AuditTrail,
     CriticReview,
     Dashboard,
     Dataset,
     DatasetVersion,
+    EvidenceRecord,
     ExecutionLog,
     Plan,
     Question,
@@ -36,6 +36,14 @@ from app.routers.chat import router as chat_router
 from app.routers.insights import router as insights_router
 from app.routers.correlations import router as correlations_router
 from app.routers.chart_views import router as chart_views_router
+from app.routers.copilot import router as copilot_router
+from app.routers.evals import router as evals_router
+from app.routers.evidence import router as evidence_router
+from app.routers.investigations import router as investigations_router
+from app.routers.jobs import router as jobs_router
+from app.routers.quality import router as quality_router
+from app.routers.scenarios import router as scenarios_router
+from app.routers.semantic import router as semantic_router
 from app.routers.inspect import router as inspect_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.sharing import router as sharing_router
@@ -86,43 +94,62 @@ app.include_router(alerts_router)
 app.include_router(chat_router)
 app.include_router(scheduled_router)
 app.include_router(chart_views_router)
+app.include_router(jobs_router)
+app.include_router(evidence_router)
+app.include_router(investigations_router)
+app.include_router(quality_router)
+app.include_router(copilot_router)
+app.include_router(scenarios_router)
+app.include_router(semantic_router)
+app.include_router(evals_router)
 
 
 @app.on_event("startup")
 def on_startup() -> None:
     setup_logging()
     init_db()
+    # Recovery first, then workers: jobs cut off by the last shutdown are back
+    # in the queue (or failed, if out of attempts) before anything new starts.
+    jobs.start_workers()
     from app.scheduler import start_scheduler
-
     start_scheduler()
 
 
 @app.on_event("shutdown")
 def on_shutdown() -> None:
     from app.scheduler import stop_scheduler
-
     stop_scheduler()
+    jobs.stop_workers()
 
 
 @app.get("/api/health")
 def health(db: Session = Depends(get_db)):
     from sqlalchemy import text
-
-    from app.sandbox.runner import docker_image_available
-
+    from app.sandbox.runner import docker_image_available, sandbox_status
     try:
         db.execute(text("SELECT 1"))
         db_ok = True
     except Exception:  # noqa: BLE001 - health check must report, not raise
         db_ok = False
-
+    sandbox = sandbox_status()
+    try:
+        queue = jobs.queue_metrics(db) if db_ok else {}
+    except Exception:  # noqa: BLE001
+        queue = {}
     return {
-        "status": "ok" if db_ok else "degraded",
+        # "degraded" also when the sandbox is not usable: analyses that need
+        # generated code will be refused (fail closed) until it is.
+        "status": "ok" if db_ok and sandbox["ready"] else "degraded",
         "database_ok": db_ok,
         "sandbox_backend": config.SANDBOX_BACKEND,
-        "sandbox_image_ready": docker_image_available(),
+        "sandbox_image_ready": docker_image_available() if config.SANDBOX_BACKEND == "docker" else False,
+        "sandbox": sandbox,
         "gemini_key_configured": bool(config.GEMINI_API_KEY),
         "llama_key_configured": bool(config.LLAMA_API_KEY),
+        "llm_failover_enabled": config.LLM_FAILOVER_ENABLED,
+        "app_version": config.APP_VERSION,
+        "jobs": {"queue_depth": queue.get("queue_depth", 0), "running": queue.get("running", 0),
+                 "workers": config.JOB_WORKERS},
     }
 
 
@@ -154,6 +181,16 @@ def _save_and_profile_upload(file: UploadFile) -> tuple[Path, dict]:
         dest_path.unlink(missing_ok=True)
         raise HTTPException(400, f"Could not parse CSV: {e}") from e
     return dest_path, profile
+
+
+def _after_new_version(db: Session, dataset: Dataset, version: DatasetVersion) -> None:
+    """Fingerprint the file and run data-quality checks against the baseline.
+    Neither can fail the upload."""
+    try:
+        provenance.fingerprint(db, version)
+    except Exception:  # noqa: BLE001
+        db.rollback()
+    data_quality.run_safely(db, dataset, version)
 
 
 def _dataset_out(db: Session, d: Dataset) -> DatasetProfile:
@@ -190,7 +227,8 @@ def upload_dataset(
     db.add(dataset)
     db.commit()
     db.refresh(dataset)
-    add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    version = add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    _after_new_version(db, dataset, version)
     return _dataset_out(db, dataset)
 
 
@@ -207,7 +245,8 @@ def replace_dataset_data(
     if not dataset or dataset.team_id != team.id:
         raise HTTPException(404, "Dataset not found")
     dest_path, profile = _save_and_profile_upload(file)
-    add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    version = add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    _after_new_version(db, dataset, version)
     return _dataset_out(db, dataset)
 
 
@@ -301,6 +340,8 @@ def list_questions(
             "kpi_count": kpi_count,
             "has_dashboard": dash is not None,
             "trigger": q.trigger or "manual",
+            "route": q.route,
+            "rerun_of_question_id": q.rerun_of_question_id,
             "verdict_state": (
                 resolve_verdict_state(dash, rejected_reviews(db, q.id)) if dash else None
             ),
@@ -311,32 +352,32 @@ def list_questions(
 @app.post("/api/questions", response_model=QuestionCreated)
 def ask_question(
     payload: QuestionCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=200),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
+    """Queue an analysis. Returns at once; the run is a durable job (app/jobs.py).
+
+    Send an `Idempotency-Key` header to make retries safe: the same key from
+    the same team returns the first submission instead of starting another."""
     dataset = db.get(Dataset, payload.dataset_id)
     if not dataset or dataset.team_id != team.id:
         raise HTTPException(404, "Dataset not found")
-
-    latest = latest_version(db, dataset)
-    question = Question(
-        team_id=team.id,
-        dataset_id=payload.dataset_id,
-        dataset_version_id=latest.id if latest else None,
-        text=payload.question,
-        status="running",
-        current_stage="queued",
-        stage_detail="Starting analysis",
-    )
-    db.add(question)
-    db.commit()
-    db.refresh(question)
-
-    thread = threading.Thread(target=run_question_graph, args=(question.id,), daemon=True)
-    thread.start()
-
-    return QuestionCreated(question_id=question.id, status=question.status)
+    text = (payload.question or "").strip()
+    if not text:
+        raise HTTPException(400, "Question text is required")
+    if len(text) > 2000:
+        raise HTTPException(400, "Question is longer than 2000 characters")
+    try:
+        question, job, created = jobs.submit_question(
+            db, team_id=team.id, dataset=dataset, text=text, created_by=user.id,
+            idempotency_key=idempotency_key or payload.idempotency_key, stage_detail="Waiting for a worker",
+        )
+    except jobs.AdmissionRejected as e:
+        raise HTTPException(429, str(e)) from e
+    return QuestionCreated(question_id=question.id, status=question.status, job_id=job.id,
+                           job_state=job.state, created=created)
 
 
 def _plan_steps_for_question(db: Session, question_id: int) -> tuple[list[dict], int | None]:
@@ -398,6 +439,7 @@ def get_status(
                 s["status"] = "running"
                 break
 
+    job = db.query(AnalysisJob).filter_by(question_id=question_id).first()
     return StatusResponse(
         question_id=question.id,
         question_text=question.text,
@@ -407,6 +449,9 @@ def get_status(
         steps=step_status,
         retry_count=retry_count,
         error=question.error,
+        route=question.route,
+        clarification=question.clarification_json,
+        job=jobs.job_out(job) if job else None,
     )
 
 
@@ -431,6 +476,11 @@ def get_dashboard(
     flagged = flagged_element_ids(db, question_id)
     narr_flagged, narr_element_id = narrative_audit(db, question_id)
     version = db.get(DatasetVersion, question.dataset_version_id) if question.dataset_version_id else None
+    evidence_rows = db.query(EvidenceRecord).filter_by(dashboard_id=dash.id).all()
+    evidence_by_element = {e.element_id: e.status for e in evidence_rows if e.element_id}
+    evidence_counts: dict[str, int] = {}
+    for e in evidence_rows:
+        evidence_counts[e.status] = evidence_counts.get(e.status, 0) + 1
     return DashboardResponse(
         id=dash.id,
         question_id=question_id,
@@ -442,8 +492,14 @@ def get_dashboard(
         narrative_element_id=narr_element_id,
         dataset_version=version.version_number if version else None,
         verification_summary=dash.verification_summary,
-        kpis=[{**k, "flagged": k.get("element_id") in flagged} for k in dash.kpis_json],
-        charts=[{**c, "flagged": c.get("element_id") in flagged} for c in dash.charts_json],
+        kpis=[{**k, "flagged": k.get("element_id") in flagged,
+               "evidence_status": evidence_by_element.get(k.get("element_id"))} for k in dash.kpis_json],
+        charts=[{**c, "flagged": c.get("element_id") in flagged,
+                 "evidence_status": evidence_by_element.get(c.get("element_id"))} for c in dash.charts_json],
+        evidence_summary={"claims": len(evidence_rows), **evidence_counts},
+        narrative_evidence_status=evidence_by_element.get(narr_element_id),
+        route=question.route,
+        dataset_fingerprint=version.content_sha256 if version else None,
         narrative=dash.narrative,
         view_overrides=_load_json_object(dash.view_overrides_json),
         created_at=dash.created_at,

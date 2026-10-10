@@ -20,6 +20,17 @@ os.environ["UPLOADS_DIR"] = str(_scratch / "data" / "uploads")
 os.environ["WORKSPACES_DIR"] = str(_scratch / "data" / "workspaces")
 os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-production-32b"
 os.environ["SANDBOX_BACKEND"] = "subprocess"
+# The subprocess runner is refused unless explicitly allowed (it is not a
+# security boundary). Tests of the pipeline's own logic opt in here; the
+# sandbox's isolation is tested separately against Docker (test_sandbox_security).
+os.environ["SANDBOX_ALLOW_UNSAFE_SUBPROCESS"] = "true"
+# No background workers: tests run jobs explicitly with jobs.run_inline(), so a
+# worker thread never races a test for the same job.
+os.environ["JOB_WORKERS"] = "0"
+# Blank, so no test can reach a real (paid) model by accident; tests that need
+# a model patch the call or use the scripted provider.
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["LLAMA_API_KEY"] = ""
 # Explicitly blank, not just "unset": dotenv doesn't override a key that's
 # already present in os.environ (even set to ""), so this is what actually
 # stops a developer's real SMTP_USER/SMTP_PASSWORD in their local .env from

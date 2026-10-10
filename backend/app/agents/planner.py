@@ -1,7 +1,7 @@
 """Planner node: turns the question + dataset profile into ordered analysis steps."""
 from __future__ import annotations
 
-from app import knowledge, memory
+from app import knowledge, memory, semantic
 from app.agents import llm_client, prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
@@ -49,8 +49,12 @@ def planner_node(state: AgentState) -> dict:
     user_content = f"""Business question: {state['question_text']}
 
 Dataset profile:
-{llm_client.pretty(state['profile'])}
+{prompts.profile_block(state['profile'])}
 """
+    # Approved definitions come from the team's semantic layer (changed only
+    # through the API by an owner or admin) -- never from dataset content.
+    user_content += semantic.format_for_prompt(state.get("approved_metrics") or [])
+    user_content += state.get("planner_hint") or ""
     # Scheduled re-runs watch for change, so they plan fresh instead of
     # anchoring on their own earlier results.
     db = SessionLocal()
