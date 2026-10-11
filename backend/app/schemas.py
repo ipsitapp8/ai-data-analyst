@@ -108,6 +108,8 @@ class InspectResponse(BaseModel):
     # row; None where the row isn't a verbatim CSV row (e.g. an aggregate).
     csv_lines: list[int | None] = []
     csv_filename: str | None = None
+    # The deterministic evidence record for this element, when one exists.
+    evidence: dict[str, Any] | None = None
 
 
 class ChartViewIn(BaseModel):
@@ -139,11 +141,17 @@ class DatasetProfile(BaseModel):
 class QuestionCreate(BaseModel):
     dataset_id: int
     question: str
+    # Optional; the Idempotency-Key header takes precedence when both are sent.
+    idempotency_key: str | None = Field(default=None, max_length=200)
 
 
 class QuestionCreated(BaseModel):
     question_id: int
     status: str
+    job_id: int | None = None
+    job_state: str | None = None
+    # False when an idempotency key matched an earlier submission.
+    created: bool = True
 
 
 class StatusResponse(BaseModel):
@@ -155,6 +163,9 @@ class StatusResponse(BaseModel):
     steps: list[dict[str, Any]] = []
     retry_count: int = 0
     error: str | None = None
+    route: str | None = None
+    clarification: dict[str, Any] | None = None
+    job: dict[str, Any] | None = None
 
 
 class CriticRejection(BaseModel):
@@ -179,6 +190,10 @@ class DashboardResponse(BaseModel):
     narrative: str
     view_overrides: dict[str, Any] = {}
     created_at: dt.datetime | None = None
+    evidence_summary: dict[str, Any] = {}
+    narrative_evidence_status: str | None = None
+    route: str | None = None
+    dataset_fingerprint: str | None = None
 
 
 class AuditEntry(BaseModel):
@@ -209,12 +224,22 @@ class ScheduledCreate(BaseModel):
     question: str
     interval: str = "daily"  # daily|weekly
     change_threshold_pct: float = 10.0
+    min_effect_abs: float | None = None
+    comparison: str | None = None  # previous|same_weekday|rolling_mean
+    window_runs: int | None = None
+    suppress_on_dq: bool | None = None
+    notify_email: bool | None = None
 
 
 class ScheduledUpdate(BaseModel):
     is_active: bool | None = None
     interval: str | None = None
     change_threshold_pct: float | None = None
+    min_effect_abs: float | None = None
+    comparison: str | None = None
+    window_runs: int | None = None
+    suppress_on_dq: bool | None = None
+    notify_email: bool | None = None
 
 
 class ScheduledOut(BaseModel):
@@ -232,3 +257,8 @@ class ScheduledOut(BaseModel):
     last_verdict_state: str | None = None
     last_trend: str | None = None
     last_change_summary: str = ""
+    min_effect_abs: float | None = None
+    comparison: str = "previous"
+    window_runs: int | None = None
+    suppress_on_dq: bool = True
+    notify_email: bool = True

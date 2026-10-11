@@ -1,16 +1,21 @@
 """Analyses — ask a question, then watch the agent plan / execute / verify live."""
 from __future__ import annotations
 
+import uuid
+
 import plotly.graph_objects as go
 import streamlit as st
 
 from api_client import (
     ApiError,
     ask_question,
+    cancel_question,
     get_audit_trail,
     get_status,
+    get_trace,
     list_datasets,
     list_questions,
+    retry_job,
 )
 from style.theme import ACCENT, ACCENT_2, badge, esc, html, page_header, page_setup, plot, render_sidebar, require_active_team
 
@@ -20,6 +25,12 @@ require_active_team("New Analysis")
 
 STAGE_LABELS = {
     "queued": "Queued",
+    "routing": "Choosing a route",
+    "triage": "Checking the question",
+    "investigating": "Investigating the change",
+    "verifying": "Checking every figure",
+    "cancelled": "Cancelled",
+    "needs_clarification": "Needs clarification",
     "planning": "Planning analysis",
     "executing": "Executing code",
     "critic": "Verifying results",
@@ -61,7 +72,11 @@ if not qid:
         if st.button("Run Analysis  →", type="primary", key="an_run",
                      disabled=not question.strip()):
             try:
-                res = ask_question(datasets[idx]["id"], question.strip())
+                # One key per drafted question: a double click or a retried
+                # request returns the same run instead of starting another.
+                nonce = st.session_state.setdefault("ask_nonce", uuid.uuid4().hex)
+                res = ask_question(datasets[idx]["id"], question.strip(), idempotency_key=nonce)
+                st.session_state.pop("ask_nonce", None)
                 st.session_state["active_dataset_id"] = datasets[idx]["id"]
                 st.session_state["active_question_id"] = res["question_id"]
                 st.session_state["question_running"] = True
@@ -80,9 +95,10 @@ if not qid:
             html('<div class="ds-card-head"><div class="ds-section-title">'
                         'Previous Analyses</div></div>')
             for h in history[:8]:
-                kind = {"verified": "verified", "unverified": "warn", "rejected": "warn",
-                        "failed": "error"}.get(h["status"], "running")
+                kind = {"verified": "verified", "unverified": "warn", "rejected": "warn", "cancelled": "neutral",
+                        "needs_clarification": "warn", "failed": "error"}.get(h["status"], "running")
                 label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable",
+                         "cancelled": "Cancelled", "needs_clarification": "Needs clarification",
                          "failed": "Failed"}.get(h["status"], "Running")
                 c1, c2 = st.columns([5, 1])
                 with c1:
@@ -116,7 +132,9 @@ def _render_live_run(qid: int) -> None:
         st.error(f"Could not fetch status: {e}")
         return
 
-    running = status["status"] not in ("verified", "unverified", "failed", "rejected")
+    TERMINAL = ("verified", "unverified", "failed", "rejected", "cancelled", "needs_clarification")
+    running = status["status"] not in TERMINAL
+    job = status.get("job") or {}
 
     top_l, top_r = st.columns([3, 1])
     with top_l:
@@ -127,13 +145,58 @@ def _render_live_run(qid: int) -> None:
         )
     with top_r:
         html("<div style='height:6px'></div>")
-        kind = {"verified": "verified", "unverified": "warn", "rejected": "warn",
-                "failed": "error"}.get(status["status"], "running")
+        kind = {"verified": "verified", "unverified": "warn", "rejected": "warn", "cancelled": "neutral",
+                "needs_clarification": "warn", "failed": "error"}.get(status["status"], "running")
         label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable",
-                 "failed": "Failed"}.get(status["status"], "Running")
+                 "cancelled": "Cancelled", "needs_clarification": "Needs clarification",
+                 "failed": "Failed"}.get(status["status"], "Queued" if job.get("state") == "queued" else "Running")
         html(f'<div style="text-align:right;">{badge(label, kind)}</div>')
 
+    # Job line: where the run is in the queue, how it was routed, and a way to stop it.
+    route_names = {"fast": "Fast path · deterministic, no model", "root_cause": "Root-cause investigator · deterministic",
+                   "statistical": "Statistical analysis · full pipeline", "standard": "Full pipeline",
+                   "clarify": "Clarification"}
+    bits = []
+    if job:
+        bits.append(f'Job #{job["id"]} · {esc(job["state"].replace("_", " "))}')
+        if job.get("attempt", 0) > 1:
+            bits.append(f'attempt {job["attempt"]} of {job["max_attempts"]} (resumed after an interruption)')
+        if job.get("cancel_requested") and running:
+            bits.append("cancelling…")
+    if status.get("route"):
+        bits.append("Route: " + esc(route_names.get(status["route"], status["route"])))
+    if bits:
+        j_l, j_r = st.columns([5, 1])
+        with j_l:
+            html(f'<div class="ds-row-meta" style="margin-top:6px;">{" &nbsp;·&nbsp; ".join(bits)}</div>')
+        with j_r:
+            if running and job and not job.get("cancel_requested"):
+                if st.button("Cancel", key="an_cancel"):
+                    try:
+                        cancel_question(qid)
+                    except ApiError as e:
+                        st.error(str(e))
+                    st.rerun()
+
     html("<div style='height:18px'></div>")
+
+    if status["status"] == "needs_clarification":
+        clar = status.get("clarification") or {}
+        with st.container(key="card_clarify"):
+            html('<div class="ds-section-title">This question has more than one possible meaning</div>'
+                 f'<div class="ds-row-meta" style="line-height:1.7;font-size:0.93rem;margin-top:8px;">'
+                 f'{esc(clar.get("reason") or status.get("error") or "")}</div>')
+            for i, opt in enumerate(clar.get("options") or []):
+                if st.button(opt.get("label", f"Option {i + 1}"), key=f"an_clar_{i}", use_container_width=True):
+                    st.session_state["prefill_question"] = opt.get("question", "")
+                    st.session_state.pop("active_question_id", None)
+                    st.rerun()
+        html('<div class="ds-row-meta" style="margin-top:10px;">Pick one to ask the question that way. '
+             "Nothing was computed for the original wording.</div>")
+        return
+
+    if status["status"] == "cancelled":
+        st.info(status.get("error") or "This analysis was cancelled.")
 
     # Rejected by triage: nothing ran, so show guidance instead of the plan/exec
     # panels (which would all be empty) or a red error (nothing broke).
@@ -288,6 +351,38 @@ def _render_live_run(qid: int) -> None:
     if status["status"] == "failed" and status.get("error"):
         html("<div style='height:16px'></div>")
         st.error(status["error"][:1500])
+
+    if not running and job.get("state") in ("failed", "cancelled", "timed_out"):
+        if st.button("Run it again", key="an_retry_job", help="Queues the same analysis again"):
+            try:
+                retry_job(job["id"])
+            except ApiError as e:
+                st.error(str(e))
+            st.rerun()
+
+    if not running:
+        with st.expander("Run trace: route, model calls, code runs and cost"):
+            try:
+                trace = get_trace(qid)
+            except ApiError as e:
+                trace = None
+                st.caption(f"Trace unavailable: {e}")
+            if trace:
+                u = trace["usage"]
+                html('<div class="ds-row-meta" style="line-height:1.8;">'
+                     f'<b>Route:</b> {esc(route_names.get(trace.get("route") or "", trace.get("route") or "—"))}<br>'
+                     f'<b>Why:</b> {esc("; ".join(trace.get("route_reasons") or []) or "—")}<br>'
+                     f'<b>Model calls:</b> {u["llm_calls"]} &nbsp;·&nbsp; <b>Code runs:</b> {u["sandbox_runs"]} '
+                     f'&nbsp;·&nbsp; <b>Tokens:</b> {u["tokens_in"]:,} in / {u["tokens_out"]:,} out '
+                     f'&nbsp;·&nbsp; <b>Estimated cost:</b> ${u["estimated_cost_usd"]:.4f}'
+                     + (f' &nbsp;·&nbsp; <b>Provider fallbacks:</b> {u["provider_fallbacks"]}' if u["provider_fallbacks"] else "")
+                     + "</div>")
+                rows = [{"Step": e["name"], "Kind": e["kind"], "Milliseconds": e["duration_ms"],
+                         "Detail": ", ".join(f"{k}={v}" for k, v in (e["detail"] or {}).items()
+                                             if k in ("outcome", "provider", "model", "backend", "success", "timed_out", "fallback"))}
+                        for e in trace["events"] if e["kind"] in ("node", "llm_call", "sandbox_run")]
+                if rows:
+                    st.dataframe(rows, use_container_width=True, hide_index=True, height=min(320, 38 + 35 * len(rows)))
 
     if not running:
         html("<div style='height:18px'></div>")

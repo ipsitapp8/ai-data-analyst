@@ -144,3 +144,69 @@ KNOWLEDGE_MAX_IN_PROMPT = int(os.getenv("KNOWLEDGE_MAX_IN_PROMPT", "25"))
 LESSON_TOP_K = int(os.getenv("LESSON_TOP_K", "3"))
 NOTE_MAX_CHARS = 1000
 NOTES_MAX_PER_DATASET = 200
+
+
+# ====================================================================== #
+# Platform hardening (see docs/PLATFORM.md for the full reference)
+# ====================================================================== #
+
+def _bool(name: str, default: str) -> bool:
+    return os.getenv(name, default).strip().lower() in ("1", "true", "yes")
+
+
+APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
+
+# --- Sandbox hardening ---
+# The subprocess runner is NOT a security boundary. It is refused unless this
+# is set, so a deployment can never fall back to it by accident.
+SANDBOX_ALLOW_UNSAFE_SUBPROCESS = _bool("SANDBOX_ALLOW_UNSAFE_SUBPROCESS", "false")
+# Optional OCI runtime for the Docker runner, e.g. "runsc" (gVisor).
+SANDBOX_DOCKER_RUNTIME = os.getenv("SANDBOX_DOCKER_RUNTIME", "")
+SANDBOX_PIDS_LIMIT = int(os.getenv("SANDBOX_PIDS_LIMIT", "128"))
+SANDBOX_TMPFS_SIZE = os.getenv("SANDBOX_TMPFS_SIZE", "64m")
+SANDBOX_MAX_STDOUT_BYTES = int(os.getenv("SANDBOX_MAX_STDOUT_BYTES", str(1024 * 1024)))
+SANDBOX_MAX_ARTIFACT_BYTES = int(os.getenv("SANDBOX_MAX_ARTIFACT_BYTES", str(5 * 1024 * 1024)))
+SANDBOX_MAX_ARTIFACTS = int(os.getenv("SANDBOX_MAX_ARTIFACTS", "20"))
+SANDBOX_MAX_CODE_BYTES = int(os.getenv("SANDBOX_MAX_CODE_BYTES", str(200 * 1024)))
+
+# --- Durable jobs ---
+JOB_WORKERS = int(os.getenv("JOB_WORKERS", "2"))
+JOB_MAX_ATTEMPTS = int(os.getenv("JOB_MAX_ATTEMPTS", "2"))
+JOB_DEADLINE_SECONDS = int(os.getenv("JOB_DEADLINE_SECONDS", "900"))
+JOB_LEASE_SECONDS = int(os.getenv("JOB_LEASE_SECONDS", "60"))
+JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "1.0"))
+JOB_TEAM_MAX_ACTIVE = int(os.getenv("JOB_TEAM_MAX_ACTIVE", "5"))
+
+# --- Per-run budgets (0 = unlimited) ---
+RUN_MAX_LLM_CALLS = int(os.getenv("RUN_MAX_LLM_CALLS", "40"))
+RUN_MAX_SANDBOX_RUNS = int(os.getenv("RUN_MAX_SANDBOX_RUNS", "30"))
+RUN_MAX_COST_USD = float(os.getenv("RUN_MAX_COST_USD", "0"))
+
+# --- Providers ---
+# When false, a Gemini failure fails the run instead of continuing on Llama.
+LLM_FAILOVER_ENABLED = _bool("LLM_FAILOVER_ENABLED", "true")
+# USD per 1M tokens, "input,output". Estimates only; override per deployment.
+LLM_PRICE_GEMINI = os.getenv("LLM_PRICE_GEMINI", "0.30,2.50")
+LLM_PRICE_LLAMA = os.getenv("LLM_PRICE_LLAMA", "0.20,0.60")
+
+# --- Retention ---
+# Sandbox workspaces of finished analyses older than this are deleted. Database
+# records (plans, logs, evidence, manifests) are never deleted by this.
+RETENTION_WORKSPACE_DAYS = int(os.getenv("RETENTION_WORKSPACE_DAYS", "7"))
+
+# --- Alerts ---
+ALERT_DELIVERY_MAX_ATTEMPTS = int(os.getenv("ALERT_DELIVERY_MAX_ATTEMPTS", "3"))
+ALERT_DELIVERY_RETRY_SECONDS = int(os.getenv("ALERT_DELIVERY_RETRY_SECONDS", "300"))
+
+# --- Data quality / drift defaults (overridable per dataset) ---
+DQ_MIN_SAMPLE = int(os.getenv("DQ_MIN_SAMPLE", "100"))
+DQ_PSI_WARN = float(os.getenv("DQ_PSI_WARN", "0.1"))
+DQ_PSI_HIGH = float(os.getenv("DQ_PSI_HIGH", "0.25"))
+
+# --- Verification ---
+# Extra relative tolerance when matching a displayed figure to a computed one.
+# 0 = display precision only (see verification.number_matches).
+VERIFY_REL_TOLERANCE = float(os.getenv("VERIFY_REL_TOLERANCE", "0"))
+
+# --- Deterministic engine guard rails ---
+ENGINE_MAX_ROWS = int(os.getenv("ENGINE_MAX_ROWS", "2000000"))

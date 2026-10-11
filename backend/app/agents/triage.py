@@ -6,8 +6,13 @@ into a plausible-looking plan and a meaningless "verified" dashboard.
 """
 from __future__ import annotations
 
+import logging
+
+from app import runtime
 from app.agents import llm_client, prompts
 from app.agents.state import AgentState, update_stage
+
+logger = logging.getLogger(__name__)
 
 TRIAGE_TOOL_SCHEMA = {
     "type": "object",
@@ -55,7 +60,7 @@ def triage_node(state: AgentState) -> dict:
 Rows: {profile.get('row_count')}
 
 Full profile:
-{llm_client.pretty(profile)}
+{prompts.profile_block(profile)}
 
 User's question: {question!r}
 """
@@ -70,6 +75,8 @@ User's question: {question!r}
             max_tokens=1024,
         )
     except Exception as e:  # noqa: BLE001 - a triage outage must not block real questions
+        if isinstance(e, runtime.RunAborted) and not isinstance(e, runtime.ProviderUnavailable):
+            raise  # cancelled, past deadline or over budget: stop here
         text = str(e)
         if "429" in text or "RESOURCE_EXHAUSTED" in text:
             # Letting this through would spend the remaining quota on a run that
@@ -84,7 +91,9 @@ User's question: {question!r}
                 ),
                 "suggestions": [],
             }
-        print(f"[triage] check failed ({type(e).__name__}: {e}); allowing the question through.")
+        if isinstance(e, runtime.ProviderUnavailable):
+            raise  # no model at all: the Planner would fail the same way one step later
+        logger.warning("Triage check failed (%s); allowing the question through.", type(e).__name__)
         return {"rejected": False}
 
     if out.get("is_analyzable", True):

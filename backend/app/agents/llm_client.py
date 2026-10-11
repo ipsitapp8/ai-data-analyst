@@ -15,7 +15,7 @@ from typing import Any
 from google import genai
 from google.genai import errors, types
 
-from app import config
+from app import config, runtime
 from app.agents import llm_client_llama
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # RetryInfo delay (it usually does, but don't depend on that). Indexed by
 # attempt number; the last value repeats for any attempt beyond it.
 _DEFAULT_BACKOFF_SECONDS = (15.0, 30.0)
+_SERVER_ERROR_BACKOFF_SECONDS = (2.0, 6.0)
 
 
 def _retry_delay_seconds(error: errors.ClientError, attempt: int) -> float:
@@ -66,6 +67,15 @@ def call_tool_gemini(
     Raw single-provider call with no failover -- use call_tool() for the
     Gemini-then-Llama path.
     """
+    runtime.checkpoint(about_to="llm")
+    started = time.monotonic()
+    override = runtime.get_provider_override()
+    if override is not None:
+        out = override("gemini", system=system, user_content=user_content, tool_name=tool_name,
+                       tool_schema=tool_schema, tool_description=tool_description, max_tokens=max_tokens)
+        runtime.note_llm_call("scripted", "scripted", tool_name, 0, 0,
+                              int((time.monotonic() - started) * 1000))
+        return dict(out)
     client = get_client()
     function_decl = types.FunctionDeclaration(
         name=tool_name,
@@ -89,6 +99,10 @@ def call_tool_gemini(
         ),
     )
 
+    usage = getattr(response, "usage_metadata", None)
+    tokens_in = getattr(usage, "prompt_token_count", None)
+    tokens_out = getattr(usage, "candidates_token_count", None)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
     for candidate in response.candidates or []:
         content = candidate.content
         if not content or not content.parts:
@@ -96,8 +110,10 @@ def call_tool_gemini(
         for part in content.parts:
             fc = part.function_call
             if fc and fc.name == tool_name:
+                runtime.note_llm_call("gemini", config.GEMINI_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms)
                 return dict(fc.args or {})
 
+    runtime.note_llm_call("gemini", config.GEMINI_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms, ok=False)
     raise RuntimeError(f"Gemini did not return the expected '{tool_name}' function call")
 
 
@@ -135,6 +151,10 @@ def call_tool(
     )
     failures: list[str] = []
 
+    if runtime.get_provider_override() is not None:
+        LAST_PROVIDER = "scripted"
+        return call_tool_gemini(**kwargs)
+
     if config.GEMINI_API_KEY:
         attempt = 0
         while True:
@@ -142,6 +162,8 @@ def call_tool(
                 out = call_tool_gemini(**kwargs)
                 LAST_PROVIDER = f"gemini:{config.GEMINI_MODEL}"
                 return out
+            except runtime.RunAborted:
+                raise  # cancelled / over budget: not a provider failure, never fail over
             except errors.ClientError as e:
                 if e.code == 429 and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
                     wait_s = _retry_delay_seconds(e, attempt)
@@ -155,6 +177,19 @@ def call_tool(
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
                 logger.warning("Gemini failed (%s); failing over to Llama.", type(e).__name__)
                 break
+            except errors.ServerError as e:
+                # 5xx: the provider's side, and usually brief. Retry within the
+                # same bound as rate limits before giving up on Gemini.
+                if attempt < config.GEMINI_RATE_LIMIT_RETRIES:
+                    wait_s = _SERVER_ERROR_BACKOFF_SECONDS[min(attempt, len(_SERVER_ERROR_BACKOFF_SECONDS) - 1)]
+                    attempt += 1
+                    logger.warning("Gemini server error (%s); retrying in %.0fs (attempt %d/%d)",
+                                   getattr(e, "code", "5xx"), wait_s, attempt, config.GEMINI_RATE_LIMIT_RETRIES)
+                    time.sleep(wait_s)
+                    continue
+                failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+                logger.warning("Gemini failed (%s); failing over to Llama.", type(e).__name__)
+                break
             except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
                 logger.warning("Gemini failed (%s); failing over to Llama.", type(e).__name__)
@@ -162,19 +197,23 @@ def call_tool(
     else:
         failures.append("gemini: no GEMINI_API_KEY set")
 
-    if config.LLAMA_API_KEY:
+    if not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
+        failures.append("llama: failover disabled (LLM_FAILOVER_ENABLED=false)")
+    elif config.LLAMA_API_KEY:
         try:
-            out = llm_client_llama.call_tool(**kwargs)
+            out = llm_client_llama.call_tool(**kwargs, _fallback=bool(config.GEMINI_API_KEY))
             LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
             logger.info("Served by Llama (%s).", config.LLAMA_MODEL)
             return out
+        except runtime.RunAborted:
+            raise
         except Exception as e:  # noqa: BLE001 - report both failures together below
             failures.append(f"llama({config.LLAMA_MODEL}): {e}")
     else:
         failures.append("llama: no LLAMA_API_KEY set")
 
     LAST_PROVIDER = "none"
-    raise RuntimeError(
+    raise runtime.ProviderUnavailable(
         "Both model providers failed for this step.\n  - " + "\n  - ".join(failures)
     )
 

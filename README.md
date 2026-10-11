@@ -120,12 +120,43 @@ then **Ask a Question**.
 
 ### No Docker available?
 
-Set `SANDBOX_BACKEND=subprocess` in `.env`. Agent-generated code then runs as a host subprocess
-with a scrubbed environment (no API keys), CPU/file-size/process caps, and its own process session,
-instead of in a container. That is meaningfully better than nothing, but it shares your kernel and
-filesystem — use Docker for anything beyond your own throwaway experiments. On a deployed box also
-set `SANDBOX_RUN_AS_USER` so those children drop to an unprivileged account; see
-[Deployment](#deployment-hugging-face-spaces).
+The app fails closed: without the Docker sandbox, questions that need AI-generated code are refused
+with a clear message. Simple aggregations ("total revenue by region") and root-cause investigations
+still work, because they run no generated code.
+
+To run generated code anyway on your own machine, set both of these in `.env`:
+
+```
+SANDBOX_BACKEND=subprocess
+SANDBOX_ALLOW_UNSAFE_SUBPROCESS=true
+```
+
+That runs the code as a plain process on your machine. It gets a scrubbed environment (no API keys),
+CPU, file-size and process caps and its own process group, but it shares your kernel, your files and
+your network. **It is not a security boundary.** Use it only with data and questions you trust. The
+Settings page shows which runner is active and says so when it is this one.
+
+## What the platform adds
+
+Beyond the original Planner → Executor → Critic pipeline, described in full in
+[`docs/PLATFORM.md`](docs/PLATFORM.md):
+
+| | |
+| --- | --- |
+| Hardened sandbox | One locked-down container per execution; fails closed |
+| Durable jobs | Analyses survive restarts; cancel, retry, deadlines, per-team limits |
+| Evidence | Every KPI, chart and narrative carries deterministic checks and a status |
+| Reproducibility | Content hashes, immutable run records, pinned reruns, run comparison |
+| Adaptive routing | Simple questions are answered with no model call; every run has a budget |
+| Root cause | Where a metric's change came from, with caveats instead of causal claims |
+| Data quality | Schema, quality and distribution checks on every upload |
+| Copilot | Multi-turn analysis where every answer is recomputed from the data |
+| What-if | Scenario arithmetic with explicit formulas and assumptions |
+| Monitoring | Deduplicated, explainable alerts with a data-quality gate |
+| Semantic layer | Approved, versioned metric definitions |
+| Evaluation lab | `python -m app.evals run`: an offline regression suite for the agents |
+
+Implementation status and what is not yet verified: [`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md).
 
 ## How a question flows through the system
 
@@ -197,8 +228,11 @@ Set these as **Space secrets** (Settings → Variables and secrets) — never co
 
 ### What the hosted deployment gives up
 
-Spaces containers can't reach a Docker daemon, so `SANDBOX_BACKEND=subprocess` there — the
-per-attempt container is not available. The fallback is hardened rather than merely tolerated:
+Spaces containers can't reach a Docker daemon, so the isolated sandbox is not available there. The
+image sets `SANDBOX_BACKEND=subprocess`, and the app refuses to run generated code with it unless
+`SANDBOX_ALLOW_UNSAFE_SUBPROCESS=true` is set as a Space secret. Setting it is an explicit decision
+to run model-written code without network or filesystem isolation. If you do, the runner applies
+what mitigations it can:
 
 - **Scrubbed environment.** Generated code gets an env dict built from scratch (`_sandbox_env`),
   never a copy of `os.environ`. `GEMINI_API_KEY` and `LLAMA_API_KEY` are simply not present.
@@ -208,15 +242,17 @@ per-attempt container is not available. The fallback is hardened rather than mer
 - **Resource caps.** `RLIMIT_CPU`, `RLIMIT_FSIZE`, `RLIMIT_NPROC`, no core dumps, own process
   session so a timeout kills grandchildren too.
 
-That is a genuine boundary against *code reading things it shouldn't*, but it is still one kernel
-namespace — there is no network isolation, and a container escape is a container escape. For real
-multi-tenant use, run the Docker backend on a VM.
+Those reduce what generated code can read, but it is still one kernel namespace with no network
+isolation: it is not a security boundary. For anything shared or public, run on a host with Docker
+and set `SANDBOX_BACKEND=docker`.
 
 ## Known limitations (by design, for this MVP)
 
-- Single-user, local-only: no auth, no multi-tenant isolation beyond the sandbox itself.
-- Status polling, not websockets — simple and reliable for a solo local app; swap for SSE/websockets
-  if this ever needs multiple concurrent viewers on one run.
+- Status polling, not websockets.
+- Job workers run inside the API process. That is durable (jobs are rows, recovered after a restart)
+  but total concurrency is workers × API processes.
+- Rate limits are in memory and per process.
+- Hosted deployments without Docker have no isolated sandbox (see above).
 - Vision-based ingestion of scanned/handwritten docs, multi-source joins, and the full reasoning-
   trace "Observability" view are stubbed out of scope per the build brief — the schema
   (`execution_logs`, `critic_reviews`) already has everything an Observability view would need to

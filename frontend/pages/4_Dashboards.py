@@ -9,8 +9,9 @@ from __future__ import annotations
 import streamlit as st
 
 import chart_studio as cs
-from api_client import (ApiError, ask_question, chat_dashboard, create_scheduled, create_share, get_dashboard,
-                        get_status, list_questions, list_shares, reset_chart_view, revoke_share, save_chart_view)
+from api_client import (ApiError, ask_question, chat_dashboard, compare_questions, create_scheduled, create_share,
+                        get_dashboard, get_evidence, get_manifest, get_status, list_questions, list_shares,
+                        rerun_question, reset_chart_view, revoke_share, save_chart_view)
 from style.theme import (
     badge,
     chart_card_css,
@@ -18,8 +19,10 @@ from style.theme import (
     esc,
     figure_from_json,
     html,
+    evidence_badge,
     open_inspect,
     page_header,
+    render_evidence,
     page_setup,
     plot,
     render_inspect_dialog_if_open,
@@ -172,6 +175,77 @@ with head_r:
 render_verdict_banner(dash)
 
 dashboard_id = dash["id"]
+
+# ------------------------------------------- evidence + reproducibility --
+_ev = dash.get("evidence_summary") or {}
+with st.expander(
+    f"Evidence and reproducibility — {_ev.get('verified', 0)} of {_ev.get('claims', 0)} claims fully verified"
+    if _ev.get("claims") else "Evidence and reproducibility"
+):
+    ev_tab, repro_tab, compare_tab = st.tabs(["Evidence", "Run record", "Rerun and compare"])
+    with ev_tab:
+        try:
+            evidence = get_evidence(qid)
+        except ApiError as e:
+            evidence = {"records": []}
+            st.caption(f"Evidence unavailable: {e}")
+        if not evidence["records"]:
+            html('<div class="ds-row-meta">This dashboard was created before evidence records existed.</div>')
+        for rec in evidence["records"]:
+            with st.container(key=f"ev_{rec['claim_id']}"):
+                html(f'<div style="display:flex;gap:10px;align-items:center;margin-top:10px;">'
+                     f'{evidence_badge(rec["status"])}<span class="ds-row-title">{esc(rec["claim_text"][:110])}</span></div>')
+                with st.popover("Checks", use_container_width=False):
+                    render_evidence(rec)
+    with repro_tab:
+        try:
+            man = get_manifest(qid)
+        except ApiError as e:
+            man = None
+            st.caption(f"Run record unavailable: {e}")
+        if man:
+            ds_info, ver = man["dataset"], man["versions"]
+            html('<div class="ds-row-meta" style="line-height:1.9;">'
+                 f'<b>Dataset:</b> {esc(str(ds_info.get("filename")))} · version {esc(str(ds_info.get("version_number")))} '
+                 f'· sha256 {esc((ds_info.get("content_sha256") or "not recorded")[:16])}…<br>'
+                 f'<b>Route:</b> {esc(str(man["question"].get("route")))} &nbsp;·&nbsp; '
+                 f'<b>Application:</b> {esc(str(ver.get("app")))} ({esc(ver.get("git_sha") or "no git sha")}) &nbsp;·&nbsp; '
+                 f'<b>Prompts:</b> {esc(str(ver.get("prompts")))}<br>'
+                 f'<b>Models:</b> {esc(", ".join(man.get("models") or {}) or "none (deterministic)")}<br>'
+                 f'<b>Environment:</b> Python {esc(man["environment"].get("python", ""))}, pandas '
+                 f'{esc(man["environment"].get("pandas", ""))}, sandbox {esc(man["environment"].get("sandbox_backend", ""))}<br>'
+                 f'<b>Scripts run:</b> {len(man.get("executions") or [])} &nbsp;·&nbsp; '
+                 f'<b>Recorded:</b> {esc(str(man.get("recorded_at") or "reconstructed from history"))}</div>')
+            st.caption(man.get("reproducibility_note", ""))
+            st.download_button("Download run record (JSON)", __import__("json").dumps(man, indent=2, default=str),
+                               file_name=f"run_{qid}.json", mime="application/json", key="dl_manifest")
+    with compare_tab:
+        html('<div class="ds-row-meta">Run the same question again on exactly the same data version, or compare '
+             "this run with another to see whether a difference comes from the data or from the execution.</div>")
+        if st.button("Rerun on the same data version", key="rerun_same"):
+            try:
+                new = rerun_question(qid)
+                st.session_state["active_question_id"] = new["question_id"]
+                st.switch_page("pages/3_Analyses.py")
+            except ApiError as e:
+                st.error(str(e))
+        others = [q for q in questions if q["id"] != qid and q.get("has_dashboard")]
+        if others:
+            pick = st.selectbox("Compare with", others, format_func=lambda q: f"#{q['id']} · {q['text'][:70]} · {q['age']}",
+                                key="cmp_pick")
+            if st.button("Compare", key="cmp_go"):
+                try:
+                    cmp = compare_questions(pick["id"], qid)
+                    changed = [k for k, v in cmp["changed"].items() if v] or ["nothing"]
+                    st.markdown(f"**{cmp['explanation']}**")
+                    html(f'<div class="ds-row-meta">Recorded inputs that differ: {esc(", ".join(changed))}</div>')
+                    if cmp["kpi_changes"]:
+                        st.dataframe([{"KPI": c["label"], f"Run #{pick['id']}": c["a"], f"Run #{qid}": c["b"],
+                                       "Change %": None if c["pct"] is None else round(c["pct"], 2)}
+                                      for c in cmp["kpi_changes"]], use_container_width=True, hide_index=True)
+                    st.caption(cmp["note"])
+                except ApiError as e:
+                    st.error(str(e))
 
 # ---------------------------------------------------------- chart studio --
 # Session keys, all scoped to this dashboard + chart:
@@ -401,7 +475,9 @@ if kpis:
         with col:
             element_id = kpi.get("element_id")
             flag = "⚠️ " if kpi.get("flagged") else ""
-            label = f"{flag}{kpi.get('label', '')}  \n**{kpi.get('value', '')}**"
+            mark = {"verified": "  \n:green[✓ verified]", "verified_with_caveats": "  \n:orange[✓ with caveats]",
+                    "unverified": "  \n:red[not verified]"}.get(kpi.get("evidence_status"), "")
+            label = f"{flag}{kpi.get('label', '')}  \n**{kpi.get('value', '')}**{mark}"
             with st.container(key=f"kpi_{element_id or kpi.get('label', '')}"):
                 if st.button(label, key=f"kpibtn_{element_id or kpi.get('label', '')}",
                              use_container_width=True, disabled=not element_id):

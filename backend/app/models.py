@@ -134,6 +134,9 @@ class DatasetVersion(Base):
     col_count = Column(Integer, default=0)
     profile_json = Column(JSONVariant, default=dict)
     uploaded_at = Column(DateTime, default=utcnow)
+    # sha256 of the uploaded file. NULL on versions created before fingerprints
+    # existed; app/provenance.py fills it in lazily the first time it is needed.
+    content_sha256 = Column(String, nullable=True)
 
     dataset = relationship("Dataset", back_populates="versions")
 
@@ -156,6 +159,14 @@ class ScheduledAnalysis(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     last_trend = Column(String, nullable=True)  # up|down|flat, since the previous run
     last_change_summary = Column(Text, default="")
+    # Monitoring configuration (app/monitoring.py). All nullable: NULL means the
+    # default, so rows created before these columns behave as they always did.
+    min_effect_abs = Column(Float, nullable=True)  # ignore changes smaller than this, in KPI units
+    comparison = Column(String, nullable=True)  # previous|same_weekday|rolling_mean
+    window_runs = Column(Integer, nullable=True)  # runs in the rolling_mean window
+    suppress_on_dq = Column(Boolean, nullable=True)  # hold business alerts while data quality is failing
+    notify_email = Column(Boolean, nullable=True)  # send email at all (in-app alerts are always recorded)
+    last_processed_question_id = Column(Integer, nullable=True)  # idempotency marker for alerting
 
 
 class Question(Base):
@@ -176,6 +187,15 @@ class Question(Base):
     # Deliberately not an FK: scheduled_analyses.last_dashboard_id -> dashboards
     # -> questions would make the FK graph circular, which SQLite can't create.
     scheduled_analysis_id = Column(Integer, nullable=True, index=True)
+    # Which graph path the router chose (fast|standard|statistical|root_cause),
+    # NULL on runs from before routing existed.
+    route = Column(String, nullable=True)
+    # Set when this run is a rerun of an earlier one (app/provenance.py). Not an
+    # FK for the same reason as scheduled_analysis_id: no self-referential graph.
+    rerun_of_question_id = Column(Integer, nullable=True, index=True)
+    # {"reason": ..., "options": [{"label", "question"}]} when the router could
+    # not pick one interpretation (status = needs_clarification).
+    clarification_json = Column(JSONVariant, nullable=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -352,6 +372,24 @@ class Alert(Base):
     detail = Column(Text, default="")
     created_at = Column(DateTime, default=utcnow)
     read_at = Column(DateTime, nullable=True)
+    # Lifecycle (app/monitoring.py). NULL status on old rows reads as "open".
+    status = Column(String, nullable=True)  # open|acknowledged|resolved
+    severity = Column(String, nullable=True)  # info|warn|high
+    # Same dedup_key + still open = the same incident recurring, not a new one.
+    dedup_key = Column(String, nullable=True, index=True)
+    occurrences = Column(Integer, nullable=True)
+    last_seen_at = Column(DateTime, nullable=True)
+    acknowledged_by = Column(Integer, nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    resolved_by = Column(Integer, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    explanation_json = Column(JSONVariant, nullable=True)  # evidence + history behind the alert
+    # Email delivery: none|pending|sent|failed|skipped. The payload is kept so a
+    # failed send can be retried without recomputing (or re-running) anything.
+    delivery_state = Column(String, nullable=True)
+    delivery_attempts = Column(Integer, nullable=True)
+    next_delivery_at = Column(DateTime, nullable=True)
+    delivery_payload_json = Column(JSONVariant, nullable=True)
 
 
 class AuditTrail(Base):
@@ -373,3 +411,314 @@ class AuditTrail(Base):
     question = relationship("Question", back_populates="audit_entries")
     execution_log = relationship("ExecutionLog")
     critic_review = relationship("CriticReview")
+
+
+# ====================================================================== #
+# Platform tables. Every team-owned table carries team_id and every reader
+# filters on it -- the same application-level tenancy as the tables above.
+# ====================================================================== #
+
+class AnalysisJob(Base):
+    """Durable unit of work (see app/jobs.py for the state machine).
+
+    One job per question. The row, not a thread, is the source of truth: a
+    worker claims it with a compare-and-set UPDATE, renews a lease while it
+    works, and a job whose lease expired is recovered by whichever process
+    notices first."""
+
+    __tablename__ = "analysis_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, unique=True)
+    kind = Column(String, nullable=False, default="analysis")
+    # queued|running|succeeded|failed|cancelled|timed_out
+    state = Column(String, nullable=False, default="queued", index=True)
+    attempt = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=2)
+    # "<team_id>:<client key>". Unique, so a repeated submission returns the
+    # first job instead of starting a second run.
+    idempotency_key = Column(String, nullable=True, unique=True)
+    worker_id = Column(String, nullable=True)
+    lease_expires_at = Column(DateTime, nullable=True)
+    cancel_requested = Column(Boolean, nullable=False, default=False)
+    failure_class = Column(String, nullable=True)
+    error = Column(Text, nullable=True)  # safe, user-facing
+    progress_json = Column(JSONVariant, default=dict)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    queued_at = Column(DateTime, default=utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    deadline_at = Column(DateTime, nullable=True)
+
+
+class RunEvent(Base):
+    """Append-only trace of one run: routing decisions, node transitions, LLM
+    calls (provider, tokens, estimated cost) and sandbox executions."""
+
+    __tablename__ = "run_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, nullable=True, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)  # route|node|llm_call|sandbox_run|verification|budget
+    name = Column(String, nullable=False, default="")
+    detail_json = Column(JSONVariant, default=dict)
+    duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class EvidenceRecord(Base):
+    """One analytical claim and the deterministic checks run against it (see
+    app/verification.py). Written once; never updated."""
+
+    __tablename__ = "evidence_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, index=True)
+    dashboard_id = Column(Integer, ForeignKey("dashboards.id"), nullable=True, index=True)
+    element_id = Column(String, nullable=True, index=True)
+    claim_id = Column(String, nullable=False, unique=True)
+    claim_type = Column(String, nullable=False)  # kpi|narrative|chart|metric
+    claim_text = Column(Text, default="")
+    metric_json = Column(JSONVariant, default=dict)  # definition, formula, filters, grouping, interval
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    dataset_fingerprint = Column(String, nullable=True)
+    execution_log_id = Column(Integer, ForeignKey("execution_logs.id"), nullable=True)
+    artifact_refs_json = Column(JSONVariant, default=list)
+    original_value = Column(String, nullable=True)
+    recomputed_value = Column(String, nullable=True)
+    checks_json = Column(JSONVariant, default=list)
+    limitations_json = Column(JSONVariant, default=list)
+    status = Column(String, nullable=False)  # verified|verified_with_caveats|unverified
+    reasons_json = Column(JSONVariant, default=list)  # machine-readable reason codes
+    validity_json = Column(JSONVariant, default=dict)  # mathematical / statistical / causal
+    created_at = Column(DateTime, default=utcnow)
+
+
+class RunManifest(Base):
+    """Everything needed to say what a run was: inputs, versions, models, code
+    hashes, environment and outcome. One per question; immutable."""
+
+    __tablename__ = "run_manifests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False, unique=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    dataset_fingerprint = Column(String, nullable=True)
+    manifest_json = Column(JSONVariant, default=dict)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Investigation(Base):
+    """A root-cause investigation report (see app/investigator.py)."""
+
+    __tablename__ = "investigations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=True, index=True)
+    params_json = Column(JSONVariant, default=dict)
+    report_json = Column(JSONVariant, default=dict)
+    status = Column(String, nullable=False, default="complete")  # complete|inconclusive|failed
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class DQSnapshot(Base):
+    """Data-quality measurements of one dataset version (see app/data_quality.py)."""
+
+    __tablename__ = "dq_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=False, unique=True)
+    snapshot_json = Column(JSONVariant, default=dict)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class DQConfig(Base):
+    """Per-dataset baseline and thresholds. Absent row = defaults."""
+
+    __tablename__ = "dq_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, unique=True)
+    baseline_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    thresholds_json = Column(JSONVariant, default=dict)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class DQIncident(Base):
+    __tablename__ = "dq_incidents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False, index=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=False, index=True)
+    baseline_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    category = Column(String, nullable=False)  # schema|quality|distribution
+    check_name = Column(String, nullable=False)
+    column_name = Column(String, nullable=True)
+    severity = Column(String, nullable=False)  # info|warn|high
+    metric_value = Column(Float, nullable=True)
+    threshold = Column(Float, nullable=True)
+    message = Column(Text, default="")
+    status = Column(String, nullable=False, default="open")  # open|acknowledged|resolved
+    resolved_by = Column(Integer, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class CopilotSession(Base):
+    """A multi-turn analytical session. Private to its creator within the team."""
+
+    __tablename__ = "copilot_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    title = Column(String, nullable=False, default="")
+    state_json = Column(JSONVariant, default=dict)  # metric, filters, group_by, time range
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class CopilotTurn(Base):
+    __tablename__ = "copilot_turns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("copilot_sessions.id"), nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    role = Column(String, nullable=False)  # user|assistant
+    content = Column(Text, default="")
+    action_json = Column(JSONVariant, nullable=True)  # the controlled operation applied
+    result_json = Column(JSONVariant, nullable=True)  # computed table / KPI / chart
+    evidence_json = Column(JSONVariant, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Scenario(Base):
+    """A saved what-if configuration and its computed outputs (app/scenarios.py)."""
+
+    __tablename__ = "scenarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    name = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    baseline_json = Column(JSONVariant, default=dict)
+    adjustments_json = Column(JSONVariant, default=dict)
+    results_json = Column(JSONVariant, default=dict)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class SemanticMetric(Base):
+    """A team-owned business metric. The definition itself lives in versions."""
+
+    __tablename__ = "semantic_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    slug = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, default="")
+    unit = Column(String, default="")
+    status = Column(String, nullable=False, default="draft")  # draft|approved|deprecated
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    current_version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class SemanticMetricVersion(Base):
+    __tablename__ = "semantic_metric_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    metric_id = Column(Integer, ForeignKey("semantic_metrics.id"), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    formula = Column(Text, nullable=False)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
+    filters_json = Column(JSONVariant, default=list)
+    source = Column(String, nullable=False, default="user")
+    note = Column(Text, default="")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+
+
+class SemanticTerm(Base):
+    """An alias, dimension or entity: a word people use, mapped to a metric or
+    to a dataset column."""
+
+    __tablename__ = "semantic_terms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)  # alias|dimension|entity
+    term = Column(String, nullable=False, index=True)  # normalised, lower case
+    metric_id = Column(Integer, ForeignKey("semantic_metrics.id"), nullable=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
+    column_name = Column(String, nullable=True)
+    unit = Column(String, default="")
+    description = Column(Text, default="")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class SemanticRelationship(Base):
+    """An edge of the knowledge graph: (type, id) -[relation]-> (type, id)."""
+
+    __tablename__ = "semantic_relationships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    src_type = Column(String, nullable=False)  # metric|term|dataset|column
+    src_ref = Column(String, nullable=False)
+    relation = Column(String, nullable=False)  # derived_from|measured_by|grouped_by|joins|synonym_of
+    dst_type = Column(String, nullable=False)
+    dst_ref = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class EvalRun(Base):
+    """One execution of the evaluation suite (see app/evals/)."""
+
+    __tablename__ = "eval_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    suite_version = Column(String, nullable=False)
+    mode = Column(String, nullable=False)  # offline|live
+    provider = Column(String, nullable=False, default="scripted")
+    app_version = Column(String, default="")
+    git_sha = Column(String, default="")
+    summary_json = Column(JSONVariant, default=dict)
+    started_at = Column(DateTime, default=utcnow)
+    finished_at = Column(DateTime, nullable=True)
+
+
+class EvalResult(Base):
+    __tablename__ = "eval_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("eval_runs.id"), nullable=False, index=True)
+    case_id = Column(String, nullable=False, index=True)
+    component = Column(String, nullable=False)
+    passed = Column(Boolean, nullable=False)
+    metrics_json = Column(JSONVariant, default=dict)
+    detail_json = Column(JSONVariant, default=dict)
+    created_at = Column(DateTime, default=utcnow)
