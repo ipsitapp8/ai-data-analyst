@@ -17,7 +17,7 @@ NEW_TABLES = {"analysis_jobs", "run_events", "evidence_records", "run_manifests"
 
 
 @pytest.mark.skipif(database._IS_POSTGRES, reason="exercises the SQLite additive-migration path")
-def test_upgrading_an_existing_sqlite_database_adds_columns_and_keeps_rows():
+def test_upgrading_an_existing_sqlite_database_adds_columns_and_keeps_rows(client):  # client: the app's own schema exists
     """A database created before this work: old tables, with rows, and none of
     the new columns. init_db must add what is missing and lose nothing."""
     path = Path(tempfile.mkdtemp(prefix="silt_platform_migration_")) / "old.db"
@@ -106,11 +106,13 @@ def test_alembic_revisions_form_one_chain_ending_at_the_platform_revision():
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
     assert len(heads) == 1, f"migration history has branched: {heads}"
-    head = script.get_revision(heads[0])
-    source = Path(head.path).read_text()
+    # Later work adds revisions after the platform one, so look along the whole chain.
+    source = "\n".join(Path(rev.path).read_text() for rev in script.walk_revisions())
     for table in NEW_TABLES:
         assert f"'{table}'" in source or f'"{table}"' in source, f"{table} is missing from the head migration"
-    assert "ix_analysis_memories_embedding" not in source.split("def upgrade")[1], "must not drop the vector index"
+    platform = Path(script.get_revision("f1a3b5c7d9e2").path).read_text()
+    assert "ix_analysis_memories_embedding" not in platform.split("def upgrade")[1], "must not drop the vector index"
+    assert "investigation_hypotheses" in source and "investigation_analyses" in source
     for column in ("content_sha256", "dedup_key", "last_processed_question_id", "clarification_json"):
         assert column in source
 

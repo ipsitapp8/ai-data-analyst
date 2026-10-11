@@ -26,7 +26,7 @@ from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
 from app.models import Question
 
-ROUTES = ("clarify", "fast", "root_cause", "statistical", "standard")
+ROUTES = ("clarify", "fast", "root_cause", "hypothesis", "statistical", "standard")
 
 _ROOT_CAUSE = re.compile(
     r"\bwhy\b|root cause|what (?:caused|drove|is driving|explains|led to)|reasons? (?:for|behind)|"
@@ -43,6 +43,8 @@ ROUTE_BUDGETS = {
     "fast": {"llm_calls": 0, "sandbox_runs": 0, "seconds": 60},
     "root_cause": {"llm_calls": 0, "sandbox_runs": 0, "seconds": 120},
     "clarify": {"llm_calls": 0, "sandbox_runs": 0, "seconds": 30},
+    # Model-driven, but with its own ceiling and no generated code at all.
+    "hypothesis": {"llm_calls": config.HYP_MAX_LLM_CALLS, "sandbox_runs": 0, "seconds": config.HYP_MAX_SECONDS + 60},
 }
 
 STATISTICAL_HINT = """
@@ -54,8 +56,13 @@ This is a statistical question (trend / comparison / outliers). The plan must:
 """
 
 
-def decide(question_text: str, profile: dict, resolution: dict, forced: str | None = None) -> dict:
-    """Pure routing decision. Returns {"route", "reasons", ...route-specific keys}."""
+def decide(question_text: str, profile: dict, resolution: dict, forced: str | None = None,
+           model_available: bool = False) -> dict:
+    """Pure routing decision. Returns {"route", "reasons", ...route-specific keys}.
+
+    `model_available` says whether a model provider can be called; with it, a
+    "why did X change" question goes to the hypothesis engine instead of the
+    deterministic investigator."""
     reasons: list[str] = []
     if resolution.get("ambiguous"):
         amb = resolution["ambiguous"][0]
@@ -78,7 +85,7 @@ def decide(question_text: str, profile: dict, resolution: dict, forced: str | No
         if forced != "root_cause":
             return {"route": forced, "reasons": reasons, "metrics": metrics}
 
-    is_root_cause = forced == "root_cause" or bool(_ROOT_CAUSE.search(question_text))
+    is_root_cause = forced in ("root_cause", "hypothesis") or bool(_ROOT_CAUSE.search(question_text))
     if not is_root_cause:
         parsed = fastpath.parse(question_text, profile, metrics)
         if parsed is not None and parsed["kind"] == "ambiguous":
@@ -91,6 +98,15 @@ def decide(question_text: str, profile: dict, resolution: dict, forced: str | No
 
     if is_root_cause:
         spec = investigator.infer_spec(profile, question_text, metrics)
+        has_time = any(c.get("kind") == "datetime" for c in profile.get("columns", []))
+        if forced != "root_cause" and has_time and model_available and (config.HYPOTHESIS_ENGINE_ENABLED or forced == "hypothesis"):
+            # The engine reads the question itself, so it needs only a date column.
+            return {"route": "hypothesis",
+                    "reasons": reasons + ["asks for the cause of a change", "a model is available to propose and steer hypotheses"],
+                    "spec": spec or {}, "metrics": metrics}
+        if forced == "hypothesis":
+            reasons.append("hypothesis engine requested, but " + ("no model provider is available" if has_time
+                                                                  else "the dataset has no date column"))
         if forced == "root_cause":
             # Submitted through the investigations API: the explicit spec is
             # stored with the investigation and the node loads it from there.
@@ -138,7 +154,10 @@ def router_node(state: AgentState) -> dict:
             resolution = semantic.resolve(db, question.team_id, question.dataset_id, state["question_text"])
         except Exception:  # noqa: BLE001 - the semantic layer is an aid; routing works without it
             resolution = {"metrics": [], "ambiguous": [], "dimensions": []}
-        decision = decide(state["question_text"], state["profile"], resolution, forced)
+        from app.agents import llm_client
+
+        decision = decide(state["question_text"], state["profile"], resolution, forced,
+                          model_available=llm_client.provider_available("submit_understanding"))
         if question is not None:
             question.route = decision["route"]
             if decision["route"] == "clarify":

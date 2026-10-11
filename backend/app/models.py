@@ -722,3 +722,45 @@ class EvalResult(Base):
     metrics_json = Column(JSONVariant, default=dict)
     detail_json = Column(JSONVariant, default=dict)
     created_at = Column(DateTime, default=utcnow)
+
+
+class InvestigationHypothesis(Base):
+    """One hypothesis of a hypothesis-driven investigation: what the model
+    proposed, and the status the evidence rules gave it (app/hypothesis_engine.py)."""
+
+    __tablename__ = "investigation_hypotheses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    investigation_id = Column(Integer, ForeignKey("investigations.id"), nullable=False, index=True)
+    key = Column(String, nullable=False)  # H1, H2, ... unique within the investigation
+    statement = Column(Text, nullable=False)
+    spec_json = Column(JSONVariant, default=dict)  # prediction, analysis, confounders, priority
+    # proposed|supported|weakened|inconclusive|not_testable|failed
+    status = Column(String, nullable=False, default="proposed")
+    assessment_json = Column(JSONVariant, default=dict)  # reasons, evidence ids, effect
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class InvestigationAnalysis(Base):
+    """One analysis that was actually executed (or attempted) for an
+    investigation. `signature` identifies the computation, so the same
+    analysis is never run twice and a resumed run reuses what is here."""
+
+    __tablename__ = "investigation_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    investigation_id = Column(Integer, ForeignKey("investigations.id"), nullable=False, index=True)
+    key = Column(String, nullable=False)  # A1, A2, ...
+    signature = Column(String, nullable=False, index=True)
+    op = Column(String, nullable=False)
+    params_json = Column(JSONVariant, default=dict)
+    status = Column(String, nullable=False)  # ok|not_testable|failed
+    result_json = Column(JSONVariant, default=dict)
+    error = Column(Text, nullable=True)
+    hypothesis_keys_json = Column(JSONVariant, default=list)
+    requested_by = Column(String, nullable=False, default="baseline")  # baseline|hypothesis|follow_up
+    duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=utcnow)

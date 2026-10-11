@@ -215,6 +215,56 @@ def test_investigations_page_shows_the_report(api, ws):
     assert api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]["question_id"] == out["question_id"]
 
 
+def _hypothesis_script() -> dict:
+    import test_hypothesis_engine as fixtures
+
+    return fixtures.script()
+
+
+def test_investigations_page_shows_a_hypothesis_report(api, ws):
+    from platform_helpers import ask, run_job
+
+    created = ask(api, ws, "Why did revenue drop by 20% in the last two months?")
+    assert run_job(created["job_id"], _hypothesis_script()) == "succeeded"
+    at = healthy(page("13_Investigations.py", ws))
+    text = text_of(at)
+    assert "Supported" in text and "Weakened" in text and "H1" in text and "West" in text
+    for section in ("Observed facts", "Statistical interpretation", "Possible explanations (not established)",
+                    "Suggested follow-up analyses", "Data quality", "Limitations", "Assumptions made"):
+        assert section in text, section
+    assert "2 supported, 3 weakened" in text and "inside this finding" in text
+    assert "do not prove what caused it" in "\n".join(str(s.value) for s in at.success), "the determination is the first thing shown"
+    assert "6 of 8 model calls" in text and "11 of 24 analyses" in text and "every number checked" in text
+    assert [m.value for m in at.metric][:3] == ["145,800.00", "131,310.00", "-14,490.00"]
+    assert len(at.dataframe) == 1 and len(at.dataframe[0].value) == 11, "the executed analyses are listed"
+    assert "refund_status" in text, "rejected hypotheses are shown with the reason"
+
+    analyses = healthy(page("3_Analyses.py", ws, active_question_id=created["question_id"]))
+    assert "Hypothesis investigation" in text_of(analyses)
+
+
+def test_investigations_page_starts_a_hypothesis_investigation(api, ws, monkeypatch):
+    from app.agents import llm_client
+
+    at = healthy(page("13_Investigations.py", ws))
+    assert at.button(key="inv_why_go").disabled, "no question yet"
+    at.text_area(key="inv_question").set_value("Why did revenue drop in the last two months?").run()
+    at.button(key="inv_why_go").click().run()
+    assert any("No AI model provider" in str(e.value) for e in at.error), "without a model the page says so"
+    assert api.get("/api/investigations", headers=ws["h"]).json()["investigations"] == []
+
+    # The page and the API run on their own threads, out of reach of a scripted provider, so the
+    # provider check alone is switched on here; the endpoint's own gate is covered in the backend tests.
+    monkeypatch.setattr(llm_client, "provider_available", lambda tool_name=None: True)
+    at = healthy(page("13_Investigations.py", ws))
+    at.text_area(key="inv_question").set_value("Why did revenue drop in the last two months?").run()
+    at.button(key="inv_why_go").click().run()
+    inv = api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]
+    assert inv["engine"] == "hypothesis" and inv["status"] == "queued"
+    waiting = healthy(page("13_Investigations.py", ws))
+    assert "still running" in text_of(waiting)
+
+
 def test_investigations_page_empty_state(api, ws):
     at = healthy(page("13_Investigations.py", ws))
     assert "No investigations yet" in text_of(at)

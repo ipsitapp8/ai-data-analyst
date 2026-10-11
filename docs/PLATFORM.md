@@ -188,6 +188,11 @@ rerun produces the same output, and the comparison says so.
 
 Deterministic decomposition of a metric's change between two periods.
 
+When a model provider is configured, "why" questions go to the hypothesis-driven engine instead, which
+builds on these decompositions: a model proposes competing explanations and the same deterministic code
+tests them. See [HYPOTHESIS_ENGINE.md](HYPOTHESIS_ENGINE.md). Without a provider, or with
+`HYPOTHESIS_ENGINE_ENABLED=false`, this investigator answers them as before.
+
 - Additive metrics (`sum`, `count`): segment contributions that add up exactly to the change.
 - Ratios (`sum/sum`, `avg`): rate effect and mix effect per segment, adding up exactly.
 - Price and volume, when the metric is a summed amount and a quantity column exists.

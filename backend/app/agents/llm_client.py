@@ -234,3 +234,15 @@ def call_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
 
 def pretty(obj: Any) -> str:
     return json.dumps(obj, indent=2, default=str)
+
+
+def provider_available(tool_name: str | None = None) -> bool:
+    """Whether some model could serve a call right now, as far as configuration
+    can tell. A test double installed with `runtime.provider_override` answers
+    for itself when it defines `can_answer(tool_name)`."""
+    override = runtime.get_provider_override()
+    if override is not None:
+        can = getattr(override, "can_answer", None)
+        return bool(can(tool_name)) if callable(can) and tool_name else True
+    return bool(config.GEMINI_API_KEY or (config.LLAMA_API_KEY and config.LLM_FAILOVER_ENABLED) or
+                (config.LLAMA_API_KEY and not config.GEMINI_API_KEY))

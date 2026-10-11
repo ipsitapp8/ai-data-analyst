@@ -72,6 +72,7 @@ class AgentState(TypedDict, total=False):
     verification_failed: bool
     verification_feedback: str | None
     investigation_id: int
+    hypothesis_fallback: bool
 
 
 def update_stage(question_id: int, stage: str, detail: str = "") -> None:

@@ -210,3 +210,28 @@ VERIFY_REL_TOLERANCE = float(os.getenv("VERIFY_REL_TOLERANCE", "0"))
 
 # --- Deterministic engine guard rails ---
 ENGINE_MAX_ROWS = int(os.getenv("ENGINE_MAX_ROWS", "2000000"))
+
+# --- Hypothesis-driven investigation (app/hypothesis_engine.py) ---
+# When true, "why did X change" questions are investigated by the model-driven
+# hypothesis engine if a model provider is available; otherwise (and when
+# false) by the deterministic decomposition in app/investigator.py.
+HYPOTHESIS_ENGINE_ENABLED = _bool("HYPOTHESIS_ENGINE_ENABLED", "true")
+# Hard limits for one investigation. Reaching any of them ends the loop and the
+# report says which one.
+HYP_MAX_LLM_CALLS = int(os.getenv("HYP_MAX_LLM_CALLS", "8"))
+HYP_MAX_ANALYSES = int(os.getenv("HYP_MAX_ANALYSES", "24"))
+HYP_MAX_SECONDS = int(os.getenv("HYP_MAX_SECONDS", "240"))
+HYP_MAX_TOKENS = int(os.getenv("HYP_MAX_TOKENS", "80000"))
+HYP_MAX_HYPOTHESES = int(os.getenv("HYP_MAX_HYPOTHESES", "6"))
+HYP_MAX_ROUNDS = int(os.getenv("HYP_MAX_ROUNDS", "4"))
+# Dimensions the engine decomposes on its own before any hypothesis is proposed.
+HYP_SCAN_DIMENSIONS = int(os.getenv("HYP_SCAN_DIMENSIONS", "4"))
+# Evidence rules (see docs/HYPOTHESIS_ENGINE.md). A change smaller than
+# HYP_MATERIAL_PCT is treated as "did not move"; a share of the total change
+# at or above HYP_STRONG_SHARE supports a hypothesis, at or below
+# HYP_WEAK_SHARE weakens it.
+HYP_MATERIAL_PCT = float(os.getenv("HYP_MATERIAL_PCT", "2.0"))
+HYP_STRONG_SHARE = float(os.getenv("HYP_STRONG_SHARE", "0.4"))
+HYP_WEAK_SHARE = float(os.getenv("HYP_WEAK_SHARE", "0.1"))
+HYP_MIN_ROWS = int(os.getenv("HYP_MIN_ROWS", "10"))
+HYP_SIGNIFICANCE_ALPHA = float(os.getenv("HYP_SIGNIFICANCE_ALPHA", "0.05"))

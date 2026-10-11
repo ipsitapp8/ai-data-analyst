@@ -8,11 +8,18 @@ from sqlalchemy.orm import Session
 from app import jobs
 from app import metric_engine as me
 from app.database import get_db
-from app.models import Investigation, Team, User
+from app import config
+from app.agents import llm_client
+from app.models import Investigation, InvestigationAnalysis, InvestigationHypothesis, Team, User
 from app.routers._common import team_dataset
 from app.security import get_current_team, get_current_user
 
 router = APIRouter(prefix="/api/investigations", tags=["investigations"])
+
+
+class HypothesisInvestigationCreate(BaseModel):
+    dataset_id: int
+    question: str = Field(min_length=4, max_length=2000)
 
 
 class InvestigationCreate(BaseModel):
@@ -27,8 +34,10 @@ class InvestigationCreate(BaseModel):
 
 
 def _out(i: Investigation, with_report: bool = True) -> dict:
+    params = i.params_json or {}
     out = {"id": i.id, "dataset_id": i.dataset_id, "dataset_version_id": i.dataset_version_id,
-           "question_id": i.question_id, "status": i.status, "params": i.params_json or {},
+           "question_id": i.question_id, "status": i.status, "params": params,
+           "engine": params.get("engine") or (i.report_json or {}).get("engine") or "decomposition",
            "summary": (i.report_json or {}).get("summary", ""), "created_at": i.created_at}
     if with_report:
         out["report"] = i.report_json or {}
@@ -85,6 +94,43 @@ def create_investigation(
             "created": created}
 
 
+@router.post("/hypothesis", status_code=201)
+def create_hypothesis_investigation(
+    payload: HypothesisInvestigationCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    """Queue a hypothesis-driven investigation of a free-text question. A model
+    proposes and steers the hypotheses; every analysis is executed and judged
+    by deterministic code. Runs as a normal durable job (cancel, retry, trace)."""
+    dataset = team_dataset(db, team, payload.dataset_id)
+    if not any(c.get("kind") == "datetime" for c in (dataset.profile_json or {}).get("columns", [])):
+        raise HTTPException(400, "This dataset has no date column, so there are no two periods to compare")
+    if not llm_client.provider_available("submit_understanding"):
+        raise HTTPException(503, "No AI model provider is configured, so a hypothesis-driven investigation cannot run. "
+                                 "The decomposition at POST /api/investigations needs no model.")
+    try:
+        question, job, created = jobs.submit_question(
+            db, team_id=team.id, dataset=dataset, text=payload.question.strip(), created_by=user.id,
+            idempotency_key=idempotency_key, route="hypothesis", stage_detail="Investigation queued")
+    except jobs.AdmissionRejected as e:
+        raise HTTPException(429, str(e)) from e
+    if created:
+        inv = Investigation(team_id=team.id, dataset_id=dataset.id, dataset_version_id=question.dataset_version_id,
+                            question_id=question.id, params_json={"engine": "hypothesis", "question": question.text},
+                            report_json={}, status="queued", created_by=user.id)
+        db.add(inv)
+        db.commit()
+        db.refresh(inv)
+    else:
+        inv = db.query(Investigation).filter_by(question_id=question.id).first()
+    return {"investigation_id": inv.id if inv else None, "question_id": question.id, "job_id": job.id, "created": created,
+            "limits": {"model_calls": config.HYP_MAX_LLM_CALLS, "analyses": config.HYP_MAX_ANALYSES,
+                       "seconds": config.HYP_MAX_SECONDS, "tokens": config.HYP_MAX_TOKENS}}
+
+
 @router.get("")
 def list_investigations(
     limit: int = Query(default=50, ge=1, le=200),
@@ -110,4 +156,20 @@ def get_investigation(
     inv = db.get(Investigation, investigation_id)
     if inv is None or inv.team_id != team.id:
         raise HTTPException(404, "Investigation not found")
-    return _out(inv)
+    out = _out(inv)
+    # Live state, readable while the run is still going: what has been proposed,
+    # what has actually been executed, and where each hypothesis stands.
+    hyps = (db.query(InvestigationHypothesis).filter_by(investigation_id=inv.id)
+            .order_by(InvestigationHypothesis.id).all())
+    analyses = (db.query(InvestigationAnalysis).filter_by(investigation_id=inv.id)
+                .order_by(InvestigationAnalysis.id).all())
+    out["hypotheses"] = [{"id": h.key, "statement": h.statement, "status": h.status,
+                          "prediction": (h.spec_json or {}).get("prediction"), "analysis": (h.spec_json or {}).get("analysis"),
+                          "priority": (h.spec_json or {}).get("priority"),
+                          "reasons": (h.assessment_json or {}).get("reasons") or [],
+                          "evidence": (h.assessment_json or {}).get("evidence") or [], "updated_at": h.updated_at} for h in hyps]
+    out["analyses"] = [{"id": a.key, "op": a.op, "params": a.params_json or {}, "status": a.status, "signature": a.signature,
+                        "result": a.result_json or {}, "error": a.error, "hypothesis_ids": list(a.hypothesis_keys_json or []),
+                        "requested_by": a.requested_by, "duration_ms": a.duration_ms, "created_at": a.created_at}
+                       for a in analyses]
+    return out

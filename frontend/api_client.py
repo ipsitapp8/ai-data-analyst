@@ -437,6 +437,11 @@ def create_investigation(payload: dict) -> dict:
     return _post("/api/investigations", payload)
 
 
+def create_hypothesis_investigation(dataset_id: int, question: str) -> dict:
+    """Start a hypothesis-driven investigation of a free-text "why" question."""
+    return _post("/api/investigations/hypothesis", {"dataset_id": dataset_id, "question": question})
+
+
 def list_investigations(limit: int = 50) -> dict:
     return _get("/api/investigations", limit=limit)
 

@@ -37,5 +37,9 @@ class ScriptedProvider:
             self._index[tool_name] = self._index.get(tool_name, 0) + 1
             return copy.deepcopy(replies[i])
 
+    def can_answer(self, tool_name: str) -> bool:
+        """Whether this script has a reply for a tool (see llm_client.provider_available)."""
+        return bool(self._script.get(tool_name))
+
     def count(self, tool_name: str | None = None) -> int:
         return len(self.calls) if tool_name is None else sum(1 for _, t in self.calls if t == tool_name)

@@ -3,6 +3,8 @@
     router ──clarify──────────────────────────────────────────> END
        │─────fast────────> fast ──────────────────────────────> END
        │─────root_cause──> investigate ───────────────────────> END
+       │─────hypothesis──> hypothesis ────────────────────────> END
+       │                       └──no model at step 1──> investigate
        └─────otherwise───> triage ──rejected──────────────────> END
                               │
                            planner <──────── prepare_revision <──┐
@@ -32,6 +34,7 @@ from app.agents.critic import critic_node
 from app.agents.dashboard import compile_node, publish_node, route_after_verify, verify_node
 from app.agents.deterministic import fast_node, investigate_node
 from app.agents.executor import executor_node
+from app.agents.hypothesis import hypothesis_node
 from app.agents.planner import planner_node
 from app.agents.router import router_node
 from app.agents.state import AgentState, mark_terminal
@@ -75,7 +78,14 @@ def route_after_router(state: AgentState) -> str:
         return "fast"
     if route == "root_cause":
         return "investigate"
+    if route == "hypothesis":
+        return "hypothesis"
     return "triage"
+
+
+def route_after_hypothesis(state: AgentState) -> str:
+    # No model could be reached at the first step: use the deterministic investigator.
+    return "investigate" if state.get("hypothesis_fallback") else "done"
 
 
 def route_after_executor(state: AgentState) -> str:
@@ -113,15 +123,16 @@ def build_graph():
         ("router", router_node), ("triage", triage_node), ("planner", planner_node),
         ("executor", executor_node), ("critic", critic_node), ("prepare_revision", prepare_revision_node),
         ("compile", compile_node), ("verify", verify_node), ("publish", publish_node),
-        ("fast", fast_node), ("investigate", investigate_node),
+        ("fast", fast_node), ("investigate", investigate_node), ("hypothesis", hypothesis_node),
     ):
         graph.add_node(name, _traced(name, fn))
 
     graph.set_entry_point("router")
     graph.add_conditional_edges(
         "router", route_after_router,
-        {"clarify": END, "fast": "fast", "investigate": "investigate", "triage": "triage"},
+        {"clarify": END, "fast": "fast", "investigate": "investigate", "hypothesis": "hypothesis", "triage": "triage"},
     )
+    graph.add_conditional_edges("hypothesis", route_after_hypothesis, {"investigate": "investigate", "done": END})
     graph.add_edge("fast", END)
     graph.add_edge("investigate", END)
     graph.add_conditional_edges(
