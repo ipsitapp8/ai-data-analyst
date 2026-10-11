@@ -72,8 +72,10 @@ html("<div style='height:18px'></div>")
 
 sandbox = hz.get("sandbox_backend", "—")
 img_ready = hz.get("sandbox_image_ready", False)
+sbx = hz.get("sandbox") or {}
 sandbox_val = f"Docker · {'image ready' if img_ready else 'image not built'}" \
     if sandbox == "docker" else "Subprocess (not isolated)"
+queue = hz.get("jobs") or {}
 
 with st.container(key="flat_ws"):
     html('<div class="ds-card-head"><div class="ds-section-title">Workspace</div></div>')
@@ -119,12 +121,29 @@ with st.container(key="flat_sys"):
         row("Backend API", "Reachable" if api_ok else "Unreachable")
         + row("Database", "Connected" if db_ok else "Unreachable")
         + row("Sandbox backend", sandbox)
+        + row("Sandbox ready", "Yes" if sbx.get("ready") else "No — analyses that run code are refused")
+        + row("Isolation boundary", sbx.get("isolation", "—") if sbx.get("is_security_boundary")
+              else f"None — {sbx.get('isolation', 'unavailable')}")
+        + row("Job workers", f"{queue.get('workers', 0)} · {queue.get('running', 0)} running, "
+                             f"{queue.get('queue_depth', 0)} queued")
+        + row("Provider failover", "On" if hz.get("llm_failover_enabled", True) else "Off")
         + row("Docker image", "Built" if img_ready else "Not built", last=True)
     )
 
 if sandbox == "docker" and not img_ready:
     html("<div style='height:14px'></div>")
     st.warning(
-        "The sandbox image isn't built yet, so analyses will fail at the execution step. "
-        "Start Docker Desktop, then run `./backend/app/sandbox/build.ps1`."
+        "The sandbox image isn't built yet, so analyses that run generated code are refused. "
+        "Start Docker, then run `./backend/app/sandbox/build.sh` (or `build.ps1` on Windows). "
+        "Simple aggregations and root-cause investigations still work: they run no generated code."
     )
+elif sandbox != "docker" and sbx.get("ready"):
+    html("<div style='height:14px'></div>")
+    st.error(
+        "Generated code is running with the development runner, which is not a security boundary: it shares this "
+        "machine's files and network. Use it only on your own machine with data you trust. Set "
+        "`SANDBOX_BACKEND=docker` for anything else."
+    )
+elif not sbx.get("ready"):
+    html("<div style='height:14px'></div>")
+    st.warning(f"The code sandbox is not available: {sbx.get('reason', '')}")

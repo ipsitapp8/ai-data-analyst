@@ -1,0 +1,83 @@
+{
+ "suite_version": "2026.10.1",
+ "mode": "live",
+ "provider": "gemini:gemini-3.6-flash",
+ "started_at": "2026-10-09T22:23:40.370127",
+ "finished_at": "2026-10-09T22:25:44.803494",
+ "summary": {
+  "cases": 1,
+  "passed": 0,
+  "failed": 1,
+  "pass_rate": 0.0,
+  "by_component": {
+   "pipeline": {
+    "cases": 1,
+    "passed": 0
+   }
+  },
+  "pipeline": {
+   "runs": 1,
+   "execution_success": 0,
+   "llm_calls": 0,
+   "sandbox_runs": 0,
+   "sandbox_timeouts": 0,
+   "retries": 0,
+   "revisions": 0,
+   "verification_failed_checks": 0,
+   "tokens_in": 0,
+   "tokens_out": 0,
+   "estimated_cost_usd": 0.0,
+   "mean_latency_ms": 124432
+  },
+  "failed_cases": [
+   "live-total-revenue-by-region"
+  ]
+ },
+ "results": [
+  {
+   "case_id": "live-total-revenue-by-region",
+   "component": "pipeline",
+   "passed": false,
+   "metrics": {
+    "question_id": 1,
+    "status": "rejected",
+    "job_state": "succeeded",
+    "route": "standard",
+    "verdict_state": null,
+    "llm_calls": 0,
+    "sandbox_runs": 0,
+    "sandbox_timeouts": 0,
+    "retries": 0,
+    "revisions": 0,
+    "verification_failed_checks": 0,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "estimated_cost_usd": 0.0,
+    "providers": [],
+    "execution_success": false,
+    "latency_ms": 124432
+   },
+   "detail": {
+    "checks": [
+     {
+      "check": "job_terminal",
+      "ok": true,
+      "detail": "job state succeeded"
+     },
+     {
+      "check": "status_allowed",
+      "ok": false,
+      "detail": "rejected"
+     },
+     {
+      "check": "a_kpi_matches_reference",
+      "ok": false,
+      "detail": "reported []"
+     }
+    ],
+    "error": null,
+    "note": ""
+   }
+  }
+ ]
+}

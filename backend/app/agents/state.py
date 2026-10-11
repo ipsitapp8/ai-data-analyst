@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from app import runtime
 from app.database import SessionLocal
 from app.models import Question
 
@@ -19,6 +20,7 @@ class StepResult(TypedDict, total=False):
     reasoning: str
     attempts: int
     execution_log_id: int
+    formula_explanation: str
 
 
 class AgentState(TypedDict, total=False):
@@ -55,8 +57,27 @@ class AgentState(TypedDict, total=False):
     rejection_reason: str | None
     suggestions: list[str]
 
+    # router (runs first)
+    route: str
+    route_reasons: list[str]
+    route_spec: dict[str, Any]
+    approved_metrics: list[dict[str, Any]]
+    planner_hint: str
+    clarification: dict[str, Any]
+
+    # compile -> verify -> publish
+    draft: dict[str, Any]
+    evidence: list[dict[str, Any]]
+    dataset_evidence: dict[str, Any]
+    verification_failed: bool
+    verification_feedback: str | None
+    investigation_id: int
+
 
 def update_stage(question_id: int, stage: str, detail: str = "") -> None:
+    """Record progress. Also the run's main checkpoint: every node calls this
+    first, so a cancelled, overdue or over-budget run stops here."""
+    runtime.checkpoint()
     db = SessionLocal()
     try:
         q = db.get(Question, question_id)
@@ -68,6 +89,9 @@ def update_stage(question_id: int, stage: str, detail: str = "") -> None:
             db.commit()
     finally:
         db.close()
+    from app import jobs
+
+    jobs.set_progress(question_id, stage, detail)
 
 
 def mark_terminal(question_id: int, status: str, error: str | None = None) -> None:
@@ -81,6 +105,12 @@ def mark_terminal(question_id: int, status: str, error: str | None = None) -> No
             elif status == "rejected":
                 q.current_stage = "rejected"
                 q.stage_detail = "Question not analyzable for this dataset"
+            elif status == "needs_clarification":
+                q.current_stage = "needs_clarification"
+                q.stage_detail = "This question has more than one possible meaning"
+            elif status == "cancelled":
+                q.current_stage = "cancelled"
+                q.stage_detail = "Cancelled"
             else:
                 q.current_stage = "failed"
             q.error = error

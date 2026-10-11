@@ -24,6 +24,15 @@ COPY .streamlit/ .streamlit/
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
+# This image cannot start Docker containers (Hugging Face Spaces and Render do not
+# allow it), so the isolated sandbox is not available here. SANDBOX_BACKEND is
+# set to the subprocess runner, which is NOT a security boundary, and the app
+# refuses to run generated code with it unless SANDBOX_ALLOW_UNSAFE_SUBPROCESS=true
+# is set as a deployment secret -- a decision for whoever operates the deployment,
+# deliberately not made here. Without it, simple aggregations and root-cause
+# investigations still work (they run no generated code); questions that need
+# generated code are refused with a clear message. For real isolation, deploy on
+# a host with Docker and set SANDBOX_BACKEND=docker. See docs/PLATFORM.md section 1.
 ENV SANDBOX_BACKEND=subprocess \
     SANDBOX_RUN_AS_USER=sandbox \
     SANDBOX_TIMEOUT_SECONDS=90 \

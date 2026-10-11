@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Dashboard, Dataset, ScheduledAnalysis, Team, User
-from app.scheduler import INTERVALS, next_run_at
+from app.routers._common import require_admin
+from app.scheduler import COMPARISONS, INTERVALS, next_run_at
 from app.schemas import ScheduledCreate, ScheduledOut, ScheduledUpdate
 from app.security import get_current_team, get_current_user
 from app.verdict import rejected_reviews, resolve_verdict_state
@@ -21,6 +22,22 @@ def _validate(interval: str | None, threshold: float | None) -> None:
         raise HTTPException(400, "change_threshold_pct must be >= 0")
 
 
+def _validate_monitoring(payload) -> None:
+    if payload.min_effect_abs is not None and payload.min_effect_abs < 0:
+        raise HTTPException(400, "min_effect_abs must be >= 0")
+    if payload.comparison is not None and payload.comparison not in COMPARISONS:
+        raise HTTPException(400, f"comparison must be one of: {', '.join(COMPARISONS)}")
+    if payload.window_runs is not None and not 2 <= payload.window_runs <= 30:
+        raise HTTPException(400, "window_runs must be between 2 and 30")
+
+
+def _apply_monitoring(sa: ScheduledAnalysis, payload) -> None:
+    for field in ("min_effect_abs", "comparison", "window_runs", "suppress_on_dq", "notify_email"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(sa, field, value)
+
+
 def _out(db: Session, sa: ScheduledAnalysis) -> ScheduledOut:
     dash = db.get(Dashboard, sa.last_dashboard_id) if sa.last_dashboard_id else None
     return ScheduledOut(
@@ -31,6 +48,8 @@ def _out(db: Session, sa: ScheduledAnalysis) -> ScheduledOut:
         last_question_id=dash.question_id if dash else None,
         last_verdict_state=resolve_verdict_state(dash, rejected_reviews(db, dash.question_id)) if dash else None,
         last_trend=sa.last_trend, last_change_summary=sa.last_change_summary or "",
+        min_effect_abs=sa.min_effect_abs, comparison=sa.comparison or "previous", window_runs=sa.window_runs,
+        suppress_on_dq=sa.suppress_on_dq is not False, notify_email=sa.notify_email is not False,
     )
 
 
@@ -49,6 +68,7 @@ def create_scheduled(
     team: Team = Depends(get_current_team),
 ):
     _validate(payload.interval, payload.change_threshold_pct)
+    _validate_monitoring(payload)
     text = payload.question.strip()
     if not text:
         raise HTTPException(400, "Question text is required")
@@ -60,6 +80,7 @@ def create_scheduled(
         interval=payload.interval, change_threshold_pct=payload.change_threshold_pct,
         created_by=user.id,
     )
+    _apply_monitoring(sa, payload)
     db.add(sa)
     db.commit()
     db.refresh(sa)
@@ -90,7 +111,13 @@ def update_scheduled(
     team: Team = Depends(get_current_team),
 ):
     _validate(payload.interval, payload.change_threshold_pct)
+    _validate_monitoring(payload)
     sa = _get_owned(db, team, sa_id)
+    # Turning off the data-quality gate or email delivery changes what the whole
+    # team is (not) told, so it is an owner/admin decision.
+    if payload.suppress_on_dq is not None or payload.notify_email is not None:
+        require_admin(db, team, user.id, "change alert delivery or the data-quality gate")
+    _apply_monitoring(sa, payload)
     if payload.is_active is not None:
         sa.is_active = payload.is_active
     if payload.interval is not None:

@@ -532,6 +532,12 @@ _NAV_ICONS = {
     "team_overview": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3 3 0 0 1 0 6M18 14c1.8.6 3 2.4 3 4.5"/>',
     "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+    "copilot": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
+    "investigations": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M8 10.5h5M10.5 8v5"/>',
+    "what_if": '<path d="M4 18c4 0 4-12 8-12s4 12 8 12"/><path d="M4 21h16"/>',
+    "data_quality": '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16v.5"/>',
+    "semantic": '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7"/>',
+    "evaluation": '<path d="M9 3h6v4l4 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L9 7z"/><path d="M8 14h8"/>',
 }
 
 
@@ -650,10 +656,16 @@ NAV_PAGES = [
     ("overview", "Overview", "pages/1_Overview.py"),
     ("datasets", "Datasets", "pages/2_Datasets.py"),
     ("analyses", "Analyses", "pages/3_Analyses.py"),
+    ("copilot", "Copilot", "pages/12_Copilot.py"),
+    ("investigations", "Root cause", "pages/13_Investigations.py"),
+    ("what_if", "What-if", "pages/14_What_If.py"),
     ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
     ("audit", "Audit trail", "pages/6_Audit_Trail.py"),
+    ("data_quality", "Data quality", "pages/15_Data_Quality.py"),
+    ("semantic", "Semantic layer", "pages/16_Semantic_Layer.py"),
+    ("evaluation", "Evaluation", "pages/17_Evaluation.py"),
     ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
     ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
     ("settings", "Settings", "pages/7_Settings.py"),
@@ -839,6 +851,60 @@ def verdict_badge(state: str | None) -> str:
     return badge(label, kind)
 
 
+EVIDENCE_META = {
+    "verified": ("verified", "Verified"),
+    "verified_with_caveats": ("warn", "Verified with caveats"),
+    "unverified": ("error", "Not verified"),
+}
+CHECK_META = {"pass": ("verified", "Passed"), "fail": ("error", "Failed"), "not_run": ("warn", "Not run"),
+              "warn": ("warn", "Caveat"), "not_applicable": ("neutral", "Not applicable")}
+
+
+def evidence_badge(status: str | None) -> str:
+    """Badge for one claim's deterministic evidence status."""
+    kind, label = EVIDENCE_META.get(status or "", ("neutral", "No evidence record"))
+    return badge(label, kind)
+
+
+def render_evidence(record: dict | None) -> None:
+    """One evidence record: status, each check with its outcome and reason, the
+    three kinds of validity, limitations and provenance."""
+    if not record:
+        html('<div class="ds-row-meta">No evidence record exists for this element (it predates verification).</div>')
+        return
+    html(f'<div style="margin:6px 0 10px 0;">{evidence_badge(record.get("status"))}</div>')
+    rows = []
+    for c in record.get("checks") or []:
+        kind, label = CHECK_META.get(c.get("outcome"), ("neutral", c.get("outcome", "")))
+        need = "required" if c.get("required") else "informational"
+        rows.append(
+            f'<div style="padding:7px 0;border-top:1px solid var(--border);">'
+            f'<div style="display:flex;gap:10px;align-items:center;">{badge(label, kind)}'
+            f'<span class="ds-row-title">{esc(str(c.get("check", "")).replace("_", " "))}</span>'
+            f'<span class="ds-row-meta">{need}</span></div>'
+            f'<div class="ds-row-meta" style="margin-top:3px;">{esc(c.get("detail") or "")}</div></div>')
+    html("".join(rows))
+    validity = record.get("validity") or {}
+    html('<div class="ds-row-meta" style="margin-top:10px;line-height:1.7;">'
+         f'<b>Mathematical validity:</b> {esc(str(validity.get("mathematical", "—")).replace("_", " "))}<br>'
+         f'<b>Statistical validity:</b> {esc(str(validity.get("statistical", "—")).replace("_", " "))}<br>'
+         f'<b>Causal validity:</b> {esc(str(validity.get("causal", "—")).replace("_", " "))}</div>')
+    limits = record.get("limitations") or []
+    if limits:
+        html('<div class="ds-row-meta" style="margin-top:6px;"><b>Limitations:</b> '
+             + esc(", ".join(str(x).replace("_", " ") for x in limits)) + "</div>")
+    metric = record.get("metric") or {}
+    bits = []
+    if metric.get("formula"):
+        bits.append(f'formula {esc(metric["formula"])}')
+    if record.get("recomputed_value"):
+        bits.append(f'recomputed value {esc(record["recomputed_value"])}')
+    if record.get("dataset_fingerprint"):
+        bits.append(f'dataset {esc(record["dataset_fingerprint"][:12])}…')
+    if bits:
+        html('<div class="ds-row-meta" style="margin-top:6px;"><b>Provenance:</b> ' + " · ".join(bits) + "</div>")
+
+
 def _rejections_html(rejections: list[dict]) -> str:
     parts = []
     for r in rejections:
@@ -858,17 +924,24 @@ def render_verdict_banner(dash: dict) -> None:
     if state == "VERIFIED":
         html('<div class="ds-verdict ds-verdict-ok"><div class="ds-verdict-head">✓ Fully Verified</div></div>')
         return
+    summary = dash.get("evidence_summary") or {}
+    not_full = summary.get("verified_with_caveats", 0) + summary.get("unverified", 0)
     if state == "VERIFIED_WITH_CAVEATS":
         cls, icon = "ds-verdict-warn", "⚠"
         n = dash.get("flagged_count", 0)
-        title = f"Verified with caveats — {n} item(s) flagged"
+        if n:
+            title = f"Verified with caveats — {n} item(s) flagged"
+        elif not_full:
+            title = f"Verified with caveats — {not_full} of {summary.get('claims', not_full)} claims not fully verified"
+        else:
+            title = "Verified with caveats"
     else:
         cls, icon = "ds-verdict-bad", "⛔"
-        title = "Unverified — Critic could not confirm this analysis"
+        title = "Unverified — verification could not confirm this analysis"
     body = _rejections_html(rejections) or esc(dash.get("verification_summary") or "No reasoning was recorded.")
     html(
         f'<details class="ds-verdict {cls}"><summary><span>{icon}</span><span>{esc(title)}</span>'
-        f'<span class="ds-verdict-hint">Show Critic reasoning ▾</span></summary>'
+        f'<span class="ds-verdict-hint">Show reasoning ▾</span></summary>'
         f'<div class="ds-verdict-body">{body}</div></details>'
     )
 
@@ -1148,6 +1221,9 @@ def _inspect_dialog() -> None:
     if studio and studio.get("plotted") is not None:
         html(f'<div {sub_title}>Values plotted in this chart</div>')
         st.dataframe(studio["plotted"], use_container_width=True, hide_index=True, height=200)
+
+    html('<div class="ds-section-title" style="margin-top:18px;">Evidence</div>')
+    render_evidence(data.get("evidence"))
 
     if data.get("flagged"):
         html('<div class="ds-section-title ds-flag-bad" style="margin-top:18px;">⚠ Critic reasoning</div>')

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import (ApiError, delete_scheduled, list_alerts, list_scheduled, mark_alert_read,
-                        mark_all_alerts_read, update_scheduled)
+from api_client import (ApiError, delete_scheduled, get_alert, list_alerts, list_scheduled, mark_alert_read,
+                        mark_all_alerts_read, update_alert, update_scheduled)
 from style.theme import (
     badge,
     invalidate_alerts_cache,
@@ -32,7 +32,11 @@ try:
 except ApiError:
     feed = {"unread": 0, "alerts": []}
 
-ALERT_KIND = {"change": ("Changed", "warn"), "anomaly": ("Unusual", "running"), "unverified": ("Unverified", "error")}
+ALERT_KIND = {"change": ("Changed", "warn"), "anomaly": ("Unusual", "running"), "unverified": ("Unverified", "error"),
+              "data_quality": ("Data quality", "error")}
+ALERT_STATUS = {"open": "Open", "acknowledged": "Acknowledged", "resolved": "Resolved"}
+DELIVERY = {"sent": "email sent", "failed": "email failed, retrying", "gave_up": "email failed", "skipped": "no email",
+            "none": ""}
 with st.container(key="card_alerts"):
     a_head, a_btn = st.columns([4, 1])
     with a_head:
@@ -51,15 +55,60 @@ with st.container(key="card_alerts"):
              'metric moves past its threshold, behaves unusually against its own history, or fails verification.</div>')
     for al in feed["alerts"]:
         label, kind = ALERT_KIND.get(al["kind"], ("Alert", "neutral"))
-        c1, c2 = st.columns([6, 1.4])
+        c1, c2 = st.columns([5, 2.4])
         with c1:
+            seen = f' · seen {al["occurrences"]} times' if al.get("occurrences", 1) > 1 else ""
+            sent = DELIVERY.get(al.get("delivery_state", "none"), "")
             html(f'<div style="padding:8px 0;{"" if al["read"] else "font-weight:600;"}">'
                  f'<div style="display:flex;gap:10px;align-items:center;">{badge(label, kind)}'
                  f'<span class="ds-row-title">{esc(al["title"])}</span></div>'
                  f'<div class="ds-row-meta" style="margin-top:3px;">{esc(al["created_at"].replace("T", " ")[:16])} UTC'
-                 f'{" · " + esc(al["detail"].splitlines()[0][:140]) if al["detail"] else ""}</div></div>')
+                 f' · {ALERT_STATUS.get(al.get("status", "open"), "Open")}{seen}{" · " + sent if sent else ""}'
+                 f'{" · " + esc(al["detail"].splitlines()[0][:120]) if al["detail"] else ""}</div></div>')
+            with st.popover("Why this alert", use_container_width=False):
+                try:
+                    ex = get_alert(al["id"]).get("explanation") or {}
+                except ApiError as e:
+                    ex = {}
+                    st.caption(str(e))
+                if not ex:
+                    st.caption("No explanation was recorded for this alert.")
+                else:
+                    st.markdown(f"Compared with **{ex.get('compared_with', 'the previous run')}**, threshold "
+                                f"**{ex.get('threshold_pct', 0):g}%**"
+                                + (f", minimum change **{ex['min_effect_abs']:g}**" if ex.get("min_effect_abs") else "")
+                                + f". Verdict of the run: **{str(ex.get('verdict', '')).replace('_', ' ').lower()}**.")
+                    if ex.get("changes"):
+                        st.dataframe([{"KPI": c["label"], "Before": c["old"], "Now": c["new"],
+                                       "Change %": None if c["pct"] is None else round(c["pct"], 1),
+                                       "Counts as a change": c["crossed"]} for c in ex["changes"]],
+                                     use_container_width=True, hide_index=True)
+                    if ex.get("history"):
+                        st.dataframe([{"KPI": k, "Earlier runs": v["runs"], "Mean": round(v["mean"], 2),
+                                       "Std dev": round(v["stdev"], 2), "Min": v["min"], "Max": v["max"]}
+                                      for k, v in ex["history"].items()], use_container_width=True, hide_index=True)
+                    for d in ex.get("data_quality") or []:
+                        st.warning(d.get("message", ""))
         with c2:
-            b1, b2 = st.columns(2)
+            b1, b2, b3, b4 = st.columns(4)
+            with b3:
+                if al.get("status", "open") == "open" and st.button("Ack", key=f"al_ack_{al['id']}",
+                                                                    help="Acknowledge: someone is looking at it"):
+                    try:
+                        update_alert(al["id"], "acknowledge")
+                    except ApiError as e:
+                        st.error(str(e))
+                    invalidate_alerts_cache()
+                    st.rerun()
+            with b4:
+                if al.get("status", "open") != "resolved" and st.button("Resolve", key=f"al_res_{al['id']}",
+                                                                        help="Close this incident"):
+                    try:
+                        update_alert(al["id"], "resolve")
+                    except ApiError as e:
+                        st.error(str(e))
+                    invalidate_alerts_cache()
+                    st.rerun()
             with b1:
                 if al.get("question_id") and st.button("Open", key=f"al_open_{al['id']}"):
                     if not al["read"]:
@@ -108,7 +157,11 @@ with st.container(key="flat_scheduled"):
                 f'<div class="ds-row" style="border-top:1px solid var(--border);">'
                 f'<div><div class="ds-row-title">{esc(sa["question_text"][:90])}</div>'
                 f'<div class="ds-row-meta">{esc(sa["interval"].title())} · alert over '
-                f'{sa["change_threshold_pct"]:g}% · last run {esc(_when(sa.get("last_run_at")))} · '
+                f'{sa["change_threshold_pct"]:g}% vs {esc(str(sa.get("comparison", "previous")).replace("_", " "))}'
+                f'{" · min change " + format(sa["min_effect_abs"], "g") if sa.get("min_effect_abs") else ""}'
+                f'{"" if sa.get("suppress_on_dq", True) else " · data-quality gate off"}'
+                f'{"" if sa.get("notify_email", True) else " · email off"}'
+                f' · last run {esc(_when(sa.get("last_run_at")))} · '
                 f'next {esc(_when(sa.get("next_run_at"))) if sa["is_active"] else "paused"}</div>'
                 f'<div class="ds-row-meta">Since last run: {trend_html(sa.get("last_trend"))}'
                 f'{" · " + esc(summary) if summary else ""}</div></div>'
@@ -118,6 +171,34 @@ with st.container(key="flat_scheduled"):
             )
         with actions:
             html("<div style='height:10px'></div>")
+            with st.popover("Monitoring settings", use_container_width=True):
+                modes = ["previous", "same_weekday", "rolling_mean"]
+                mode = st.selectbox("Compare each run with", modes, index=modes.index(sa.get("comparison", "previous")),
+                                    format_func=lambda m: {"previous": "The previous run",
+                                                           "same_weekday": "The latest run on the same weekday",
+                                                           "rolling_mean": "The mean of recent runs"}[m],
+                                    key=f"sc_mode_{sa['id']}")
+                thr = st.number_input("Alert when a KPI changes by more than (%)", min_value=0.0,
+                                      value=float(sa["change_threshold_pct"]), key=f"sc_thr_{sa['id']}")
+                min_abs = st.number_input("…and by at least this much in the KPI's own units (0 = no minimum)",
+                                          min_value=0.0, value=float(sa.get("min_effect_abs") or 0.0), key=f"sc_min_{sa['id']}")
+                window = st.number_input("Runs in the mean (for the mean comparison)", min_value=2, max_value=30,
+                                         value=int(sa.get("window_runs") or 4), key=f"sc_win_{sa['id']}")
+                gate = st.checkbox("Hold KPI alerts while the data has open quality problems",
+                                   value=bool(sa.get("suppress_on_dq", True)), key=f"sc_gate_{sa['id']}")
+                mail = st.checkbox("Send email (in-app alerts are always recorded)",
+                                   value=bool(sa.get("notify_email", True)), key=f"sc_mail_{sa['id']}")
+                if st.button("Save", key=f"sc_save_{sa['id']}", type="primary"):
+                    fields = {"comparison": mode, "change_threshold_pct": thr, "min_effect_abs": min_abs, "window_runs": int(window)}
+                    if gate != bool(sa.get("suppress_on_dq", True)):
+                        fields["suppress_on_dq"] = gate   # owner/admin only; only sent when changed
+                    if mail != bool(sa.get("notify_email", True)):
+                        fields["notify_email"] = mail
+                    try:
+                        update_scheduled(sa["id"], **fields)
+                        st.rerun()
+                    except ApiError as e:
+                        st.error(str(e))
             b1, b2, b3 = st.columns(3)
             with b1:
                 if sa.get("last_question_id") and st.button("Open", key=f"sc_open_{sa['id']}"):

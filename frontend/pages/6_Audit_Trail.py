@@ -65,9 +65,10 @@ if st.button("←  All analyses", key="au_back"):
 html("<div style='height:6px'></div>")
 
 html(f'<div class="ds-page-title">{esc(trail["question_text"])}</div>')
-kind = {"verified": "verified", "unverified": "warn", "rejected": "warn",
+kind = {"verified": "verified", "unverified": "warn", "rejected": "warn", "cancelled": "neutral", "needs_clarification": "warn",
         "failed": "error"}.get(status["status"], "running")
-label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable",
+label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable", "cancelled": "Cancelled",
+         "needs_clarification": "Needs clarification",
          "failed": "Failed"}.get(status["status"], "Running")
 html(
     f'<div style="display:flex;align-items:center;gap:11px;margin-bottom:18px;">'
