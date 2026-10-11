@@ -7,8 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.csv_lines import match_csv_lines
 from app.database import get_db
-from app import verification
-from app.models import AuditTrail, Dashboard, EvidenceRecord, Question, Team, User
+from app.models import AuditTrail, Dashboard, Question, Team, User
 from app.schemas import InspectResponse
 from app.security import get_current_team, get_current_user
 
@@ -35,9 +34,6 @@ def inspect_element(
     if not entry:
         raise HTTPException(404, "Element not found")
 
-    evidence_row = (db.query(EvidenceRecord)
-                    .filter_by(dashboard_id=dashboard.id, element_id=element_id).first())
-    evidence = verification.record_out(evidence_row) if evidence_row is not None else None
     review = entry.critic_review
     flagged = review is not None and review.verdict == "rejected"
     critic = {
@@ -53,7 +49,6 @@ def inspect_element(
             formula_explanation="Synthesized from all verified step results — no single formula.",
             data_slice={"columns": [], "rows": []},
             **critic,
-            evidence=evidence,
         )
 
     data_slice = log.data_slice_json or {}
@@ -73,5 +68,4 @@ def inspect_element(
         **critic,
         csv_lines=csv_lines,
         csv_filename=dataset.filename if dataset else None,
-        evidence=evidence,
     )

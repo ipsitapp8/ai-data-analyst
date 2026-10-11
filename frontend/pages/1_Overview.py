@@ -75,10 +75,9 @@ with left:
                 'stroke-width="1.8"><path d="M4 18l5-6 4 3.5L20 7" stroke-linecap="round" '
                 'stroke-linejoin="round"/></svg>')
         for q in questions[:4]:
-            kind = {"verified": "verified", "unverified": "warn", "rejected": "warn", "cancelled": "neutral", "needs_clarification": "warn",
+            kind = {"verified": "verified", "unverified": "warn", "rejected": "warn",
                     "failed": "error"}.get(q["status"], "running")
-            label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable", "cancelled": "Cancelled",
-                     "needs_clarification": "Needs clarification",
+            label = {"verified": "Verified", "unverified": "Needs review", "rejected": "Not analyzable",
                      "failed": "Failed"}.get(q["status"], "Running")
             state = "Completed" if q["status"] in ("verified", "unverified") else q["status"].capitalize()
             html(
