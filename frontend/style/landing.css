@@ -47,3 +47,7 @@
 .lp-card-sub { color: #5a4a66; font-size: .92rem; margin-bottom: 8px; }
 
 @media (max-width: 640px) { .lp-hero { padding-top: 17vh; } .st-key-auth_card { padding: 22px 20px; } }
+.lp-cta, .lp-nav a.lp-pill { border-radius: 999px; }
+.lp-cta { background: linear-gradient(135deg, #250e2c, #4a2457); box-shadow: 0 14px 30px rgba(37,14,44,.35), inset 0 1px 0 rgba(255,255,255,.25); padding: 15px 34px; }
+.st-key-auth_card [data-testid="stBaseButton-primaryFormSubmit"] { border-radius: 999px !important; }
+.st-key-auth_card [data-testid="stTextInputRootElement"] { border-radius: 999px !important; }

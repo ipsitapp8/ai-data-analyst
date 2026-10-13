@@ -1,0 +1,111 @@
+/* Liquid-glass skin: pill buttons, frosted floating sidebar, translucent cards.
+   Palette: plum #250e2c, periwinkle #837ab6, lavender #9d85b6, orchid #cc8db3, pink #f6a5c0, blush #f7c2ca.
+   Loaded after silt.css so these rules win. */
+:root {
+  --glass-bg: rgba(255,255,255,0.58);
+  --glass-bg-strong: rgba(255,255,255,0.78);
+  --glass-border: rgba(255,255,255,0.85);
+  --glass-edge: rgba(131,122,182,0.22);
+  --glass-shadow: 0 10px 28px rgba(37,14,44,0.10), 0 2px 6px rgba(37,14,44,0.05);
+  --liquid: linear-gradient(135deg, #837ab6 0%, #9d85b6 48%, #cc8db3 100%);
+}
+
+/* soft mesh behind everything, so the glass has something to refract */
+.stApp, [data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(55% 45% at 8% 10%, rgba(131,122,182,0.30) 0%, rgba(131,122,182,0) 70%),
+    radial-gradient(50% 45% at 92% 16%, rgba(246,165,192,0.32) 0%, rgba(246,165,192,0) 70%),
+    radial-gradient(55% 50% at 80% 94%, rgba(204,141,179,0.26) 0%, rgba(204,141,179,0) 70%),
+    radial-gradient(45% 40% at 14% 92%, rgba(157,133,182,0.22) 0%, rgba(157,133,182,0) 70%),
+    #fbf8fb !important;
+  background-attachment: fixed !important;
+}
+
+/* ---------- buttons ---------- */
+.stButton > button, .stFormSubmitButton > button, .stDownloadButton > button, .stLinkButton > a {
+  border-radius: 999px !important; transition: transform .18s ease, box-shadow .18s ease, background .18s ease !important;
+  font-weight: 550 !important; letter-spacing: -0.005em;
+}
+button[kind="secondary"], .stDownloadButton > button, .stLinkButton > a {
+  background: var(--glass-bg-strong) !important; backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid var(--glass-border) !important; color: var(--text-primary) !important;
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.95), 0 0 0 1px var(--glass-edge) !important;
+}
+button[kind="secondary"]:hover, .stDownloadButton > button:hover {
+  background: rgba(255,255,255,0.95) !important; transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(37,14,44,0.14), inset 0 1px 0 #fff, 0 0 0 1px rgba(131,122,182,0.4) !important;
+}
+button[kind="primary"], .stFormSubmitButton > button, button[kind="primaryFormSubmit"] {
+  background: var(--liquid) !important; color: #fff !important; border: 1px solid rgba(255,255,255,0.55) !important;
+  text-shadow: 0 1px 2px rgba(37,14,44,0.35);
+  box-shadow: 0 12px 24px rgba(131,122,182,0.40), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -8px 16px rgba(255,255,255,0.14) !important;
+}
+button[kind="primary"]:hover, .stFormSubmitButton > button:hover, button[kind="primaryFormSubmit"]:hover {
+  background: var(--liquid) !important; filter: brightness(1.06) saturate(1.1); transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(131,122,182,0.5), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -8px 16px rgba(255,255,255,0.18) !important;
+}
+button:active { transform: translateY(0) scale(0.985) !important; }
+button:disabled { opacity: 0.6; }
+
+/* ---------- inputs ---------- */
+[data-testid="stTextInputRootElement"], .stTextInput input, [data-testid="stNumberInputRootElement"] {
+  border-radius: 999px !important;
+}
+[data-testid="stTextAreaRootElement"], .stTextArea textarea { border-radius: 22px !important; }
+[data-testid="stTextInputRootElement"], [data-testid="stTextAreaRootElement"], [data-testid="stNumberInputRootElement"],
+.stTextInput input, .stTextArea textarea, .react-aria-ComboBox > div, [data-baseweb="select"] > div {
+  background: var(--glass-bg-strong) !important; backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border) !important; box-shadow: 0 6px 16px rgba(37,14,44,0.06), 0 0 0 1px var(--glass-edge) !important;
+}
+[data-baseweb="select"] > div { border-radius: 999px !important; }
+[data-testid="stTextInputRootElement"]:focus-within, [data-testid="stTextAreaRootElement"]:focus-within {
+  box-shadow: 0 0 0 3px rgba(131,122,182,0.28), 0 6px 16px rgba(37,14,44,0.08) !important; border-color: #837ab6 !important;
+}
+[data-testid="stFileUploaderDropzone"] { border-radius: 24px !important; background: var(--glass-bg) !important; backdrop-filter: blur(12px); }
+
+/* ---------- cards / containers ---------- */
+.ds-card, [class*="st-key-card"], [class*="st-key-flat"], [data-testid="stMetric"], [data-testid="stExpander"], [data-testid="stForm"] {
+  background: var(--glass-bg) !important; backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--glass-border) !important; border-radius: 22px !important;
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.9) !important;
+}
+[data-testid="stAlert"] { border-radius: 18px !important; backdrop-filter: blur(10px); }
+.stTabs [data-baseweb="tab-list"] { gap: 6px; background: var(--glass-bg); border-radius: 999px; padding: 4px; width: fit-content; backdrop-filter: blur(12px); box-shadow: 0 0 0 1px var(--glass-edge); }
+.stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 6px 16px; }
+.stTabs [aria-selected="true"] { background: var(--glass-bg-strong); box-shadow: var(--glass-shadow); }
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
+
+/* ---------- top strip ---------- */
+.silt-topbar {
+  left: 274px; right: 16px; top: 12px; height: 52px; border-radius: 999px; border: 1px solid var(--glass-border);
+  background: var(--glass-bg-strong); backdrop-filter: blur(20px) saturate(160%); box-shadow: var(--glass-shadow); padding: 0 22px;
+}
+.silt-tb-user { border-left-color: var(--glass-edge); }
+.silt-tb-avatar { background: var(--liquid); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+
+/* ---------- floating frosted sidebar ---------- */
+[data-testid="stSidebar"] { background: transparent !important; border-right: none !important; }
+[data-testid="stSidebarContent"] {
+  margin: 12px 0 12px 12px; height: calc(100vh - 24px) !important; border-radius: 28px;
+  background: linear-gradient(160deg, rgba(255,255,255,0.72), rgba(247,194,202,0.30) 60%, rgba(131,122,182,0.22));
+  backdrop-filter: blur(26px) saturate(170%); border: 1px solid var(--glass-border);
+  box-shadow: 0 18px 44px rgba(37,14,44,0.14), inset 0 1px 0 rgba(255,255,255,0.95);
+}
+.st-key-nav .stButton > button {
+  background: transparent !important; border: 1px solid transparent !important; box-shadow: none !important; backdrop-filter: none;
+  border-radius: 999px !important; color: var(--text-secondary) !important; text-shadow: none;
+}
+.st-key-nav .stButton > button:hover {
+  background: rgba(255,255,255,0.7) !important; border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 6px 16px rgba(37,14,44,0.08), inset 0 1px 0 #fff !important; transform: none; color: var(--text-primary) !important;
+}
+.st-key-nav .stButton > button:disabled {
+  background: var(--liquid) !important; color: #fff !important; opacity: 1 !important; font-weight: 600 !important;
+  border: 1px solid rgba(255,255,255,0.6) !important; text-shadow: 0 1px 2px rgba(37,14,44,0.35);
+  box-shadow: 0 10px 22px rgba(131,122,182,0.40), inset 0 1px 0 rgba(255,255,255,0.65), inset 0 -8px 14px rgba(255,255,255,0.14) !important;
+}
+.st-key-nav .stButton > button::before { opacity: 1; }
+.st-key-nav_logout button { color: var(--text-secondary) !important; }
+.st-key-ws_switcher [data-baseweb="select"] > div { min-height: 38px; }
+
+@media (max-width: 900px) { .silt-topbar { left: 12px; } }
