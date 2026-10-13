@@ -11,6 +11,7 @@ development is unchanged.
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from pathlib import Path
 
@@ -119,9 +120,66 @@ def current_user() -> dict | None:
     return st.session_state.get(_USER_SESSION_KEY)
 
 
+# "Stay signed in": Streamlit forgets session_state on every browser refresh, so
+# the API token would be lost and the visitor sent back to the login form. We keep
+# the same JWT the API issued (7-day expiry, validated by the API on every use) in
+# a browser cookie and restore the session from it. The cookie is script-readable
+# because Streamlit offers no server-side cookie writing; it carries no more than
+# the session token already held in memory, and logging out clears it.
+_COOKIE = "silt_token"
+_COOKIE_MAX_AGE = 7 * 24 * 3600
+
+
+def _cookie_js(token: str | None) -> str:
+    if token:
+        value = "encodeURIComponent(" + json.dumps(token).replace("</", "<\\/") + ")"
+        attrs = "'; path=/; max-age=" + str(_COOKIE_MAX_AGE) + "; SameSite=Lax'"
+    else:
+        value = "''"
+        attrs = "'; path=/; max-age=0; SameSite=Lax'"
+    return (
+        "<script>(function(){var secure = window.parent.location.protocol === 'https:' ? '; Secure' : '';"
+        f"window.parent.document.cookie = '{_COOKIE}=' + {value} + {attrs} + secure;}})();</script>"
+    )
+
+
+def _write_cookie(token: str | None) -> None:
+    components.html(_cookie_js(token), height=0)
+
+
+def _restore_session_from_cookie() -> bool:
+    """Re-establish the login from the browser cookie. Returns True on success."""
+    if st.session_state.get("_logged_out"):
+        return False
+    try:
+        token = st.context.cookies.get(_COOKIE)
+    except Exception:  # noqa: BLE001 - no request context (e.g. headless test)
+        return False
+    if not token:
+        return False
+    import api_client
+
+    try:
+        # Raw call, not api_client.me(): a stale cookie must not trigger the
+        # "session expired" flow (which reruns the script) -- it just means "log in".
+        resp = api_client.requests.get(f"{api_client.BACKEND_BASE_URL}/api/auth/me",
+                                       headers={"Authorization": f"Bearer {token}"}, timeout=api_client.TIMEOUT)
+    except Exception:  # noqa: BLE001 - backend down: show the normal login form
+        return False
+    if not resp.ok:
+        st.session_state["_clear_cookie"] = True
+        return False
+    st.session_state[_USER_SESSION_KEY] = resp.json()
+    st.session_state["auth_token"] = token
+    return True
+
+
 def logout() -> None:
     for key in (_USER_SESSION_KEY, "auth_token", "active_community_id", "active_team_id"):
         st.session_state.pop(key, None)
+    # Don't restore from the cookie that is still on this very connection.
+    st.session_state["_logged_out"] = True
+    st.session_state["_clear_cookie"] = True
 
 
 def require_login() -> None:
@@ -132,7 +190,15 @@ def require_login() -> None:
     from api_client import ApiError, login as api_login, signup as api_signup
 
     if st.session_state.get(_USER_SESSION_KEY) and st.session_state.get("auth_token"):
+        pending = st.session_state.pop("_set_cookie", None)
+        if pending:
+            _write_cookie(pending)
         return
+
+    if _restore_session_from_cookie():
+        return
+    if st.session_state.pop("_clear_cookie", None):
+        _write_cookie(None)
 
     # Why the visitor is back at this form (set when the API rejects a session token). Shown once.
     notice = st.session_state.pop("auth_notice", None)
@@ -172,6 +238,8 @@ def require_login() -> None:
                     result = api_login(email.strip().lower(), password)
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
+                    st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not log in: {e}")
@@ -191,6 +259,8 @@ def require_login() -> None:
                     result = api_signup(email.strip().lower(), password, name)
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
+                    st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not sign up: {e}")

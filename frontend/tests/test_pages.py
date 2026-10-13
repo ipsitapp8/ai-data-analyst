@@ -738,3 +738,13 @@ def test_a_user_with_no_team_sees_onboarding_instead_of_the_app(api, ws):
     text = text_of(at)
     assert "Create a workspace" in text and "not in a team yet" not in text.lower()
     assert not [b for b in at.button if b.key == "nav_datasets"], "no app navigation before a workspace exists"
+
+
+def test_session_cookie_script_sets_and_clears_the_token_safely():
+    import auth
+
+    on = auth._cookie_js('abc."</script>')
+    assert "max-age=604800" in on and "SameSite=Lax" in on and "encodeURIComponent(" in on
+    assert on.count("</script>") == 1, "a hostile token cannot close the script tag early"
+    off = auth._cookie_js(None)
+    assert "max-age=0" in off and "silt_token=" in off
