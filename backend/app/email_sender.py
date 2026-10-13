@@ -6,6 +6,7 @@ takes is a reasonable tradeoff against the complexity of a background queue.
 """
 from __future__ import annotations
 
+import html as _html
 import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -25,6 +26,7 @@ def send_team_invite_email(
     inviter_name: str,
     community_name: str,
     team_name: str,
+    accept_url: str | None = None,
 ) -> bool:
     """Best-effort: logs and returns False on any failure rather than
     raising, so a broken mail config never breaks the invite API call that
@@ -33,17 +35,19 @@ def send_team_invite_email(
         logger.info("SMTP not configured -- skipping invite email to %s", to_email)
         return False
 
+    link = accept_url or config.APP_URL
+    esc = _html.escape
     subject = f"{inviter_name} invited you to {team_name} on Silt"
     text_body = (
         f"{inviter_name} invited you to join the \"{team_name}\" team "
         f"in \"{community_name}\" on Silt.\n\n"
-        f"Sign in (or create an account with this email address) to accept: {config.APP_URL}\n"
+        f"Sign in (or create an account with this email address) to accept: {link}\n"
     )
     html_body = f"""
     <div style="font-family:sans-serif;color:#1a1a1a;">
-      <p><b>{inviter_name}</b> invited you to join <b>{team_name}</b>
-      in <b>{community_name}</b> on Silt.</p>
-      <p><a href="{config.APP_URL}" style="color:#4f8fe0;">Open Silt</a> and sign in
+      <p><b>{esc(inviter_name)}</b> invited you to join <b>{esc(team_name)}</b>
+      in <b>{esc(community_name)}</b> on Silt.</p>
+      <p><a href="{esc(link)}" style="color:#4f8fe0;">Open Silt</a> and sign in
       (or sign up with this email address) to accept the invite.</p>
     </div>
     """

@@ -663,3 +663,32 @@ def test_the_dashboard_chart_finish_changes_presentation_only():
     assert theme.dashboard_chart(wide).data[0].line.width == 4, "an explicit width is never overridden"
     plain = theme.style_chart(go.Figure([go.Bar(x=["a"], y=[1])]))
     assert plain.layout.legend.orientation is None and plain.layout.barcornerradius is None, "other pages' charts are not finished this way"
+
+
+# ------------------------------------------------- organization / discussion --
+
+def test_discussion_page_shows_a_posted_comment_and_can_post(api, ws):
+    api.post("/api/discussion", json={"body": "Revenue dipped in the west"}, headers=ws["h"])
+    at = healthy(page("18_Discussion.py", ws))
+    assert "Revenue dipped in the west" in text_of(at)
+
+
+def test_workspaces_page_renders_org_admin_controls_for_the_owner(api, ws):
+    at = healthy(page("8_Workspaces.py", ws))
+    text = text_of(at)
+    assert "Team members" in text and "Create a team" in text
+
+
+def test_a_user_with_no_team_sees_onboarding_instead_of_the_app(api, ws):
+    from platform_helpers import signup
+
+    token, email = signup(api)
+    bare = {"token": token, "email": email, "team": None}
+    at = AppTest.from_file(str(FRONTEND_DIR / "pages" / "2_Datasets.py"), default_timeout=60)
+    at.session_state["auth_user"] = {"id": 0, "email": email, "display_name": "New Person"}
+    at.session_state["auth_token"] = token
+    at = at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = text_of(at)
+    assert "Create a workspace" in text and "not in a team yet" not in text.lower()
+    assert not [b for b in at.button if b.key == "nav_datasets"], "no app navigation before a workspace exists"

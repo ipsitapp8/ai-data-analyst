@@ -19,6 +19,12 @@ import streamlit.components.v1 as components
 
 _SESSION_KEY = "_auth_ok"
 
+def _landing_css() -> str:
+    """Landing/sign-in stylesheet (style/landing.css), flattened like _gate_css."""
+    raw = (Path(__file__).parent / "style" / "landing.css").read_text(encoding="utf-8")
+    return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
+
+
 def _gate_css() -> str:
     """Login-screen stylesheet (style/gate.css), flattened to one line: markdown
     ends an HTML block at the first blank line and would print the rest as text."""
@@ -133,30 +139,46 @@ def require_login() -> None:
     if notice:
         st.warning(notice)
 
-    st.markdown(_gate_css(), unsafe_allow_html=True)
+    st.markdown(_landing_css(), unsafe_allow_html=True)
     st.markdown(_GATE_FONTS, unsafe_allow_html=True)
-    st.markdown("<style>.block-container { max-width: 1020px !important; padding-top: 8vh !important; }</style>",
-                unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="lp-nav"><div class="lp-brand">{_GATE_LOGO}Silt</div>'
+        '<a class="lp-pill" href="#auth">Log in</a></div>'
+        '<div class="lp-hero">'
+        '<h1 class="lp-title">Ask your data anything.<br><b>Trust every answer.</b></h1>'
+        '<p class="lp-sub">Silt is an AI data analyst for teams. Ask a question in plain English; an agent plans, '
+        'runs and explains the analysis, and an independent model checks it before it reaches you.</p>'
+        '<p class="lp-tag">Invisible when it works. Essential when it matters.</p>'
+        '<a class="lp-cta" href="#auth">Get started</a>'
+        '<div class="lp-points"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
+        '<span>Fully auditable</span></div></div>'
+        '<div id="auth"></div>',
+        unsafe_allow_html=True,
+    )
 
-    with st.container(key="auth_stage"):
-        # The gold panel always covers the *inactive* side; switching modes only
-        # flips its class, and the CSS transition slides it across.
-        st.markdown(
-            '<div class="auth-overlay">'
-            f'<div class="auth-ov-brand">{_GATE_LOGO.replace("#4f46e5", "#ffffff")}<div class="gate-mark">Silt</div></div>'
-            '<div class="gate-eyebrow">Your data. Our analysis.</div>'
-            '<div class="gate-title">Ask a question in plain English.</div>'
-            '<div class="gate-sub">An agent plans, runs and explains the analysis, and an independent '
-            'model checks it before it reaches you.</div>'
-            '<ul class="auth-ov-list"><li>Runs in a secure sandbox</li><li>Every number is verified</li>'
-            '<li>Fully auditable</li></ul></div>',
-            unsafe_allow_html=True,
-        )
-        col_signup, col_login = st.columns(2)
+    with st.container(key="auth_card"):
+        tab_login, tab_signup = st.tabs(["Log in", "Create account"])
 
-        with col_signup:
-            st.markdown('<div class="auth-panel-title">Create your account.</div>'
-                        '<div class="auth-panel-sub">Start asking questions of your data.</div>',
+        with tab_login:
+            st.markdown('<div class="lp-card-title">Welcome back.</div>'
+                        '<div class="lp-card-sub">Sign in to your team&#39;s workspace.</div>',
+                        unsafe_allow_html=True)
+            with st.form("login_form", clear_on_submit=False):
+                email = st.text_input("Email", key="login_email")
+                password = st.text_input("Password", type="password", key="login_password")
+                submitted = st.form_submit_button("Log in", type="primary", use_container_width=True)
+            if submitted:
+                try:
+                    result = api_login(email.strip().lower(), password)
+                    st.session_state[_USER_SESSION_KEY] = result["user"]
+                    st.session_state["auth_token"] = result["access_token"]
+                    st.rerun()
+                except ApiError as e:
+                    st.error(f"Could not log in: {e}")
+
+        with tab_signup:
+            st.markdown('<div class="lp-card-title">Create your account.</div>'
+                        '<div class="lp-card-sub">Start asking questions of your data.</div>',
                         unsafe_allow_html=True)
             with st.form("signup_form", clear_on_submit=False):
                 name = st.text_input("Display name", key="signup_name")
@@ -172,28 +194,5 @@ def require_login() -> None:
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not sign up: {e}")
-            st.markdown('<a class="auth-switch" data-to="login">Already have an account? Log in →</a>',
-                        unsafe_allow_html=True)
-
-        with col_login:
-            st.markdown('<div class="auth-panel-title">Welcome back.</div>'
-                        '<div class="auth-panel-sub">Sign in to your team&#39;s workspace.</div>',
-                        unsafe_allow_html=True)
-            with st.form("login_form", clear_on_submit=False):
-                email = st.text_input("Email", key="login_email")
-                password = st.text_input("Password", type="password", key="login_password")
-                submitted = st.form_submit_button("Log in", type="primary", use_container_width=True)
-            if submitted:
-                try:
-                    result = api_login(email.strip().lower(), password)
-                    st.session_state[_USER_SESSION_KEY] = result["user"]
-                    st.session_state["auth_token"] = result["access_token"]
-                    st.rerun()
-                except ApiError as e:
-                    st.error(f"Could not log in: {e}")
-            st.markdown('<a class="auth-switch" data-to="signup">New to Silt? Create an account →</a>',
-                        unsafe_allow_html=True)
-
-    components.html(_AUTH_SWITCH_JS, height=0)
 
     st.stop()

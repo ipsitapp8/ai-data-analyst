@@ -7,13 +7,20 @@ from api_client import (
     ApiError,
     accept_invite,
     create_community,
-    create_team,
+    create_group,
+    create_invitation,
+    create_team_in_group,
     invite_member,
     invite_members_bulk,
     list_communities,
+    list_groups,
+    list_invitations,
     list_members,
     my_invites,
+    remove_team_member,
+    revoke_invitation,
     revoke_invite,
+    set_team_role,
 )
 from config import APP_URL
 from style.theme import badge, esc, html, invalidate_workspaces_cache, page_header, page_setup, render_sidebar
@@ -116,27 +123,44 @@ with col_r:
         for t in c["teams"]:
             if t["id"] == active_team_id:
                 active_role = t["role"]
-    can_manage_members = active_role in ("owner", "admin")
+    can_manage_members = active_role in ("owner", "admin", "leader")
 
     with st.container(key="card_new_team"):
         html('<div class="ds-section-title">Create a team</div>')
         html("<div style='height:8px'></div>")
         if not active_community:
             html('<div class="ds-row-meta">Pick a community above first.</div>')
+        elif active_community.get("role") not in ("owner", "admin"):
+            html('<div class="ds-row-meta">Only an organization owner or admin can create teams.</div>')
         else:
             html(f'<div class="ds-row-meta">In <b>{esc(active_community["name"])}</b></div>')
+            try:
+                groups = list_groups(active_community["id"])
+            except ApiError:
+                groups = []
+            group_choices = {"No group": None, **{g["name"]: g["id"] for g in groups}}
             with st.form("new_team_form", clear_on_submit=True):
                 name = st.text_input("Team name", label_visibility="collapsed",
                                       placeholder="e.g. Growth")
+                group_label = st.selectbox("Group / department", list(group_choices))
                 submitted = st.form_submit_button("Create team", type="primary")
             if submitted and name.strip():
                 try:
-                    new_team = create_team(active_community["id"], name.strip())
+                    new_team = create_team_in_group(active_community["id"], name.strip(), group_choices[group_label])
                     st.session_state["active_team_id"] = new_team["id"]
                     invalidate_workspaces_cache()
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not create team: {e}")
+            with st.form("new_group_form", clear_on_submit=True):
+                gname = st.text_input("New group", placeholder="Group / department, e.g. Sales")
+                gsub = st.form_submit_button("Add group")
+            if gsub and gname.strip():
+                try:
+                    create_group(active_community["id"], gname.strip())
+                    st.rerun()
+                except ApiError as e:
+                    st.error(f"Could not create group: {e}")
 
     html("<div style='height:14px'></div>")
     with st.container(key="card_members"):
@@ -186,6 +210,31 @@ with col_r:
                             except ApiError as e:
                                 st.error(f"Could not revoke: {e}")
 
+            for m in members:
+                if m["status"] != "active" or m["role"] not in ("member", "leader") or not can_manage_members:
+                    continue
+                mc1, mc2, mc3 = st.columns([3, 1.4, 1])
+                with mc1:
+                    html(f'<div class="ds-row-meta">{esc(m["display_name"] or m["email"])} · {esc(m["role"])}</div>')
+                with mc2:
+                    if active_role in ("owner", "admin"):
+                        target = "member" if m["role"] == "leader" else "leader"
+                        if st.button(f"Make {target}", key=f"role_{m['id']}", use_container_width=True):
+                            try:
+                                set_team_role(active_team_id, m["id"], target)
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not change role: {e}")
+                with mc3:
+                    if m["role"] == "member" or active_role in ("owner", "admin"):
+                        if st.button("Remove", key=f"rm_{m['id']}", use_container_width=True):
+                            try:
+                                remove_team_member(active_team_id, m["id"])
+                                invalidate_workspaces_cache()
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not remove: {e}")
+
             html("<div style='height:12px'></div>")
 
             # Persisted in session_state rather than a bare st.success() right
@@ -219,22 +268,32 @@ with col_r:
 
             tab_one, tab_many = st.tabs(["Invite one", "Invite many at once"])
             with tab_one:
+                role_options = ["member", "leader"] if active_role in ("owner", "admin") else ["member"]
                 with st.form("invite_form", clear_on_submit=True):
                     email = st.text_input("Invite by email", placeholder="teammate@company.com")
+                    invite_role = st.selectbox("Team role", role_options)
+                    org_admin_toggle = False
+                    if active_community and active_community.get("role") == "owner":
+                        org_admin_toggle = st.checkbox("Also make an organization admin")
                     submitted = st.form_submit_button("Send invite", type="primary")
                 if submitted and email.strip():
                     try:
-                        result = invite_member(active_team_id, email.strip())
-                        st.session_state["last_invite_result"] = {
-                            "team_id": active_team_id,
-                            "email": email.strip(),
-                            "email_sent": result["email_sent"],
-                            "resent": result["resent"],
-                        }
-                        st.session_state.pop("last_bulk_invite_result", None)
+                        result = create_invitation(active_team_id, email.strip(), invite_role,
+                                                   "admin" if org_admin_toggle else "member")
+                        st.session_state["last_invitation"] = result
                         st.rerun()
                     except ApiError as e:
                         st.error(f"Could not invite: {e}")
+                last_inv = st.session_state.get("last_invitation")
+                if last_inv and last_inv["team_id"] == active_team_id:
+                    if last_inv["email_sent"]:
+                        st.success(f"Invitation emailed to {last_inv['email']} (expires in 7 days).")
+                    else:
+                        st.warning(
+                            f"Email isn't configured, so nothing was sent to {last_inv['email']}. Share this "
+                            "single-use link with them yourself (it only works for that email address and expires in 7 days):"
+                        )
+                        st.code(last_inv["accept_url"], language=None)
             with tab_many:
                 html(
                     "<div class='ds-row-meta'>Paste your whole company's addresses at once — "
@@ -260,3 +319,22 @@ with col_r:
                         st.rerun()
                     except ApiError as e:
                         st.error(f"Could not send bulk invites: {e}")
+
+            try:
+                open_invites = list_invitations(active_team_id) if can_manage_members else []
+            except ApiError:
+                open_invites = []
+            if open_invites:
+                html('<div class="ds-section-title" style="margin-top:14px;">Open invitations</div>')
+                for inv in open_invites:
+                    ic1, ic2 = st.columns([4, 1])
+                    with ic1:
+                        html(f'<div class="ds-row-meta">{esc(inv["email"])} · {esc(inv["team_role"])} · '
+                             f'expires {esc(inv["expires_at"][:10])}</div>')
+                    with ic2:
+                        if st.button("Revoke", key=f"revinv_{inv['id']}", use_container_width=True):
+                            try:
+                                revoke_invitation(active_team_id, inv["id"])
+                                st.rerun()
+                            except ApiError as e:
+                                st.error(f"Could not revoke: {e}")

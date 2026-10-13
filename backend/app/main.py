@@ -41,6 +41,7 @@ from app.routers.copilot import router as copilot_router
 from app.routers.evals import router as evals_router
 from app.routers.evidence import router as evidence_router
 from app.routers.investigations import router as investigations_router
+from app.routers.org import router as org_router
 from app.routers.jobs import router as jobs_router
 from app.routers.quality import router as quality_router
 from app.routers.scenarios import router as scenarios_router
@@ -98,6 +99,7 @@ app.include_router(chart_views_router)
 app.include_router(jobs_router)
 app.include_router(evidence_router)
 app.include_router(investigations_router)
+app.include_router(org_router)
 app.include_router(quality_router)
 app.include_router(copilot_router)
 app.include_router(scenarios_router)

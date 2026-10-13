@@ -19,7 +19,18 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-from api_client import ApiError, health, inspect_element, list_alerts, my_workspaces
+from api_client import (
+    ApiError,
+    accept_invitation,
+    accept_invite,
+    create_community,
+    create_team,
+    health,
+    inspect_element,
+    list_alerts,
+    my_invites,
+    my_workspaces,
+)
 from auth import current_user, logout, require_login, require_password
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -736,6 +747,7 @@ _NAV_ICONS = {
     "data_quality": '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16v.5"/>',
     "semantic": '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7"/>',
     "evaluation": '<path d="M9 3h6v4l4 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L9 7z"/><path d="M8 14h8"/>',
+    "discussion": '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/>',
 }
 
 
@@ -782,8 +794,10 @@ def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
     # (there are no anonymous accounts) but is fast once a session exists.
     require_password()
     require_login()
+    _consume_invite_param()
     _ensure_active_team()
     inject_base_css()
+    _require_team_onboarding()
     if not sidebar:
         st.markdown(
             "<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
@@ -842,6 +856,118 @@ def _ensure_active_team() -> None:
             return
 
 
+def _consume_invite_param() -> None:
+    """Accept an invitation arriving as ?invite=<token> (the link in an invite
+    email or the one an admin shares). Runs after login so the server can bind
+    the token to the signed-in account's email."""
+    token = st.query_params.get("invite")
+    if not token:
+        return
+    try:
+        result = accept_invitation(token)
+        invalidate_workspaces_cache()
+        st.session_state["active_team_id"] = result["team_id"]
+        st.session_state["active_community_id"] = result["community_id"]
+        st.session_state["flash"] = f"You joined {result['team_name']}."
+    except ApiError as e:
+        st.session_state["flash_error"] = (
+            "That invitation link couldn't be used. It may have expired, been used already, or been "
+            f"sent to a different email address. ({e})"
+        )
+    st.query_params.clear()
+
+
+def _require_team_onboarding() -> None:
+    """Full-screen first-run step for a logged-in user with no team: accept a
+    pending invite or create a workspace, with no app nav shown. Every
+    team-scoped page needs an X-Team-Id, so nothing else is usable until this
+    is done -- better to ask up front than to show "not in a team" on each page."""
+    if st.session_state.get("active_team_id"):
+        return
+    try:
+        _cached_my_workspaces()
+    except ApiError:
+        return  # backend down: let the page show its own error rather than onboarding
+    st.markdown(
+        "<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
+        "[data-testid='stExpandSidebarButton']{display:none !important;}"
+        ".block-container{max-width:640px !important;padding-top:4rem !important;}</style>",
+        unsafe_allow_html=True,
+    )
+    user = current_user() or {}
+    html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
+    page_header(
+        f"Welcome, {user.get('display_name', '')}".rstrip(", "),
+        "Everything in Silt lives in a workspace. Join one you were invited to, or create your own.",
+    )
+
+    if st.session_state.get("flash_error"):
+        st.error(st.session_state.pop("flash_error"))
+    try:
+        invites = my_invites()
+    except ApiError:
+        invites = []
+    if invites:
+        with st.container(key="card_onboard_invites"):
+            html('<div class="ds-section-title">You\'ve been invited</div>')
+            for inv in invites:
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    html(
+                        f'<div class="ds-row-title">{esc(inv["team_name"])}</div>'
+                        f'<div class="ds-row-meta">in {esc(inv["community_name"])} · role: {esc(inv["role"])}</div>'
+                    )
+                with c2:
+                    if st.button("Accept", key=f"onb_accept_{inv['team_id']}", type="primary"):
+                        try:
+                            accept_invite(inv["team_id"])
+                            invalidate_workspaces_cache()
+                            st.rerun()
+                        except ApiError as e:
+                            st.error(f"Could not accept: {e}")
+        html("<div style='height:14px'></div>")
+
+    with st.container(key="card_onboard_create"):
+        html('<div class="ds-section-title">Create a workspace</div>')
+        with st.form("onboard_create_form"):
+            ws_name = st.text_input("Workspace name", placeholder="e.g. Acme Inc.")
+            team_name = st.text_input("First team", value="General")
+            submitted = st.form_submit_button("Create workspace", type="primary")
+        if submitted:
+            if not ws_name.strip() or not team_name.strip():
+                st.error("Enter a workspace name and a team name.")
+            else:
+                try:
+                    community = create_community(ws_name.strip())
+                    team = create_team(community["id"], team_name.strip())
+                    st.session_state["active_community_id"] = community["id"]
+                    st.session_state["active_team_id"] = team["id"]
+                    invalidate_workspaces_cache()
+                    st.rerun()
+                except ApiError as e:
+                    st.error(f"Could not create workspace: {e}")
+
+    with st.container(key="card_onboard_code"):
+        html('<div class="ds-section-title">Have an invitation link or code?</div>')
+        with st.form("onboard_code_form"):
+            code = st.text_input("Invitation code", placeholder="Paste the code from your invitation link")
+            go = st.form_submit_button("Join with invitation")
+        if go and code.strip():
+            try:
+                result = accept_invitation(code.strip().split("invite=")[-1])
+                invalidate_workspaces_cache()
+                st.session_state["active_team_id"] = result["team_id"]
+                st.session_state["active_community_id"] = result["community_id"]
+                st.rerun()
+            except ApiError as e:
+                st.error(f"Could not use that invitation: {e}")
+
+    if st.button("Log out", key="onb_logout"):
+        logout()
+        st.rerun()
+    st.stop()
+
+
 @st.cache_data
 def asset_data_uri(filename: str, mime: str = "image/jpeg") -> str:
     """Base64 data URI for a file in frontend/assets (CSS can't reach local paths)."""
@@ -864,6 +990,7 @@ NAV_PAGES = [
     ("data_quality", "Data quality", "pages/15_Data_Quality.py"),
     ("semantic", "Semantic layer", "pages/16_Semantic_Layer.py"),
     ("evaluation", "Evaluation", "pages/17_Evaluation.py"),
+    ("discussion", "Discussion", "pages/18_Discussion.py"),
     ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
     ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
     ("settings", "Settings", "pages/7_Settings.py"),
@@ -991,6 +1118,10 @@ _LOGO = (
 def render_sidebar(current: str) -> None:
     """Logo, icon nav rail, workspace switcher, log-out; plus the top status strip."""
     render_topbar()
+    if st.session_state.get("flash"):
+        st.success(st.session_state.pop("flash"))
+    if st.session_state.get("flash_error"):
+        st.error(st.session_state.pop("flash_error"))
     with st.sidebar:
         html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
         with st.container(key="nav"):

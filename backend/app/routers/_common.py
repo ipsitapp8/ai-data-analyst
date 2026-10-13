@@ -8,7 +8,8 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import Dataset, DatasetVersion, Question, Team, TeamMember
+from app.authz import team_role
+from app.models import Dataset, DatasetVersion, Question, Team
 
 
 def team_dataset(db: Session, team: Team, dataset_id: int) -> Dataset:
@@ -33,10 +34,10 @@ def dataset_version(db: Session, dataset: Dataset, version_id: int) -> DatasetVe
 
 
 def role_of(db: Session, team_id: int, user_id: int) -> str | None:
-    m = (db.query(TeamMember)
-         .filter(TeamMember.team_id == team_id, TeamMember.user_id == user_id, TeamMember.status == "active")
-         .first())
-    return m.role if m else None
+    """Effective team role (explicit membership, else implicit admin for
+    organization owners/admins -- see app/authz.py)."""
+    team = db.get(Team, team_id)
+    return team_role(db, team, user_id) if team else None
 
 
 def require_admin(db: Session, team: Team, user_id: int, what: str) -> None:

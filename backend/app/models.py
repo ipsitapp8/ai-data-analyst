@@ -25,6 +25,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import JSONB
@@ -71,6 +72,8 @@ class Team(Base):
     community_id = Column(Integer, ForeignKey("communities.id"), nullable=False)
     name = Column(String, nullable=False)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Optional department/group inside the organization (Sales, Finance, ...).
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=utcnow)
 
     community = relationship("Community", back_populates="teams")
@@ -86,12 +89,100 @@ class TeamMember(Base):
     # that person has an account. Claimed (user_id set, status->active) at signup.
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     invited_email = Column(String, nullable=True)
-    role = Column(String, default="member")  # owner|admin|member
+    role = Column(String, default="member")  # owner|admin|leader|member
     status = Column(String, default="active")  # active|pending
     joined_at = Column(DateTime, default=utcnow)
 
     team = relationship("Team", back_populates="members")
     user = relationship("User")
+
+
+class CommunityMember(Base):
+    """Organization-level membership. A Community is the customer company; this
+    is who belongs to it and with what authority, independent of any team.
+    owner/admin manage the organization (teams, groups, members, invitations);
+    member has no organization authority and sees only teams they belong to."""
+
+    __tablename__ = "community_members"
+    __table_args__ = (UniqueConstraint("community_id", "user_id", name="uq_community_member"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String, nullable=False, default="member")  # owner|admin|member
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Group(Base):
+    """A department/grouping of teams inside an organization."""
+
+    __tablename__ = "groups"
+    __table_args__ = (UniqueConstraint("community_id", "name", name="uq_group_name"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Invitation(Base):
+    """Expiring, single-use invitation. Only a SHA-256 of the token is stored,
+    so a database leak does not yield usable invitation links."""
+
+    __tablename__ = "invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    org_role = Column(String, nullable=False, default="member")  # member|admin
+    team_role = Column(String, nullable=False, default="member")  # member|leader
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    accepted_at = Column(DateTime, nullable=True)
+    accepted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class OrgAuditEvent(Base):
+    """Who changed membership/permissions/structure, and when. Distinct from
+    AuditTrail, which records how an analysis result was produced."""
+
+    __tablename__ = "org_audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    community_id = Column(Integer, ForeignKey("communities.id"), nullable=False, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    action = Column(String, nullable=False)
+    target_type = Column(String, nullable=True)
+    target_id = Column(Integer, nullable=True)
+    detail_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class WorkspaceComment(Base):
+    """A discussion post or a note on a specific analysis artifact, scoped to
+    one team. target_type/target_id are null for a plain discussion post."""
+
+    __tablename__ = "workspace_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    target_type = Column(String, nullable=True)  # question|dataset|investigation
+    target_id = Column(Integer, nullable=True)
+    kind = Column(String, nullable=False, default="comment")  # comment|note
+    body = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="open")  # open|resolved (follow-up state)
+    edit_history = Column(JSON, default=list)  # prior bodies, oldest first
+    created_at = Column(DateTime, default=utcnow)
+    edited_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
 
 class Dataset(Base):

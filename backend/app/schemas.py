@@ -40,6 +40,7 @@ class CommunityCreate(BaseModel):
 
 class TeamCreate(BaseModel):
     name: str
+    group_id: int | None = None
 
 
 class InviteRequest(BaseModel):
@@ -51,6 +52,8 @@ class TeamOut(BaseModel):
     community_id: int
     name: str
     role: str  # the caller's own role on this team
+    group_id: int | None = None
+    group_name: str | None = None
 
     class Config:
         from_attributes = True
@@ -59,6 +62,7 @@ class TeamOut(BaseModel):
 class CommunityOut(BaseModel):
     id: int
     name: str
+    role: str | None = None  # the caller's organization role
     teams: list[TeamOut] = []
 
     class Config:

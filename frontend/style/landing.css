@@ -1,0 +1,40 @@
+/* Landing / sign-in page: soft gradient-mesh hero, big light headline, one dark CTA. */
+[data-testid="stApp"] {
+  background:
+    radial-gradient(60% 55% at 12% 8%, #ff6a3d 0%, rgba(255,106,61,0) 70%),
+    radial-gradient(55% 50% at 92% 14%, #7b8cf0 0%, rgba(123,140,240,0) 72%),
+    radial-gradient(50% 45% at 8% 78%, #ffb35c 0%, rgba(255,179,92,0) 70%),
+    radial-gradient(60% 55% at 88% 86%, #ff5a2e 0%, rgba(255,90,46,0) 68%),
+    radial-gradient(45% 40% at 52% 42%, #ffffff 0%, rgba(255,255,255,0) 75%),
+    #fbe9dc !important;
+  background-attachment: fixed !important;
+}
+[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+.block-container { max-width: 880px !important; padding: 0 20px 80px !important; }
+
+.lp-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: 58px; background: #fff;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 28px; box-shadow: 0 1px 0 rgba(0,0,0,.05); }
+.lp-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 1.05rem; color: #18181b; }
+.lp-nav a.lp-pill { background: #f4f4f6; color: #18181b; font-size: .82rem; padding: 8px 16px; border-radius: 8px;
+  text-decoration: none; font-weight: 500; }
+.lp-nav a.lp-pill:hover { background: #e9e9ee; }
+
+.lp-hero { text-align: center; padding: 22vh 0 6vh; }
+.lp-title { font-size: clamp(2.6rem, 6.4vw, 4.6rem); line-height: 1.04; font-weight: 300; letter-spacing: -0.035em;
+  color: #121214; margin: 0 0 26px; }
+.lp-title b { font-weight: 500; }
+.lp-sub { max-width: 640px; margin: 0 auto 14px; color: #3b3b42; font-size: 1.02rem; line-height: 1.6; font-weight: 400; }
+.lp-tag { color: #3b3b42; font-size: .98rem; margin-bottom: 34px; font-style: italic; }
+.lp-cta { display: inline-block; background: #17171a; color: #fff !important; text-decoration: none; letter-spacing: .06em;
+  font-size: .86rem; font-weight: 500; padding: 15px 30px; border-radius: 3px; text-transform: uppercase; }
+.lp-cta:hover { background: #000; }
+.lp-points { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; margin-top: 30px; color: #3b3b42; font-size: .86rem; }
+.lp-points span::before { content: "✓ "; color: #17171a; font-weight: 600; }
+
+.st-key-auth_card { background: rgba(255,255,255,.88); backdrop-filter: blur(14px); border-radius: 18px;
+  padding: 30px 34px 26px; max-width: 460px; margin: 4vh auto 0; box-shadow: 0 20px 60px rgba(120,60,20,.18); scroll-margin-top: 90px; }
+.st-key-auth_card [data-testid="stForm"] { border: none !important; padding: 0 !important; background: transparent !important; }
+.lp-card-title { font-size: 1.5rem; font-weight: 500; letter-spacing: -0.02em; color: #121214; margin-bottom: 4px; }
+.lp-card-sub { color: #55555d; font-size: .92rem; margin-bottom: 8px; }
+
+@media (max-width: 640px) { .lp-hero { padding-top: 17vh; } .st-key-auth_card { padding: 22px 20px; } }

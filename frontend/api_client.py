@@ -207,6 +207,95 @@ def list_members(team_id: int) -> list[dict]:
     return _handle(resp)
 
 
+# ------------------------------------------------- organization / invitations --
+
+def _get(path: str, params: dict | None = None, with_team: bool = False) -> Any:
+    return _handle(requests.get(f"{BACKEND_BASE_URL}{path}", params=params,
+                                headers=_headers(with_team=with_team), timeout=TIMEOUT))
+
+
+def _send(method: str, path: str, body: dict | None = None, with_team: bool = False) -> Any:
+    return _handle(getattr(requests, method.lower())(f"{BACKEND_BASE_URL}{path}", json=body,
+                                    headers=_headers(with_team=with_team), timeout=TIMEOUT))
+
+
+def list_groups(community_id: int) -> list[dict]:
+    return _get(f"/api/communities/{community_id}/groups")
+
+
+def create_group(community_id: int, name: str) -> dict:
+    return _send("POST", f"/api/communities/{community_id}/groups", {"name": name})
+
+
+def create_team_in_group(community_id: int, name: str, group_id: int | None) -> dict:
+    return _send("POST", f"/api/communities/{community_id}/teams", {"name": name, "group_id": group_id})
+
+
+def org_members(community_id: int) -> list[dict]:
+    return _get(f"/api/communities/{community_id}/members")
+
+
+def set_org_role(community_id: int, user_id: int, role: str) -> dict:
+    return _send("PUT", f"/api/communities/{community_id}/members/{user_id}/role", {"role": role})
+
+
+def remove_org_member(community_id: int, user_id: int) -> dict:
+    return _send("DELETE", f"/api/communities/{community_id}/members/{user_id}")
+
+
+def org_audit_events(community_id: int, limit: int = 50) -> list[dict]:
+    return _get(f"/api/communities/{community_id}/audit-events", {"limit": limit})
+
+
+def set_team_role(team_id: int, member_id: int, role: str) -> dict:
+    return _send("PUT", f"/api/teams/{team_id}/members/{member_id}/role", {"role": role})
+
+
+def remove_team_member(team_id: int, member_id: int) -> dict:
+    return _send("DELETE", f"/api/teams/{team_id}/members/{member_id}/membership")
+
+
+def create_invitation(team_id: int, email: str, team_role: str = "member", org_role: str = "member") -> dict:
+    return _send("POST", f"/api/teams/{team_id}/invitations",
+                 {"email": email, "team_role": team_role, "org_role": org_role})
+
+
+def list_invitations(team_id: int) -> list[dict]:
+    return _get(f"/api/teams/{team_id}/invitations")
+
+
+def revoke_invitation(team_id: int, invitation_id: int) -> dict:
+    return _send("DELETE", f"/api/teams/{team_id}/invitations/{invitation_id}")
+
+
+def accept_invitation(token: str) -> dict:
+    return _send("POST", "/api/invitations/accept", {"token": token})
+
+
+# --------------------------------------------------------------- discussion --
+
+def list_comments(target_type: str | None = None, target_id: int | None = None,
+                  status: str | None = None) -> list[dict]:
+    params = {k: v for k, v in {"target_type": target_type, "target_id": target_id, "status": status}.items()
+              if v is not None}
+    return _get("/api/discussion", params, with_team=True)
+
+
+def post_comment(body: str, target_type: str | None = None, target_id: int | None = None,
+                 kind: str = "comment") -> dict:
+    return _send("POST", "/api/discussion",
+                 {"body": body, "target_type": target_type, "target_id": target_id, "kind": kind}, with_team=True)
+
+
+def update_comment(comment_id: int, body: str | None = None, status: str | None = None) -> dict:
+    payload = {k: v for k, v in {"body": body, "status": status}.items() if v is not None}
+    return _send("PATCH", f"/api/discussion/{comment_id}", payload, with_team=True)
+
+
+def delete_comment(comment_id: int) -> dict:
+    return _send("DELETE", f"/api/discussion/{comment_id}", with_team=True)
+
+
 # ----------------------------------------------------------------- datasets --
 
 def upload_dataset(filename: str, file_bytes: bytes) -> dict:

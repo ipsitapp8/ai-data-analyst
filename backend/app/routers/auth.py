@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.authz import ensure_org_member
 from app.models import Team, TeamMember, User
 from app.rate_limit import enforce as rate_limit
 from app.schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
@@ -49,6 +50,9 @@ def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_d
     for invite in pending:
         invite.user_id = user.id
         invite.status = "active"
+        invited_team = db.get(Team, invite.team_id)
+        if invited_team is not None:
+            ensure_org_member(db, invited_team.community_id, user.id, "member")
 
     if is_first_user_ever:
         legacy_team = db.query(Team).filter(Team.name == "Legacy").first()
