@@ -1,7 +1,8 @@
 # Render Blueprint. Connect this repo on Render (New > Blueprint) and it
 # reads this file automatically.
 #
-# The database is managed Postgres (below), not the app's local disk -- so
+# The database is external Postgres (Neon) supplied via DATABASE_URL, not the
+# app's local disk -- Render allows only one free Postgres per workspace. So
 # uploads/workspaces are still ephemeral on the free plan's disk (wiped on
 # deploy/idle spin-down), but the actual data (datasets, questions, dashboards,
 # audit trail) survives, since it now lives in Postgres rather than a SQLite
@@ -41,12 +42,4 @@ services:
       - key: APP_URL
         sync: false
       - key: DATABASE_URL
-        fromDatabase:
-          name: ai-data-analyst-db
-          property: connectionString
-
-databases:
-  - name: ai-data-analyst-db
-    plan: free
-    databaseName: silt
-    user: silt
+        sync: false
