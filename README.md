@@ -226,6 +226,25 @@ Set these as **Space secrets** (Settings → Variables and secrets) — never co
 | `LLAMA_API_KEY` | Critic |
 | `APP_PASSWORD` | Shared password for the gate. Unset ⇒ gate disabled. |
 
+The names are exact: a key saved under any other name (`GOOGLE_API_KEY`, `OPENAI_API_KEY`, …) is not read.
+`GEMINI_MODEL` and `LLAMA_MODEL` are optional; leave them unset to use the defaults in `backend/app/config.py`.
+
+### When a run fails with "No AI model could be reached"
+
+The message names each provider and how it failed, and the same detail is in the run trace on the Analyses page
+(rows of kind *model request failed*) and in the server log (`provider_event …` lines). Settings → Models shows
+which model each provider is configured to use and whether a key is present.
+
+| The message says | What it means | What to do |
+| --- | --- | --- |
+| no API key is configured | The variable is absent or empty in the running process | Set `GEMINI_API_KEY` / `LLAMA_API_KEY` under exactly that name, then redeploy |
+| the provider did not accept the configured API key (HTTP 400, 401 or 403) | The key is wrong, revoked, or for another provider | Replace the key; for Llama, check `LLAMA_BASE_URL` matches the service the key is for |
+| the configured model was not found (HTTP 404) | The provider has retired or renamed the model | Set `GEMINI_MODEL` / `LLAMA_MODEL` to a current one |
+| the usage limit was reached (HTTP 429) | Quota or rate limit | Wait, switch model, or enable billing |
+| could not be reached over the network / temporarily unavailable | Outage or timeout on the provider's side | Retry later |
+
+A key being present does not mean it works: only a request can tell, and the app makes none until a question needs one.
+
 ### What the hosted deployment gives up
 
 Spaces containers can't reach a Docker daemon, so the isolated sandbox is not available there. The

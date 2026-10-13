@@ -588,6 +588,11 @@ def create_hypothesis_investigation(dataset_id: int, question: str) -> dict:
     return _post("/api/investigations/hypothesis", {"dataset_id": dataset_id, "question": question})
 
 
+def ask_investigation(dataset_id: int, question: str) -> dict:
+    """Start a root-cause investigation of a free-text question; no model is used."""
+    return _post("/api/investigations/ask", {"dataset_id": dataset_id, "question": question})
+
+
 def list_investigations(limit: int = 50) -> dict:
     return _get("/api/investigations", limit=limit)
 

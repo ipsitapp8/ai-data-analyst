@@ -196,7 +196,10 @@ def investigate_node(state: AgentState) -> dict:
                                     "contribution": r["contribution"], "share_of_change": r["share_of_change"]}
                                    for r in report.get("ranked_contributors", [])[:10]],
               "price_volume": {k: (report.get("price_volume") or {}).get(k)
-                               for k in ("price_effect", "volume_effect", "entry_exit_effect")}}
+                               for k in ("price_effect", "volume_effect", "entry_exit_effect")},
+              # The summary states these, so they are recorded with the step it is checked against.
+              # "p < 0.001" is how a smaller p-value is stated, so the threshold is recorded too.
+              "change_evidence": {**((report.get("change_evidence") or {}).get("overall") or {}), "p_reported_floor": 0.001}}
     if totals.get("a") is not None and totals.get("b") is not None:
         periods = report["periods"]
         fa = investigator._period_filters(periods["time_column"], periods["a"], last=False)

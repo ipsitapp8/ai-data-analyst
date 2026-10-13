@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app import fallbacks, jobs
+from app import fallbacks, investigator, jobs
 from app import metric_engine as me
 from app.database import get_db
 from app import config
@@ -93,6 +93,56 @@ def create_investigation(
         inv = db.query(Investigation).filter_by(question_id=question.id).first()
     return {"investigation_id": inv.id if inv else None, "question_id": question.id, "job_id": job.id,
             "created": created}
+
+
+def _why_not(profile: dict, question: str) -> str | None:
+    """Why this dataset cannot answer a "why did it change" question, or None."""
+    columns = profile.get("columns", [])
+    numeric = [c["name"] for c in columns if c.get("kind") == "numeric"]
+    if not any(c.get("kind") == "datetime" for c in columns):
+        return "This dataset has no date column, so there are no two periods to compare."
+    if not numeric:
+        return "This dataset has no numeric column, so there is no metric whose change could be measured."
+    named = ", ".join(numeric[:8])
+    return (f"The question does not name exactly one numeric column of this dataset. Name one of: {named}"
+            + (" …" if len(numeric) > 8 else "") + ", or specify the metric yourself.")
+
+
+@router.post("/ask", status_code=201)
+def ask_investigation(
+    payload: HypothesisInvestigationCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    """Queue a root-cause investigation of a free-text question without a model.
+    The metric is the numeric column the question names and the periods are the
+    ones it names ("last month", "the last 14 days", "in March"), read against
+    the dataset's own calendar; everything after that is deterministic."""
+    dataset = team_dataset(db, team, payload.dataset_id)
+    profile = dataset.profile_json or {}
+    question_text = payload.question.strip()
+    spec = investigator.infer_spec(profile, question_text)
+    if spec is None:
+        raise HTTPException(422, _why_not(profile, question_text))
+    try:
+        question, job, created = jobs.submit_question(
+            db, team_id=team.id, dataset=dataset, text=question_text, created_by=user.id,
+            idempotency_key=idempotency_key, route="root_cause", stage_detail="Investigation queued")
+    except jobs.AdmissionRejected as e:
+        raise HTTPException(429, str(e)) from e
+    if created:
+        inv = Investigation(team_id=team.id, dataset_id=dataset.id, dataset_version_id=question.dataset_version_id,
+                            question_id=question.id, params_json={**spec, "engine": "deterministic"}, report_json={},
+                            status="queued", created_by=user.id)
+        db.add(inv)
+        db.commit()
+        db.refresh(inv)
+    else:
+        inv = db.query(Investigation).filter_by(question_id=question.id).first()
+    return {"investigation_id": inv.id if inv else None, "question_id": question.id, "job_id": job.id, "created": created,
+            "read_as": {"formula": spec["formula"], "label": spec["label"], "time_column": spec["time_column"]}}
 
 
 @router.post("/hypothesis", status_code=201)

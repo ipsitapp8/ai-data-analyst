@@ -156,6 +156,298 @@ def test_question_routed_to_the_investigator_publishes_a_report_and_dashboard(cl
     assert trace["usage"]["llm_calls"] == 0 and [e["name"] for e in trace["events"] if e["kind"] == "node"] == ["router", "investigate"]
 
 
+# ---- asking in words: periods read from the question, statistics, evidence table
+
+def _frame(days: int, start: str = "2025-01-01", value=lambda i, seg: 100.0) -> pd.DataFrame:
+    dates = pd.date_range(start, periods=days, freq="D")
+    return pd.DataFrame([{"day": d, "region": seg, "revenue": float(value(i, seg))}
+                         for i, d in enumerate(dates) for seg in ("North", "South")])
+
+
+def _profile(df: pd.DataFrame) -> dict:
+    return {"row_count": len(df), "columns": [
+        {"name": "day", "kind": "datetime"}, {"name": "region", "kind": "categorical", "unique_count": df["region"].nunique()},
+        {"name": "revenue", "kind": "numeric"}]}
+
+
+@pytest.mark.parametrize("question, a, b", [
+    ("Why did revenue decrease last month?", ("2025-02-01", "2025-03-01"), ("2025-03-01", "2025-03-31")),
+    ("why did revenue drop in the last 14 days", ("2025-04-02", "2025-04-16"), ("2025-04-16", "2025-04-29")),
+    ("What explains revenue in the past 2 weeks?", ("2025-04-02", "2025-04-16"), ("2025-04-16", "2025-04-29")),
+    ("why did revenue fall in February?", ("2025-01-01", "2025-02-01"), ("2025-02-01", "2025-02-28")),
+    ("why is revenue down this month", ("2025-03-01", "2025-03-30"), ("2025-04-01", "2025-04-29")),
+    ("why did revenue fall last quarter", None, None),
+])
+def test_periods_are_read_from_the_question_against_the_datasets_own_calendar(sales, question, a, b):
+    df, _ = sales                                   # covers 2025-01-01 .. 2025-04-29
+    read = inv.question_periods(question, df, "order_date")
+    if a is None:
+        assert "no earlier period" in read["error"], "Q1 is the first quarter in the data"
+        return
+    assert (read["period_a"][0][:10], read["period_a"][1][:10]) == a
+    assert (read["period_b"][0][:10], read["period_b"][1][:10]) == b
+    assert "read from the question" in read["source"] and "2025-04-29" in read["source"]
+
+
+def test_a_month_the_data_ends_in_counts_as_last_month_only_when_complete():
+    full = _frame(59)                               # Jan 1 .. Feb 28: February is complete
+    assert inv.question_periods("why last month", full, "day")["period_b"][0][:10] == "2025-02-01"
+    partial = _frame(90)                            # .. Mar 31 is day 90; stop a day short
+    partial = partial[partial["day"] < "2025-03-31"]
+    assert inv.question_periods("why last month", partial, "day")["period_b"][0][:10] == "2025-02-01", "March is incomplete"
+    assert inv.question_periods("why did it change?", full, "day") is None, "no period named: the caller falls back"
+    assert "only covers" in inv.question_periods("why in 2019 last year", _frame(40), "day")["error"]
+
+
+def test_a_question_sets_the_periods_of_an_investigation_and_an_unanswerable_one_says_why(sales):
+    df, profile = sales
+    spec = inv.infer_spec(profile, "Why did revenue decrease last month?")
+    r = inv.investigate(df, profile, spec)
+    assert r["periods"]["a"][0][:10] == "2025-02-01" and r["periods"]["b"][0][:10] == "2025-03-01"
+    assert "last month" in r["periods"]["source"]
+    assert r["ranked_contributors"][0]["segment"] == "West"
+    explicit = inv.investigate(df, profile, {**spec, **PERIODS})
+    assert explicit["periods"]["source"] == "specified", "periods given outright win over the question"
+    r = inv.investigate(df, profile, inv.infer_spec(profile, "Why did revenue fall last year?"))
+    assert r["status"] == "inconclusive" and "only covers" in r["summary"] and r["evidence_table"] == []
+
+
+def test_statistical_evidence_is_per_bucket_adjusted_and_separates_measured_from_hypothesis(sales):
+    df, profile = sales
+    r = inv.investigate(df, profile, spec())
+    overall = r["change_evidence"]["overall"]
+    assert overall["status"] == "ok" and overall["significant"] and overall["bucket"] == "day"
+    assert overall["low"] < overall["estimate"] < overall["high"] < 0
+    assert "interval" in r["summary"] and "p < 0.001" in r["summary"]
+    tested = [c for c in r["ranked_contributors"] if c["statistic"]["status"] == "ok"]
+    assert 1 <= len(tested) <= inv.STAT_CONTRIBUTORS and r["change_evidence"]["family"]["comparisons"] == len(tested)
+    assert all(c["statistic"]["p_adjusted"] >= c["statistic"]["p_value"] for c in tested), "Holm never lowers a p-value"
+    table = r["evidence_table"]
+    west = next(row for row in table if row["candidate"] == "region = West")
+    assert west["kind"] == "measured" and west["support"] == "strong" and west["limitations"] == []
+    assert west["value_a"] > west["value_b"] and west["contribution"] == west["value_b"] - west["value_a"]
+    hypotheses = [row for row in table if row["kind"] == "hypothesis"]
+    assert len(hypotheses) == 2 and all(h["claim"] == "not tested" and "statistic" not in h for h in hypotheses)
+    assert any("not testable" in h["support"] for h in hypotheses)
+    assert all("caused" not in row["claim"] for row in table), "a location is never called a cause"
+    assert any("where the change is, not what brought it about" in f for f in r["follow_ups"])
+
+
+def test_a_change_within_ordinary_variation_is_inconclusive_not_a_finding():
+    rng = np.random.default_rng(7)
+    noise = {(i, s): v for (i, s), v in zip(((i, s) for i in range(60) for s in ("North", "South")), rng.normal(100, 30, 120))}
+    df = _frame(60, value=lambda i, seg: noise[(i, seg)])
+    r = inv.investigate(df, _profile(df), {"formula": "sum(revenue)", "label": "Revenue", "time_column": "day"})
+    if r["decomposition_method"] == "none":
+        assert "less than" in r["summary"]          # the totals happened to agree within 1%
+        return
+    overall = r["change_evidence"]["overall"]
+    assert overall["status"] == "ok" and not overall["significant"]
+    assert r["status"] == "inconclusive" and "within its ordinary variation" in r["summary"]
+    assert any("may be describing noise" in u for u in r["unresolved"])
+    assert all(row["support"] != "strong" for row in r["evidence_table"])
+
+
+def test_short_periods_zero_baselines_and_unequal_coverage_are_reported_not_hidden():
+    short = _frame(6, value=lambda i, seg: 100.0 if i < 3 else (40.0 if seg == "North" else 100.0))
+    r = inv.investigate(short, _profile(short), {"formula": "sum(revenue)", "label": "Revenue", "time_column": "day"})
+    overall = r["change_evidence"]["overall"]
+    assert overall["status"] == "unavailable" and "needed" in overall["reason"], "three days a side is no series"
+    north = next(row for row in r["evidence_table"] if row["candidate"] == "region = North")
+    assert north["support"] != "strong" and any("no statistical test" in x for x in north["limitations"])
+    assert any("longer periods" in f for f in r["follow_ups"])
+
+    zero = _frame(40, value=lambda i, seg: 0.0 if i < 20 else 50.0)
+    r = inv.investigate(zero, _profile(zero), {"formula": "sum(revenue)", "label": "Revenue", "time_column": "day",
+                                               "period_a": ["2025-01-01", "2025-01-21"], "period_b": ["2025-01-21", "2025-02-09"]})
+    assert r["totals"]["a"] == 0 and r["totals"]["change_pct"] is None
+    assert any("no percentage change is defined" in u for u in r["unresolved"])
+
+    empty = inv.investigate(zero, _profile(zero), {"formula": "sum(revenue)", "label": "Revenue", "time_column": "day",
+                                                   "period_a": ["2024-11-01", "2024-12-01"], "period_b": ["2025-01-01", "2025-01-31"]})
+    assert empty["status"] == "inconclusive" and "earlier period has no rows" in empty["summary"]
+
+
+# ---- regressions: each of these was reported as a finding, or not flagged, before the fix
+
+JAN, FEB, MAR = range(0, 31), range(31, 59), range(59, 90)          # day indices from 2025-01-01
+REVENUE = {"formula": "sum(revenue)", "label": "Revenue", "time_column": "day"}
+
+
+def _ask(df: pd.DataFrame, question: str) -> dict:
+    return inv.investigate(df, _profile(df), inv.infer_spec(_profile(df), question))
+
+
+def test_a_longer_month_is_not_reported_as_a_change():
+    """February against March with identical daily revenue: the totals differ
+    by 10.7% and nothing changed. Was: "complete", revenue rose 10.7%."""
+    r = _ask(_frame(90), "Why did revenue rise last month?")
+    t = r["totals"]
+    assert (t["days_a"], t["days_b"], t["length_adjusted"]) == (28, 31, True)
+    assert t["a"] == 5600 and t["b"] == 6200 and math.isclose(t["length_effect"], 600) and abs(t["like_for_like_change"]) < 1e-9
+    assert t["per_day_a"] == t["per_day_b"] == 200
+    assert r["status"] == "inconclusive" and "difference in length" in r["summary"] and r["ranked_contributors"] == []
+    _numbers_are_backed(r["summary"], r["totals"])
+
+
+def _numbers_are_backed(text: str, *computed) -> None:
+    """Every number stated in `text` is one of the computed values, to the precision shown."""
+    from app import verification
+
+    pool = verification.extract_numbers(list(computed))
+    stated = verification.narrative_numbers(text)
+    assert stated and all(verification.number_matches(token, pool)[0] for token in stated), (stated, text)
+
+
+def test_report_figures_match_an_independent_recomputation_from_the_rows():
+    df = _frame(90, value=lambda i, seg: 60.0 + i % 3 if (i in MAR and seg == "North") else 100.0 + i % 3)
+    r = _ask(df, "Why did revenue fall in March?")
+    feb, mar = df[df["day"].dt.month == 2], df[df["day"].dt.month == 3]
+    t = r["totals"]
+    assert math.isclose(t["a"], feb["revenue"].sum()) and math.isclose(t["b"], mar["revenue"].sum())
+    assert math.isclose(t["per_day_a"], feb["revenue"].sum() / 28) and math.isclose(t["per_day_b"], mar["revenue"].sum() / 31)
+    assert math.isclose(t["like_for_like_change"], mar["revenue"].sum() - feb["revenue"].sum() * 31 / 28)
+    for row in (x for x in r["evidence_table"] if x["candidate"].startswith("region = ")):
+        seg = row["candidate"].split(" = ")[1]
+        a, b = feb.loc[feb["region"] == seg, "revenue"].sum(), mar.loc[mar["region"] == seg, "revenue"].sum()
+        assert math.isclose(row["value_a"], a) and math.isclose(row["value_b"], b)
+        assert math.isclose(row["contribution"], b - a * 31 / 28)
+        assert math.isclose(row["share_of_change"], row["contribution"] / t["like_for_like_change"])
+    # the stated level difference is the difference of the two daily means
+    daily = df.groupby("day")["revenue"].sum()
+    overall = r["change_evidence"]["overall"]
+    assert math.isclose(overall["estimate"], daily[daily.index.month == 3].mean() - daily[daily.index.month == 2].mean())
+    assert overall["low"] < overall["estimate"] < overall["high"]
+    _numbers_are_backed(r["summary"], r["totals"], overall, r["ranked_contributors"], r["price_volume"], {"p_floor": 0.001})
+
+
+def test_unequal_months_are_compared_like_for_like_and_still_reconcile():
+    df = _frame(90, value=lambda i, seg: 60.0 + i % 3 if (i in MAR and seg == "North") else 100.0 + i % 3)
+    r = _ask(df, "Why did revenue fall in March?")
+    t = r["totals"]
+    assert t["length_adjusted"] and math.isclose(t["length_effect"] + t["like_for_like_change"], t["change"])
+    assert math.isclose(t["length_effect"], t["a"] * (31 / 28 - 1))
+    for dim in r["dimensions"]:
+        assert dim["reconciles"] and math.isclose(sum(x["contribution"] for x in dim["segments"]), t["like_for_like_change"])
+    north = next(row for row in r["evidence_table"] if row["candidate"] == "region = North")
+    assert north["support"] == "strong" and 0.95 < north["share_of_change"] < 1.05, "all of the like-for-like fall is in North"
+    length = r["evidence_table"][0]
+    assert length["candidate"] == "Length of the periods (31 days against 28)" and length["support"] == "exact"
+    assert math.isclose(length["contribution"], t["length_effect"])
+    assert "like for like" in r["summary"] and "of the like-for-like change" in r["summary"]
+    assert r["comparability"]["issues"] == [] and r["status"] == "complete"
+    ratio = inv.investigate(df, _profile(df), {**REVENUE, "formula": "avg(revenue)", "question": "why in March"})
+    assert ratio["totals"]["length_adjusted"] is False, "an average does not grow with the length of the period"
+
+
+def test_a_segment_that_moved_against_the_change_is_an_offset_not_a_location():
+    """Was: South, which rose while the total fell, labelled "the change is located in this segment" with strong support."""
+    df = _frame(90, value=lambda i, seg: (60.0 if i in MAR else 100.0) + i % 3 if seg == "North"
+                else (125.0 if i in MAR else 100.0) + i % 2)
+    r = _ask(df, "Why did revenue fall in March?")
+    rows = {row["candidate"]: row for row in r["evidence_table"]}
+    assert rows["region = South"]["support"] == "offset" and "moved against" in rows["region = South"]["claim"]
+    assert rows["region = South"]["share_of_change"] < 0
+    assert rows["region = North"]["support"] == "strong" and "located" in rows["region = North"]["claim"]
+    assert "region = North" in r["summary"] and "other segments moved the other way" in r["summary"]
+
+
+def test_a_month_the_data_only_partly_covers_is_compared_over_the_same_days():
+    """Was: 20 days of March against all 28 of February, a 28.6% "fall" in flat data."""
+    df = _frame(79)                                                 # .. 2025-03-20
+    read = inv.question_periods("why did revenue fall in March?", df, "day")
+    assert (read["period_a"][0][:10], read["period_a"][1][:10]) == ("2025-02-01", "2025-02-21")
+    assert (read["period_b"][0][:10], read["period_b"][1][:10]) == ("2025-03-01", "2025-03-20")
+    assert "cut to their first 20 day(s)" in read["source"]
+    r = _ask(df, "why did revenue fall in March?")
+    assert r["totals"]["a"] == r["totals"]["b"] == 4000 and r["status"] == "inconclusive" and "less than" in r["summary"]
+
+
+def test_an_earlier_period_the_data_only_partly_covers_is_flagged():
+    """Was: "complete", revenue rose 133%, no warning: the dataset starts on 20 January."""
+    df = _frame(40, start="2025-01-20")
+    r = _ask(df, "Why did revenue change in February?")
+    issues = r["comparability"]["issues"]
+    assert any("earlier period's data starts on 2025-01-20" in i for i in issues), issues
+    assert r["status"] == "inconclusive" and "not fully comparable" in r["summary"]
+    assert all(row["support"] != "strong" for row in r["evidence_table"]), "nothing is strong evidence on uncomparable periods"
+    assert any("covers completely" in f for f in r["follow_ups"])
+    recording = next(row for row in r["evidence_table"] if row["candidate"].startswith("A change in how the data was recorded"))
+    assert "not ruled out" in recording["support"]
+
+
+def test_missing_days_in_a_period_make_the_result_inconclusive():
+    """Was: flagged, but still "complete": March recorded every other day read as a 43% fall."""
+    df = _frame(90)
+    df = df[~((df["day"].dt.month == 3) & (df["day"].dt.day % 2 == 0))]
+    r = _ask(df, "Why did revenue fall last month?")
+    assert r["status"] == "inconclusive" and any("16 days against 28" in i for i in r["comparability"]["issues"])
+
+
+@pytest.mark.parametrize("question, a, b", [
+    ("why was revenue down in sept?", None, "only covers"),
+    ("why did revenue fall in Q2?", ("2025-01-01", "2025-01-31"), ("2025-04-01", "2025-04-30")),
+    ("why did revenue fall in Q1 2025", None, "no earlier period"),
+    ("why was revenue lower yesterday", ("2025-04-29", "2025-04-30"), ("2025-04-30", "2025-04-30")),
+])
+def test_more_period_phrases_are_read_or_refused_with_a_reason(question, a, b):
+    df = _frame(120)                                                # 2025-01-01 .. 2025-04-30
+    read = inv.question_periods(question, df, "day")
+    if a is None:
+        assert b in read["error"]
+        return
+    assert (read["period_a"][0][:10], read["period_a"][1][:10]) == a
+    assert (read["period_b"][0][:10], read["period_b"][1][:10]) == b
+
+
+def test_a_question_whose_period_is_not_understood_says_so():
+    df = _frame(60, value=lambda i, seg: 100.0 + i % 4 if i < 30 or seg == "South" else 50.0 + i % 4)
+    r = _ask(df, "Why has revenue been down since the relaunch?")
+    assert r["periods"]["source"].startswith("automatic") and "names no period" in r["periods"]["source"]
+
+
+def test_a_trend_that_predates_the_later_period_is_measured_and_reported():
+    df = _frame(60, value=lambda i, seg: 300.0 - 2.0 * i + (i * 7 % 5))          # falling steadily throughout
+    r = inv.investigate(df, _profile(df), REVENUE)
+    pre = r["change_evidence"]["pre_trend"]
+    assert pre["status"] == "ok" and pre["significant"] and pre["same_direction"] and pre["slope"] < 0 and pre["share"] > 0.4
+    assert "already moving this way before" in r["alternative_explanations"][0]
+    row = next(x for x in r["evidence_table"] if x["candidate"].startswith("A trend already under way"))
+    assert row["kind"] == "measured" and "extrapolation" in row["limitations"][0]
+    assert any("when the trend began" in f for f in r["follow_ups"])
+    step = _frame(60, value=lambda i, seg: (100.0 if i < 30 else 60.0) + (i * 7 % 5))
+    flat = inv.investigate(step, _profile(step), REVENUE)
+    assert not any(x["candidate"].startswith("A trend already under way") for x in flat["evidence_table"]), "a step is not a trend"
+
+
+def test_ask_endpoint_investigates_a_question_without_a_model_and_explains_a_dataset_it_cannot_use(client):
+    ws = workspace(client)
+    out = client.post("/api/investigations/ask", headers=ws["h"],
+                      json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"})
+    assert out.status_code == 201, out.text
+    body = out.json()
+    assert body["read_as"] == {"formula": 'sum("revenue")', "label": "Total revenue", "time_column": "order_date"}
+    assert run_job(body["job_id"]) == "succeeded"
+    q = question_row(body["question_id"])
+    assert q.route == "root_cause" and q.status == "verified", "the stated statistics are all backed by the recorded step"
+    got = client.get(f"/api/investigations/{body['investigation_id']}", headers=ws["h"]).json()
+    report = got["report"]
+    assert got["engine"] == "deterministic" and report["periods"]["b"][0][:10] == "2025-03-01"
+    assert report["totals"]["length_adjusted"] and "like for like" in report["summary"], "February has 28 days, March 31"
+    assert [row["candidate"] for row in report["evidence_table"][:2]] == ["Length of the periods (31 days against 28)", "region = West"]
+    assert report["follow_ups"] and "Price effect" not in report["summary"], "the raw price/volume split is not mixed into a like-for-like summary"
+    volume = next(row for row in report["evidence_table"] if row["candidate"] == "Volume effect")
+    assert any("includes the difference in the periods' lengths" in x for x in volume["limitations"])
+    trace = client.get(f"/api/questions/{body['question_id']}/trace", headers=ws["h"]).json()
+    assert trace["usage"]["llm_calls"] == 0
+
+    vague = client.post("/api/investigations/ask", headers=ws["h"], json={"dataset_id": ws["ds"], "question": "Why did things get worse?"})
+    assert vague.status_code == 422 and "revenue" in vague.json()["detail"] and "Name one of" in vague.json()["detail"]
+    other = workspace(client)
+    assert client.post("/api/investigations/ask", headers=other["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue fall?"}).status_code == 404
+
+
 def test_investigation_api_with_explicit_spec_validation_and_tenancy(client):
     ws = workspace(client)
     body = {"dataset_id": ws["ds"], "formula": "sum(revenue) / sum(units)", "label": "Average selling price",

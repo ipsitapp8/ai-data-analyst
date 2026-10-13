@@ -203,6 +203,31 @@ def test_copilot_page_empty_and_stale_states(api, ws):
     assert "newer version of this dataset exists" in text_of(at)
 
 
+def test_a_run_that_could_not_reach_a_model_shows_which_provider_failed_and_how(api, ws):
+    """Was: only "No AI model could be reached", with the recorded reason filtered out of the trace table."""
+    from platform_helpers import ask, run_job
+
+    created = ask(api, ws, "Summarise what this dataset says about the business")
+    assert run_job(created["job_id"]) == "failed"
+    at = page("3_Analyses.py", ws, active_question_id=created["question_id"]).run()
+    assert not at.exception, [e.value for e in at.exception]
+    shown = " ".join(str(e.value) for e in at.error)
+    assert "Gemini: no API key is configured." in shown and "Llama: no API key is configured." in shown
+    rows = [row for frame in at.dataframe for row in frame.value.to_dict("records")]
+    failed = [r for r in rows if r.get("Kind") == "model request failed"]
+    assert [r["Step"] for r in failed] == ["gemini:not_configured", "llama:not_configured"], rows
+    assert all("action=not_tried" in r["Detail"] for r in failed)
+
+
+def test_settings_names_the_configured_models_next_to_the_key_status(api, ws):
+    from app import config
+
+    at = page("7_Settings.py", ws).run()       # the page's own warning about the test sandbox runner is an st.error
+    assert not at.exception, [e.value for e in at.exception]
+    text = text_of(at)
+    assert f"Gemini · {config.GEMINI_MODEL}" in text and f"Llama · {config.LLAMA_MODEL}" in text and "No key" in text
+
+
 # ----------------------------------------------------------- investigations --
 
 def test_investigations_page_shows_the_report(api, ws):
@@ -213,6 +238,27 @@ def test_investigations_page_shows_the_report(api, ws):
     assert "not what caused it" in text, "the caveats are on the page"
     assert len(at.metric) >= 6 and len(at.dataframe) >= 1
     assert api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]["question_id"] == out["question_id"]
+
+
+def test_investigations_page_asks_without_a_model_and_shows_the_evidence_table(api, ws):
+    from platform_helpers import run_job
+
+    at = healthy(page("13_Investigations.py", ws))
+    assert [b.key for b in at.button if b.key in ("inv_ask_go", "inv_why_go")] == ["inv_ask_go", "inv_why_go"]
+    assert "uses no AI model" in text_of(at)
+
+    created = api.post("/api/investigations/ask", headers=ws["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    at = healthy(page("13_Investigations.py", ws, investigation_id=created["investigation_id"]))
+    text = text_of(at)
+    for expected in ("Evidence for each candidate explanation", "region = West", "Strong evidence of location",
+                     "Hypothesis, not a finding", "not testable with this dataset", "never evidence of what",
+                     "Recommended follow-up analyses", "last month", "larger than the metric's ordinary variation"):
+        assert expected in text, expected
+    assert "interval" in text and "after adjustment" in text, "uncertainty is shown, adjusted for the segments tested"
+    assert "31 days against 28" in text and "like for like the change is" in text and "Exact arithmetic" in text
+    assert "--dash-surface" not in _styles(at), "the palette is borrowed for the table; the page keeps its own look"
 
 
 def _hypothesis_script() -> dict:
