@@ -30,6 +30,7 @@ _WHY = {
     "model_not_found": "the configured AI model was not found",
     "network": "the AI model could not be reached",
     "malformed_output": "the AI model did not return a usable answer",
+    "not_configured": "no AI model API key is configured",
 }
 _WHY_GENERIC = "the AI model was unavailable"
 _TRACE_MARKER = "fell back from the hypothesis engine"
@@ -43,6 +44,10 @@ def _provider_failure(db: Session, question_id: int | None) -> dict | None:
               .order_by(RunEvent.id).all())
     if not events:
         return None
+    # A provider that was never called (no key, failover off) is recorded too; the failure that
+    # explains the fallback is the last request that was actually made, when there was one.
+    tried = [e for e in events if (e.detail_json or {}).get("kind") not in ("not_configured", "disabled")]
+    events = tried or events
     last = events[-1].detail_json or {}
     kind = last.get("kind") if last.get("kind") in _WHY else "other"
     status = last.get("status") if isinstance(last.get("status"), int) else None

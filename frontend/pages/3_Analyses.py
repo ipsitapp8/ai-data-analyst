@@ -382,10 +382,15 @@ def _render_live_run(qid: int) -> None:
                      f'&nbsp;·&nbsp; <b>Estimated cost:</b> ${u["estimated_cost_usd"]:.4f}'
                      + (f' &nbsp;·&nbsp; <b>Provider fallbacks:</b> {u["provider_fallbacks"]}' if u["provider_fallbacks"] else "")
                      + "</div>")
-                rows = [{"Step": e["name"], "Kind": e["kind"], "Milliseconds": e["duration_ms"],
+                # "provider" rows are model requests that failed or were never made: which provider,
+                # how it failed (kind, HTTP status) and what happened next. They are why a run stopped.
+                shown = ("outcome", "provider", "model", "backend", "success", "timed_out", "fallback",
+                         "kind", "status", "provider_status", "action")
+                rows = [{"Step": e["name"], "Kind": "model request failed" if e["kind"] == "provider" else e["kind"],
+                         "Milliseconds": e["duration_ms"],
                          "Detail": ", ".join(f"{k}={v}" for k, v in (e["detail"] or {}).items()
-                                             if k in ("outcome", "provider", "model", "backend", "success", "timed_out", "fallback"))}
-                        for e in trace["events"] if e["kind"] in ("node", "llm_call", "sandbox_run")]
+                                             if k in shown and v not in (None, ""))}
+                        for e in trace["events"] if e["kind"] in ("node", "llm_call", "sandbox_run", "provider")]
                 if rows:
                     st.dataframe(rows, use_container_width=True, hide_index=True, height=min(320, 38 + 35 * len(rows)))
 
