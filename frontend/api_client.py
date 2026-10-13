@@ -125,6 +125,15 @@ def login(email: str, password: str) -> dict:
     return _handle(resp)
 
 
+def google_exchange(email: str, name: str, email_verified: bool, secret: str) -> dict:
+    resp = requests.post(
+        f"{BACKEND_BASE_URL}/api/auth/google-exchange",
+        json={"email": email, "name": name, "email_verified": email_verified},
+        headers={"X-Internal-Secret": secret}, timeout=TIMEOUT,
+    )
+    return _handle(resp)
+
+
 def me() -> dict:
     return _handle(requests.get(f"{BACKEND_BASE_URL}/api/auth/me", headers=_headers(with_team=False), timeout=TIMEOUT))
 

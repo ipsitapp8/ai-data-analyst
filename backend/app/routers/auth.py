@@ -3,18 +3,35 @@ signing-up email address, and -- only for the very first user ever, so the
 pre-multi-tenancy data isn't orphaned -- makes them owner of the Legacy team."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import hmac
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app import config
 from app.database import get_db
 from app.authz import ensure_org_member
 from app.models import Team, TeamMember, User
 from app.rate_limit import enforce as rate_limit
-from app.schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
+from app.schemas import GoogleExchange, LoginRequest, SignupRequest, TokenResponse, UserOut
 from app.security import create_access_token, get_current_user, hash_password, verify_password
 from app.validation import is_valid_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _claim_pending_invites(db: Session, user: User, email: str) -> None:
+    """Claim any pending invites sent to this email before they had an account."""
+    pending = db.query(TeamMember).filter(
+        TeamMember.invited_email == email, TeamMember.user_id.is_(None)
+    ).all()
+    for invite in pending:
+        invite.user_id = user.id
+        invite.status = "active"
+        invited_team = db.get(Team, invite.team_id)
+        if invited_team is not None:
+            ensure_org_member(db, invited_team.community_id, user.id, "member")
 
 
 @router.post("/signup", response_model=TokenResponse)
@@ -43,16 +60,7 @@ def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_d
     db.commit()
     db.refresh(user)
 
-    # Claim any pending invites sent to this email before they had an account.
-    pending = db.query(TeamMember).filter(
-        TeamMember.invited_email == email, TeamMember.user_id.is_(None)
-    ).all()
-    for invite in pending:
-        invite.user_id = user.id
-        invite.status = "active"
-        invited_team = db.get(Team, invite.team_id)
-        if invited_team is not None:
-            ensure_org_member(db, invited_team.community_id, user.id, "member")
+    _claim_pending_invites(db, user, email)
 
     if is_first_user_ever:
         legacy_team = db.query(Team).filter(Team.name == "Legacy").first()
@@ -87,3 +95,41 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/google-exchange", response_model=TokenResponse)
+def google_exchange(payload: GoogleExchange, request: Request, db: Session = Depends(get_db),
+                    x_internal_secret: str | None = Header(default=None)):
+    """Session for an email that Google has already verified.
+
+    Called only by our own Streamlit frontend (after its OIDC login) and gated by
+    a shared secret, so it cannot be used to mint a session for an arbitrary
+    address from the outside. Disabled (404) unless INTERNAL_AUTH_SECRET is set.
+    """
+    expected = config.INTERNAL_AUTH_SECRET
+    if not expected:
+        raise HTTPException(404, "Not found")
+    rate_limit(f"google:{request.client.host}", max_attempts=30, window_seconds=60)
+    if not x_internal_secret or not hmac.compare_digest(x_internal_secret.encode(), expected.encode()):
+        raise HTTPException(403, "Forbidden")
+    if not payload.email_verified:
+        raise HTTPException(400, "Google has not verified this email address")
+    email = payload.email.strip().lower()
+    if not is_valid_email(email):
+        raise HTTPException(400, "A valid email is required")
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        # No password: this account signs in with Google. A random hash keeps the
+        # column populated and unusable for password login.
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            display_name=(payload.name or "").strip() or email.split("@")[0],
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        _claim_pending_invites(db, user, email)
+        db.commit()
+    return TokenResponse(access_token=create_access_token(user.id, user.email), user=user)

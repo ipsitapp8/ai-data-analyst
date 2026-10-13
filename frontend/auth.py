@@ -174,7 +174,53 @@ def _restore_session_from_cookie() -> bool:
     return True
 
 
+def _google_enabled() -> bool:
+    """Google sign-in needs both Streamlit's [auth] OIDC settings and the secret
+    the API checks. Missing either one simply hides the button."""
+    from config import INTERNAL_AUTH_SECRET
+
+    if not INTERNAL_AUTH_SECRET:
+        return False
+    try:
+        return bool(st.secrets.get("auth"))
+    except Exception:  # noqa: BLE001 - no secrets file at all
+        return False
+
+
+def _sign_in_with_google_if_ready() -> bool:
+    """After Google redirects back, trade the verified identity for an app session."""
+    if st.session_state.get("_logged_out"):
+        return False
+    try:
+        user = st.user
+        if not user.is_logged_in:
+            return False
+        email = str(user.get("email") or "")
+        name = str(user.get("name") or "")
+        verified = bool(user.get("email_verified", False))
+    except Exception:  # noqa: BLE001
+        return False
+
+    from api_client import ApiError, google_exchange
+    from config import INTERNAL_AUTH_SECRET
+
+    try:
+        result = google_exchange(email, name, verified, INTERNAL_AUTH_SECRET)
+    except ApiError as e:
+        st.session_state["auth_notice"] = f"Google sign-in could not be completed: {e}"
+        return False
+    st.session_state[_USER_SESSION_KEY] = result["user"]
+    st.session_state["auth_token"] = result["access_token"]
+    st.session_state["_set_cookie"] = result["access_token"]
+    return True
+
+
 def logout() -> None:
+    try:
+        if st.user.is_logged_in:
+            st.logout()  # also end the Google identity, or the next load would sign straight back in
+    except Exception:  # noqa: BLE001 - no OIDC configured
+        pass
     for key in (_USER_SESSION_KEY, "auth_token", "active_community_id", "active_team_id"):
         st.session_state.pop(key, None)
     # Don't restore from the cookie that is still on this very connection.
@@ -197,6 +243,8 @@ def require_login() -> None:
 
     if _restore_session_from_cookie():
         return
+    if _google_enabled() and _sign_in_with_google_if_ready():
+        st.rerun()
     if st.session_state.pop("_clear_cookie", None):
         _write_cookie(None)
 
@@ -223,6 +271,10 @@ def require_login() -> None:
     )
 
     with st.container(key="auth_card"):
+        if _google_enabled():
+            if st.button("Continue with Google", key="google_login", use_container_width=True):
+                st.login()
+            st.markdown('<div class="lp-or"><span>or use email</span></div>', unsafe_allow_html=True)
         tab_login, tab_signup = st.tabs(["Log in", "Create account"])
 
         with tab_login:

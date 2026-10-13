@@ -358,3 +358,51 @@ def test_backfill_gives_existing_users_org_memberships_without_changing_rows(cli
         assert db.query(TeamMember).count() == before_tm
     finally:
         db.close()
+
+
+# ----------------------------------------------------------- google exchange --
+
+def _gx(client, email="g@test.example", secret="s3cret", verified=True, name="G User"):
+    h = {"X-Internal-Secret": secret} if secret is not None else {}
+    return client.post("/api/auth/google-exchange",
+                       json={"email": email, "name": name, "email_verified": verified}, headers=h)
+
+
+def test_google_exchange_is_off_unless_configured(client, unique_email):
+    assert _gx(client, f"a-{unique_email}").status_code == 404
+
+
+def test_google_exchange_requires_the_shared_secret_and_a_verified_email(client, unique_email, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "INTERNAL_AUTH_SECRET", "s3cret")
+    assert _gx(client, f"a-{unique_email}", secret=None).status_code == 403
+    assert _gx(client, f"a-{unique_email}", secret="wrong").status_code == 403
+    assert _gx(client, f"a-{unique_email}", verified=False).status_code == 400
+    assert _gx(client, "not-an-email").status_code == 400
+
+
+def test_google_exchange_creates_then_reuses_the_account(client, unique_email, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "INTERNAL_AUTH_SECRET", "s3cret")
+    email = f"New.Person-{unique_email}"
+    first = _gx(client, email, name="New Person")
+    assert first.status_code == 200, first.text
+    uid = first.json()["user"]["id"]
+    assert first.json()["user"]["display_name"] == "New Person"
+    again = _gx(client, email.upper())
+    assert again.json()["user"]["id"] == uid, "same address, same account (case-insensitive)"
+    me = client.get("/api/auth/me", headers=_h(first.json()["access_token"]))
+    assert me.status_code == 200 and me.json()["email"] == email.lower()
+    # a Google-created account has no usable password
+    login = client.post("/api/auth/login", json={"email": email, "password": "password123"})
+    assert login.status_code == 401
+
+
+def test_google_exchange_claims_legacy_pending_invites(client, org, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "INTERNAL_AUTH_SECRET", "s3cret")
+    email = f"legacy-{org['email']}"
+    r = client.post(f"/api/teams/{org['team']['id']}/invite", json={"email": email}, headers=_h(org["owner"]))
+    assert r.status_code == 200, r.text
+    token = _gx(client, email).json()["access_token"]
+    assert client.get("/api/datasets", headers=_h(token, org["team"]["id"])).status_code == 200

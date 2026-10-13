@@ -28,6 +28,12 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+class GoogleExchange(BaseModel):
+    email: str
+    name: str = ""
+    email_verified: bool = False
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -51,3 +51,41 @@
 .lp-cta { background: linear-gradient(135deg, #250e2c, #4a2457); box-shadow: 0 14px 30px rgba(37,14,44,.35), inset 0 1px 0 rgba(255,255,255,.25); padding: 15px 34px; }
 .st-key-auth_card [data-testid="stBaseButton-primaryFormSubmit"] { border-radius: 999px !important; }
 .st-key-auth_card [data-testid="stTextInputRootElement"] { border-radius: 999px !important; }
+.lp-or { display: flex; align-items: center; gap: 12px; color: #5a4a66; font-size: .78rem; margin: 14px 0 6px; }
+.lp-or::before, .lp-or::after { content: ""; flex: 1; height: 1px; background: rgba(37,14,44,.14); }
+.st-key-google_login button { border-radius: 999px !important; background: #fff !important; color: #250e2c !important; border: 1px solid rgba(37,14,44,.14) !important; box-shadow: 0 6px 16px rgba(37,14,44,.10) !important; font-weight: 550; }
+
+/* ---- glassmorphism treatment: grainy vertical gradient, big soft orbs, frosted card ---- */
+[data-testid="stApp"] {
+  background: linear-gradient(180deg, #f7c2ca 0%, #e3a9c6 26%, #b693c0 52%, #9d85b6 74%, #837ab6 100%) !important;
+  background-attachment: fixed !important;
+}
+[data-testid="stApp"]::before, [data-testid="stApp"]::after {
+  content: ""; position: fixed; z-index: 0; border-radius: 50%; pointer-events: none; filter: blur(2px);
+}
+[data-testid="stApp"]::before {
+  width: min(46vw, 520px); height: min(46vw, 520px); left: 6vw; top: 14vh;
+  background: radial-gradient(circle at 35% 30%, #f6a5c0 0%, #cc8db3 55%, #a45b8d 100%); opacity: .85;
+}
+[data-testid="stApp"]::after {
+  width: min(52vw, 600px); height: min(52vw, 600px); right: -8vw; top: 46vh;
+  background: radial-gradient(circle at 40% 35%, #cbb3de 0%, #9d85b6 55%, #6d5f9f 100%); opacity: .75;
+}
+/* film grain over the whole page */
+[data-testid="stAppViewContainer"]::before {
+  content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .22; mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+[data-testid="stMain"], .block-container { position: relative; z-index: 2; }
+.lp-nav { z-index: 50; }
+
+.st-key-auth_card {
+  background: linear-gradient(145deg, rgba(255,255,255,.46), rgba(255,255,255,.22)) !important;
+  backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(255,255,255,.62); border-radius: 26px;
+  box-shadow: 0 24px 60px rgba(37,14,44,.28), inset 0 1px 0 rgba(255,255,255,.8), inset 0 -1px 0 rgba(255,255,255,.18);
+}
+.st-key-auth_card [data-testid="stTextInputRootElement"] { background: rgba(255,255,255,.78) !important; border: 1px solid rgba(255,255,255,.9) !important; }
+.lp-card-title, .lp-card-sub { text-shadow: 0 1px 0 rgba(255,255,255,.35); }
+.lp-card-sub { color: #3a2a45; }
+.lp-points, .lp-sub, .lp-tag { color: #2d1836; }

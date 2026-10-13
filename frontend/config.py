@@ -13,3 +13,7 @@ BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000")
 # Public URL of this Streamlit app itself -- used only for the "share this
 # link" fallback shown when an invite email couldn't be sent.
 APP_URL = os.getenv("APP_URL", "http://localhost:8501")
+
+# Google sign-in is offered only when Streamlit has an [auth] section configured
+# AND the backend shares this secret (see .streamlit/secrets.toml.example).
+INTERNAL_AUTH_SECRET = os.getenv("INTERNAL_AUTH_SECRET", "")

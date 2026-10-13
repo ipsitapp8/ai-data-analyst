@@ -3,6 +3,22 @@
 # platform restarts us instead of serving a half-dead app.
 set -uo pipefail
 
+# Streamlit's Google login reads .streamlit/secrets.toml. Build it from environment variables
+# when (and only when) a Google client is configured, so no secret lives in the image or repo.
+if [ -n "${GOOGLE_CLIENT_ID:-}" ] && [ -n "${GOOGLE_CLIENT_SECRET:-}" ] && [ -n "${APP_URL:-}" ]; then
+  mkdir -p /app/.streamlit
+  umask 077
+  cat > /app/.streamlit/secrets.toml <<TOML
+[auth]
+redirect_uri = "${APP_URL%/}/oauth2callback"
+cookie_secret = "${JWT_SECRET_KEY:-${INTERNAL_AUTH_SECRET:-change-me}}"
+client_id = "${GOOGLE_CLIENT_ID}"
+client_secret = "${GOOGLE_CLIENT_SECRET}"
+server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
+TOML
+  echo "[start] Google sign-in configured"
+fi
+
 echo "[start] launching backend on 127.0.0.1:8000"
 uvicorn app.main:app --app-dir /app/backend --host 127.0.0.1 --port 8000 &
 backend_pid=$!

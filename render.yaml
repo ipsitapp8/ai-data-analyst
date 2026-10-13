@@ -35,6 +35,15 @@ services:
         sync: false
       - key: JWT_SECRET_KEY
         generateValue: true
+      # Google sign-in (optional). The API and Streamlit run in this one container, so one generated
+      # secret is shared by both. Set GOOGLE_CLIENT_ID/SECRET in the dashboard to switch the button on;
+      # redirect URI to authorise in Google Cloud: <APP_URL>/oauth2callback
+      - key: INTERNAL_AUTH_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASSWORD
