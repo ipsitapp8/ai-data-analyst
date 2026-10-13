@@ -38,6 +38,9 @@ _QTY = re.compile(r"(^|_|\b)(quantity|qty|units|volume|unit[_ ]?sold|units[_ ]?s
 MATERIAL_CHANGE_PCT = 1.0
 STRONG_SHARE = 0.4
 MIN_ROWS_HIGH, MIN_ROWS_MEDIUM = 30, 10
+# Two periods whose lengths differ by more than this are not compared total against
+# total: a sum over 31 days exceeds one over 28 with nothing having changed.
+LENGTH_TOLERANCE = 0.02
 
 
 @dataclass
@@ -109,7 +112,115 @@ def infer_spec(profile: dict, question: str, resolved_metrics: list[dict] | None
             formula, label = f'sum("{numeric[0]}")', f"Total {numeric[0]}"
     if formula is None:
         return None
-    return {"formula": formula, "label": label, "filters": filters, "time_column": time_cols[0]}
+    return {"formula": formula, "label": label, "filters": filters, "time_column": time_cols[0], "question": question}
+
+
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"))}
+_MONTHS.update({m[:3]: i for m, i in list(_MONTHS.items())})
+_MONTHS["sept"] = 9
+_QUARTER = re.compile(r"\bq([1-4])\b(?:\s+(\d{4}))?", re.IGNORECASE)
+_YESTERDAY = re.compile(r"\byesterday\b", re.IGNORECASE)
+_RELATIVE = re.compile(r"\b(last|past|previous|prior|this|current)\s+(?:(\d{1,3})\s+)?(day|week|month|quarter|year)s?\b", re.IGNORECASE)
+_NAMED_MONTH = re.compile(r"\b(?:in|during|for)\s+(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\b\.?(?:\s+(\d{4}))?",
+                          re.IGNORECASE)
+_UNIT_MONTHS = {"month": 1, "quarter": 3, "year": 12}
+
+
+def _unit_start(ts: pd.Timestamp, unit: str) -> pd.Timestamp:
+    day = ts.normalize()
+    if unit == "month":
+        return day.replace(day=1)
+    if unit == "quarter":
+        return day.replace(month=3 * ((day.month - 1) // 3) + 1, day=1)
+    return day.replace(month=1, day=1)
+
+
+def question_periods(question: str, df: pd.DataFrame, time_column: str) -> dict | None:
+    """The two periods a question names ("last month", "the last 14 days",
+    "in March"), read against the dataset's own calendar: "last" means the most
+    recent stretch the data covers, not the most recent on today's calendar.
+    The earlier period is the stretch of the same kind immediately before.
+
+    Returns {"period_a", "period_b", "source"}, {"error": reason} when the
+    question names a period the dataset cannot compare, or None when it names
+    no period this function reads."""
+    ts = pd.to_datetime(df[time_column], errors="coerce").dropna()
+    if ts.empty or not question:
+        return None
+    lo, hi = ts.min(), ts.max()
+    data_end = hi.normalize() + pd.Timedelta(days=1)          # exclusive
+    relative, named = _RELATIVE.search(question), _NAMED_MONTH.search(question)
+    quarter = _QUARTER.search(question)
+    if not relative and _YESTERDAY.search(question):
+        day = pd.Timedelta(days=1)
+        return _checked_periods("yesterday", "the final day of data, against the day before",
+                                data_end - 2 * day, data_end - day, data_end - day, data_end, lo, hi)
+    if relative:
+        word, count, unit = relative.group(1).lower(), relative.group(2), relative.group(3).lower()
+        n = max(1, int(count)) if count else 1
+        phrase = relative.group(0)
+        if unit in ("day", "week"):
+            span = pd.Timedelta(days=n * (7 if unit == "week" else 1))
+            end_b, start_b = data_end, data_end - span
+            start_a = start_b - span
+            reading = f"the final {span.days} day(s) of data"
+        elif word in ("this", "current"):
+            start_b, end_b = _unit_start(hi, unit), data_end
+            start_a = start_b - pd.DateOffset(months=_UNIT_MONTHS[unit])
+            reading = f"the {unit} to date, against the same number of days at the start of the {unit} before"
+            end_a = min(start_a + (end_b - start_b), start_b)
+            return _checked_periods(phrase, reading, start_a, end_a, start_b, end_b, lo, hi)
+        else:
+            # The most recent complete calendar unit: the one the data ends in
+            # only if the data runs to its final day.
+            current = _unit_start(hi, unit)
+            complete = current + pd.DateOffset(months=_UNIT_MONTHS[unit]) == data_end
+            end_b = data_end if complete else current
+            start_b = end_b - pd.DateOffset(months=n * _UNIT_MONTHS[unit])
+            start_a = start_b - pd.DateOffset(months=n * _UNIT_MONTHS[unit])
+            reading = f"the most recent {n if n > 1 else ''} complete calendar {unit}{'s' if n > 1 else ''} in the data".replace("  ", " ")
+        return _checked_periods(phrase, reading, start_a, start_b, start_b, end_b, lo, hi)
+    if named:
+        month = _MONTHS[named.group(1).lower()]
+        year = int(named.group(2)) if named.group(2) else (hi.year if month <= hi.month else hi.year - 1)
+        try:
+            start_b = pd.Timestamp(year=year, month=month, day=1, tz=hi.tz)
+        except ValueError:
+            return None
+        end_b = start_b + pd.DateOffset(months=1)
+        start_a = start_b - pd.DateOffset(months=1)
+        return _checked_periods(named.group(0), "that calendar month, against the month before",
+                                start_a, start_b, start_b, end_b, lo, hi)
+    if quarter:
+        first_month = 3 * (int(quarter.group(1)) - 1) + 1
+        year = int(quarter.group(2)) if quarter.group(2) else (hi.year if first_month <= hi.month else hi.year - 1)
+        start_b = pd.Timestamp(year=year, month=first_month, day=1, tz=hi.tz)
+        return _checked_periods(quarter.group(0).strip(), "that calendar quarter, against the quarter before",
+                                start_b - pd.DateOffset(months=3), start_b, start_b, start_b + pd.DateOffset(months=3), lo, hi)
+    return None
+
+
+def _checked_periods(phrase: str, reading: str, start_a, end_a, start_b, end_b, lo, hi) -> dict:
+    last_day = str(hi.date())
+    if start_b > hi or end_b <= lo:
+        return {"error": f"The question asks about \"{phrase}\" ({start_b.date()} to {(end_b - pd.Timedelta(days=1)).date()}), "
+                         f"but the dataset only covers {lo.date()} to {last_day}."}
+    if end_a <= lo:
+        return {"error": f"The question asks about \"{phrase}\" ({start_b.date()} to {(end_b - pd.Timedelta(days=1)).date()}), "
+                         f"but the dataset starts on {lo.date()}, so there is no earlier period to compare it with."}
+    data_end = hi.normalize() + pd.Timedelta(days=1)
+    if end_b > data_end:
+        # The data stops part-way through the period asked about. Comparing a
+        # part-period with a whole one would show a fall that is only the
+        # missing days, so both are cut to the same number of days from their start.
+        end_b = data_end
+        end_a = min(end_a, start_a + (end_b - start_b))
+        reading += f"; the data stops on {last_day}, so both periods are cut to their first {(end_b - start_b).days} day(s)"
+    # Period B's end is inclusive in the engine; stop just short of the next day.
+    inclusive_end = end_b - pd.Timedelta(microseconds=1)
+    return {"period_a": [start_a.isoformat(), end_a.isoformat()], "period_b": [start_b.isoformat(), inclusive_end.isoformat()],
+            "source": f"read from the question: \"{phrase}\" taken as {reading} (the dataset ends on {last_day})"}
 
 
 def _auto_periods(df: pd.DataFrame, time_column: str) -> tuple[list[str], list[str]] | None:
@@ -122,6 +233,15 @@ def _auto_periods(df: pd.DataFrame, time_column: str) -> tuple[list[str], list[s
     if mid <= lo:
         mid = lo + (hi - lo) / 2
     return [lo.isoformat(), mid.isoformat()], [mid.isoformat(), hi.isoformat()]
+
+
+def _period_days(period: list[str], last: bool) -> float:
+    """Length of a period in days. The later period includes its end: an end
+    at midnight (a date) or at the last instant of a day counts that whole day."""
+    start, end = pd.Timestamp(period[0]), pd.Timestamp(period[1])
+    if last and (end == end.normalize() or end + pd.Timedelta(microseconds=1) == (end + pd.Timedelta(microseconds=1)).normalize()):
+        end = end.normalize() + pd.Timedelta(days=1) if end == end.normalize() else end + pd.Timedelta(microseconds=1)
+    return (end - start).total_seconds() / 86400
 
 
 def _period_filters(time_column: str, period: list[str], last: bool) -> list[dict]:
@@ -159,7 +279,11 @@ def _quality(rows_a: int, rows_b: int, consistent: bool | None) -> str:
 
 # ------------------------------------------------------------- decomposition --
 
-def _decompose_additive(df, formula, base_filters, fa, fb, dimension, delta, budget) -> dict | None:
+def _decompose_additive(df, formula, base_filters, fa, fb, dimension, delta, budget, scale: float = 1.0) -> dict | None:
+    """`scale` is (days in the later period) / (days in the earlier one) when
+    the two differ: each segment's earlier value is scaled to the later
+    period's length, so a segment's contribution is its change at equal length
+    and the contributions sum to `delta`, the like-for-like change."""
     if not (budget.spend() and budget.spend()):
         return None
     a = _by_segment(me.evaluate(df, formula, base_filters + fa, [dimension]), dimension)
@@ -167,7 +291,7 @@ def _decompose_additive(df, formula, base_filters, fa, fb, dimension, delta, bud
     segments = []
     for key in sorted(set(a) | set(b)):
         va, vb = (a.get(key) or {}).get("value") or 0.0, (b.get(key) or {}).get("value") or 0.0
-        contribution = vb - va
+        contribution = vb - va * scale
         segments.append({
             "segment": key, "a": va, "b": vb, "contribution": contribution,
             "share_of_change": contribution / delta if delta else None,
@@ -228,7 +352,7 @@ def _finish_dimension(dimension: str, method: str, segments: list[dict], delta: 
 
 
 def _consistency(df, formula, base_filters, time_column, period_a, period_b, dimension, segment,
-                 direction: float, budget) -> bool | None:
+                 direction: float, budget, scale: float = 1.0) -> bool | None:
     """Does the segment move the same way in both halves of the comparison?
     A change that only appears in one half is weaker evidence."""
     try:
@@ -250,7 +374,7 @@ def _consistency(df, formula, base_filters, time_column, period_a, period_b, dim
             return None
         if va is None or vb is None:
             return None
-        signs.append(vb - va)
+        signs.append(vb - va * scale)
     return all(s * direction > 0 for s in signs)
 
 
@@ -315,6 +439,10 @@ def _price_volume(df: pd.DataFrame, formula: me.Formula, profile: dict, base_fil
 
 # ------------------------------------------------------------------ report --
 
+def _p_text(p: float) -> str:
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+
+
 def _fmt(value: float | None) -> str:
     if value is None:
         return "n/a"
@@ -356,12 +484,20 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
         periods_source = "specified"
     else:
         scoped = me.apply_filters(df, base_filters)
-        auto = _auto_periods(scoped, time_column)
-        if auto is None:
-            return _inconclusive(label, formula, spec, budget, "The time column has fewer than two distinct moments, "
-                                 "so there are no two periods to compare.")
-        period_a, period_b = auto
-        periods_source = "automatic: the time range split at its midpoint"
+        read = question_periods(spec.get("question") or "", scoped, time_column)
+        if read is not None and read.get("error"):
+            return _inconclusive(label, formula, spec, budget, read["error"])
+        if read is not None:
+            period_a, period_b, periods_source = read["period_a"], read["period_b"], read["source"]
+        else:
+            auto = _auto_periods(scoped, time_column)
+            if auto is None:
+                return _inconclusive(label, formula, spec, budget, "The time column has fewer than two distinct moments, "
+                                     "so there are no two periods to compare.")
+            period_a, period_b = auto
+            periods_source = "automatic: the time range split at its midpoint"
+            if spec.get("question"):
+                periods_source += " (the question names no period this investigator can read)"
     fa = _period_filters(time_column, period_a, last=False)
     fb = _period_filters(time_column, period_b, last=True)
 
@@ -373,15 +509,40 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
     base = {"metric": {"label": label, "formula": formula.text, "filters": base_filters},
             "periods": {"a": period_a, "b": period_b, "time_column": time_column, "source": periods_source},
             "totals": {"a": total_a, "b": total_b, "rows_a": res_a["rows"], "rows_b": res_b["rows"]}}
+    if not res_a["rows"] or not res_b["rows"]:
+        which = "earlier" if not res_a["rows"] else "later"
+        return {**_inconclusive(label, formula, spec, budget, f"The {which} period has no rows at all, so there is "
+                                "nothing to compare the other period with."), **base}
     if total_a is None or total_b is None:
         return {**_inconclusive(label, formula, spec, budget, "The metric has no value in one of the two periods."), **base}
     delta = total_b - total_a
     pct = delta / abs(total_a) * 100 if total_a else None
     base["totals"].update({"change": delta, "change_pct": pct})
+
+    # A total over a longer period is larger with nothing having changed. For a
+    # sum or a count, the earlier value is scaled to the later period's length
+    # and only the remainder (the like-for-like change) is explained.
+    days_a, days_b = _period_days(period_a, last=False), _period_days(period_b, last=True)
+    scale = 1.0
+    if formula.is_additive and days_a > 0 and days_b > 0 and abs(days_b / days_a - 1) > LENGTH_TOLERANCE:
+        scale = days_b / days_a
+    length_effect = total_a * (scale - 1)
+    explain = delta - length_effect
+    explain_pct = explain / abs(total_a * scale) * 100 if total_a else None
+    base["totals"].update({"days_a": round(days_a, 3), "days_b": round(days_b, 3), "length_adjusted": scale != 1.0,
+                           "length_effect": length_effect, "like_for_like_change": explain, "like_for_like_pct": explain_pct,
+                           "per_day_a": total_a / days_a if formula.is_additive and days_a else None,
+                           "per_day_b": total_b / days_b if formula.is_additive and days_b else None})
     if delta == 0 or (pct is not None and abs(pct) < MATERIAL_CHANGE_PCT):
         return {**_inconclusive(label, formula, spec, budget,
                                 f"The metric moved by less than {MATERIAL_CHANGE_PCT:g}% between the periods; "
                                 "there is no material change to explain."), **base}
+    if scale != 1.0 and (explain == 0 or (explain_pct is not None and abs(explain_pct) < MATERIAL_CHANGE_PCT)):
+        return {**_inconclusive(
+            label, formula, spec, budget,
+            f"{label} went from {_fmt(total_a)} to {_fmt(total_b)}, but the later period is {_fmt(days_b)} days against "
+            f"{_fmt(days_a)}. Per day it went from {_fmt(total_a / days_a)} to {_fmt(total_b / days_b)}: the difference in "
+            "the totals is the difference in length, and there is no material change to explain."), **base}
 
     requested = spec.get("dimensions")
     exclude = {time_column, *formula.columns}
@@ -399,7 +560,7 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
     for d in dims:
         try:
             if formula.is_additive:
-                out = _decompose_additive(df, formula, base_filters, fa, fb, d, delta, budget)
+                out = _decompose_additive(df, formula, base_filters, fa, fb, d, explain, budget, scale)
             elif parts is not None:
                 out = _decompose_ratio(df, parts, base_filters, fa, fb, d, total_a, delta, budget)
             else:
@@ -419,7 +580,8 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
         for s in dim["segments"]:
             if s["share_of_change"] is None:
                 continue
-            ranked.append({"dimension": dim["dimension"], "segment": s["segment"], "contribution": s["contribution"],
+            ranked.append({"dimension": dim["dimension"], "segment": s["segment"], "a": s["a"], "b": s["b"],
+                           "contribution": s["contribution"],
                            "share_of_change": s["share_of_change"], "rows_a": s["rows_a"], "rows_b": s["rows_b"],
                            "presence": s["presence"], "method": dim["method"]})
     ranked.sort(key=lambda r: -abs(r["contribution"]))
@@ -427,7 +589,7 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
         consistent = None
         if r["presence"] == "both" and formula.is_additive:
             consistent = _consistency(df, formula, base_filters, time_column, period_a, period_b,
-                                      r["dimension"], r["segment"], r["contribution"], budget)
+                                      r["dimension"], r["segment"], r["contribution"], budget, scale)
         r["consistent_across_halves"] = consistent
         r["evidence_quality"] = _quality(r["rows_a"], r["rows_b"], consistent)
     for r in ranked[5:]:
@@ -450,7 +612,7 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
         if not others or not formula.is_additive:
             continue
         seg_filter = [{"column": r["dimension"], "op": "==", "value": r["segment"]}]
-        sub = _decompose_additive(df, formula, base_filters + seg_filter, fa, fb, others[0], r["contribution"], budget)
+        sub = _decompose_additive(df, formula, base_filters + seg_filter, fa, fb, others[0], r["contribution"], budget, scale)
         if sub is not None:
             sub["segments"] = sub["segments"][:5]
             drilldowns.append({"within": {"dimension": r["dimension"], "segment": r["segment"]}, **sub})
@@ -474,18 +636,61 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
     if low_only:
         unresolved.append("The leading contributors rest on few rows or do not hold in both halves of the periods.")
 
-    conclusive = bool(ranked) and not low_only
+    evidence = _statistical_evidence(df, profile, formula, label, base_filters, time_column, period_a, period_b,
+                                     total_a, total_b, ranked, budget)
+    overall, comparability, pre_trend = evidence["overall"], evidence["comparability"], evidence["pre_trend"]
+    if scale != 1.0:
+        # Unequal lengths are handled by the scaling above, so they are no longer a reason to distrust the result.
+        comparability["issues"] = [i for i in comparability["issues"] if "different lengths" not in i]
+        comparability["comparable"] = not comparability["issues"]
+        comparability["length_adjusted"] = True
+    if comparability["issues"]:
+        unresolved.append("The two periods are not fully comparable: " + "; ".join(comparability["issues"]) + ".")
+    trending = (pre_trend["status"] == "ok" and pre_trend["significant"] and pre_trend["same_direction"]
+                and (pre_trend["share"] or 0) >= STRONG_SHARE)
+    if trending:
+        alternatives.insert(0, f"The metric was already moving this way before the later period began: its trend in the "
+                               f"earlier period, continued, would produce {pre_trend['share'] * 100:.0f}% of the change in "
+                               f"its {pre_trend['bucket']} level. Whatever explains the change may predate the later period.")
+    if not total_a:
+        unresolved.append("The metric was zero in the earlier period, so no percentage change is defined.")
+    within_noise = overall["status"] == "ok" and not overall["significant"]
+    if within_noise:
+        unresolved.append(f"As a series of {overall['bucket']} values, the difference between the periods is within the "
+                          f"metric's ordinary variation ({_p_text(overall['p_value'])}), so the contributors below may "
+                          "be describing noise.")
+
+    conclusive = bool(ranked) and not low_only and not within_noise and not comparability["issues"]
     direction = "rose" if delta > 0 else "fell"
     summary = (f"{label} {direction} from {_fmt(total_a)} to {_fmt(total_b)} "
                f"({_fmt(delta)}{f', {pct:+.1f}%' if pct is not None else ''}).")
-    if ranked:
-        lead = ranked[0]
+    of_what = "the change"
+    if scale != 1.0:
+        of_what = "the like-for-like change"
+        summary += (f" The later period is {_fmt(days_b)} days against {_fmt(days_a)}, which alone accounts for "
+                    f"{_fmt(length_effect)}; like for like the change is {_fmt(explain)}"
+                    f"{f' ({explain_pct:+.1f}%)' if explain_pct is not None else ''}.")
+    lead = next((r for r in ranked if (r["share_of_change"] or 0) > 0), ranked[0] if ranked else None)
+    if lead is not None:
         summary += (f" The largest measured contributor is {lead['dimension']} = {lead['segment']}, accounting for "
-                    f"{lead['share_of_change'] * 100:.0f}% of the change ({lead['evidence_quality']} evidence quality).")
-    if pvm and pvm["reconciles"]:
+                    f"{lead['share_of_change'] * 100:.0f}% of {of_what} ({lead['evidence_quality']} evidence quality)"
+                    + ("; other segments moved the other way." if lead["share_of_change"] > 1 else "."))
+    if pvm and pvm["reconciles"] and scale == 1.0:
+        # On periods of unequal length the split is of the raw totals, so its volume effect
+        # contains the extra days; it stays in the evidence table, labelled, and out of the summary.
         summary += f" Price effect {_fmt(pvm['price_effect'])}, volume effect {_fmt(pvm['volume_effect'])}."
-    if not conclusive:
+    if overall["status"] == "ok":
+        summary += (f" Per {overall['bucket']}, the level differs by {_fmt(overall['estimate'])} "
+                    f"({overall['level'] * 100:.0f}% interval {_fmt(overall['low'])} to {_fmt(overall['high'])}, "
+                    f"{_p_text(overall['p_value'])})"
+                    + ("." if overall["significant"] else ", which is within its ordinary variation."))
+    if comparability["issues"]:
+        summary += " The two periods are not fully comparable, so this is not a like-for-like result."
+    elif not conclusive:
         summary += " The evidence is not strong enough to single out a contributor."
+    length = {"days_a": days_a, "days_b": days_b, "effect": length_effect} if scale != 1.0 else None
+    evidence_table = _evidence_table(ranked, pvm, delta, comparability, length, pre_trend if trending else None)
+    follow_ups = _follow_ups(ranked, drilldowns, dims, skipped, comparability, overall, period_b, low_only, pre_trend, lead)
 
     charts = []
     if ranked:
@@ -504,8 +709,227 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
         "dimensions": dimensions, "ranked_contributors": ranked[:15], "price_volume": pvm,
         "drilldowns": drilldowns, "hypotheses": hypotheses, "unresolved": unresolved,
         "alternative_explanations": alternatives, "caveats": CAVEATS, "charts": charts,
+        "change_evidence": {"overall": overall, "pre_trend": pre_trend, "family": evidence["family"]},
+        "comparability": comparability,
+        "evidence_table": evidence_table, "follow_ups": follow_ups,
         "budget": budget.used(),
     }
+
+
+# ------------------------------------------------------ statistical evidence --
+
+STAT_CONTRIBUTORS = 5
+
+
+def _compact_stat(result: dict | None, bucket: str = "") -> dict:
+    if result is None:
+        return {"status": "not_run", "reason": "outside this investigation's computation budget"}
+    if result.get("status") != "ok":
+        return {"status": "unavailable", "reason": result.get("reason") or "the test could not be run"}
+    interval, test = result.get("interval") or {}, result.get("test") or {}
+    return {"status": "ok", "method": result.get("method_label"), "bucket": bucket, "estimate": result.get("estimate"),
+            "low": interval.get("low"), "high": interval.get("high"), "level": interval.get("level"),
+            "p_value": test.get("p_value"), "alpha": result.get("alpha"), "significant": bool(result.get("significant")),
+            "buckets": (result.get("sample") or {}).get("groups"), "limitations": result.get("limitations") or []}
+
+
+def _statistical_evidence(df, profile, formula, label, base_filters, time_column, period_a, period_b,
+                          total_a, total_b, ranked, budget) -> dict:
+    """Uncertainty for the change and for its leading contributors.
+
+    Each is tested as a series of time buckets (days, usually) with
+    autocorrelation-robust errors, never row by row: thousands of rows from the
+    same few days are not thousands of independent observations. The
+    contributors' p-values are Holm-adjusted as one family, because looking at
+    several segments and reporting the one that moved is how noise gets
+    mistaken for a finding. Attaches `statistic` to the ranked rows in place."""
+    from app import analysis_ops as ops           # imports this module, so not at the top
+    from app.stats import selector as stat
+
+    ctx = ops.AnalysisContext(formula=formula, label=label, base_filters=base_filters, time_column=time_column,
+                              period_a=list(period_a), period_b=list(period_b), profile=profile,
+                              total_a=total_a, total_b=total_b)
+
+    def level_shift(filters: list[dict] | None, what: str) -> dict:
+        if not budget.spend():
+            return _compact_stat(None)
+        try:
+            series = ops.bucket_series(df, ctx, formula, filters)
+            return _compact_stat(stat.level_shift(series["a"], series["b"], what=what, bucket=series["bucket"],
+                                                  context=series["context"]), series["bucket"])
+        except (me.FormulaError, ops.OpError, ValueError) as e:
+            return {"status": "unavailable", "reason": str(e)}
+
+    try:
+        coverage = ops._period_coverage(df, ctx)["facts"]
+        comparability = {"comparable": not coverage["incomplete"], "issues": coverage["issues"],
+                         "span_days_a": coverage["span_days_a"], "span_days_b": coverage["span_days_b"],
+                         "days_with_data_a": coverage["days_with_data_a"], "days_with_data_b": coverage["days_with_data_b"]}
+        # The shared check looks for a later period that is thinner or cut short;
+        # an earlier period the data only partly covers distorts a comparison just as much.
+        issues = comparability["issues"]
+        density_a = coverage["days_with_data_a"] / max(coverage["span_days_a"], 1.0)
+        density_b = coverage["days_with_data_b"] / max(coverage["span_days_b"], 1.0)
+        if density_b > 0 and density_a < 0.8 * density_b:
+            first = pd.to_datetime(ops.period_frame(df, ctx, "a")[time_column], errors="coerce").min()
+            late = pd.notna(first) and (first - pd.Timestamp(period_a[0])).total_seconds() / 86400 > 0.15 * coverage["span_days_a"]
+            issues.append(f"the earlier period's data starts on {first.date()}, after the period begins on "
+                          f"{pd.Timestamp(period_a[0]).date()}" if late else
+                          f"the earlier period has data on {coverage['days_with_data_a']} days against "
+                          f"{coverage['days_with_data_b']} in the later one")
+        comparability["comparable"] = not issues
+    except (me.FormulaError, ValueError, KeyError) as e:
+        comparability = {"comparable": None, "issues": [f"period coverage could not be checked ({e})"]}
+
+    overall = level_shift(None, label)
+    pre_trend = {"status": "not_run", "reason": "outside this investigation's computation budget"}
+    if budget.spend():
+        try:
+            series = ops.bucket_series(df, ctx, formula, None)
+            result = stat.pre_trend(series["a"], series["b"], what=label, bucket=series["bucket"], context=series["context"])
+            if result.get("status") == "ok":
+                details = result.get("details") or {}
+                observed = details.get("observed_change_per_bucket") or 0.0
+                pre_trend = {"status": "ok", "bucket": series["bucket"], "slope": result.get("estimate"),
+                             "p_value": (result.get("test") or {}).get("p_value"), "significant": bool(result.get("significant")),
+                             "share": details.get("share_explained_by_trend"),
+                             "same_direction": (result.get("estimate") or 0.0) * observed > 0}
+            else:
+                pre_trend = {"status": "unavailable", "reason": result.get("reason") or "the trend could not be estimated"}
+        except (me.FormulaError, ops.OpError, ValueError) as e:
+            pre_trend = {"status": "unavailable", "reason": str(e)}
+    tested = ranked[:STAT_CONTRIBUTORS]
+    for r in tested:
+        r["statistic"] = level_shift([{"column": r["dimension"], "op": "==", "value": r["segment"]}],
+                                     f"{label} for {r['dimension']} = {r['segment']}")
+    for r in ranked[STAT_CONTRIBUTORS:]:
+        r["statistic"] = {"status": "not_run", "reason": f"only the {STAT_CONTRIBUTORS} leading contributors are tested"}
+    ok = [r["statistic"] for r in tested if r["statistic"]["status"] == "ok" and r["statistic"]["p_value"] is not None]
+    for s, adjusted in zip(ok, stat.adjust_family([s["p_value"] for s in ok], "holm") if ok else []):
+        s["p_adjusted"] = adjusted
+        s["significant"] = adjusted < (s.get("alpha") or 0.05)
+    return {"overall": overall, "comparability": comparability, "pre_trend": pre_trend,
+            "family": {"method": "Holm", "comparisons": len(ok),
+                       "note": "p-values of the contributors are adjusted together, as one family of tests"}}
+
+
+def _support(r: dict) -> str:
+    """How far the measurements back "the change is located here". Never more
+    than that: no row here is evidence about what caused the change."""
+    share, stat_ = r.get("share_of_change") or 0.0, r.get("statistic") or {}
+    if share < 0:
+        return "offset"          # it moved against the change: not somewhere the change is located
+    tested, significant = stat_.get("status") == "ok", bool(stat_.get("significant"))
+    if share >= STRONG_SHARE and r["evidence_quality"] != "low" and tested and significant:
+        return "strong"
+    if share >= 0.2 and r["evidence_quality"] != "low" and not (tested and not significant):
+        return "moderate"
+    return "weak"
+
+
+def _row_limitations(r: dict) -> list[str]:
+    out, stat_ = [], r.get("statistic") or {}
+    if min(r["rows_a"], r["rows_b"]) < MIN_ROWS_MEDIUM:
+        out.append(f"few rows ({r['rows_a']} earlier, {r['rows_b']} later)")
+    if r["presence"] != "both":
+        out.append(f"present in only one period ({r['presence']}), so its whole value counts as change")
+    if r.get("consistent_across_halves") is False:
+        out.append("the direction does not hold in both halves of the periods")
+    if stat_.get("status") == "ok" and not stat_.get("significant"):
+        out.append("its own difference is within its ordinary variation after adjusting for the number of segments tested")
+    elif stat_.get("status") in ("unavailable", "not_run"):
+        out.append("no statistical test: " + str(stat_.get("reason")))
+    return out
+
+
+def _evidence_table(ranked: list[dict], pvm: dict | None, delta: float, comparability: dict,
+                    length: dict | None = None, pre_trend: dict | None = None) -> list[dict]:
+    """One row per candidate explanation. `kind` separates what was measured in
+    the data ("measured": a location of the change) from what was not and
+    cannot be read off it ("hypothesis")."""
+    rows = []
+    if length is not None and delta:
+        rows.append({"candidate": f"Length of the periods ({_fmt(length['days_b'])} days against {_fmt(length['days_a'])})",
+                     "kind": "measured", "claim": "a longer or shorter period, with the daily level unchanged",
+                     "value_a": None, "value_b": None, "contribution": length["effect"], "share_of_change": length["effect"] / delta,
+                     "rows_a": None, "rows_b": None, "statistic": {"status": "note", "text": "exact arithmetic, not a test"},
+                     "evidence_quality": "high", "support": "exact",
+                     "limitations": ["the shares in the rows below are of the like-for-like change that remains"]})
+    if pre_trend is not None:
+        rows.append({"candidate": "A trend already under way before the later period", "kind": "measured",
+                     "claim": "the earlier period's trend, continued, would produce this share of the change in level",
+                     "value_a": None, "value_b": None, "contribution": None, "share_of_change": pre_trend["share"],
+                     "rows_a": None, "rows_b": None,
+                     "statistic": {"status": "note", "text": f"trend of {_fmt(pre_trend['slope'])} per {pre_trend['bucket']} "
+                                                             f"in the earlier period ({_p_text(pre_trend['p_value'])})"},
+                     "evidence_quality": "medium", "support": "moderate",
+                     "limitations": ["a continued trend is an extrapolation; it says the change may predate the later period, "
+                                     "not what set it off"]})
+    uncomparable = bool(comparability.get("issues"))
+    for r in ranked[:8]:
+        offset = (r["share_of_change"] or 0.0) < 0
+        support, limits = _support(r), _row_limitations(r)
+        if uncomparable and support == "strong":
+            support = "moderate"
+            limits = limits + ["the two periods are not fully comparable, so the size of this contribution is uncertain"]
+        rows.append({"candidate": f"{r['dimension']} = {r['segment']}", "kind": "measured",
+                     "claim": "moved against the overall change, offsetting part of it" if offset
+                     else "the change is located in this segment",
+                     "value_a": r.get("a"), "value_b": r.get("b"), "contribution": r["contribution"],
+                     "share_of_change": r["share_of_change"], "rows_a": r["rows_a"], "rows_b": r["rows_b"],
+                     "statistic": r.get("statistic"), "evidence_quality": r["evidence_quality"],
+                     "support": support, "limitations": limits})
+    if pvm is not None and pvm.get("reconciles") and delta:
+        for name, key in (("Price effect", "price_effect"), ("Volume effect", "volume_effect")):
+            rows.append({"candidate": name, "kind": "measured", "claim": "an accounting split of the change, on " + pvm["basis"],
+                         "value_a": None, "value_b": None, "contribution": pvm[key], "share_of_change": pvm[key] / delta,
+                         "rows_a": None, "rows_b": None, "statistic": {"status": "note", "text": "an exact identity, not a test"},
+                         "evidence_quality": "medium", "support": "moderate" if abs(pvm[key] / delta) >= 0.2 else "weak",
+                         "limitations": ["a price or volume effect says how the change is composed, not why prices or volumes moved"]
+                         + (["computed on the raw totals: the volume effect includes the difference in the periods' lengths"]
+                            if length is not None else [])})
+    rows.append({"candidate": "An event not recorded in this dataset (a pricing decision, campaign, outage, competitor)",
+                 "kind": "hypothesis", "claim": "not tested", "support": "not testable with this dataset",
+                 "limitations": ["nothing in the dataset's columns can confirm or rule this out"]})
+    issues = comparability.get("issues") or []
+    rows.append({"candidate": "A change in how the data was recorded (late, missing or duplicated rows)",
+                 "kind": "hypothesis", "claim": "not tested",
+                 "support": "not ruled out: the periods are not fully comparable" if issues else "not tested here",
+                 "limitations": issues or ["the two periods cover comparable spans, but row-level recording was not audited"]})
+    return rows
+
+
+def _follow_ups(ranked, drilldowns, dims, skipped, comparability, overall, period_b, low_only,
+                pre_trend: dict | None = None, lead: dict | None = None) -> list[str]:
+    out = []
+    pre_trend = pre_trend or {"status": "not_run"}
+    if comparability.get("issues"):
+        out.append("Repeat the comparison on two periods the data covers completely; the result above mixes a real "
+                   "change with the difference in coverage.")
+    if overall["status"] != "ok":
+        out.append("Use longer periods or a finer date column so the metric forms a series long enough to test "
+                   f"({overall.get('reason')}).")
+    lead = lead or (ranked[0] if ranked else None)
+    if lead is not None:
+        where = f"{lead['dimension']} = {lead['segment']}"
+        other = next((d for d in dims if d != lead["dimension"]), None)
+        if other and not any(d["within"]["segment"] == lead["segment"] for d in drilldowns):
+            out.append(f"Break {where} down by {other} to see whether the change sits in part of it.")
+        out.append(f"Find out what changed for {where} around {str(period_b[0])[:10]} (prices, promotions, stock, outages, "
+                   "tracking): the dataset shows where the change is, not what brought it about.")
+        if pre_trend["status"] == "ok" and pre_trend["significant"] and pre_trend["same_direction"]:
+            out.append(f"Extend the earlier period further back to find when the trend began; the metric was already moving "
+                       f"this way before {str(period_b[0])[:10]}.")
+        elif pre_trend["status"] != "ok":
+            out.append(f"Check whether {where} was already moving before {str(period_b[0])[:10]} (not tested here: "
+                       f"{pre_trend.get('reason')}); a trend that predates the period is not explained by anything in it.")
+    if low_only:
+        out.append("Gather more rows per segment before acting: the leading contributors rest on too little data.")
+    if skipped:
+        out.append("Examine the dimensions left out of this run: " + ", ".join(skipped[:6]) + ".")
+    if not dims:
+        out.append("Add a categorical column (region, product, channel) to the dataset so the change can be located.")
+    return out
 
 
 def _hypotheses(ranked: list[dict], dimensions: list[dict], pvm: dict | None, delta: float) -> list[dict]:
@@ -551,4 +975,7 @@ def _inconclusive(label: str, formula: me.Formula, spec: dict, budget: Budget, r
         "periods": {}, "totals": {}, "decomposition_method": "none", "dimensions": [], "ranked_contributors": [],
         "price_volume": None, "drilldowns": [], "hypotheses": [], "unresolved": [reason],
         "alternative_explanations": [], "caveats": CAVEATS, "charts": [], "budget": budget.used(),
+        "change_evidence": {"overall": {"status": "not_run", "reason": reason},
+                            "pre_trend": {"status": "not_run", "reason": reason}, "family": None},
+        "comparability": {"comparable": None, "issues": []}, "evidence_table": [], "follow_ups": [],
     }

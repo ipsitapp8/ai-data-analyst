@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from api_client import (ApiError, create_hypothesis_investigation, create_investigation, get_investigation,
+from api_client import (ApiError, ask_investigation, create_hypothesis_investigation, create_investigation, get_investigation,
                         get_investigation_statistics, list_datasets, list_investigations, list_metrics)
-from style.theme import (badge, esc, figure_from_json, html, page_header, page_setup, plot, render_sidebar,
+from style.theme import (DASHBOARD_TOKENS, badge, esc, figure_from_json, html, page_header, page_setup, plot, render_sidebar,
                          require_active_team)
 
 page_setup("Root cause")
@@ -34,13 +34,31 @@ with st.expander("New investigation", expanded=not listing["investigations"]):
         categorical = [c["name"] for c in cols if c.get("kind") == "categorical"]
         if not time_cols:
             st.warning("This dataset has no date column, so two periods cannot be compared.")
+            st.caption("A root-cause investigation compares a metric between two periods. Upload a version of this dataset "
+                       "with a date column (order date, event date) to use it.")
+        elif not numeric:
+            st.warning("This dataset has no numeric column, so there is no metric whose change could be measured.")
         else:
+            if not categorical:
+                st.info("This dataset has no categorical column (region, product, channel). The change can be measured and "
+                        "tested, but not located in any segment.")
             html('<div class="ds-section-title">Ask why</div>')
             why = st.text_area("Question", key="inv_question", height=70,
                                placeholder="Why did revenue drop in the last two months?", label_visibility="collapsed")
-            st.caption("A model proposes competing hypotheses; each one is tested by a fixed, deterministic analysis on your data. "
-                       "Needs a configured model provider.")
-            if st.button("Investigate with hypotheses  →", type="primary", key="inv_why_go", disabled=len((why or "").strip()) < 8):
+            st.caption("Name a numeric column and, if you like, a period: “last month”, “the last 14 days”, “in March”. "
+                       "Periods are read against the dataset's own dates.")
+            too_short = len((why or "").strip()) < 8
+            if st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short):
+                try:
+                    out = ask_investigation(ds["id"], why.strip())
+                    st.session_state["active_question_id"] = out["question_id"]
+                    st.session_state["investigation_id"] = out["investigation_id"]
+                    st.switch_page("pages/3_Analyses.py")
+                except ApiError as e:
+                    st.error(str(e))
+            st.caption("The button above uses no AI model: every figure is computed from your data. The one below also has a "
+                       "model propose competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
+            if st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short):
                 try:
                     out = create_hypothesis_investigation(ds["id"], why.strip())
                     st.session_state["active_question_id"] = out["question_id"]
@@ -296,6 +314,88 @@ def _analysis_table(analyses: list) -> None:
                  use_container_width=True, hide_index=True)
 
 
+def _n(value, signed: bool = False) -> str:
+    if value is None:
+        return "—"
+    return f"{value:+,.2f}" if signed else f"{value:,.2f}"
+
+
+def _stat_text(stat: dict | None) -> str:
+    if not stat:
+        return "—"
+    if stat.get("status") == "note":
+        return str(stat.get("text") or "—")
+    if stat.get("status") != "ok":
+        return "No test: " + str(stat.get("reason") or "not run")
+    p = stat.get("p_adjusted", stat.get("p_value"))
+    return (f"{_n(stat.get('estimate'), True)} per {stat.get('bucket') or 'bucket'} "
+            f"({(stat.get('level') or 0) * 100:.0f}% interval {_n(stat.get('low'))} to {_n(stat.get('high'))}); "
+            f"p {_p(p) if p is not None and p < 0.001 else '= ' + _p(p)}{' after adjustment' if 'p_adjusted' in stat else ''}")
+
+
+_T = DASHBOARD_TOKENS
+_EVIDENCE_CSS = f"""<style>
+.rc-panel {{ background: {_T['--bg-page']}; border-radius: 20px; padding: 14px; margin: 10px 0 6px 0; }}
+.rc-panel table {{ width: 100%; border-collapse: separate; border-spacing: 0; background: {_T['--bg-card']};
+  border-radius: 14px; overflow: hidden; font-size: 0.84rem; color: {_T['--text-primary']}; }}
+.rc-panel th {{ text-align: left; font-weight: 600; font-size: 0.74rem; letter-spacing: .03em; text-transform: uppercase;
+  color: {_T['--text-secondary']}; background: {_T['--bg-inset']}; padding: 9px 12px; border-bottom: 1px solid {_T['--border']}; }}
+.rc-panel td {{ padding: 10px 12px; border-bottom: 1px solid {_T['--border']}; vertical-align: top; }}
+.rc-panel tr:last-child td {{ border-bottom: none; }}
+.rc-panel tr.rc-hyp td {{ background: {_T['--bg-card-hover']}; color: {_T['--text-secondary']}; }}
+.rc-bar {{ height: 6px; border-radius: 3px; background: {_T['--accent-bg']}; margin-top: 5px; min-width: 70px; }}
+.rc-bar span {{ display: block; height: 6px; border-radius: 3px; background: {_T['--accent']}; }}
+.rc-tag {{ display: inline-block; font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }}
+.rc-strong {{ background: {_T['--accent']}; color: #fff; }}
+.rc-moderate {{ background: {_T['--accent-bg']}; color: {_T['--accent-ink']}; border: 1px solid {_T['--accent-border']}; }}
+.rc-weak, .rc-none, .rc-offset, .rc-exact {{ background: {_T['--bg-inset']}; color: {_T['--text-secondary']}; border: 1px solid {_T['--border']}; }}
+.rc-muted {{ color: {_T['--text-muted']}; font-size: 0.78rem; }}
+</style>"""
+_SUPPORT = {"strong": "Strong evidence of location", "moderate": "Moderate evidence of location", "weak": "Weak evidence",
+            "offset": "Offsets the change", "exact": "Exact arithmetic"}
+
+
+def _evidence_section(report: dict) -> None:
+    """The evidence table: what was measured (a location of the change, never a
+    cause) apart from the explanations that were not and could not be tested."""
+    rows = report.get("evidence_table") or []
+    if not rows:
+        return
+    html('<div class="ds-section-title" style="margin-top:14px;">Evidence for each candidate explanation</div>')
+    body = []
+    for r in rows:
+        limits = "; ".join(r.get("limitations") or []) or "none noted"
+        if r.get("kind") == "hypothesis":
+            body.append(f'<tr class="rc-hyp"><td><b>{esc(r["candidate"])}</b><div class="rc-muted">Hypothesis, not a finding</div></td>'
+                        f'<td>—</td><td>—</td><td>Not tested</td><td><span class="rc-tag rc-none">{esc(r.get("support") or "")}</span></td>'
+                        f'<td>{esc(limits)}</td></tr>')
+            continue
+        share = r.get("share_of_change")
+        width = 0 if share is None or share < 0 else min(share, 1.0) * 100
+        measured = "—" if r.get("value_a") is None else f"{_n(r['value_a'])} → {_n(r.get('value_b'))}"
+        rows_text = "" if r.get("rows_a") is None else f'<div class="rc-muted">{r["rows_a"]:,} → {r["rows_b"]:,} rows</div>'
+        support = r.get("support") or "weak"
+        body.append(
+            f'<tr><td><b>{esc(r["candidate"])}</b><div class="rc-muted">Measured: {esc(r.get("claim") or "")}</div></td>'
+            f'<td>{esc(measured)}{rows_text}</td>'
+            f'<td>{esc(_n(r.get("contribution"), True))}'
+            + ("" if share is None else f'<div class="rc-muted">{share * 100:.0f}% of the change</div>' if share >= 0
+               else f'<div class="rc-muted">against the change ({share * 100:.0f}%)</div>')
+            + f'<div class="rc-bar"><span style="width:{width:.0f}%"></span></div></td>'
+            f'<td>{esc(_stat_text(r.get("statistic")))}</td>'
+            f'<td><span class="rc-tag rc-{esc(support)}">{esc(_SUPPORT.get(support, support))}</span>'
+            f'<div class="rc-muted">data quality: {esc(r.get("evidence_quality") or "")}</div></td>'
+            f'<td>{esc(limits)}</td></tr>')
+    st.markdown(_EVIDENCE_CSS + '<div class="rc-panel"><table><thead><tr><th>Candidate explanation</th><th>Measured change</th>'
+                '<th>Contribution</th><th>Statistical evidence</th><th>Support</th><th>Limitations</th></tr></thead><tbody>'
+                + "".join(body) + "</tbody></table></div>", unsafe_allow_html=True)
+    family = (report.get("change_evidence") or {}).get("family") or {}
+    st.caption("“Evidence of location” means the measurements show the change sits in that segment. It is never evidence of what "
+               "caused it: a segment that moved is a place to look, not an explanation."
+               + (f" The {family['comparisons']} segment tests are {family['method']}-adjusted together."
+                  if family.get("comparisons") else ""))
+
+
 if inv.get("engine") == "hypothesis" and inv["status"] in ("queued", "running"):
     st.info("This investigation is still running. Open it on the Analyses page to watch progress, or reload this page.")
     _evidence_line(inv.get("evidence") or {})
@@ -382,9 +482,25 @@ if totals.get("a") is not None:
     k3.metric("Change", f"{totals.get('change', 0):,.2f}",
               f"{totals['change_pct']:+.1f}%" if totals.get("change_pct") is not None else None)
     st.caption(f"Periods: {periods.get('source', '')}. Method: {report.get('decomposition_method', '').replace('_', ' ')}.")
+    if totals.get("length_adjusted"):
+        lfl_pct = totals.get("like_for_like_pct")
+        st.caption(f"The later period is {totals['days_b']:g} days against {totals['days_a']:g}. That difference in length alone "
+                   f"accounts for {_n(totals.get('length_effect'), True)} of the change; like for like the change is "
+                   f"{_n(totals.get('like_for_like_change'), True)}" + (f" ({lfl_pct:+.1f}%)." if lfl_pct is not None else "."))
+    overall = (report.get("change_evidence") or {}).get("overall")
+    if overall:
+        st.caption("Is the change larger than the metric's ordinary variation? " + _stat_text(overall)
+                   + ("" if overall.get("status") != "ok" else
+                      " — yes." if overall.get("significant") else " — no, it is within ordinary variation."))
+for issue in (report.get("comparability") or {}).get("issues") or []:
+    st.warning(f"The two periods are not fully comparable: {issue}.")
+if report.get("status") == "inconclusive" and not report.get("ranked_contributors"):
+    st.info("Nothing could be located for this question. " + " ".join(report.get("unresolved") or []))
 
 for chart in report.get("charts") or []:
     plot(figure_from_json(chart["plotly_json"]), height=320)
+
+_evidence_section(report)
 
 if report.get("ranked_contributors"):
     html('<div class="ds-section-title" style="margin-top:14px;">Contributors, ranked by measured contribution and evidence quality</div>')
@@ -422,6 +538,7 @@ with c2:
     html('<div class="ds-section-title" style="margin-top:14px;">How to read this</div>')
     for line in report.get("caveats") or []:
         html(f'<div class="ds-row-meta" style="padding:4px 0;">• {esc(line)}</div>')
+_bullets("Recommended follow-up analyses", report.get("follow_ups") or [])
 if not fallback_explained:       # after a fallback the partial evidence is already covered in the section at the top
     _partial_evidence_section(inv)
 b = report.get("budget") or {}

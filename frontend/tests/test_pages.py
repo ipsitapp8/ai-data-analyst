@@ -215,6 +215,27 @@ def test_investigations_page_shows_the_report(api, ws):
     assert api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]["question_id"] == out["question_id"]
 
 
+def test_investigations_page_asks_without_a_model_and_shows_the_evidence_table(api, ws):
+    from platform_helpers import run_job
+
+    at = healthy(page("13_Investigations.py", ws))
+    assert [b.key for b in at.button if b.key in ("inv_ask_go", "inv_why_go")] == ["inv_ask_go", "inv_why_go"]
+    assert "uses no AI model" in text_of(at)
+
+    created = api.post("/api/investigations/ask", headers=ws["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    at = healthy(page("13_Investigations.py", ws, investigation_id=created["investigation_id"]))
+    text = text_of(at)
+    for expected in ("Evidence for each candidate explanation", "region = West", "Strong evidence of location",
+                     "Hypothesis, not a finding", "not testable with this dataset", "never evidence of what",
+                     "Recommended follow-up analyses", "last month", "larger than the metric's ordinary variation"):
+        assert expected in text, expected
+    assert "interval" in text and "after adjustment" in text, "uncertainty is shown, adjusted for the segments tested"
+    assert "31 days against 28" in text and "like for like the change is" in text and "Exact arithmetic" in text
+    assert "--dash-surface" not in _styles(at), "the palette is borrowed for the table; the page keeps its own look"
+
+
 def _hypothesis_script() -> dict:
     import test_hypothesis_engine as fixtures
 
