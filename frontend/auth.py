@@ -39,7 +39,7 @@ _GATE_FONTS = (
     '&display=swap" rel="stylesheet">'
 )
 _GATE_LOGO = (
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#4f46e5" '
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#837ab6" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 

@@ -38,15 +38,15 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 # Chart data gets real, distinct color even though the UI chrome around it
 # stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
 # do it): plain chrome, legible/vivid data encoding.
-CHART_COLORWAY = ["#4f46e5", "#0ea5a4", "#f59e0b", "#e11d48", "#8b5cf6", "#64748b"]
-ACCENT = "#4f46e5"      # indigo -- the one interactive/brand UI color
+CHART_COLORWAY = ["#837ab6", "#cc8db3", "#250e2c", "#f6a5c0", "#9d85b6", "#64748b"]
+ACCENT = "#250e2c"      # deep plum -- the one interactive/brand UI color
 ACCENT_2 = "#94a3b8"    # slate -- in-progress/secondary state
 
 BASE_CSS = """
 <style>
 :root {
   --bg-base: #ffffff;
-  --bg-page: #fafafa;
+  --bg-page: #fbf8fb;
   --bg-card: #ffffff;
   --bg-card-hover: #f4f4f5;
   --bg-inset: #f4f4f5;
@@ -57,10 +57,10 @@ BASE_CSS = """
   --text-secondary: #52525b;
   --text-muted: #a1a1aa;
 
-  --accent: #4f46e5;
-  --accent-dim: #4338ca;
-  --accent-bg: #eef2ff;
-  --accent-border: #c7d2fe;
+  --accent: #250e2c;
+  --accent-dim: #3b1a47;
+  --accent-bg: #f6eef6;
+  --accent-border: #e6cfe2;
 
   --ok: #16a34a;
   --ok-bg: #f0fdf4;
@@ -1110,7 +1110,7 @@ def render_topbar() -> None:
 
 
 _LOGO = (
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" '
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#837ab6" stroke-width="2" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 

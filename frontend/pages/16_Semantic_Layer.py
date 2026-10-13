@@ -155,7 +155,7 @@ with tab_graph:
             fig.add_trace(go.Scatter(x=[x0, x1], y=[y0, y1], mode="lines", hoverinfo="text", text=e["relation"],
                                      line={"width": 1, "dash": "dot" if e["implied"] else "solid", "color": "#9ca3af"},
                                      showlegend=False))
-        colors = {"metric": "#4f46e5", "term": "#0ea5a4", "column": "#f59e0b", "dataset": "#6b7280"}
+        colors = {"metric": "#837ab6", "term": "#cc8db3", "column": "#f6a5c0", "dataset": "#250e2c"}
         for t in order:
             if by_type[t]:
                 fig.add_trace(go.Scatter(x=[pos[n["id"]][0] for n in by_type[t]], y=[pos[n["id"]][1] for n in by_type[t]],

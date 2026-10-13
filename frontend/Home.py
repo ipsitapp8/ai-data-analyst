@@ -51,9 +51,9 @@ HERO_SVG = """
   <text x="68" y="76" fill="#18181b" font-size="14" font-weight="600" font-family="Inter, sans-serif">Sales overview</text>
   <rect x="68" y="96" width="130" height="64" rx="8" fill="#fafafa" stroke="#e4e4e7"/>
   <rect x="212" y="96" width="130" height="64" rx="8" fill="#fafafa" stroke="#e4e4e7"/>
-  <rect x="356" y="96" width="130" height="64" rx="8" fill="#eef2ff" stroke="#c7d2fe"/>
-  <polyline points="68,290 130,262 190,272 250,232 310,242 370,200 430,190 486,170" fill="none" stroke="#4f46e5" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-  <polyline points="68,300 130,290 190,294 250,274 310,282 370,262 430,256 486,248" fill="none" stroke="#0ea5a4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="356" y="96" width="130" height="64" rx="8" fill="#f6eef6" stroke="#e6cfe2"/>
+  <polyline points="68,290 130,262 190,272 250,232 310,242 370,200 430,190 486,170" fill="none" stroke="#837ab6" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <polyline points="68,300 130,290 190,294 250,274 310,282 370,262 430,256 486,248" fill="none" stroke="#cc8db3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
   <g transform="translate(470 250)">
     <rect width="130" height="96" rx="12" fill="#ffffff" stroke="#e4e4e7"/>
     <circle cx="28" cy="30" r="12" fill="#dcfce7"/><path d="M22 30l4 4 8-8" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>

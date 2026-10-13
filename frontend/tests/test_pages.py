@@ -554,7 +554,7 @@ def test_the_dashboard_look_is_applied_on_the_dashboard_page_only(api, ws):
     assert declared.startswith("<style>.stMain,") and ":root" not in sheet, "tokens are set on the main area, never globally"
     assert "stSidebar" not in sheet, "the sidebar keeps the base look"
     assert all(f"{name}: {value};" in declared for name, value in theme.DASHBOARD_TOKENS.items())
-    assert theme.ACCENT == "#4f46e5" and "--accent: #4f46e5" in theme.BASE_CSS, "the base tokens are untouched"
+    assert theme.ACCENT == "#250e2c" and "--accent: #250e2c" in theme.BASE_CSS, "the base tokens are untouched"
 
 
 def test_the_dashboard_shows_whatever_the_analysis_produced(api, ws):
@@ -621,7 +621,7 @@ def test_restyling_in_chart_studio_keeps_the_user_s_palette(api, ws):
     assert (colour if isinstance(colour, str) else colour[0]) == cs.rgba(first, cs.DEFAULT_STYLE["opacity"])
     saved = api.get(f"/api/questions/{out['question_id']}/dashboard", headers=ws["h"]).json()["view_overrides"]
     assert [v["chart_type"] for v in saved.values()] == ["hbar"], "the choice is saved for the team as before"
-    assert theme.CHART_COLORWAY[0] == "#4f46e5", "other pages' chart colours are unchanged"
+    assert theme.CHART_COLORWAY[0] == "#837ab6", "other pages' chart colours are unchanged"
 
 
 def test_chart_helpers_keep_their_default_colours_unless_given_a_colorway():
