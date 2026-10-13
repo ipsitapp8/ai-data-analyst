@@ -480,6 +480,204 @@ hr { border-color: var(--border) !important; }
 """
 
 
+# ------------------------------------------------- dashboard look (opt-in) --
+# A second set of design tokens for the dashboard view: a sage page, one large
+# white rounded surface, a warm orange accent and pastel data colours. It is
+# applied only by a page that calls inject_dashboard_theme() (today
+# pages/4_Dashboards.py), and only to the main area, dialogs and popovers --
+# the sidebar and every other page keep the base tokens above.
+DASHBOARD_PALETTE: dict[str, str] = {
+    "orange": "#FF824D", "yellow": "#FFD166", "mint": "#83D8C5",
+    "coral": "#E87983", "lavender": "#A6A2E8", "blue": "#61BDE0",
+}
+# Orange leads; the pastels follow for further series. chart_studio's "Dashboard"
+# palette is this same list (a test keeps the two in step).
+DASHBOARD_COLORWAY = list(DASHBOARD_PALETTE.values())
+DASHBOARD_TOKENS: dict[str, str] = {
+    "--bg-page": "#B8CECA",
+    "--bg-card": "#FFFFFF",
+    "--bg-card-hover": "#F6F9F8",
+    "--bg-inset": "#F4F7F6",
+    "--border": "#DCE3E0",
+    "--border-strong": "#C6D1CD",
+    "--text-primary": "#202522",
+    "--text-secondary": "#58615D",
+    "--text-muted": "#7C8581",
+    "--accent": DASHBOARD_PALETTE["orange"],
+    "--accent-dim": "#F26E36",
+    "--accent-ink": "#B4470F",        # orange dark enough to read as text on white
+    "--accent-bg": "#FFF1EA",
+    "--accent-border": "#FFD0BB",
+    "--radius-lg": "16px",
+    "--radius-md": "12px",
+    "--radius-sm": "8px",
+    "--dash-surface": "#FFFFFF",
+    "--dash-surface-radius": "28px",
+    "--dash-gap": "20px",
+    "--dash-shadow": "0 1px 2px rgba(32,37,34,0.05), 0 18px 40px rgba(32,37,34,0.08)",
+    "--dash-card-shadow": "0 1px 2px rgba(32,37,34,0.04), 0 4px 12px rgba(32,37,34,0.03)",
+    **{f"--dash-c{i}": colour for i, colour in enumerate(DASHBOARD_PALETTE.values(), start=1)},
+}
+# Plotly draws on a canvas that page CSS cannot reach, so the chart's own colours are set here.
+DASHBOARD_CHART = {"text": "#202522", "muted": "#7C8581", "grid": "#EDF1EF", "line": "#DCE3E0"}
+
+# .stMain is the main scroll area (its data-testid varies with the page's content)
+_DASHBOARD_SCOPE = '.stMain, [data-testid="stDialog"], [data-baseweb="popover"]'
+
+_DASHBOARD_CSS = """
+.stMain { background: var(--bg-page) !important; accent-color: var(--accent); }
+.stMain [data-testid="stBottom"], .stMain [data-testid="stBottom"] > div,
+.stMain [data-testid="stBottomBlockContainer"] { background: var(--bg-page) !important; }
+
+/* the one large surface every dashboard element sits on */
+.stMain [data-testid="stMainBlockContainer"] {
+  background: var(--dash-surface); border: 1px solid var(--border);
+  border-radius: var(--dash-surface-radius); box-shadow: var(--dash-shadow);
+  width: calc(100% - 48px) !important; max-width: 1240px;
+  margin: 82px auto 30px auto !important; padding: 34px 38px 40px 38px !important;
+}
+.stMain [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] { gap: var(--dash-gap); }
+
+/* typography */
+.stMain { color: var(--text-primary); }
+.stMain .ds-page-title { font-size: 1.75rem; font-weight: 700; line-height: 1.22; letter-spacing: -0.022em; color: var(--text-primary); }
+.stMain .ds-page-sub { color: var(--text-muted); }
+.stMain .ds-section-title { font-size: 1rem; font-weight: 650; color: var(--text-primary); }
+.stMain .ds-row-title { color: var(--text-primary); }
+.stMain .ds-row-meta { color: var(--text-muted); }
+.dash-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 12px 0; }
+.dash-eyebrow { display: flex; align-items: baseline; gap: 8px; font-size: 1.02rem; font-weight: 650;
+                letter-spacing: -0.01em; color: var(--text-primary); margin: 12px 0 -4px 2px; }
+.dash-eyebrow b { font-size: 0.74rem; font-weight: 600; color: var(--accent-ink); background: var(--accent-bg);
+                  border-radius: 999px; padding: 1px 8px; }
+.dash-narrative { font-size: 0.97rem; line-height: 1.75; color: var(--text-primary); margin-top: 10px; }
+
+/* cards: white, thin border, a restrained shadow; they sit on the white surface */
+.stMain [class*="st-key-card"], .stMain [class*="st-key-flat"],
+.stMain [class*="st-key-chartcard_"] {
+  background: var(--bg-card) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important; box-shadow: var(--dash-card-shadow) !important;
+}
+.stMain [class*="st-key-card"], .stMain [class*="st-key-chartcard_"] { padding: 20px 22px !important; }
+.stMain .st-key-card_studio { background: var(--bg-inset) !important; border-color: var(--border) !important; box-shadow: none !important; }
+.stMain .st-key-card_narr { border-left: 4px solid var(--dash-c3) !important; }
+.stMain .st-key-card_verif { background: var(--bg-inset) !important; box-shadow: none !important; }
+.stMain [data-testid="stExpander"] { border-radius: var(--radius-lg) !important; }
+.stMain [data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.stMain .ds-verdict { border-radius: var(--radius-md); margin-bottom: 16px; }
+/* stylesheets and the fixed top strip are page furniture, not rows of the surface */
+.stMain [data-testid="stElementContainer"]:has(style, link[rel], .silt-topbar):not(:has(.dash-eyebrow)) { position: absolute !important; }
+
+/* buttons */
+.stMain button[kind="secondary"] { border-radius: 999px !important; border-color: var(--border-strong) !important; }
+.stMain button[kind="secondary"]:hover { border-color: var(--accent) !important; color: var(--accent-ink) !important; }
+/* dark text on the orange: white on #FF824D is too faint to read */
+.stMain button[kind="primary"], .stMain button[kind="primary"]:hover,
+[data-baseweb="popover"] button[kind="primary"], [data-baseweb="popover"] button[kind="primary"]:hover {
+  border-radius: 999px !important; color: var(--text-primary) !important;
+}
+.stMain button[kind="primary"] p, [data-baseweb="popover"] button[kind="primary"] p { color: var(--text-primary) !important; }
+/* the title row's actions sit side by side and wrap when there is no room */
+/* on a narrow surface the actions drop under the title instead of squeezing beside it */
+.stMain [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-dash_actions) { flex-wrap: wrap; row-gap: 8px; }
+.stMain [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-dash_actions) > [data-testid="stColumn"] {
+  min-width: min(340px, 100%) !important; flex: 1 1 340px !important;
+}
+/* likewise the studio's heading keeps its text readable and lets its two buttons wrap */
+.st-key-card_studio [data-testid="stColumn"]:has(> div .ds-section-title) {
+  min-width: min(320px, 100%) !important; flex: 1 1 320px !important; padding-bottom: 16px;
+}
+.st-key-dash_actions { flex-wrap: wrap !important; justify-content: flex-end; gap: 10px !important; }
+.st-key-dash_actions > * { flex: 0 0 auto !important; width: auto !important; }
+.st-key-dash_actions button { padding-left: 1.1em !important; padding-right: 1.1em !important; }
+.st-key-dash_actions button, .st-key-dash_actions [data-testid="stPopover"] { width: max-content !important; max-width: none !important; }
+.st-key-dash_actions button div, .st-key-dash_actions button p {
+  white-space: nowrap; overflow: visible !important; text-overflow: clip !important; max-width: none !important;
+}
+
+/* A selected segment is a radio too, so the base radio rule paints a solid block behind its
+   label; inside the dashboard the segment's own tint is the selection mark. */
+.stMain [data-testid="stButtonGroup"] button[role="radio"][aria-checked="true"] div { background: transparent !important; }
+.stMain [data-testid="stButtonGroup"] button[aria-checked="true"] p { color: var(--accent-ink) !important; font-weight: 600; }
+
+/* KPI grid: as many equal cards per row as fit. Each card is white, with a short bar in the
+   next palette colour so a row of cards reads as one set. */
+.st-key-dash_kpis [data-testid="stHorizontalBlock"] {
+  display: grid !important; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--dash-gap);
+}
+.st-key-dash_kpis [data-testid="stColumn"] { width: auto !important; min-width: 0 !important; flex: none !important; --kpi-mark: var(--dash-c1); }
+.st-key-dash_kpis [data-testid="stColumn"]:nth-child(6n+2) { --kpi-mark: var(--dash-c3); }
+.st-key-dash_kpis [data-testid="stColumn"]:nth-child(6n+3) { --kpi-mark: var(--dash-c2); }
+.st-key-dash_kpis [data-testid="stColumn"]:nth-child(6n+4) { --kpi-mark: var(--dash-c5); }
+.st-key-dash_kpis [data-testid="stColumn"]:nth-child(6n+5) { --kpi-mark: var(--dash-c6); }
+.st-key-dash_kpis [data-testid="stColumn"]:nth-child(6n+6) { --kpi-mark: var(--dash-c4); }
+.st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button {
+  border-radius: var(--radius-lg) !important; border: 1px solid var(--border) !important;
+  background: var(--bg-card) !important; box-shadow: var(--dash-card-shadow) !important;
+  padding: 36px 22px 20px 22px !important; min-height: 132px; opacity: 1 !important;
+  align-items: flex-start !important; justify-content: flex-start !important;
+}
+.st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button::before {
+  content: ""; position: absolute; top: 20px; left: 22px; width: 28px; height: 4px;
+  border-radius: 999px; background: var(--kpi-mark);
+}
+.st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button > div { width: 100%; justify-content: flex-start; text-align: left; }
+.st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button:hover:not(:disabled) { border-color: var(--accent) !important; background: var(--bg-card) !important; }
+.st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button p {
+  font-family: var(--font) !important; font-size: 0.8rem !important; font-weight: 500 !important;
+  color: var(--text-muted) !important; letter-spacing: 0 !important; line-height: 1.5 !important;
+  text-align: left; margin: 0 !important;
+}
+.st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button strong {
+  display: inline-block; margin: 8px 0 4px 0; font-size: 1.95rem !important; font-weight: 700 !important;
+  color: var(--text-primary) !important; line-height: 1.15; letter-spacing: -0.025em; overflow-wrap: anywhere;
+}
+
+/* chart grid: two across, one when the surface is narrow; an odd last chart spans the row */
+.st-key-dash_charts [data-testid="stHorizontalBlock"]:has([class*="st-key-chartcard_"], [class*="st-key-card_ch"]) {
+  display: grid !important; gap: var(--dash-gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(380px, calc(50% - var(--dash-gap)))), 1fr));
+}
+.st-key-dash_charts [data-testid="stColumn"]:has([class*="st-key-chartcard_"], [class*="st-key-card_ch"]) {
+  width: auto !important; min-width: 0 !important; flex: none !important;
+}
+.st-key-dash_charts [data-testid="stColumn"]:has([class*="st-key-chartcard_"], [class*="st-key-card_ch"]):last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+/* the studio's control rows wrap instead of squeezing their controls */
+.st-key-card_studio [data-testid="stHorizontalBlock"] { flex-wrap: wrap; row-gap: 10px; }
+.st-key-card_studio [data-testid="stColumn"] { min-width: min(110px, 100%) !important; }
+.st-key-card_studio [data-testid="stColumn"]:has(.st-key-cs_inspect, .st-key-cs_reset) { min-width: min(160px, 100%) !important; }
+/* the dashboard list: each row's Open button sits on the row's centre line */
+.st-key-flat_pick [data-testid="stHorizontalBlock"] { align-items: center; padding-right: 18px; }
+.st-key-flat_pick [data-testid="stHorizontalBlock"] + [data-testid="stHorizontalBlock"],
+.st-key-flat_pick [data-testid="stLayoutWrapper"] + [data-testid="stLayoutWrapper"] { border-top: 1px solid var(--border); }
+.st-key-card_studio button p { white-space: nowrap; }
+.stMain [class*="st-key-cs_edit_"] .stButton > button, .stMain [class*="st-key-cs_edit_"] .stButton > button p { white-space: nowrap !important; }
+.st-key-dash_summary [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: var(--dash-gap); }
+.st-key-dash_summary [data-testid="stColumn"] { min-width: min(300px, 100%) !important; }
+
+@media (max-width: 900px) {
+  .stMain [data-testid="stMainBlockContainer"] {
+    width: calc(100% - 20px) !important; padding: 20px 16px 26px 16px !important; border-radius: 20px;
+  }
+}
+"""
+
+
+def dashboard_theme_css(tokens: dict[str, str] | None = None) -> str:
+    """The dashboard stylesheet, with its tokens declared on the main area
+    (plus dialogs and popovers, which render outside it) rather than :root."""
+    declared = " ".join(f"{name}: {value};" for name, value in (tokens or DASHBOARD_TOKENS).items())
+    css = f"{_DASHBOARD_SCOPE} {{ {declared} }} {_DASHBOARD_CSS}"
+    return "<style>" + " ".join(line.strip() for line in css.splitlines() if line.strip()) + "</style>"
+
+
+def inject_dashboard_theme() -> None:
+    """Call after page_setup() on a page that should use the dashboard look."""
+    st.markdown(dashboard_theme_css(), unsafe_allow_html=True)
+
+
 def esc(value) -> str:
     """Escape a value for safe interpolation into an html()/f-string call.
 
@@ -532,6 +730,12 @@ _NAV_ICONS = {
     "team_overview": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3 3 0 0 1 0 6M18 14c1.8.6 3 2.4 3 4.5"/>',
     "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+    "copilot": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
+    "investigations": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M8 10.5h5M10.5 8v5"/>',
+    "what_if": '<path d="M4 18c4 0 4-12 8-12s4 12 8 12"/><path d="M4 21h16"/>',
+    "data_quality": '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16v.5"/>',
+    "semantic": '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7"/>',
+    "evaluation": '<path d="M9 3h6v4l4 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L9 7z"/><path d="M8 14h8"/>',
 }
 
 
@@ -650,10 +854,16 @@ NAV_PAGES = [
     ("overview", "Overview", "pages/1_Overview.py"),
     ("datasets", "Datasets", "pages/2_Datasets.py"),
     ("analyses", "Analyses", "pages/3_Analyses.py"),
+    ("copilot", "Copilot", "pages/12_Copilot.py"),
+    ("investigations", "Root cause", "pages/13_Investigations.py"),
+    ("what_if", "What-if", "pages/14_What_If.py"),
     ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
     ("audit", "Audit trail", "pages/6_Audit_Trail.py"),
+    ("data_quality", "Data quality", "pages/15_Data_Quality.py"),
+    ("semantic", "Semantic layer", "pages/16_Semantic_Layer.py"),
+    ("evaluation", "Evaluation", "pages/17_Evaluation.py"),
     ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
     ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
     ("settings", "Settings", "pages/7_Settings.py"),
@@ -839,6 +1049,60 @@ def verdict_badge(state: str | None) -> str:
     return badge(label, kind)
 
 
+EVIDENCE_META = {
+    "verified": ("verified", "Verified"),
+    "verified_with_caveats": ("warn", "Verified with caveats"),
+    "unverified": ("error", "Not verified"),
+}
+CHECK_META = {"pass": ("verified", "Passed"), "fail": ("error", "Failed"), "not_run": ("warn", "Not run"),
+              "warn": ("warn", "Caveat"), "not_applicable": ("neutral", "Not applicable")}
+
+
+def evidence_badge(status: str | None) -> str:
+    """Badge for one claim's deterministic evidence status."""
+    kind, label = EVIDENCE_META.get(status or "", ("neutral", "No evidence record"))
+    return badge(label, kind)
+
+
+def render_evidence(record: dict | None) -> None:
+    """One evidence record: status, each check with its outcome and reason, the
+    three kinds of validity, limitations and provenance."""
+    if not record:
+        html('<div class="ds-row-meta">No evidence record exists for this element (it predates verification).</div>')
+        return
+    html(f'<div style="margin:6px 0 10px 0;">{evidence_badge(record.get("status"))}</div>')
+    rows = []
+    for c in record.get("checks") or []:
+        kind, label = CHECK_META.get(c.get("outcome"), ("neutral", c.get("outcome", "")))
+        need = "required" if c.get("required") else "informational"
+        rows.append(
+            f'<div style="padding:7px 0;border-top:1px solid var(--border);">'
+            f'<div style="display:flex;gap:10px;align-items:center;">{badge(label, kind)}'
+            f'<span class="ds-row-title">{esc(str(c.get("check", "")).replace("_", " "))}</span>'
+            f'<span class="ds-row-meta">{need}</span></div>'
+            f'<div class="ds-row-meta" style="margin-top:3px;">{esc(c.get("detail") or "")}</div></div>')
+    html("".join(rows))
+    validity = record.get("validity") or {}
+    html('<div class="ds-row-meta" style="margin-top:10px;line-height:1.7;">'
+         f'<b>Mathematical validity:</b> {esc(str(validity.get("mathematical", "—")).replace("_", " "))}<br>'
+         f'<b>Statistical validity:</b> {esc(str(validity.get("statistical", "—")).replace("_", " "))}<br>'
+         f'<b>Causal validity:</b> {esc(str(validity.get("causal", "—")).replace("_", " "))}</div>')
+    limits = record.get("limitations") or []
+    if limits:
+        html('<div class="ds-row-meta" style="margin-top:6px;"><b>Limitations:</b> '
+             + esc(", ".join(str(x).replace("_", " ") for x in limits)) + "</div>")
+    metric = record.get("metric") or {}
+    bits = []
+    if metric.get("formula"):
+        bits.append(f'formula {esc(metric["formula"])}')
+    if record.get("recomputed_value"):
+        bits.append(f'recomputed value {esc(record["recomputed_value"])}')
+    if record.get("dataset_fingerprint"):
+        bits.append(f'dataset {esc(record["dataset_fingerprint"][:12])}…')
+    if bits:
+        html('<div class="ds-row-meta" style="margin-top:6px;"><b>Provenance:</b> ' + " · ".join(bits) + "</div>")
+
+
 def _rejections_html(rejections: list[dict]) -> str:
     parts = []
     for r in rejections:
@@ -858,17 +1122,24 @@ def render_verdict_banner(dash: dict) -> None:
     if state == "VERIFIED":
         html('<div class="ds-verdict ds-verdict-ok"><div class="ds-verdict-head">✓ Fully Verified</div></div>')
         return
+    summary = dash.get("evidence_summary") or {}
+    not_full = summary.get("verified_with_caveats", 0) + summary.get("unverified", 0)
     if state == "VERIFIED_WITH_CAVEATS":
         cls, icon = "ds-verdict-warn", "⚠"
         n = dash.get("flagged_count", 0)
-        title = f"Verified with caveats — {n} item(s) flagged"
+        if n:
+            title = f"Verified with caveats — {n} item(s) flagged"
+        elif not_full:
+            title = f"Verified with caveats — {not_full} of {summary.get('claims', not_full)} claims not fully verified"
+        else:
+            title = "Verified with caveats"
     else:
         cls, icon = "ds-verdict-bad", "⛔"
-        title = "Unverified — Critic could not confirm this analysis"
+        title = "Unverified — verification could not confirm this analysis"
     body = _rejections_html(rejections) or esc(dash.get("verification_summary") or "No reasoning was recorded.")
     html(
         f'<details class="ds-verdict {cls}"><summary><span>{icon}</span><span>{esc(title)}</span>'
-        f'<span class="ds-verdict-hint">Show Critic reasoning ▾</span></summary>'
+        f'<span class="ds-verdict-hint">Show reasoning ▾</span></summary>'
         f'<div class="ds-verdict-body">{body}</div></details>'
     )
 
@@ -912,7 +1183,8 @@ def figure_from_json(payload: dict) -> go.Figure:
 
 
 def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
-                 ensure_markers: bool = False, recolor: bool = True) -> go.Figure:
+                 ensure_markers: bool = False, recolor: bool = True,
+                 colorway: list[str] | None = None) -> go.Figure:
     """Force any figure -- including sandbox-generated ones -- into the SILT look.
 
     ensure_markers: sandbox line charts default to mode="lines" (px.line's
@@ -921,6 +1193,7 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
     (click-to-inspect charts do) to add markers to any bare-line scatter trace
     so there's something to actually click.
     """
+    colorway = colorway or CHART_COLORWAY
     if ensure_markers:
         for trace in fig.data:
             if getattr(trace, "type", None) == "scatter" and trace.mode and "markers" not in trace.mode:
@@ -929,7 +1202,7 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#52525b", family="Inter, system-ui, sans-serif", size=12),
-        colorway=CHART_COLORWAY,
+        colorway=colorway,
         margin=dict(l=8, r=8, t=8, b=8),
         height=height,
         showlegend=showlegend,
@@ -945,7 +1218,7 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
     fig.update_yaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
                      color="#71717a", showline=False, ticks="")
     if recolor:
-        _recolor_traces(fig)
+        _recolor_traces(fig, colorway)
     return fig
 
 
@@ -1002,8 +1275,8 @@ def shade_hex(hex_color: str) -> str:
     return shade(hex_color, 0.6)
 
 
-def _recolor_traces(fig: go.Figure) -> None:
-    """Repaint solid trace colors from CHART_COLORWAY.
+def _recolor_traces(fig: go.Figure, colorway: list[str] | None = None) -> None:
+    """Repaint solid trace colors from the colorway (CHART_COLORWAY by default).
 
     `colorway` only supplies colors Plotly would otherwise auto-assign. Plotly
     Express bakes explicit per-trace colors whenever the sandbox code groups by
@@ -1011,8 +1284,9 @@ def _recolor_traces(fig: go.Figure) -> None:
     the SILT palette. Array-valued colors (continuous scales) are left
     alone -- overwriting those would destroy the encoding.
     """
+    colorway = colorway or CHART_COLORWAY
     for i, trace in enumerate(fig.data):
-        color = CHART_COLORWAY[i % len(CHART_COLORWAY)]
+        color = colorway[i % len(colorway)]
         marker = getattr(trace, "marker", None)
         if marker is not None and not isinstance(getattr(marker, "color", None), (list, tuple)):
             try:
@@ -1027,14 +1301,53 @@ def _recolor_traces(fig: go.Figure) -> None:
                 pass
 
 
+def dashboard_chart(fig: go.Figure, own_traces: bool = False) -> go.Figure:
+    """Finish a styled figure in the dashboard look: muted labels, light
+    gridlines, the legend in a row above the plot, rounded bars, even line and
+    marker weights. Only presentation changes -- no trace's data, type, hover
+    text or name is touched.
+
+    own_traces: the figure was drawn by Chart Studio with the weights and
+    corner radius the user chose, so only the frame around the traces is set."""
+    c = DASHBOARD_CHART
+    family = "Inter, system-ui, sans-serif"
+    named = [t for t in fig.data if getattr(t, "name", None)]
+    if not own_traces and len(fig.data) == 1 and not named:
+        fig.update_layout(showlegend=False)          # one unnamed series: a legend reading "trace 0" says nothing
+    legend_shown = bool(fig.layout.showlegend)
+    fig.update_layout(
+        font=dict(color=c["muted"], family=family, size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    font=dict(color=c["muted"], size=12), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#ffffff", bordercolor=c["line"], font=dict(color=c["text"], family=family)),
+        margin=dict(l=8, r=8, t=40 if legend_shown else 12, b=8),
+    )
+    axis = dict(gridcolor=c["grid"], zerolinecolor=c["line"], linecolor=c["line"], color=c["muted"],
+                tickfont=dict(color=c["muted"], size=11), title_font=dict(color=c["muted"], size=12))
+    fig.update_xaxes(**axis)
+    fig.update_yaxes(**axis)
+    if not own_traces:
+        fig.update_layout(barcornerradius=6, bargap=0.3)
+        for trace in fig.data:
+            if getattr(trace, "type", None) == "scatter":
+                if trace.line.width is None:
+                    trace.line.width = 2.5
+                if trace.marker.size is None:
+                    trace.marker.size = 7
+    return fig
+
+
 def plot(fig: go.Figure, height: int = 300, showlegend: bool = False,
-         on_select_key: str | None = None, restyle_traces: bool = True):
+         on_select_key: str | None = None, restyle_traces: bool = True,
+         colorway: list[str] | None = None, finish=None):
     """Render a styled chart. Pass on_select_key to make it clickable -- the
     click/select event is then returned (and also lands in
     st.session_state[on_select_key]) instead of nothing.
 
     restyle_traces=False keeps the figure's own trace colors/modes (Chart
-    Studio figures were already styled exactly as the user picked)."""
+    Studio figures were already styled exactly as the user picked).
+    colorway replaces the default data colours for this chart only; finish,
+    if given, is called with the styled figure for a page's own last touches."""
     kwargs = {}
     if on_select_key:
         # selection_mode="points" only (not the default points+box+lasso):
@@ -1042,7 +1355,9 @@ def plot(fig: go.Figure, height: int = 300, showlegend: bool = False,
         # this way, instead of needing an actual box/lasso drag.
         kwargs = {"on_select": "rerun", "key": on_select_key, "selection_mode": "points"}
     styled = style_chart(fig, height, showlegend, ensure_markers=bool(on_select_key) and restyle_traces,
-                         recolor=restyle_traces)
+                         recolor=restyle_traces, colorway=colorway)
+    if finish is not None:
+        styled = finish(styled) or styled
     return st.plotly_chart(styled, use_container_width=True,
                            config={"displayModeBar": False}, **kwargs)
 
@@ -1148,6 +1463,9 @@ def _inspect_dialog() -> None:
     if studio and studio.get("plotted") is not None:
         html(f'<div {sub_title}>Values plotted in this chart</div>')
         st.dataframe(studio["plotted"], use_container_width=True, hide_index=True, height=200)
+
+    html('<div class="ds-section-title" style="margin-top:18px;">Evidence</div>')
+    render_evidence(data.get("evidence"))
 
     if data.get("flagged"):
         html('<div class="ds-section-title ds-flag-bad" style="margin-top:18px;">⚠ Critic reasoning</div>')

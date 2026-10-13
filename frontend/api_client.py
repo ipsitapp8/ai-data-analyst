@@ -10,16 +10,70 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
+import requests as _requests
 import streamlit as st
 
 from config import BACKEND_BASE_URL
 
 TIMEOUT = 30
+SESSION_EXPIRED_NOTICE = "Your session has expired. Please sign in again."
+# Everything that makes up a signed-in session (see auth.logout).
+_SESSION_KEYS = ("auth_user", "auth_token", "active_community_id", "active_team_id")
 
 
 class ApiError(Exception):
     pass
+
+
+class BackendUnreachable(ApiError):
+    """No response at all: the server is down, refused the connection or timed out."""
+
+
+class SessionExpired(ApiError):
+    """The API rejected the session token (expired, signed with an old key, or
+    the account no longer exists). Not a connectivity problem."""
+
+
+class _Http:
+    """`requests`, with transport failures raised as BackendUnreachable so that
+    pages can tell "the server did not answer" from "the server said no"."""
+
+    def __getattr__(self, name: str):
+        fn = getattr(_requests, name)
+        if name not in ("get", "post", "put", "patch", "delete", "request"):
+            return fn
+
+        def call(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except _requests.exceptions.RequestException as e:
+                raise BackendUnreachable(f"no response from {BACKEND_BASE_URL} ({type(e).__name__})") from e
+
+        return call
+
+
+requests = _Http()
+
+
+def _sent_token(resp) -> bool:
+    request = getattr(resp, "request", None)
+    if request is not None and getattr(request, "headers", None) is not None:
+        return bool(request.headers.get("Authorization"))
+    return bool(st.session_state.get("auth_token"))
+
+
+def _expire_session() -> None:
+    """Sign the visitor out and send them to the login form with an explanation.
+
+    Only ever reached for a request that carried a token, and it removes that
+    token, so the rerun lands on the login gate and cannot come back here."""
+    for key in _SESSION_KEYS:
+        st.session_state.pop(key, None)
+    st.session_state["auth_notice"] = SESSION_EXPIRED_NOTICE
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        st.rerun()
 
 
 def _headers(with_team: bool = True) -> dict:
@@ -34,7 +88,10 @@ def _headers(with_team: bool = True) -> dict:
     return headers
 
 
-def _handle(resp: requests.Response) -> Any:
+def _handle(resp: _requests.Response) -> Any:
+    if resp.status_code == 401 and _sent_token(resp):
+        _expire_session()
+        raise SessionExpired(SESSION_EXPIRED_NOTICE)
     if not resp.ok:
         try:
             detail = resp.json().get("detail", resp.text)
@@ -188,11 +245,16 @@ def list_questions() -> list[dict]:
     return _handle(requests.get(f"{BACKEND_BASE_URL}/api/questions", headers=_headers(), timeout=TIMEOUT))
 
 
-def ask_question(dataset_id: int, question: str) -> dict:
+def ask_question(dataset_id: int, question: str, idempotency_key: str | None = None) -> dict:
+    """Queue an analysis. Pass an idempotency key so a double click or a retried
+    request returns the first submission instead of starting a second run."""
+    headers = _headers()
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
     resp = requests.post(
         f"{BACKEND_BASE_URL}/api/questions",
         json={"dataset_id": dataset_id, "question": question},
-        headers=_headers(), timeout=TIMEOUT,
+        headers=headers, timeout=TIMEOUT,
     )
     return _handle(resp)
 
@@ -350,3 +412,245 @@ def reset_chart_view(dashboard_id: int, chart_key: str) -> dict:
         headers=_headers(), timeout=TIMEOUT,
     )
     return _handle(resp)
+
+
+# ================================================================== platform ==
+# Small helpers so the functions below stay one line each.
+
+def _get(path: str, timeout: int = TIMEOUT, **params) -> Any:
+    clean = {k: v for k, v in params.items() if v is not None}
+    return _handle(requests.get(f"{BACKEND_BASE_URL}{path}", params=clean or None, headers=_headers(), timeout=timeout))
+
+
+def _post(path: str, body: dict | None = None, timeout: int = TIMEOUT, extra_headers: dict | None = None) -> Any:
+    resp = requests.post(f"{BACKEND_BASE_URL}{path}", json=body, headers={**_headers(), **(extra_headers or {})},
+                         timeout=timeout)
+    if resp.status_code == 204:
+        return None
+    return _handle(resp)
+
+
+def _put(path: str, body: dict) -> Any:
+    return _handle(requests.put(f"{BACKEND_BASE_URL}{path}", json=body, headers=_headers(), timeout=TIMEOUT))
+
+
+def _delete(path: str) -> None:
+    resp = requests.delete(f"{BACKEND_BASE_URL}{path}", headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+
+
+# -------------------------------------------------------------------- jobs --
+
+def list_jobs(state: str | None = None, limit: int = 50) -> dict:
+    return _get("/api/jobs", state=state, limit=limit)
+
+
+def job_metrics() -> dict:
+    return _get("/api/jobs/metrics")
+
+
+def cancel_question(question_id: int) -> dict:
+    return _post(f"/api/questions/{question_id}/cancel")
+
+
+def retry_job(job_id: int) -> dict:
+    return _post(f"/api/jobs/{job_id}/retry")
+
+
+def get_trace(question_id: int) -> dict:
+    return _get(f"/api/questions/{question_id}/trace")
+
+
+# ------------------------------------------------ evidence + reproducibility --
+
+def get_evidence(question_id: int) -> dict:
+    return _get(f"/api/questions/{question_id}/evidence")
+
+
+def get_manifest(question_id: int) -> dict:
+    return _get(f"/api/questions/{question_id}/manifest")
+
+
+def rerun_question(question_id: int, dataset_version_id: int | None = None) -> dict:
+    return _post(f"/api/questions/{question_id}/rerun", {"dataset_version_id": dataset_version_id})
+
+
+def compare_questions(question_id: int, other_id: int) -> dict:
+    return _get(f"/api/questions/{question_id}/compare/{other_id}")
+
+
+def list_dataset_versions(dataset_id: int) -> list[dict]:
+    return _get(f"/api/datasets/{dataset_id}/versions")
+
+
+def compare_dataset_versions(dataset_id: int, a: int, b: int) -> dict:
+    return _get(f"/api/datasets/{dataset_id}/versions/compare", a=a, b=b)
+
+
+# ----------------------------------------------------------- investigations --
+
+def create_investigation(payload: dict) -> dict:
+    return _post("/api/investigations", payload)
+
+
+def create_hypothesis_investigation(dataset_id: int, question: str) -> dict:
+    """Start a hypothesis-driven investigation of a free-text "why" question."""
+    return _post("/api/investigations/hypothesis", {"dataset_id": dataset_id, "question": question})
+
+
+def list_investigations(limit: int = 50) -> dict:
+    return _get("/api/investigations", limit=limit)
+
+
+def get_investigation(investigation_id: int) -> dict:
+    return _get(f"/api/investigations/{investigation_id}")
+
+
+def get_investigation_statistics(investigation_id: int) -> dict:
+    return _get(f"/api/investigations/{investigation_id}/statistics")
+
+
+# ------------------------------------------------------------- data quality --
+
+def get_quality(dataset_id: int) -> dict:
+    return _get(f"/api/datasets/{dataset_id}/quality")
+
+
+def run_quality(dataset_id: int) -> dict:
+    return _post(f"/api/datasets/{dataset_id}/quality/run", timeout=120)
+
+
+def set_quality_config(dataset_id: int, baseline_version_id: int | None, thresholds: dict) -> dict:
+    return _put(f"/api/datasets/{dataset_id}/quality/config",
+                {"baseline_version_id": baseline_version_id, "thresholds": thresholds})
+
+
+def update_incident(incident_id: int, action: str) -> dict:
+    return _post(f"/api/quality/incidents/{incident_id}/{action}")
+
+
+# ------------------------------------------------------------------ alerts --
+
+def get_alert(alert_id: int) -> dict:
+    return _get(f"/api/alerts/{alert_id}")
+
+
+def update_alert(alert_id: int, action: str) -> dict:
+    return _post(f"/api/alerts/{alert_id}/{action}")
+
+
+# ----------------------------------------------------------------- copilot --
+
+def create_copilot_session(dataset_id: int, title: str = "") -> dict:
+    return _post("/api/copilot/sessions", {"dataset_id": dataset_id, "title": title})
+
+
+def list_copilot_sessions() -> list[dict]:
+    return _get("/api/copilot/sessions")
+
+
+def get_copilot_session(session_id: int) -> dict:
+    return _get(f"/api/copilot/sessions/{session_id}")
+
+
+def send_copilot_message(session_id: int, message: str) -> dict:
+    return _post(f"/api/copilot/sessions/{session_id}/messages", {"message": message}, timeout=120)
+
+
+def delete_copilot_session(session_id: int) -> None:
+    _delete(f"/api/copilot/sessions/{session_id}")
+
+
+# --------------------------------------------------------------- scenarios --
+
+def scenario_models() -> dict:
+    return _get("/api/scenarios/models")
+
+
+def scenario_baseline(dataset_id: int, model: str, mapping: dict) -> dict:
+    return _post("/api/scenarios/baseline", {"dataset_id": dataset_id, "model": model, "mapping": mapping})
+
+
+def evaluate_scenarios(payload: dict) -> dict:
+    return _post("/api/scenarios/evaluate", payload)
+
+
+def save_scenario(payload: dict) -> dict:
+    return _post("/api/scenarios", payload)
+
+
+def list_scenarios() -> dict:
+    return _get("/api/scenarios")
+
+
+def compare_scenarios(ids: list[int]) -> dict:
+    return _get("/api/scenarios/compare", ids=",".join(str(i) for i in ids))
+
+
+def delete_scenario(scenario_id: int) -> None:
+    _delete(f"/api/scenarios/{scenario_id}")
+
+
+# ---------------------------------------------------------- semantic layer --
+
+def list_metrics() -> list[dict]:
+    return _get("/api/semantic/metrics")
+
+
+def get_metric(metric_id: int) -> dict:
+    return _get(f"/api/semantic/metrics/{metric_id}")
+
+
+def create_metric(payload: dict) -> dict:
+    return _post("/api/semantic/metrics", payload)
+
+
+def add_metric_version(metric_id: int, payload: dict) -> dict:
+    return _post(f"/api/semantic/metrics/{metric_id}/versions", payload)
+
+
+def approve_metric_version(metric_id: int, version: int) -> dict:
+    return _post(f"/api/semantic/metrics/{metric_id}/versions/{version}/approve")
+
+
+def deprecate_metric(metric_id: int) -> dict:
+    return _post(f"/api/semantic/metrics/{metric_id}/deprecate")
+
+
+def validate_formula(formula: str, dataset_id: int | None) -> dict:
+    return _post("/api/semantic/validate", {"formula": formula, "dataset_id": dataset_id})
+
+
+def list_terms() -> list[dict]:
+    return _get("/api/semantic/terms")
+
+
+def create_term(payload: dict) -> dict:
+    return _post("/api/semantic/terms", payload)
+
+
+def semantic_graph() -> dict:
+    return _get("/api/semantic/graph")
+
+
+def semantic_search(query: str) -> dict:
+    return _get("/api/semantic/search", q=query)
+
+
+# ------------------------------------------------------------------- evals --
+
+def list_eval_runs() -> list[dict]:
+    return _get("/api/evals/runs")
+
+
+def get_eval_run(run_id: int) -> dict:
+    return _get(f"/api/evals/runs/{run_id}")
+
+
+def compare_eval_runs(base: int, new: int) -> dict:
+    return _get("/api/evals/compare", base=base, new=new)
+
+
+def eval_suite() -> dict:
+    return _get("/api/evals/suite")

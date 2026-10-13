@@ -60,7 +60,7 @@ def executor_node(state: AgentState) -> dict:
     user_content = f"""Business question: {state['question_text']}
 
 Dataset profile:
-{llm_client.pretty(state['profile'])}
+{prompts.profile_block(state['profile'])}
 
 Prior step results (already computed, available context — do not recompute them, but you may
 reference their numbers in your own analysis if directly relevant):
@@ -131,6 +131,7 @@ Fix the root cause and provide corrected code.
             "reasoning": reasoning,
             "attempts": attempt_number,
             "execution_log_id": log_id,
+            "formula_explanation": formula_explanation,
         }
         new_results = state.get("step_results", []) + [step_result]
         return {

@@ -6,7 +6,7 @@ __pycache__/
 .git/
 .gitignore
 backend/data/
-.streamlit/
+.streamlit/secrets.toml
 *.md
 !README.md
 web/

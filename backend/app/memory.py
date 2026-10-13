@@ -40,6 +40,29 @@ def embed(texts: list[str], task_type: str) -> list[list[float]]:
     return out
 
 
+class QueryEmbedding:
+    """One question's retrieval embedding, shared by the lookups made for the
+    same planning step so the provider is asked once, not once per lookup.
+
+    Computed lazily (no request at all if no lookup needs it) and reused only
+    when everything that determines the vector is identical: the embedding
+    model, its dimensionality, the task type and the exact text. A failed
+    request is not remembered, so it cannot stand in for a vector later."""
+
+    TASK_TYPE = "RETRIEVAL_QUERY"
+
+    def __init__(self) -> None:
+        self._key: tuple | None = None
+        self._vector: list[float] | None = None
+
+    def get(self, text: str, embed_fn=None) -> list[float]:
+        key = (config.EMBEDDING_MODEL, config.EMBEDDING_DIM, self.TASK_TYPE, text)
+        if self._key != key or self._vector is None:
+            self._vector = (embed_fn or embed)([text], self.TASK_TYPE)[0]     # raises on failure: nothing is stored
+            self._key = key
+        return self._vector
+
+
 def _summarize(dashboard: Dashboard) -> str:
     kpis = "; ".join(f"{k.get('label')}: {k.get('value')}" for k in (dashboard.kpis_json or []))
     parts = []
@@ -76,8 +99,10 @@ def index_dashboard(db, dashboard: Dashboard) -> None:
 
 
 def retrieve(db, *, team_id: int | None, dataset_id: int, question_text: str,
-             exclude_question_id: int | None = None) -> list[AnalysisMemory]:
-    """Top-k similar past analyses for this team + dataset, best first. Never raises."""
+             exclude_question_id: int | None = None,
+             query_embedding: QueryEmbedding | None = None) -> list[AnalysisMemory]:
+    """Top-k similar past analyses for this team + dataset, best first. Never raises.
+    Pass a shared `query_embedding` to reuse the question's vector across lookups."""
     if not config.RAG_ENABLED:
         return []
     try:
@@ -88,7 +113,7 @@ def retrieve(db, *, team_id: int | None, dataset_id: int, question_text: str,
             q = q.filter(AnalysisMemory.question_id != exclude_question_id)
         if q.first() is None:
             return []
-        query = embed([question_text], "RETRIEVAL_QUERY")[0]
+        query = (query_embedding or QueryEmbedding()).get(question_text, embed)
         if db.get_bind().dialect.name == "postgresql":
             # pgvector: cosine distance in SQL, served by the HNSW index.
             dist = AnalysisMemory.embedding.op("<=>", return_type=Float)(

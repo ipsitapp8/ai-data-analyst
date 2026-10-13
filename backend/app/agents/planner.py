@@ -1,7 +1,7 @@
 """Planner node: turns the question + dataset profile into ordered analysis steps."""
 from __future__ import annotations
 
-from app import knowledge, memory
+from app import knowledge, memory, semantic
 from app.agents import llm_client, prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
@@ -49,11 +49,17 @@ def planner_node(state: AgentState) -> dict:
     user_content = f"""Business question: {state['question_text']}
 
 Dataset profile:
-{llm_client.pretty(state['profile'])}
+{prompts.profile_block(state['profile'])}
 """
+    # Approved definitions come from the team's semantic layer (changed only
+    # through the API by an owner or admin) -- never from dataset content.
+    user_content += semantic.format_for_prompt(state.get("approved_metrics") or [])
+    user_content += state.get("planner_hint") or ""
     # Scheduled re-runs watch for change, so they plan fresh instead of
     # anchoring on their own earlier results.
     db = SessionLocal()
+    # Both lookups below search with the same question text, model and settings: one embedding serves both.
+    question_vector = memory.QueryEmbedding()
     try:
         question = db.get(Question, question_id)
         if question is not None:
@@ -62,12 +68,13 @@ Dataset profile:
             user_content += knowledge.format_for_prompt(
                 knowledge.get_knowledge(db, team_id=question.team_id, dataset_id=question.dataset_id),
                 knowledge.retrieve_lessons(db, team_id=question.team_id, dataset_id=question.dataset_id,
-                                           question_text=question.text),
+                                           question_text=question.text, query_embedding=question_vector),
             )
         if question is not None and question.trigger != "scheduled":
             user_content += memory.format_for_prompt(memory.retrieve(
                 db, team_id=question.team_id, dataset_id=question.dataset_id,
                 question_text=question.text, exclude_question_id=question_id,
+                query_embedding=question_vector,
             ))
     finally:
         db.close()
