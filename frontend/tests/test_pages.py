@@ -203,6 +203,31 @@ def test_copilot_page_empty_and_stale_states(api, ws):
     assert "newer version of this dataset exists" in text_of(at)
 
 
+def test_a_run_that_could_not_reach_a_model_shows_which_provider_failed_and_how(api, ws):
+    """Was: only "No AI model could be reached", with the recorded reason filtered out of the trace table."""
+    from platform_helpers import ask, run_job
+
+    created = ask(api, ws, "Summarise what this dataset says about the business")
+    assert run_job(created["job_id"]) == "failed"
+    at = page("3_Analyses.py", ws, active_question_id=created["question_id"]).run()
+    assert not at.exception, [e.value for e in at.exception]
+    shown = " ".join(str(e.value) for e in at.error)
+    assert "Gemini: no API key is configured." in shown and "Llama: no API key is configured." in shown
+    rows = [row for frame in at.dataframe for row in frame.value.to_dict("records")]
+    failed = [r for r in rows if r.get("Kind") == "model request failed"]
+    assert [r["Step"] for r in failed] == ["gemini:not_configured", "llama:not_configured"], rows
+    assert all("action=not_tried" in r["Detail"] for r in failed)
+
+
+def test_settings_names_the_configured_models_next_to_the_key_status(api, ws):
+    from app import config
+
+    at = page("7_Settings.py", ws).run()       # the page's own warning about the test sandbox runner is an st.error
+    assert not at.exception, [e.value for e in at.exception]
+    text = text_of(at)
+    assert f"Gemini · {config.GEMINI_MODEL}" in text and f"Llama · {config.LLAMA_MODEL}" in text and "No key" in text
+
+
 # ----------------------------------------------------------- investigations --
 
 def test_investigations_page_shows_the_report(api, ws):

@@ -147,6 +147,9 @@ def health(db: Session = Depends(get_db)):
         "sandbox": sandbox,
         "gemini_key_configured": bool(config.GEMINI_API_KEY),
         "llama_key_configured": bool(config.LLAMA_API_KEY),
+        # Model identifiers, never keys: a retired model fails every request whatever the key.
+        "gemini_model": config.GEMINI_MODEL,
+        "llama_model": config.LLAMA_MODEL,
         "llm_failover_enabled": config.LLM_FAILOVER_ENABLED,
         "app_version": config.APP_VERSION,
         "jobs": {"queue_depth": queue.get("queue_depth", 0), "running": queue.get("running", 0),

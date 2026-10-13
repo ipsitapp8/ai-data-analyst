@@ -165,12 +165,50 @@ def _elapsed_ms(started: float) -> int:
     return max(0, int(round((time.monotonic() - started) * 1000)))
 
 
+# Reasons a provider gives for refusing a key. Compared as whole identifiers; nothing else in an
+# error body is read.
+_KEY_REJECTED_REASONS = frozenset({"API_KEY_INVALID", "API_KEY_EXPIRED", "API_KEY_SERVICE_BLOCKED",
+                                   "API_KEY_HTTP_REFERRER_BLOCKED", "API_KEY_IP_ADDRESS_BLOCKED"})
+
+
+def _key_rejected(exc: BaseException) -> bool:
+    details = getattr(exc, "details", None)
+    if not isinstance(details, dict):
+        return False
+    body = details.get("error", details)
+    items = body.get("details") if isinstance(body, dict) else None
+    return any(isinstance(item, dict) and item.get("reason") in _KEY_REJECTED_REASONS for item in (items or []))
+
+
+def _not_tried(provider: str, kind: str) -> dict:
+    return {"provider": provider, "kind": kind, "status": None, "model": ""}
+
+
+def _log_not_tried(tool_name: str, reasons: list[dict]) -> None:
+    """When no request was made to any provider, say so in the log and the run
+    trace. A failed request records itself; a run that failed for want of a
+    key used to leave nothing behind to explain it."""
+    if any(r["kind"] not in ("not_configured", "disabled") for r in reasons):
+        return
+    for r in reasons:
+        failure = {"kind": r["kind"], "category": r["kind"], "status": None, "finish_reasons": None,
+                   "retryable": False, "provider_status": STATUS_UNSPECIFIED}
+        log_provider_event(r["provider"], tool_name, failure, attempt=0, max_attempts=0, action="not_tried")
+
+
+def _failed(provider: str, model: str, exc: BaseException) -> dict:
+    failure = classify_failure(exc)
+    return {"provider": provider, "kind": failure["kind"], "status": failure["status"], "model": model}
+
+
 def classify_failure(exc: BaseException) -> dict:
     """A provider failure as a category a person can act on, plus its HTTP
     status when there is one. Built from the exception's type and status code
     only: the message, which could echo request data, is never included."""
-    status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
-    status = status if isinstance(status, int) else None
+    # Gemini's errors carry the HTTP status as `.code`; the OpenAI-compatible client carries it as
+    # `.status_code` and uses `.code` for a string, which used to hide the status altogether.
+    status = next((v for v in (getattr(exc, "code", None), getattr(exc, "status_code", None))
+                   if isinstance(v, int) and not isinstance(v, bool)), None)
     name = type(exc).__name__
     if isinstance(exc, MalformedOutput):
         return {"kind": "malformed_output", "category": exc.diagnosis.get("category"), "status": None,
@@ -182,8 +220,8 @@ def classify_failure(exc: BaseException) -> dict:
         kind = "overloaded"
     elif status is not None and status >= 500:
         kind = "server_error"
-    elif status in (401, 403):
-        kind = "authentication"
+    elif status in (401, 403) or _key_rejected(exc):
+        kind = "authentication"      # Gemini reports a bad key as 400 with reason API_KEY_INVALID
     elif status == 400:
         kind = "bad_request"
     elif status == 404:
@@ -329,6 +367,7 @@ def call_tool(
         max_tokens=max_tokens,
     )
     failures: list[str] = []
+    reasons: list[dict] = []          # one structured entry per provider, for the message a user sees
 
     if runtime.get_provider_override() is not None:
         LAST_PROVIDER = "scripted"
@@ -360,6 +399,7 @@ def call_tool(
                     time.sleep(wait_s)
                     continue
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+                reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
                 log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
                                    action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
                                    elapsed_ms=_elapsed_ms(started))
@@ -378,6 +418,7 @@ def call_tool(
                     time.sleep(wait_s)
                     continue
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+                reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
                 log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
                                    action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
                                    elapsed_ms=_elapsed_ms(started))
@@ -386,15 +427,18 @@ def call_tool(
                 # Includes MalformedOutput: the model answered without the required structured
                 # output. Not retried here (unchanged behaviour): the backup provider gets the step.
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+                reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
                 log_provider_event("gemini", tool_name, classify_failure(e), attempt=attempt + 1, max_attempts=tries,
                                    action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
                                    elapsed_ms=_elapsed_ms(started))
                 break
     else:
         failures.append("gemini: no GEMINI_API_KEY set")
+        reasons.append(_not_tried("gemini", "not_configured"))
 
     if not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
         failures.append("llama: failover disabled (LLM_FAILOVER_ENABLED=false)")
+        reasons.append(_not_tried("llama", "disabled"))
     elif config.LLAMA_API_KEY:
         started = time.monotonic()
         try:
@@ -406,14 +450,17 @@ def call_tool(
             raise
         except Exception as e:  # noqa: BLE001 - report both failures together below
             failures.append(f"llama({config.LLAMA_MODEL}): {e}")
+            reasons.append(_failed("llama", config.LLAMA_MODEL, e))
             log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1, action="give_up",
                                error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
     else:
         failures.append("llama: no LLAMA_API_KEY set")
+        reasons.append(_not_tried("llama", "not_configured"))
 
     LAST_PROVIDER = "none"
+    _log_not_tried(tool_name, reasons)
     raise runtime.ProviderUnavailable(
-        "Both model providers failed for this step.\n  - " + "\n  - ".join(failures)
+        "Both model providers failed for this step.\n  - " + "\n  - ".join(failures), failures=reasons,
     )
 
 

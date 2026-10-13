@@ -57,9 +57,45 @@ class ProviderUnavailable(RunAborted, RuntimeError):
     keep working unchanged."""
 
     failure_class = "provider_unavailable"
-    user_message = ("No AI model could be reached, so this analysis could not run. The usual causes are a "
-                    "missing or invalid API key, an exhausted quota, or a provider outage. Questions that are "
-                    "simple aggregations, and root-cause investigations, do not need a model.")
+    _LEAD = "No AI model could be reached, so this analysis could not run."
+    _TAIL = "Questions that are simple aggregations, and root-cause investigations, do not need a model."
+    user_message = (f"{_LEAD} The usual causes are a missing or invalid API key, an exhausted quota, or a "
+                    f"provider outage. {_TAIL}")
+    # failure kind (llm_client.classify_failure, plus the two "never tried" kinds) -> plain wording
+    WHY = {
+        "not_configured": "no API key is configured",
+        "disabled": "not tried, because provider failover is turned off",
+        "authentication": "the provider did not accept the configured API key",
+        "model_not_found": "the configured model was not found",
+        "rate_limited": "the usage limit was reached",
+        "overloaded": "the provider's service was temporarily unavailable",
+        "server_error": "the provider's service returned an error",
+        "network": "the provider could not be reached over the network",
+        "bad_request": "the provider rejected the request",
+        "malformed_output": "the model did not return a usable answer",
+    }
+
+    def __init__(self, message: str = "", failures: list[dict] | None = None):
+        """`failures`: one {"provider", "kind", "status", "model"} per provider,
+        from the failure's type and status code only. They become the message a
+        user sees, so it says which provider failed and how -- never a key, a
+        variable name, or anything the provider sent back."""
+        super().__init__(message or self.user_message)
+        self.failures = list(failures or [])
+        if self.failures:
+            self.user_message = f"{self._LEAD} {self.describe(self.failures)} {self._TAIL}"
+
+    @classmethod
+    def describe(cls, failures: list[dict]) -> str:
+        parts = []
+        for f in failures:
+            who = str(f.get("provider") or "provider").capitalize()
+            if f.get("model") and f.get("kind") not in ("not_configured", "disabled"):
+                who += f" ({f['model']})"
+            why = cls.WHY.get(f.get("kind"), "the request failed")
+            status = f" (HTTP {f['status']})" if isinstance(f.get("status"), int) else ""
+            parts.append(f"{who}: {why}{status}.")
+        return " ".join(parts)
 
 
 @dataclass

@@ -24,11 +24,24 @@ DB_PATH = Path(os.getenv("DB_PATH") or DATA_DIR / "app.db")
 for d in (DATA_DIR, UPLOADS_DIR, WORKSPACES_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
+def _secret(name: str) -> str:
+    """An API key from the environment, without the whitespace or quotes that
+    pasting it into a dashboard field can leave around it (either makes a
+    valid key fail as invalid)."""
+    value = os.getenv(name, "").strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1].strip()
+    return value
+
+
 # --- Gemini (Planner / Executor / Dashboard) ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = _secret("GEMINI_API_KEY")
 # Flash, not Pro: the Pro models are not available on the free tier (they return
 # 429 with "limit: 0"). Flash handles the structured tool-calling this app needs.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# A default that the provider retires answers every request with 404, whatever
+# the key: gemini-2.5-flash did. Blank counts as unset, so an empty dashboard
+# field cannot select "no model".
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.6-flash"
 # Bounded retry-with-backoff for the free tier's per-minute rate limit (429),
 # tried before failing over to Llama -- most 429s clear within a retry or two.
 GEMINI_RATE_LIMIT_RETRIES = int(os.getenv("GEMINI_RATE_LIMIT_RETRIES", "2"))
@@ -39,9 +52,9 @@ GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_S
 # genuinely independent means a different model, not just a different prompt on
 # the same one. Defaults to Meta's official Llama API (OpenAI-compatible); point
 # LLAMA_BASE_URL at Groq/Together/OpenRouter/etc instead if that's what your key is for.
-LLAMA_API_KEY = os.getenv("LLAMA_API_KEY", "")
-LLAMA_MODEL = os.getenv("LLAMA_MODEL", "Llama-4-Maverick-17B-128E-Instruct-FP8")
-LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "https://api.llama.com/compat/v1/")
+LLAMA_API_KEY = _secret("LLAMA_API_KEY")
+LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "Llama-4-Maverick-17B-128E-Instruct-FP8"
+LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.llama.com/compat/v1/"
 
 # --- Sandbox ---
 # "docker" (recommended, isolated) or "subprocess" (dev-only fallback, NOT isolated)

@@ -98,9 +98,11 @@ with st.container(key="flat_models"):
     # would still show here.
     html(
         row("Planner / Executor / Dashboard",
-            f"Gemini {badge('Key set', 'verified') if gem else badge('No key', 'error')}")
+            f"Gemini · {esc(hz.get('gemini_model') or 'model unknown')} "
+            f"{badge('Key set', 'verified') if gem else badge('No key', 'error')}")
         + row("Critic (independent verifier)",
-              f"Llama {badge('Key set', 'verified') if lla else badge('No key', 'error')}",
+              f"Llama · {esc(hz.get('llama_model') or 'model unknown')} "
+              f"{badge('Key set', 'verified') if lla else badge('No key', 'error')}",
               last=True)
     )
     html(
