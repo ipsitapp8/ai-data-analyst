@@ -344,6 +344,9 @@ def test_level_shift_trend_and_change_point_on_known_series():
     assert short["status"] == "unavailable" and f"at least {config.STAT_MIN_SERIES_POINTS} are needed" in short["reason"]
     assert sel.level_shift([5] * 10, [5] * 10, what="r", bucket="day")["status"] == "unavailable"
     assert sel.level_shift([5] * 10, [7] * 10, what="r", bucket="day")["status"] == "unavailable", "an exact difference needs no test"
+    # Values with no exact binary form leave rounding noise in the residuals.
+    for lo, hi in [(0.1, 0.3), (1 / 3, 2 / 3), (1e6 + 0.1, 1e6 + 0.7)]:
+        assert sel.level_shift([lo] * 10, [hi] * 10, what="r", bucket="day")["status"] == "unavailable", (lo, hi)
 
     falling = 200 - 2.0 * np.arange(40) + rng.normal(0, 3, 40)
     later = 200 - 2.0 * np.arange(40, 80) + rng.normal(0, 3, 40)

@@ -12,6 +12,11 @@ import numpy as np
 from scipy import stats as st
 
 
+# Residual sum of squares, relative to that of the outcome, below which a fit
+# is exact: a residual norm under 1e-12 of the outcome's is floating-point noise.
+EXACT_FIT_TOLERANCE = 1e-24
+
+
 class RegressionError(ValueError):
     """The model cannot be estimated from this data."""
 
@@ -41,6 +46,10 @@ def ols(X: np.ndarray, y: np.ndarray, cov: str = "HC3", lags: int = 0) -> dict:
     xtx_inv = np.linalg.inv(X.T @ X)
     beta = xtx_inv @ X.T @ y
     e = y - X @ beta
+    # An exact fit leaves rounding noise, not zeros, in the residuals. Left in,
+    # it gives a tiny non-zero standard error and a test built on that noise.
+    if float(e @ e) <= EXACT_FIT_TOLERANCE * float(y @ y):
+        e = np.zeros_like(e)
     if cov == "classical":
         V = xtx_inv * float(e @ e) / (n - k)
     elif cov == "HC3":
