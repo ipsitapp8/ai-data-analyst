@@ -210,6 +210,38 @@ not examined and names alternative explanations.
 A "why did … change" question is routed here automatically when the dataset has a date column and
 one metric can be identified. `POST /api/investigations` takes an explicit metric and periods.
 
+**Asking in words, without a model.** `POST /api/investigations/ask` takes a dataset and a question. The metric is
+the one numeric column the question names (summed); the periods are read from the question against the dataset's own
+calendar, not today's date:
+
+| Phrase | Read as |
+|---|---|
+| last / previous / past month, quarter, year (optionally "last 3 months") | the most recent complete calendar unit(s) in the data, against the same number before |
+| this / current month, quarter, year | the unit to date, against the same number of days at the start of the one before |
+| last N days, last N weeks, yesterday | the final days of data, against the same number of days before |
+| in March, in Sept 2025, in Q2 | that calendar month or quarter, against the one before |
+
+A period the data only partly covers is cut, together with its comparison period, to the same number of days. A period
+outside the data is refused with the reason. A question that names no readable period falls back to the midpoint split,
+and the report says so.
+
+**Unequal lengths.** A sum over 31 days exceeds one over 28 with nothing having changed. When the two periods differ in
+length by more than 2%, a sum or count is compared like for like: the earlier value is scaled to the later period's
+length, the part of the change that is only the extra days is reported as its own row, and segment contributions add up
+to the like-for-like change. Averages and ratios are not scaled.
+
+**Uncertainty.** The change, and each of the five leading contributors, is tested as a series of time buckets with
+Newey-West errors (`app/stats`), never row by row. The contributors' p-values are Holm-adjusted as one family. A change
+within the metric's ordinary variation makes the report inconclusive. A trend already under way in the earlier period is
+measured and reported as an alternative reading.
+
+**Evidence table.** `report.evidence_table` has one row per candidate explanation. `kind` is `measured` (a location of
+the change, an offsetting segment, the period-length effect, a price or volume effect, a pre-existing trend) or
+`hypothesis` (not tested, and not testable from the dataset). `support` is `strong`, `moderate`, `weak`, `offset` or
+`exact`; it rates the evidence that the change is located there, never that it was caused there. Nothing is rated
+`strong` when the periods are not comparable (missing days, a period the data only partly covers), and such a report
+is inconclusive.
+
 ## 7. Data quality and drift
 
 `backend/app/data_quality.py`
@@ -417,7 +449,7 @@ List endpoints with `limit` and `offset` return `{total, limit, offset, ...}`.
 | --- | --- |
 | Jobs | `GET /api/jobs`, `GET /api/jobs/metrics`, `GET /api/jobs/{id}`, `POST /api/jobs/{id}/cancel`, `POST /api/jobs/{id}/retry`, `GET /api/questions/{id}/job`, `POST /api/questions/{id}/cancel`, `GET /api/questions/{id}/trace` |
 | Evidence | `GET /api/questions/{id}/evidence`, `GET /api/questions/{id}/manifest`, `POST /api/questions/{id}/rerun`, `GET /api/questions/{a}/compare/{b}`, `GET /api/datasets/{id}/versions`, `GET /api/datasets/{id}/versions/compare?a=&b=` |
-| Investigations | `POST /api/investigations`, `GET /api/investigations`, `GET /api/investigations/{id}` |
+| Investigations | `POST /api/investigations`, `POST /api/investigations/ask`, `GET /api/investigations`, `GET /api/investigations/{id}` |
 | Data quality | `GET /api/datasets/{id}/quality`, `POST /api/datasets/{id}/quality/run`, `PUT /api/datasets/{id}/quality/config`, `POST /api/quality/incidents/{id}/acknowledge`, `POST /api/quality/incidents/{id}/resolve` |
 | Alerts | `GET /api/alerts/{id}`, `POST /api/alerts/{id}/acknowledge`, `POST /api/alerts/{id}/resolve` |
 | Copilot | `POST /api/copilot/sessions`, `GET /api/copilot/sessions`, `GET /api/copilot/sessions/{id}`, `POST /api/copilot/sessions/{id}/messages`, `DELETE /api/copilot/sessions/{id}` |
