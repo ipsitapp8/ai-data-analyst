@@ -11,6 +11,7 @@ openai==3.3.1
 langgraph==1.2.11
 pandas==2.3.3
 numpy==2.4.6
+scipy==1.18.1
 plotly==6.9.0
 matplotlib==3.11.1
 alembic==1.19.2

@@ -13,13 +13,16 @@ from api_client import (ApiError, ask_question, chat_dashboard, compare_question
                         get_dashboard, get_evidence, get_manifest, get_status, list_questions, list_shares,
                         rerun_question, reset_chart_view, revoke_share, save_chart_view)
 from style.theme import (
+    DASHBOARD_COLORWAY,
     badge,
+    dashboard_chart,
     chart_card_css,
     require_active_team,
     esc,
     figure_from_json,
     html,
     evidence_badge,
+    inject_dashboard_theme,
     open_inspect,
     page_header,
     render_evidence,
@@ -32,6 +35,7 @@ from style.theme import (
 )
 
 page_setup("Dashboards")
+inject_dashboard_theme()  # the mint / white-surface / orange look, this page only
 render_sidebar("dashboards")
 require_active_team("Dashboards")
 
@@ -106,24 +110,21 @@ except ApiError as e:
 if st.button("←  All dashboards", key="db_back"):
     st.session_state.pop("active_question_id", None)
     st.rerun()
-html("<div style='height:4px'></div>")
 
 verdict_state = dash.get("verdict_state")
-head_l, head_r = st.columns([3, 1])
+head_l, head_r = st.columns([2.3, 1.7], vertical_alignment="top")
 with head_l:
     html(
         f'<div class="ds-page-title">{esc(status.get("question_text", "Analysis"))}</div>'
-    )
-    html(
-        f'<div style="display:flex;align-items:center;gap:11px;margin-bottom:24px;">'
+        f'<div class="dash-head-meta">'
         f'<span class="ds-row-meta">Analysis #{qid}</span>'
         f'{verdict_badge(verdict_state)}'
         + (f'<span class="ds-row-meta">Data v{dash["dataset_version"]}</span>' if dash.get("dataset_version") else "")
         + "</div>"
     )
-with head_r:
-    html("<div style='height:12px'></div>")
-    if st.button("Audit Trail  →", key="db_audit"):
+# the three actions sit in one row beside the title (and wrap under it when there is no room)
+with head_r, st.container(key="dash_actions", horizontal=True, horizontal_alignment="right"):
+    if st.button("Audit Trail  →", key="db_audit", use_container_width=True):
         st.switch_page("pages/6_Audit_Trail.py")
     with st.popover("Share", use_container_width=True):
         if verdict_state == "UNVERIFIED":
@@ -246,6 +247,24 @@ with st.expander(
                     st.caption(cmp["note"])
                 except ApiError as e:
                     st.error(str(e))
+
+kpis = dash.get("kpis", [])
+if kpis:
+    html(f'<div class="dash-eyebrow">Key metrics <b>{len(kpis)}</b></div>')
+    with st.container(key="dash_kpis"):
+        # one row of columns; the dashboard stylesheet lays it out as a grid that wraps
+        for col, kpi in zip(st.columns(len(kpis), gap="medium"), kpis):
+            with col:
+                element_id = kpi.get("element_id")
+                flag = "⚠️ " if kpi.get("flagged") else ""
+                mark = {"verified": "  \n:green[✓ verified]", "verified_with_caveats": "  \n:orange[✓ with caveats]",
+                        "unverified": "  \n:red[not verified]"}.get(kpi.get("evidence_status"), "")
+                label = f"{flag}{kpi.get('label', '')}  \n**{kpi.get('value', '')}**{mark}"
+                with st.container(key=f"kpi_{element_id or kpi.get('label', '')}"):
+                    if st.button(label, key=f"kpibtn_{element_id or kpi.get('label', '')}",
+                                 use_container_width=True, disabled=not element_id):
+                        open_inspect(dashboard_id, element_id)
+                        st.rerun()
 
 # ---------------------------------------------------------- chart studio --
 # Session keys, all scoped to this dashboard + chart:
@@ -466,41 +485,26 @@ if entries:
             elif view["style"] != cs.DEFAULT_STYLE and not target["build"]:
                 html('<div class="ds-row-meta" style="margin-top:8px;">This chart\'s original type can\'t be '
                      'restyled directly; pick a chart type above to apply the style.</div>')
-    html("<div style='height:22px'></div>")
-
-kpis = dash.get("kpis", [])
-if kpis:
-    cols = st.columns(min(4, len(kpis)), gap="medium")
-    for col, kpi in zip(cols, kpis[:4]):
-        with col:
-            element_id = kpi.get("element_id")
-            flag = "⚠️ " if kpi.get("flagged") else ""
-            mark = {"verified": "  \n:green[✓ verified]", "verified_with_caveats": "  \n:orange[✓ with caveats]",
-                    "unverified": "  \n:red[not verified]"}.get(kpi.get("evidence_status"), "")
-            label = f"{flag}{kpi.get('label', '')}  \n**{kpi.get('value', '')}**{mark}"
-            with st.container(key=f"kpi_{element_id or kpi.get('label', '')}"):
-                if st.button(label, key=f"kpibtn_{element_id or kpi.get('label', '')}",
-                             use_container_width=True, disabled=not element_id):
-                    open_inspect(dashboard_id, element_id)
-                    st.rerun()
-    html("<div style='height:22px'></div>")
 
 if entries:
     selected_key = st.session_state.get(f"cs_target_{dashboard_id}")
-    for i in range(0, len(entries), 2):
-        pair = entries[i:i + 2]
-        cols = st.columns(len(pair), gap="medium")
-        for col, entry in zip(cols, pair):
+
+    def _card_key(entry: dict) -> str:
+        element_id = entry["chart"].get("element_id")
+        return f"chartcard_{element_id}" if element_id else f"card_ch{entry['index']}_{entry['chart']['step_index']}"
+
+    # Per-card effects go out once, ahead of the grid, so no card is pushed down by its own stylesheet.
+    card_css = "".join(chart_card_css(_card_key(e), e["view"]["style"] if e["build"] else cs.DEFAULT_STYLE,
+                                      selected=e["key"] == selected_key and len(entries) > 1) for e in entries)
+    html(f'<div class="dash-eyebrow">Charts <b>{len(entries)}</b></div>{card_css}')
+    with st.container(key="dash_charts"):
+        # one row of columns; the dashboard stylesheet lays it out two across, wrapping
+        for col, entry in zip(st.columns(len(entries), gap="medium"), entries):
             chart = entry["chart"]
             with col:
                 element_id = chart.get("element_id")
-                container_key = f"chartcard_{element_id}" if element_id else f"card_ch{i}_{chart['step_index']}"
-                css = chart_card_css(container_key, entry["view"]["style"] if entry["build"] else cs.DEFAULT_STYLE,
-                                     selected=entry["key"] == selected_key and len(entries) > 1)
-                if css:
-                    html(css)
-                with st.container(key=container_key):
-                    t_l, t_r = st.columns([5, 1.3], vertical_alignment="center")
+                with st.container(key=_card_key(entry)):
+                    t_l, t_r = st.columns([4, 1.6], vertical_alignment="center")
                     with t_l:
                         if chart.get("flagged") and element_id:
                             f_l, f_r = st.columns([5, 1])
@@ -516,27 +520,28 @@ if entries:
                         with st.container(key=f"cs_edit_{entry['key']}"):
                             st.button("✎ Customize", key=f"cs_edit_btn_{entry['key']}",
                                       on_click=_on_customize, args=(entry["key"],))
-                    html("<div style='height:4px'></div>")
                     try:
                         if entry["build"]:
+                            # a Chart Studio chart keeps exactly the colours the user picked
                             fig = entry["build"].fig
                             event = plot(fig, height=300, showlegend=entry["view"]["style"]["legend"],
                                          on_select_key=f"chart_{element_id}" if element_id else None,
-                                         restyle_traces=False)
+                                         restyle_traces=False, colorway=DASHBOARD_COLORWAY,
+                                         finish=lambda f: dashboard_chart(f, own_traces=True))
                         else:
                             fig = figure_from_json(chart["plotly_json"])
                             event = plot(fig, height=300, showlegend=True,
-                                         on_select_key=f"chart_{element_id}" if element_id else None)
+                                         on_select_key=f"chart_{element_id}" if element_id else None,
+                                         colorway=DASHBOARD_COLORWAY, finish=dashboard_chart)
                         if element_id and event and event.selection and event.selection.get("points"):
                             open_inspect(dashboard_id, element_id, _studio_info(entry))
                             st.rerun()
                     except Exception as e:  # noqa: BLE001 - render one bad chart, not the page
                         html(f'<div class="ds-row-meta">Could not render: {esc(e)}</div>')
-        html("<div style='height:8px'></div>")
 
 render_inspect_dialog_if_open()
 
-if dash.get("narrative"):
+def _narrative_card() -> None:
     with st.container(key="card_narr"):
         n_col, nf_col = st.columns([6, 1])
         with n_col:
@@ -549,13 +554,10 @@ if dash.get("narrative"):
                         st.rerun()
                 else:
                     html('<span class="ds-flag" title="Flagged by the Critic">⚠️</span>')
-        html(
-            f'<div style="font-size:0.97rem;line-height:1.75;color:var(--text-primary);'
-            f'margin-top:10px;">{esc(dash["narrative"])}</div>'
-        )
+        html(f'<div class="dash-narrative">{esc(dash["narrative"])}</div>')
 
-if dash.get("verification_summary"):
-    html("<div style='height:14px'></div>")
+
+def _verification_card() -> None:
     with st.container(key="card_verif"):
         html(
             f'<div style="display:flex;align-items:center;gap:10px;">'
@@ -566,8 +568,18 @@ if dash.get("verification_summary"):
         )
 
 
+_summary = [card for card, shown in ((_narrative_card, dash.get("narrative")),
+                                     (_verification_card, dash.get("verification_summary"))) if shown]
+if _summary:
+    html('<div class="dash-eyebrow">Summary</div>')
+    with st.container(key="dash_summary"):
+        # the narrative gets the wider column when both are present
+        for col, card in zip(st.columns([2, 1] if len(_summary) == 2 else 1, gap="medium"), _summary):
+            with col:
+                card()
+
+
 # ------------------------------------------------------- ask your dashboard --
-html("<div style='height:22px'></div>")
 chat_key = f"chat_{qid}"
 history = st.session_state.setdefault(chat_key, [])
 with st.container(key="card_chat"):

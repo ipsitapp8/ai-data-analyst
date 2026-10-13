@@ -26,6 +26,9 @@ proposals stop being new, or when the data cannot support a conclusion.
 """
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
+import json
 import logging
 import re
 import time
@@ -36,6 +39,8 @@ import pandas as pd
 
 from app import analysis_ops as ops
 from app import config, investigator, runtime, verification
+from app.stats import result as stat_result
+from app.stats import selector as stat_select
 from app import metric_engine as me
 from app.analysis_ops import FAILED, INCONCLUSIVE, NOT_TESTABLE, SUPPORTED, WEAKENED
 
@@ -53,7 +58,14 @@ ANALYSIS_SCHEMA = {"type": "object", "properties": {
     "op": {"type": "string", "enum": [k for k in ops.EXPECTATIONS if k != "metric_change"]},
     "params": {"type": "object", "description": "Only the parameters the chosen analysis takes.", "properties": {
         "formula": {"type": "string"}, "column": {"type": "string"}, "dimension": {"type": "string"},
-        "segment": {"type": "string"}, "filters": FILTER_SCHEMA}}}, "required": ["op", "params"]}
+        "segment": {"type": "string"}, "filters": FILTER_SCHEMA,
+        "unit": {"type": "string"}, "outcome": {"type": "string"}, "x": {"type": "string"}, "y": {"type": "string"},
+        "controls": {"type": "array", "items": {"type": "string"}},
+        "period": {"type": "string", "enum": ["earlier", "later", "both"]},
+        "estimand": {"type": "string", "enum": ["mean", "typical"]},
+        "method": {"type": "string", "description": "Optional: the statistical test you would suggest. The system "
+                                                    "checks it against the data and may override it."}}}},
+    "required": ["op", "params"]}
 PREDICTION_SCHEMA = {"type": "object", "properties": {"expect": {"type": "string"}}, "required": ["expect"]}
 
 UNDERSTANDING_SCHEMA = {
@@ -170,10 +182,26 @@ class MemoryStore:
         self.understanding: dict | None = None
         self.hypotheses: list[dict] = []
         self.analyses: list[dict] = []
+        self.superseded: list[dict] = []          # results of an earlier context: kept for the record, never reused
+        self.evidence: dict = {}                  # which context the current results belong to, and whether its run finished
 
     def load(self) -> dict:
         return {"understanding": self.understanding, "hypotheses": [dict(h) for h in self.hypotheses],
                 "analyses": [dict(a) for a in self.analyses]}
+
+    def begin(self, evidence: dict, keep_analyses: set[str], keep_hypotheses: set[str]) -> None:
+        """A run starts (or resumes) in the context described by `evidence`.
+        Everything stored that is not in the keep-sets was produced in another
+        context and is set aside."""
+        self.superseded += [a for a in self.analyses if a["id"] not in keep_analyses]
+        self.analyses = [a for a in self.analyses if a["id"] in keep_analyses]
+        self.hypotheses = [h for h in self.hypotheses if h["id"] in keep_hypotheses]
+        self.evidence = dict(evidence)
+
+    def finish(self, state: str, note: str = "") -> None:
+        """Record how the run that produced the current evidence ended:
+        "final" (it completed and its report uses the evidence) or "partial"."""
+        self.evidence = {**self.evidence, "state": state, "note": note}
 
     def save_understanding(self, understanding: dict) -> None:
         self.understanding = understanding
@@ -244,6 +272,7 @@ class HypothesisEngine:
         self.limitations: list[str] = []
         self.model_notes: list[str] = []
         self.stop_reason = ""
+        self.multiplicity: dict | None = None
         self.resumed = False
         self.model_unavailable = False
 
@@ -285,7 +314,7 @@ class HypothesisEngine:
                 entry.pop("top_values", None)
                 entry["note"] = "high-cardinality column; sample values withheld"
             slim["columns"].append(entry)
-        return prompts.profile_block(_rounded(slim))
+        return prompts.profile_block(_rounded(slim), compact=True)
 
     # --------------------------------------------------------- A. understand --
 
@@ -437,9 +466,12 @@ class HypothesisEngine:
     def _record(self, sig, op, status, result, error, requested_by, hypothesis_ids, duration_ms, count=True) -> dict:
         if count:
             self.budget.analyses += 1
-        record = {"id": f"A{len(self.analyses) + 1}", "signature": sig or "", "op": op.get("op"), "params": op.get("params") or {},
+        number = max([int(a["id"][1:]) for a in self.analyses if a["id"][1:].isdigit()] or [0]) + 1
+        record = {"id": f"A{number}", "signature": sig or "", "op": op.get("op"), "params": op.get("params") or {},
                   "status": status, "result": result, "error": error, "requested_by": requested_by,
-                  "hypothesis_ids": list(hypothesis_ids), "duration_ms": duration_ms}
+                  "hypothesis_ids": list(hypothesis_ids), "duration_ms": duration_ms,
+                  # What produced this result. A result is only ever reused in the same context.
+                  "provenance": {**self._evidence_context(), "computed_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"}}
         self.analyses.append(record)
         if sig:
             self.by_signature[sig] = record
@@ -449,15 +481,25 @@ class HypothesisEngine:
     # ------------------------------------------------------------ B. generate --
 
     def _facts_for_prompt(self) -> str:
-        lines = []
+        lines, cautions = [], {}
         for a in self.analyses:
+            params = json.dumps({k: v for k, v in (a["params"] or {}).items() if v not in (None, [], {})},
+                                separators=(",", ":"), default=str)
             if a["status"] != "ok":
-                lines.append(f"{a['id']} {a['op']} {a['params']}: {a['status']} ({a['error']})")
+                lines.append(f"{a['id']} {a['op']} {params}: {a['status']} ({a['error']})")
                 continue
-            facts = _rounded({k: v for k, v in a["result"]["facts"].items() if k not in ("identity",)})
-            table = _rounded(a["result"].get("table"))
-            lines.append(f"{a['id']} {a['op']} {a['params']} -> {facts}" + (f" top rows: {table[:5]}" if table else ""))
-        return "\n".join(lines)[:9000]
+            # A brief, not the stored result: what was measured, its uncertainty and the leading
+            # segments. Full tables and per-group descriptives stay in the record, out of the prompt.
+            brief = ops.analysis_brief(a["op"], a["result"])
+            # Several analyses share a limitation (every series has the same calendar): each is
+            # written once, word for word, below the list, with the analyses it applies to.
+            for text in (brief.get("statistics") or {}).pop("limitations", []):
+                cautions.setdefault(text, []).append(a["id"])
+            lines.append(f"{a['id']} {a['op']} {params} -> " + json.dumps(_rounded(brief), separators=(",", ":"), default=str))
+        footer = ""
+        if cautions:
+            footer = "\nLimitations of the methods used:\n" + "\n".join(f"- {', '.join(ids)}: {text}" for text, ids in cautions.items())
+        return "\n".join(lines)[:max(0, 9000 - len(footer))] + footer
 
     def generate_hypotheses(self) -> None:
         from app.agents import prompts
@@ -571,6 +613,79 @@ class HypothesisEngine:
 
     # --------------------------------------------------------------- E. adapt --
 
+    def _apply_multiplicity(self) -> None:
+        """Correct for testing several hypotheses in one investigation.
+
+        The family is every distinct statistical test used as test evidence
+        for a hypothesis in this investigation (refinements, the baseline and
+        the scan are not confirmatory tests and are outside it). With two or
+        more members, each test's p-value is adjusted (Holm by default) and
+        every affected hypothesis is judged again on the adjusted value. Raw
+        p-values are kept; the adjustment is recomputed whenever the family grows."""
+        by_id = {a["id"]: a for a in self.analyses}
+        members: dict[str, dict] = {}
+        for h in self.hypotheses:
+            for e in h["evidence"]:
+                a = by_id.get(e.get("analysis_id"))
+                if e.get("role", "test") != "test" or a is None or a["status"] != "ok":
+                    continue
+                result = a["result"]["facts"].get("stat")
+                if result and result["status"] == "ok" and result.get("test") and result["test"].get("p_value") is not None:
+                    members[a["id"]] = a
+        family = "statistical tests of this investigation's hypotheses"
+        self.multiplicity = None
+        if len(members) >= 2:
+            ids = sorted(members, key=lambda i: int(i[1:]))
+            raw = [members[i]["result"]["facts"]["stat"]["test"]["p_value"] for i in ids]
+            method = config.STAT_MULTIPLICITY_METHOD
+            label = "Holm" if method == "holm" else "Benjamini-Hochberg"
+            for i, p_adj in zip(ids, stat_select.adjust_family(raw, method)):
+                facts = members[i]["result"]["facts"]
+                facts["stat"] = stat_result.with_adjustment({**facts["stat"], "adjusted": None}, p_adj, label, family, len(ids))
+                self.store.save_analysis(members[i])
+            self.multiplicity = {"method": label, "family": family, "comparisons": len(ids), "analysis_ids": ids,
+                                 "controls": ("the chance of any false positive among these tests" if method == "holm"
+                                              else "the expected share of false positives among the significant results")}
+        for h in self.hypotheses:
+            changed = False
+            for e in h["evidence"]:
+                a = members.get(e.get("analysis_id"))
+                if a is None or e.get("role", "test") != "test" or "prediction" not in e:
+                    continue
+                verdict = ops.evaluate({"op": a["op"], "params": a["params"]}, a["result"], {"expect": e["prediction"]})
+                if (verdict["status"], verdict["reasons"]) != (e["assessment"], e["reasons"]):
+                    e.update(assessment=verdict["status"], reasons=verdict["reasons"], effect=verdict["effect"])
+                    changed = True
+            if changed:
+                self._settle(h)
+
+    def _statistics(self) -> list[dict]:
+        """Every statistical result of the run, flat, tied to its analysis and hypotheses."""
+        out = []
+        for a in self.analyses:
+            result = (a.get("result") or {}).get("facts", {}).get("stat") if a["status"] == "ok" else None
+            if result:
+                out.append({"analysis_id": a["id"], "op": a["op"], "params": a["params"], "requested_by": a["requested_by"],
+                            "hypothesis_ids": list(a["hypothesis_ids"]), "provenance": a.get("provenance") or {}, **result})
+        return out
+
+    def _practical(self, statistics: list[dict]) -> list[str]:
+        """How large each estimated difference is in the metric's own terms.
+        Kept apart from whether it is statistically distinguishable."""
+        lines = []
+        for s in statistics:
+            if s["status"] != "ok" or s.get("estimate") is None:
+                continue
+            relative = next((e["value"] for e in s["effects"] if e["name"] == "relative difference, percent" and e["value"] is not None), None)
+            if relative is None:
+                continue
+            size = "at or above" if abs(relative) >= config.HYP_MATERIAL_PCT else "below"
+            detect = {True: "and statistically distinguishable from no change", False: "but not statistically distinguishable from no change",
+                      None: "(no test applies)"}[None if s["significant"] is None else ops._sig(s)]
+            lines.append(f"{s['analysis_id']}: {s['estimand']} is {stat_result.fmt(s['estimate'], s.get('units'))}, {relative:+.1f}% of the "
+                         f"earlier level: {size} the {config.HYP_MATERIAL_PCT:g}% materiality threshold, {detect}.")
+        return lines
+
     def _state_for_prompt(self) -> str:
         lines = []
         for h in self.hypotheses:
@@ -601,7 +716,7 @@ class HypothesisEngine:
                     f"Segment dimensions available: {self.understanding['available_dimensions']}\n\n"
                     f"Hypotheses and their current status:\n{self._state_for_prompt()}\n\n"
                     f"Analyses already executed (do not repeat an equivalent one):\n{self._facts_for_prompt()}\n\n"
-                    f"Available analyses:\n{ops.CATALOGUE}\n"
+                    f"Available analyses:\n{ops.CATALOGUE_BRIEF}\n"
                     "Choose the single analysis most likely to distinguish the competing hypotheses, or stop.")
             step = self._ask("submit_next_step", NEXT_STEP_SCHEMA, prompts.HYP_NEXT_SYSTEM, user,
                              "Choose the next analysis, or stop.")
@@ -643,6 +758,7 @@ class HypothesisEngine:
             before = hyp["status"]
             drill_down = analysis["op"] == "segment_contribution" and bool(analysis["params"].get("filters"))
             self.test_hypothesis(hyp, analysis, prediction, "follow_up", role="refinement" if drill_down else "test")
+            self._apply_multiplicity()
             hyp.setdefault("follow_ups", []).append({"round": self.budget.rounds, "question": str(step.get("unresolved_question") or "")[:300],
                                                      "rationale": str(step.get("rationale") or "")[:300],
                                                      "status_before": before, "status_after": hyp["status"]})
@@ -680,7 +796,8 @@ class HypothesisEngine:
         pool = verification.extract_numbers([a["result"] for a in self.analyses if a["status"] == "ok"])
         pool += verification.extract_numbers(totals)
         pool += derived_numbers(pool)
-
+        # Thresholds a faithful sentence may quote: "p < 0.001", "at the 0.05 level", "95% interval".
+        pool += [0.001, config.HYP_SIGNIFICANCE_ALPHA, config.STAT_CONFIDENCE_LEVEL * 100, config.HYP_MATERIAL_PCT]
         pool += [float(len(self.hypotheses)), float(len([h for h in self.hypotheses if h["status"] == SUPPORTED]))]
         return pool
 
@@ -700,6 +817,10 @@ class HypothesisEngine:
 
         template = self._template_summary(totals, determination)
         fallback = {"text": template, "source": "template", "possible_explanations": [], "follow_ups": [], "rejected_reason": None}
+        if self.model_unavailable:
+            # The provider already failed in this run. Asking it again for wording would spend
+            # more attempts on a failing service; the template needs no model.
+            return {**fallback, "rejected_reason": "the model was unavailable for the summary"}
         if self.budget.blocked("llm"):
             return {**fallback, "rejected_reason": "no model call was left in the budget"}
         user = (f"Question: {self.question}\nDetermination (fixed; do not contradict it): {determination['text']}\n"
@@ -768,12 +889,12 @@ class HypothesisEngine:
             if a["status"] != "ok":
                 continue
             f = a["result"]["facts"]
-            test = f.get("test") or {}
-            if test.get("p_value") is not None:
-                interpretations.append(f"{a['id']} ({a['op']}): {test['method']}, p = {test['p_value']:.4f}"
-                                       + (f", effect size d = {test['cohens_d']:.2f}" if test.get("cohens_d") is not None else "") + ".")
-            elif test.get("skipped"):
-                interpretations.append(f"{a['id']} ({a['op']}): no significance test ({test['skipped']}).")
+            result = f.get("stat")
+            if result:
+                who = f"{a['id']}" + (f" (for {', '.join(a['hypothesis_ids'])})" if a["hypothesis_ids"] else " (headline change)"
+                                      if a["requested_by"] == "baseline" else "")
+                lines = [l for l in stat_result.interpret(result) if not l.startswith("The interval is the range")]
+                interpretations.append(f"{who}: " + " ".join(lines))
             quality += [f"{a['id']}: {w}" for w in a["result"].get("warnings") or []]
             for issue in f.get("issues") or []:
                 quality.append(f"{a['id']}: {issue}")
@@ -787,6 +908,13 @@ class HypothesisEngine:
         if self.stop_reason.startswith("budget:"):
             limitations.append(f"The investigation stopped at its {self.stop_reason.split(':', 1)[1].replace('_', ' ')} limit.")
 
+        statistics = self._statistics()
+        if any(s["status"] == "ok" for s in statistics):
+            limitations += [stat_result.FRAME_NOTE, stat_result.BIAS_NOTE]
+        if self.multiplicity:
+            m = self.multiplicity
+            limitations.append(f"{m['comparisons']} statistical tests were run for the hypotheses; their p-values are {m['method']}-adjusted, "
+                               f"which controls {m['controls']}. Exploratory breakdowns (the segment scan) carry no p-values.")
         segment = next((a for a in self.analyses if a["op"] == "segment_contribution" and a["status"] == "ok"), None)
         charts = []
         if segment and segment["result"].get("table"):
@@ -811,11 +939,22 @@ class HypothesisEngine:
             "hypotheses": ranked, "rejected_hypotheses": self.rejected, "hypothesis_counts": counts,
             "analyses": self.analyses,
             "observed_facts": observed, "statistical_interpretations": interpretations,
+            "statistical_evidence": interpretations, "statistics": statistics,
+            "practical_significance": self._practical(statistics), "multiplicity": self.multiplicity,
+            "how_to_read_statistics": [
+                "An interval is the range of values the data is reasonably compatible with; it is not the probability that the true value lies inside.",
+                "A small p-value says a difference is hard to explain by ordinary variation. It does not say the difference is large, important or caused by anything in particular.",
+                "A p-value above the criterion is not evidence of no difference; the interval shows what remains plausible.",
+            ] if statistics else [],
             "possible_explanations": summary["possible_explanations"],
             "data_quality": quality, "limitations": limitations, "model_notes": self.model_notes,
             "follow_ups": summary["follow_ups"], "charts": charts, "caveats": investigator.CAVEATS[:1],
             "stop_reason": self.stop_reason, "budget": self.budget.used(), "resumed": self.resumed,
             "reproducibility": {**self.provenance, "engine_version": ENGINE_VERSION,
+                                "statistics": {"schema_version": stat_result.SCHEMA_VERSION, "methods_version": stat_result.METHODS_VERSION,
+                                               "significance_criterion": config.HYP_SIGNIFICANCE_ALPHA,
+                                               "confidence_level": config.STAT_CONFIDENCE_LEVEL, "resampling_seed": config.STAT_SEED,
+                                               "multiplicity_method": config.STAT_MULTIPLICITY_METHOD},
                                 "analysis_ids": [a["id"] for a in self.analyses],
                                 "analysis_signatures": {a["id"]: a["signature"] for a in self.analyses if a["signature"]},
                                 "evidence_thresholds": {"material_pct": config.HYP_MATERIAL_PCT, "strong_share": config.HYP_STRONG_SHARE,
@@ -828,14 +967,42 @@ class HypothesisEngine:
 
     # ------------------------------------------------------------------- run --
 
-    def _restore(self, saved: dict) -> None:
-        """Pick up a run that was interrupted: reuse the understanding, the
-        hypotheses and every analysis already executed."""
-        self.resumed = True
-        self.understanding = saved["understanding"]
-        self.analyses = [dict(a) for a in saved["analyses"]]
+    def _evidence_context(self) -> dict:
+        """What a result depends on besides its own operation: the dataset
+        version, how the question was framed (metric, population, periods) and
+        the versions of the code that computes and judges. Two results are
+        comparable, and a stored one reusable, only when all of it is equal."""
+        u = self.understanding
+        framing = {"label": u["metric"]["label"], "formula": u["metric"]["formula"], "filters": u["metric"]["filters"],
+                   "time_column": u["time_column"], "period_a": u["period_a"], "period_b": u["period_b"]}
+        basis = {"dataset_version_id": self.provenance.get("dataset_version_id"),
+                 "dataset_fingerprint": self.provenance.get("dataset_fingerprint"),
+                 "engine_version": ENGINE_VERSION, "methods_version": stat_result.METHODS_VERSION,
+                 "statistics_schema": stat_result.SCHEMA_VERSION}
+        digest = hashlib.sha256(json.dumps({**basis, "framing": {k: v for k, v in framing.items() if k != "label"}},
+                                           sort_keys=True, default=str).encode()).hexdigest()[:16]
+        return {"context": digest, **basis, "framing": framing}
+
+    def _adopt(self, saved: dict) -> None:
+        """Start in the current context, reusing only what was produced in it.
+
+        A stored analysis from another context -- a different dataset version,
+        a different reading of the question, or older computation code -- is
+        not wrong, but it answers a different question, so it is set aside
+        rather than reused. Hypotheses are kept only when every analysis they
+        rest on is kept."""
+        context = self._evidence_context()
+        keep = [dict(a) for a in saved["analyses"] if (a.get("provenance") or {}).get("context") == context["context"]]
+        kept_ids = {a["id"] for a in keep}
+        hyps = [dict(h) for h in saved["hypotheses"]
+                if all(e.get("analysis_id") in kept_ids for e in h.get("evidence") or [] if e.get("analysis_id"))]
+        if len(keep) < len(saved["analyses"]):
+            hyps = []          # something changed underneath the earlier attempt: propose and test afresh
+            self.model_notes.append(f"{len(saved['analyses']) - len(keep)} stored result(s) from an earlier context were set aside, not reused")
+        self.analyses, self.hypotheses = keep, hyps
         self.by_signature = {a["signature"]: a for a in self.analyses if a["signature"]}
-        self.hypotheses = [dict(h) for h in saved["hypotheses"]]
+        self.resumed = bool(keep)
+        self.store.begin({k: v for k, v in context.items()} | {"state": "running", "note": ""}, kept_ids, {h["id"] for h in hyps})
 
     def _make_context(self) -> None:
         u = self.understanding
@@ -847,12 +1014,13 @@ class HypothesisEngine:
     def run(self) -> dict:
         saved = self.store.load()
         if saved.get("understanding"):
-            self._restore(saved)
+            self.understanding = saved["understanding"]
         else:
             self.progress("Reading the question")
             self.understanding = self.understand()
             self.store.save_understanding(self.understanding)
         self._make_context()
+        self._adopt(saved)
 
         self.progress("Measuring the change and checking the data")
         base = self.run_analysis({"op": "metric_change", "params": {}}, requested_by="baseline")
@@ -860,6 +1028,8 @@ class HypothesisEngine:
             self.ctx.total_a, self.ctx.total_b = base["result"]["facts"]["a"], base["result"]["facts"]["b"]
         coverage = self.run_analysis({"op": "period_coverage", "params": {}}, requested_by="baseline")
         self.run_analysis({"op": "data_quality", "params": {}}, requested_by="baseline")
+        # The headline change as a series: is it larger than the metric's ordinary day-to-day variation?
+        self.run_analysis({"op": "level_shift", "params": {}}, requested_by="baseline")
         if coverage["status"] == "ok" and coverage["result"]["facts"]["incomplete"]:
             self.limitations.append("The two periods are not directly comparable: " + "; ".join(coverage["result"]["facts"]["issues"]) + ".")
 
@@ -901,6 +1071,7 @@ class HypothesisEngine:
                 self.stop_reason = f"budget:{self.budget.blocked('analysis')}"
                 break
             self.test_hypothesis(hyp, hyp["analysis"], hyp["prediction"], "hypothesis")
+        self._apply_multiplicity()
         if not self.stop_reason:
             self.adapt()
         return self.build_report()

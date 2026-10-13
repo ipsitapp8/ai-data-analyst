@@ -20,7 +20,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import Float, bindparam
 
 from app import config
-from app.memory import embed
+from app.memory import QueryEmbedding, embed
 from app.models import KnowledgeNote
 
 logger = logging.getLogger(__name__)
@@ -86,8 +86,10 @@ def get_knowledge(db, *, team_id: int | None, dataset_id: int) -> list[Knowledge
         return []
 
 
-def retrieve_lessons(db, *, team_id: int | None, dataset_id: int, question_text: str) -> list[KnowledgeNote]:
-    """Top-k lessons for this team + dataset most similar to the question."""
+def retrieve_lessons(db, *, team_id: int | None, dataset_id: int, question_text: str,
+                     query_embedding: QueryEmbedding | None = None) -> list[KnowledgeNote]:
+    """Top-k lessons for this team + dataset most similar to the question.
+    Pass a shared `query_embedding` to reuse the question's vector across lookups."""
     if not config.RAG_ENABLED:
         return []
     try:
@@ -97,7 +99,7 @@ def retrieve_lessons(db, *, team_id: int | None, dataset_id: int, question_text:
         )
         if q.first() is None:
             return []
-        query = embed([question_text], "RETRIEVAL_QUERY")[0]
+        query = (query_embedding or QueryEmbedding()).get(question_text, embed)
         if db.get_bind().dialect.name == "postgresql":
             dist = KnowledgeNote.embedding.op("<=>", return_type=Float)(
                 bindparam("q", query, type_=Vector(config.EMBEDDING_DIM))

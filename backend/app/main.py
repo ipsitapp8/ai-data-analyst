@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import config, data_quality, jobs, provenance
+from app import config, data_quality, fallbacks, jobs, provenance
 from app.database import get_db, init_db
 from app.dataset_versions import add_version, latest_version, version_count
 from app.logging_config import setup_logging
@@ -24,6 +24,7 @@ from app.models import (
     DatasetVersion,
     EvidenceRecord,
     ExecutionLog,
+    Investigation,
     Plan,
     Question,
     Team,
@@ -452,6 +453,7 @@ def get_status(
         route=question.route,
         clarification=question.clarification_json,
         job=jobs.job_out(job) if job else None,
+        fallback=fallbacks.describe(db, db.query(Investigation).filter_by(question_id=question_id).first()),
     )
 
 

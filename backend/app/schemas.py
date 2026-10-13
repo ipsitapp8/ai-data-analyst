@@ -166,6 +166,8 @@ class StatusResponse(BaseModel):
     route: str | None = None
     clarification: dict[str, Any] | None = None
     job: dict[str, Any] | None = None
+    # Set only when a model-driven investigation fell back to the deterministic investigator.
+    fallback: dict[str, Any] | None = None
 
 
 class CriticRejection(BaseModel):

@@ -165,7 +165,11 @@ def _render_live_run(qid: int) -> None:
         if job.get("cancel_requested") and running:
             bits.append("cancelling…")
     if status.get("route"):
-        bits.append("Route: " + esc(route_names.get(status["route"], status["route"])))
+        route_text = esc(route_names.get(status["route"], status["route"]))
+        if (status.get("fallback") or {}).get("used"):
+            # A short pointer only; the explanation is on the Investigations page.
+            route_text += " (fallback: the AI investigation could not complete — see Root cause for details)"
+        bits.append("Route: " + route_text)
     if bits:
         j_l, j_r = st.columns([5, 1])
         with j_l:

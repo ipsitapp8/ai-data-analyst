@@ -235,3 +235,24 @@ HYP_STRONG_SHARE = float(os.getenv("HYP_STRONG_SHARE", "0.4"))
 HYP_WEAK_SHARE = float(os.getenv("HYP_WEAK_SHARE", "0.1"))
 HYP_MIN_ROWS = int(os.getenv("HYP_MIN_ROWS", "10"))
 HYP_SIGNIFICANCE_ALPHA = float(os.getenv("HYP_SIGNIFICANCE_ALPHA", "0.05"))
+
+
+# --- Statistical reasoning (docs/STATISTICAL_REASONING.md) ---
+# The significance criterion is HYP_SIGNIFICANCE_ALPHA, fixed before any test runs.
+STAT_CONFIDENCE_LEVEL = float(os.getenv("STAT_CONFIDENCE_LEVEL", "0.95"))
+# Seed for permutation and bootstrap methods, so a result can be reproduced exactly.
+STAT_SEED = int(os.getenv("STAT_SEED", "20240501"))
+# Fewest time buckets per period for a series analysis: below this the series'
+# own variation and autocorrelation cannot be estimated.
+STAT_MIN_SERIES_POINTS = int(os.getenv("STAT_MIN_SERIES_POINTS", "6"))
+# Pairwise comparisons are run only up to this many groups.
+STAT_MAX_PAIRWISE_GROUPS = int(os.getenv("STAT_MAX_PAIRWISE_GROUPS", "6"))
+# Regression guards: a categorical control with more levels is dropped, and
+# the model needs this many complete rows per coefficient.
+STAT_MAX_CONTROL_LEVELS = int(os.getenv("STAT_MAX_CONTROL_LEVELS", "20"))
+STAT_ROWS_PER_COEFFICIENT = int(os.getenv("STAT_ROWS_PER_COEFFICIENT", "10"))
+# Correction applied across one investigation's confirmatory tests: holm | bh.
+STAT_MULTIPLICITY_METHOD = os.getenv("STAT_MULTIPLICITY_METHOD", "holm").lower()
+# An adjusted difference that has lost at least this share of the unadjusted
+# one is read as "largely accounted for by the controls".
+STAT_ATTENUATION_SHARE = float(os.getenv("STAT_ATTENUATION_SHARE", "0.5"))

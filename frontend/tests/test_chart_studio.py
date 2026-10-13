@@ -81,7 +81,8 @@ def test_normalize_style_rejects_unsafe_values():
     style = cs.normalize_style({"color": "red;}</style><script>", "effect": "explode",
                                 "opacity": 99, "palette": "nope", "labels": "yes"})
     assert style["color"] == cs.DEFAULT_STYLE["color"]
-    assert style["effect"] == "solid" and style["palette"] == "SILT"
+    assert style["effect"] == "solid" and style["palette"] == cs.DEFAULT_STYLE["palette"] == "Dashboard"
+    assert cs.normalize_style({"palette": "SILT"})["palette"] == "SILT", "a look saved with the earlier default keeps its palette"
     assert style["opacity"] == 1.0 and style["labels"] is False
 
 

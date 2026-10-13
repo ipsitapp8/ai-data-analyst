@@ -1,5 +1,5 @@
 {
- "suite_version": "2026.10.1",
+ "suite_version": "2026.10.2",
  "description": "Reference answers computed by build_fixtures.py with plain Python.",
  "cases": [
   {
@@ -1109,6 +1109,381 @@
     "route": "root_cause",
     "max_llm_calls": 0
    }
+  },
+  {
+   "id": "stat-two-group-mean-uses-welch",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "distribution_shift",
+   "params": {
+    "column": "units"
+   },
+   "expect": {
+    "predict": "decrease",
+    "status": "supported",
+    "method": "welch_t",
+    "estimate": -2.25,
+    "significant": true,
+    "interval_excludes_zero": true,
+    "says": [
+     "Welch's t-test"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-not-significant-is-not-no-effect",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "distribution_shift",
+   "params": {
+    "column": "unit_price"
+   },
+   "expect": {
+    "predict": "decrease",
+    "status": "inconclusive",
+    "method": "welch_t",
+    "estimate": 0.6666666666666643,
+    "significant": false,
+    "says": [
+     "not evidence that nothing changed"
+    ],
+    "never_says": [
+     "there was no change",
+     "shows no difference",
+     "prices did not change",
+     "proves"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-suggested-method-is-overridden",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "share_change",
+   "params": {
+    "filters": [
+     {
+      "column": "region",
+      "op": "==",
+      "value": "West"
+     }
+    ],
+    "method": "t-test"
+   },
+   "expect": {
+    "predict": "decrease",
+    "status": "inconclusive",
+    "method": "chi_square",
+    "suggestion": "overridden",
+    "estimate": 0.0
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-paired-units-abstains-with-four-pairs",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "paired_change",
+   "params": {
+    "unit": "region"
+   },
+   "expect": {
+    "predict": "decrease",
+    "status": "inconclusive",
+    "method": "sign_flip_permutation",
+    "interval_available": false,
+    "significant": false,
+    "says": [
+     "1 of 4 region values went down"
+    ],
+    "warns": [
+     "cannot detect an effect of any size"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-series-test-is-autocorrelation-aware",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "level_shift",
+   "params": {},
+   "expect": {
+    "predict": "decrease",
+    "status": "supported",
+    "method": "ols_newey_west",
+    "estimate": -483.0,
+    "significant": true,
+    "rejects_method": "welch_t",
+    "limits": [
+     "not independent"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-change-point-is-located",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "change_point",
+   "params": {},
+   "expect": {
+    "predict": "abrupt",
+    "status": "supported",
+    "method": "pettitt",
+    "says": [
+     "between 2025-02-28 and 2025-03-02"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-no-pre-existing-trend-is-not-ruled-out",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "pre_trend",
+   "params": {},
+   "expect": {
+    "predict": "pre_existing_trend",
+    "status": "inconclusive",
+    "method": "trend_newey_west",
+    "says": [
+     "A trend is not ruled out"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-adjusted-association-is-not-causal",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "adjusted_change",
+   "params": {
+    "outcome": "units",
+    "controls": [
+     "region",
+     "product"
+    ]
+   },
+   "expect": {
+    "predict": "persists",
+    "status": "supported",
+    "method": "ols_hc3",
+    "estimate": -2.25,
+    "says": [
+     "Variables not in the dataset are not ruled out"
+    ],
+    "limits": [
+     "not a causal estimate",
+     "omitted-variable bias"
+    ],
+    "never_says": [
+     "caused",
+     "because of"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-association-is-not-called-a-cause",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "correlation",
+   "params": {
+    "x": "units",
+    "y": "unit_price"
+   },
+   "expect": {
+    "predict": "positive",
+    "status": "supported",
+    "method": "pearson",
+    "says": [
+     "An association, not a cause"
+    ],
+    "limits": [
+     "does not show what caused it"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-insufficient-series-abstains",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-04-25",
+     "2025-04-29"
+    ]
+   },
+   "op": "level_shift",
+   "params": {},
+   "expect": {
+    "predict": "decrease",
+    "status": "inconclusive",
+    "unavailable": true,
+    "says": [
+     "no statistical conclusion"
+    ]
+   },
+   "tolerance": 0.005
+  },
+  {
+   "id": "stat-unchanged-mix-is-practically-unchanged",
+   "component": "statistics",
+   "fixture": "sales.csv",
+   "spec": {
+    "formula": "sum(revenue)",
+    "label": "Revenue",
+    "time_column": "order_date",
+    "period_a": [
+     "2025-01-01",
+     "2025-03-01"
+    ],
+    "period_b": [
+     "2025-03-01",
+     "2025-04-29"
+    ]
+   },
+   "op": "composition_change",
+   "params": {
+    "dimension": "region"
+   },
+   "expect": {
+    "predict": "changed",
+    "status": "weakened",
+    "method": "chi_square",
+    "says": [
+     "practically unchanged"
+    ]
+   },
+   "tolerance": 0.005
   },
   {
    "id": "live-total-revenue-by-region",

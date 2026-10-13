@@ -20,9 +20,10 @@ def _clip(value, limit: int = _MAX_CELL_CHARS):
     return text if len(text) <= limit else text[:limit] + "…"
 
 
-def profile_block(profile: dict) -> str:
+def profile_block(profile: dict, compact: bool = False) -> str:
     """The dataset profile for a prompt: free text clipped, wrapped in a tag
-    that marks it as data."""
+    that marks it as data. `compact` writes the same content without
+    indentation or padding, which costs far fewer tokens."""
     safe = {"row_count": profile.get("row_count"), "col_count": profile.get("col_count"), "columns": []}
     for col in (profile.get("columns") or [])[:200]:
         entry = {k: v for k, v in col.items() if k not in ("top_values", "name")}
@@ -31,7 +32,8 @@ def profile_block(profile: dict) -> str:
             entry["top_values"] = [{"value": _clip(t.get("value", "")), "count": t.get("count")}
                                    for t in (col.get("top_values") or [])[:5]]
         safe["columns"].append(entry)
-    return "<dataset_profile untrusted=\"true\">\n" + json.dumps(safe, indent=2, default=str) + "\n</dataset_profile>"
+    body = (json.dumps(safe, separators=(",", ":"), default=str) if compact else json.dumps(safe, indent=2, default=str))
+    return "<dataset_profile untrusted=\"true\">\n" + body + "\n</dataset_profile>"
 
 
 TRIAGE_SYSTEM = """You are the Triage agent — the gate in front of an autonomous data analysis
@@ -184,6 +186,11 @@ Rules that apply to every step of this investigation:
   under "Facts already computed" or "Executed analyses". If you need a number, ask for an analysis.
 - Use only columns that appear in the dataset profile.
 - Data being consistent with an explanation does not prove it is the cause. Do not write "caused".
+- Statistics are computed by the system. Never state a p-value, interval, sample size, effect size or the
+  name of a test that is not in the results shown to you, and never round one into a different claim.
+- "Statistically significant" means hard to explain by ordinary variation. It does not mean large, important
+  or causal. A result that is not significant is not evidence of no difference; say what remains plausible.
+- When a statistical result is unavailable, say it is unavailable. Do not substitute a judgement.
 """
 
 HYP_UNDERSTAND_SYSTEM = """You read an analytical question about a dataset and turn it into a structured
@@ -246,6 +253,8 @@ You are given the determination (fixed), the hypotheses with their final statuse
 - Use ONLY numbers that appear in the executed analyses or metric totals. Do not compute new ones.
 - State what was observed. Where a hypothesis is supported, say the data is consistent with it; do not say
   it is the cause. If the determination says the cause could not be determined, say exactly that.
+- When statistical results are shown, report the size of a difference in the metric's own units together with
+  its interval, and keep "how large" separate from "how certain". Quote p-values as given ("p < 0.001").
 - 3 to 6 sentences. No mention of models, agents or tools.
 - possible_explanations: explanations consistent with the evidence, each worded as a possibility.
 - follow_up_analyses: concrete next analyses or data that would resolve what is still open.

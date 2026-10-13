@@ -19,7 +19,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-SUITE_VERSION = "2026.10.1"
+SUITE_VERSION = "2026.10.2"
 HERE = Path(__file__).resolve().parent
 REGIONS = ["East", "North", "South", "West"]
 PRODUCTS = {"Gadget": (20.0, 12.0), "Widget": (10.0, 6.0), "Gizmo": (35.0, 21.0)}  # price, unit cost
@@ -49,6 +49,60 @@ def sales_rows() -> list[dict]:
                     "revenue": round(units * price, 2), "cost": round(units * unit_cost, 2),
                 })
     return rows
+
+
+def statistics_cases(rows: list[dict]) -> list[dict]:
+    split = "2025-03-01"
+    spec = {"formula": "sum(revenue)", "label": "Revenue", "time_column": "order_date",
+            "period_a": ["2025-01-01", split], "period_b": [split, "2025-04-29"]}
+    mean = lambda xs: sum(xs) / len(xs)  # noqa: E731
+    units_a = [r["units"] for r in rows if r["order_date"] < split]
+    units_b = [r["units"] for r in rows if r["order_date"] >= split]
+    price_a = [r["unit_price"] for r in rows if r["order_date"] < split]
+    price_b = [r["unit_price"] for r in rows if r["order_date"] >= split]
+    days: dict[str, float] = {}
+    for r in rows:
+        days[r["order_date"]] = days.get(r["order_date"], 0.0) + r["revenue"]
+    level = mean([v for d, v in days.items() if d >= split]) - mean([v for d, v in days.items() if d < split])
+    last_before, first_after = max(d for d in days if d < split), min(d for d in days if d >= split)
+
+    def case(cid, op, params, expect, **extra):
+        return {"id": cid, "component": "statistics", "fixture": "sales.csv", "spec": {**spec, **extra.pop("spec", {})},
+                "op": op, "params": params, "expect": expect, "tolerance": 0.005, **extra}
+
+    return [
+        case("stat-two-group-mean-uses-welch", "distribution_shift", {"column": "units"},
+             {"predict": "decrease", "status": "supported", "method": "welch_t", "estimate": mean(units_b) - mean(units_a),
+              "significant": True, "interval_excludes_zero": True, "says": ["Welch's t-test"]}),
+        case("stat-not-significant-is-not-no-effect", "distribution_shift", {"column": "unit_price"},
+             {"predict": "decrease", "status": "inconclusive", "method": "welch_t", "estimate": mean(price_b) - mean(price_a),
+              "significant": False, "says": ["not evidence that nothing changed"], "never_says": ["there was no change", "shows no difference", "prices did not change", "proves"]}),
+        case("stat-suggested-method-is-overridden", "share_change",
+             {"filters": [{"column": "region", "op": "==", "value": "West"}], "method": "t-test"},
+             {"predict": "decrease", "status": "inconclusive", "method": "chi_square", "suggestion": "overridden", "estimate": 0.0}),
+        case("stat-paired-units-abstains-with-four-pairs", "paired_change", {"unit": "region"},
+             {"predict": "decrease", "status": "inconclusive", "method": "sign_flip_permutation", "interval_available": False,
+              "significant": False, "says": ["1 of 4 region values went down"], "warns": ["cannot detect an effect of any size"]}),
+        case("stat-series-test-is-autocorrelation-aware", "level_shift", {},
+             {"predict": "decrease", "status": "supported", "method": "ols_newey_west", "estimate": level, "significant": True,
+              "rejects_method": "welch_t", "limits": ["not independent"]}),
+        case("stat-change-point-is-located", "change_point", {},
+             {"predict": "abrupt", "status": "supported", "method": "pettitt", "says": [f"between {last_before} and {first_after}"]}),
+        case("stat-no-pre-existing-trend-is-not-ruled-out", "pre_trend", {},
+             {"predict": "pre_existing_trend", "status": "inconclusive", "method": "trend_newey_west", "says": ["A trend is not ruled out"]}),
+        case("stat-adjusted-association-is-not-causal", "adjusted_change", {"outcome": "units", "controls": ["region", "product"]},
+             {"predict": "persists", "status": "supported", "method": "ols_hc3", "estimate": mean(units_b) - mean(units_a),
+              "says": ["Variables not in the dataset are not ruled out"], "limits": ["not a causal estimate", "omitted-variable bias"],
+              "never_says": ["caused", "because of"]}),
+        case("stat-association-is-not-called-a-cause", "correlation", {"x": "units", "y": "unit_price"},
+             {"predict": "positive", "status": "supported", "method": "pearson", "says": ["An association, not a cause"],
+              "limits": ["does not show what caused it"]}),
+        case("stat-insufficient-series-abstains", "level_shift", {},
+             {"predict": "decrease", "status": "inconclusive", "unavailable": True, "says": ["no statistical conclusion"]},
+             spec={"period_b": ["2025-04-25", "2025-04-29"]}),
+        case("stat-unchanged-mix-is-practically-unchanged", "composition_change", {"dimension": "region"},
+             {"predict": "changed", "status": "weakened", "method": "chi_square", "says": ["practically unchanged"]}),
+    ]
 
 
 def write_csv(path: Path, rows: list[dict], columns: list[str]) -> None:
@@ -311,6 +365,11 @@ def main() -> None:
         {"id": "pipeline-root-cause-route", "component": "pipeline", "fixture": "sales.csv",
          "question": "Why did revenue change?", "script": {},
          "expect": {"status": "verified", "route": "root_cause", "max_llm_calls": 0}},
+
+        # ---------------- statistical reasoning ----------------
+        # Is the right method chosen, is its result read correctly, and does the system abstain
+        # when the data cannot support a conclusion? Reference numbers are plain Python.
+        *statistics_cases(rows),
 
         # ---------------- live (only with --live; never in CI) ----------------
         {"id": "live-total-revenue-by-region", "component": "pipeline", "live": True, "fixture": "sales.csv",

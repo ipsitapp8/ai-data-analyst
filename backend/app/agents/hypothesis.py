@@ -11,10 +11,11 @@ decomposition, and the trace records why.
 """
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import uuid
 
-from app import config, fastpath, hypothesis_engine, investigator, provenance, runtime, verification
+from app import config, fallbacks, fastpath, hypothesis_engine, investigator, provenance, runtime, verification
 from app import metric_engine as me
 from app.agents import llm_client
 from app.agents.dashboard import dataset_evidence_for, publish_dashboard
@@ -25,10 +26,25 @@ from app.models import DQIncident, Investigation, InvestigationAnalysis, Investi
 
 logger = logging.getLogger(__name__)
 
+# Where an analysis row keeps its provenance inside result_json, and how the key
+# of a row that has been set aside is marked ("A3" becomes "A3~<row id>").
+PROVENANCE_KEY = "_provenance"
+SUPERSEDED_MARK = "~"
+
+
+def split_provenance(result_json: dict | None) -> tuple[dict, dict]:
+    """(the analysis result, its provenance) from a stored result_json."""
+    result = dict(result_json or {})
+    return result, result.pop(PROVENANCE_KEY, None) or {}
+
 
 class DbStore(hypothesis_engine.MemoryStore):
     """Engine state in `investigations`, `investigation_hypotheses` and
-    `investigation_analyses`, written as the run proceeds."""
+    `investigation_analyses`, written as the run proceeds.
+
+    Rows are never deleted. A row produced in another context (see
+    HypothesisEngine._evidence_context) is renamed out of the way and marked
+    superseded, so it stays on record but cannot be read back as current."""
 
     def __init__(self, investigation_id: int, team_id: int):
         super().__init__()
@@ -39,19 +55,62 @@ class DbStore(hypothesis_engine.MemoryStore):
         try:
             inv = db.get(Investigation, self.investigation_id)
             understanding = (inv.params_json or {}).get("understanding")
-            hyps = (db.query(InvestigationHypothesis).filter_by(investigation_id=self.investigation_id)
-                    .order_by(InvestigationHypothesis.id).all())
-            analyses = (db.query(InvestigationAnalysis).filter_by(investigation_id=self.investigation_id)
-                        .order_by(InvestigationAnalysis.id).all())
+            hyps = [h for h in db.query(InvestigationHypothesis).filter_by(investigation_id=self.investigation_id)
+                    .order_by(InvestigationHypothesis.id).all() if SUPERSEDED_MARK not in h.key]
+            analyses = [a for a in db.query(InvestigationAnalysis).filter_by(investigation_id=self.investigation_id)
+                        .order_by(InvestigationAnalysis.id).all() if SUPERSEDED_MARK not in a.key]
+            self.evidence = dict((inv.params_json or {}).get("evidence") or {})
+            out = []
+            for a in analyses:
+                result, prov = split_provenance(a.result_json)
+                out.append({"id": a.key, "signature": a.signature, "op": a.op, "params": a.params_json or {},
+                            "status": a.status, "result": result, "error": a.error, "requested_by": a.requested_by,
+                            "hypothesis_ids": list(a.hypothesis_keys_json or []), "duration_ms": a.duration_ms,
+                            "provenance": prov})
             return {
                 "understanding": understanding,
                 "hypotheses": [{**(h.spec_json or {}), **(h.assessment_json or {}), "id": h.key, "statement": h.statement,
                                 "status": h.status} for h in hyps],
-                "analyses": [{"id": a.key, "signature": a.signature, "op": a.op, "params": a.params_json or {},
-                              "status": a.status, "result": a.result_json or {}, "error": a.error,
-                              "requested_by": a.requested_by, "hypothesis_ids": list(a.hypothesis_keys_json or []),
-                              "duration_ms": a.duration_ms} for a in analyses],
+                "analyses": out,
             }
+        finally:
+            db.close()
+
+    def _save_evidence(self, db) -> None:
+        inv = db.get(Investigation, self.investigation_id)
+        inv.params_json = {**(inv.params_json or {}), "evidence": {
+            **self.evidence, "updated_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"}}
+
+    def begin(self, evidence: dict, keep_analyses: set[str], keep_hypotheses: set[str]) -> None:
+        now = dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        db = SessionLocal()
+        try:
+            for a in db.query(InvestigationAnalysis).filter_by(investigation_id=self.investigation_id).all():
+                if SUPERSEDED_MARK in a.key or a.key in keep_analyses:
+                    continue
+                result, prov = split_provenance(a.result_json)
+                a.result_json = {**result, PROVENANCE_KEY: {**prov, "superseded": True, "superseded_at": now,
+                                                            "superseded_by_context": evidence.get("context")}}
+                a.key = f"{a.key}{SUPERSEDED_MARK}{a.id}"
+            for h in db.query(InvestigationHypothesis).filter_by(investigation_id=self.investigation_id).all():
+                if SUPERSEDED_MARK in h.key or h.key in keep_hypotheses:
+                    continue
+                h.assessment_json = {**(h.assessment_json or {}), "superseded": True, "superseded_at": now}
+                h.key = f"{h.key}{SUPERSEDED_MARK}{h.id}"
+            self.evidence = dict(evidence)
+            self._save_evidence(db)
+            db.commit()
+        finally:
+            db.close()
+
+    def finish(self, state: str, note: str = "") -> None:
+        if not self.evidence:
+            return          # the run ended before any context existed: there is no evidence to describe
+        self.evidence = {**self.evidence, "state": state, "note": note}
+        db = SessionLocal()
+        try:
+            self._save_evidence(db)
+            db.commit()
         finally:
             db.close()
 
@@ -91,8 +150,9 @@ class DbStore(hypothesis_engine.MemoryStore):
                 row = InvestigationAnalysis(team_id=self.team_id, investigation_id=self.investigation_id, key=analysis["id"],
                                             signature=analysis["signature"], op=str(analysis["op"]), status=analysis["status"])
                 db.add(row)
-            row.params_json, row.status = analysis["params"], analysis["status"]
-            row.result_json, row.error = analysis["result"], analysis["error"]
+            row.params_json, row.status, row.signature = analysis["params"], analysis["status"], analysis["signature"]
+            row.result_json = {**(analysis["result"] or {}), PROVENANCE_KEY: analysis.get("provenance") or {}}
+            row.error = analysis["error"]
             row.hypothesis_keys_json = list(analysis["hypothesis_ids"])
             row.requested_by, row.duration_ms = analysis["requested_by"], analysis["duration_ms"]
             db.commit()
@@ -149,10 +209,11 @@ def hypothesis_node(state: AgentState) -> dict:
         _save(investigation_id, {"engine": "hypothesis", "error": str(e)}, "failed")
         return {"failed": True, "failure_reason": f"The investigation could not read the dataset: {e}"}
 
+    store = DbStore(investigation_id, team_id)
     engine = hypothesis_engine.HypothesisEngine(
         question=state["question_text"], df=df, profile=state["profile"], call_model=llm_client.call_tool,
         approved_metrics=state.get("approved_metrics") or [], dq_messages=dq_messages,
-        store=DbStore(investigation_id, team_id),
+        store=store,
         budget=hypothesis_engine.Budget.from_config(lambda: (ctx.tokens_in + ctx.tokens_out) if ctx else 0),
         progress=lambda message: update_stage(question_id, "investigating", message),
         checkpoint=runtime.checkpoint,
@@ -161,8 +222,9 @@ def hypothesis_node(state: AgentState) -> dict:
                     "investigation_id": investigation_id, "prompt_version": provenance.prompt_version(),
                     "app_version": config.APP_VERSION},
     )
-    def fall_back() -> dict:
-        """No model produced a hypothesis. The deterministic investigator needs none."""
+    def fall_back(reason: str) -> dict:
+        """No model produced a hypothesis. The deterministic investigator needs none.
+        `reason` is a fixed code (see app.fallbacks), stored so the fallback can be explained to the user."""
         logger.warning("Hypothesis engine: no model available; using the deterministic investigator")
         runtime.record_event("route", "root_cause", {"reasons": ["no model provider could be reached; fell back from the "
                                                                 "hypothesis engine to the deterministic investigator"]})
@@ -172,27 +234,33 @@ def hypothesis_node(state: AgentState) -> dict:
             q.route = "root_cause"
             inv = db.get(Investigation, investigation_id)
             spec = investigator.infer_spec(state["profile"], state["question_text"], state.get("approved_metrics") or [])
-            inv.params_json = spec or {}
+            inv.params_json = {**(spec or {}), "fallback": {
+                "from_engine": "hypothesis", "reason": reason,
+                "at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"}}
             db.commit()
         finally:
             db.close()
+        # Whatever the engine computed before it lost the model stays on record -- as partial evidence,
+        # with the framing it was computed under. The investigator's report is written without it.
+        store.finish("partial", "model_unavailable_before_hypotheses")
         return {"route": "root_cause", "route_spec": spec or {}, "hypothesis_fallback": True}
 
     try:
         report = engine.run()
     except runtime.ProviderUnavailable:
         if engine.budget.llm_calls <= 1 and not engine.hypotheses:
-            return fall_back()
+            return fall_back(fallbacks.AT_FIRST_STEP)
         raise
     except hypothesis_engine.CannotInvestigate as e:
         report = {"engine": "hypothesis", "question": state["question_text"], "status": "inconclusive", "summary": str(e),
                   "determination": {"code": "cannot_investigate", "text": str(e)}, "hypotheses": [], "analyses": [],
                   "limitations": [str(e)], "totals": {}, "stop_reason": "cannot_investigate"}
         _save(investigation_id, report, "inconclusive")
+        store.finish("partial", "could_not_investigate")
         return {"failed": True, "failure_reason": str(e)}
 
     if report["stop_reason"] == "model_unavailable" and not report["hypotheses"]:
-        return fall_back()      # the model answered at first, then was lost before proposing anything
+        return fall_back(fallbacks.BEFORE_HYPOTHESES)      # the model answered at first, then was lost before proposing anything
 
     report["reproducibility"]["models"] = list(ctx.providers) if ctx else []
     totals, label, u = report["totals"], report["metric"]["label"], report["understanding"]
@@ -203,6 +271,8 @@ def hypothesis_node(state: AgentState) -> dict:
                                      "table": (a["result"] or {}).get("table")} for a in report["analyses"] if a["status"] == "ok"}}
     # A summary may state a fall of -9,500 as "a decrease of 9,500", and may count hypotheses.
     result["derived"] = sorted(set(hypothesis_engine.derived_numbers(verification.extract_numbers(result))))
+    # Thresholds fixed in configuration that a faithful summary may quote ("p < 0.001", "95% interval").
+    result["criteria"] = [0.001, config.HYP_SIGNIFICANCE_ALPHA, config.STAT_CONFIDENCE_LEVEL * 100, config.HYP_MATERIAL_PCT]
     result["counts"] = {**report["hypothesis_counts"], "hypotheses": len(report["hypotheses"])}
     if totals.get("a") is not None and totals.get("b") is not None:
         fa = investigator._period_filters(u["time_column"], u["period_a"], last=False)
@@ -256,6 +326,7 @@ def hypothesis_node(state: AgentState) -> dict:
         r["status"], r["reasons"] = verification.decide_status(r["checks"], r["limitations"])
     report["reproducibility"]["execution_log_id"] = log_id
     _save(investigation_id, report, report["status"])
+    store.finish("final")
     dashboard = publish_dashboard(
         question_id=question_id, kpis=kpis, charts=charts, narrative=narrative, narrative_element_id=narrative_id,
         steps=steps, records=records, dataset_ev=dataset_ev, base_state="VERIFIED" if kpis else "UNVERIFIED",

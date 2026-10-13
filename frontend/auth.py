@@ -128,6 +128,11 @@ def require_login() -> None:
     if st.session_state.get(_USER_SESSION_KEY) and st.session_state.get("auth_token"):
         return
 
+    # Why the visitor is back at this form (set when the API rejects a session token). Shown once.
+    notice = st.session_state.pop("auth_notice", None)
+    if notice:
+        st.warning(notice)
+
     st.markdown(_gate_css(), unsafe_allow_html=True)
     st.markdown(_GATE_FONTS, unsafe_allow_html=True)
     st.markdown("<style>.block-container { max-width: 1020px !important; padding-top: 8vh !important; }</style>",

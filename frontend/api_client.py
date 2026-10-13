@@ -10,16 +10,70 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
+import requests as _requests
 import streamlit as st
 
 from config import BACKEND_BASE_URL
 
 TIMEOUT = 30
+SESSION_EXPIRED_NOTICE = "Your session has expired. Please sign in again."
+# Everything that makes up a signed-in session (see auth.logout).
+_SESSION_KEYS = ("auth_user", "auth_token", "active_community_id", "active_team_id")
 
 
 class ApiError(Exception):
     pass
+
+
+class BackendUnreachable(ApiError):
+    """No response at all: the server is down, refused the connection or timed out."""
+
+
+class SessionExpired(ApiError):
+    """The API rejected the session token (expired, signed with an old key, or
+    the account no longer exists). Not a connectivity problem."""
+
+
+class _Http:
+    """`requests`, with transport failures raised as BackendUnreachable so that
+    pages can tell "the server did not answer" from "the server said no"."""
+
+    def __getattr__(self, name: str):
+        fn = getattr(_requests, name)
+        if name not in ("get", "post", "put", "patch", "delete", "request"):
+            return fn
+
+        def call(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except _requests.exceptions.RequestException as e:
+                raise BackendUnreachable(f"no response from {BACKEND_BASE_URL} ({type(e).__name__})") from e
+
+        return call
+
+
+requests = _Http()
+
+
+def _sent_token(resp) -> bool:
+    request = getattr(resp, "request", None)
+    if request is not None and getattr(request, "headers", None) is not None:
+        return bool(request.headers.get("Authorization"))
+    return bool(st.session_state.get("auth_token"))
+
+
+def _expire_session() -> None:
+    """Sign the visitor out and send them to the login form with an explanation.
+
+    Only ever reached for a request that carried a token, and it removes that
+    token, so the rerun lands on the login gate and cannot come back here."""
+    for key in _SESSION_KEYS:
+        st.session_state.pop(key, None)
+    st.session_state["auth_notice"] = SESSION_EXPIRED_NOTICE
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+    if get_script_run_ctx() is not None:
+        st.rerun()
 
 
 def _headers(with_team: bool = True) -> dict:
@@ -34,7 +88,10 @@ def _headers(with_team: bool = True) -> dict:
     return headers
 
 
-def _handle(resp: requests.Response) -> Any:
+def _handle(resp: _requests.Response) -> Any:
+    if resp.status_code == 401 and _sent_token(resp):
+        _expire_session()
+        raise SessionExpired(SESSION_EXPIRED_NOTICE)
     if not resp.ok:
         try:
             detail = resp.json().get("detail", resp.text)
@@ -448,6 +505,10 @@ def list_investigations(limit: int = 50) -> dict:
 
 def get_investigation(investigation_id: int) -> dict:
     return _get(f"/api/investigations/{investigation_id}")
+
+
+def get_investigation_statistics(investigation_id: int) -> dict:
+    return _get(f"/api/investigations/{investigation_id}/statistics")
 
 
 # ------------------------------------------------------------- data quality --

@@ -22,7 +22,8 @@ The decomposition maths is shared: the engine calls the investigator's functions
    formula the model wrote; periods outside the data are replaced by an automatic split; period end dates
    are read as inclusive ("1 Jan to 28 Feb" includes 28 Feb); a claimed size of change is kept only if that
    number is written in the question. No metric or no date column ends the run with a clear reason.
-2. **Baseline** (no model). `metric_change`, `period_coverage`, `data_quality`. A change under
+2. **Baseline** (no model). `metric_change`, `period_coverage`, `data_quality`, and `level_shift` (the
+   headline change as a time series: is it larger than ordinary day-to-day variation?). A change under
    `MATERIAL_CHANGE_PCT` stops here: there is nothing to explain.
 3. **Scan** (no model). `segment_contribution` along up to `HYP_SCAN_DIMENSIONS` dimensions. The model
    sees these results before proposing anything, and a concentration that no supported hypothesis covers
@@ -47,7 +48,9 @@ later, the report is built from the evidence already gathered, with a template s
 
 `metric_change`, `component_change`, `share_change`, `distribution_shift`, `segment_contribution`
 (optionally one named segment, optionally a drill-down inside a sub-population), `mix_shift`,
-`driver_decomposition`, `price_volume`, `period_coverage`, `data_quality`. Defined in `analysis_ops.py`.
+`driver_decomposition`, `price_volume`, `period_coverage`, `data_quality`, and the statistical operations
+`level_shift`, `pre_trend`, `change_point`, `paired_change`, `composition_change`, `group_difference`,
+`correlation`, `adjusted_change` (see [STATISTICAL_REASONING.md](STATISTICAL_REASONING.md)). Defined in `analysis_ops.py`.
 Formulas go through the same whitelisted grammar as the semantic layer; filters are column/operator/value
 triples. There is no SQL and no generated code, so the sandbox is not used (`sandbox_runs` budget is 0).
 
@@ -71,8 +74,10 @@ Statuses are set by code in `analysis_ops.evaluate` and `HypothesisEngine._settl
 - There is no confidence score. Each status carries its reasons and an effect size where one exists.
 - Concentration is judged against the segment's size: a segment holding 50% of the metric and 50% of the
   change is "in proportion", not a finding (`HYP_STRONG_SHARE`, and 1.5x its base share).
-- Significance tests: Welch's test for means and a two-proportion z-test for shares, normal approximation,
-  only with at least 30 rows per period; otherwise the test is reported as skipped. Totals get no test.
+- Statistical tests are chosen and computed by the statistical layer (STATISTICAL_REASONING.md). A result
+  that is not distinguishable from no change makes a hypothesis inconclusive, not weakened, unless its
+  interval rules out a material effect. P-values are Holm-adjusted across an investigation's tests.
+  Plain totals get no row-level test.
 - A drill-down inside a finding is a refinement: recorded with the hypothesis, does not change its status.
 - If a period is incomplete or the data-quality check finds problems, the determination is
   `data_cannot_support_conclusion` even when a hypothesis is supported.
@@ -100,6 +105,35 @@ run proceeds, so `GET /api/investigations/{id}` shows live state. A retried or r
 understanding, hypotheses and finished analyses and continues; nothing already done is repeated.
 Cancellation is checked before every model call and every analysis; it takes effect within about two
 seconds plus any model call already in flight.
+
+## Evidence provenance
+
+Every executed analysis is stored with what produced it: the dataset version and fingerprint, the framing
+of the question (metric, population, periods), the engine and statistical-method versions, and when it was
+computed. Together these form its *context*. Rules:
+
+- A stored result is reused only in the same context. A new dataset version, a different reading of the
+  question or newer computation code means the earlier rows are set aside (kept, marked superseded, hidden
+  by default) and everything is computed again.
+- The investigation records how the run that produced its evidence ended. `GET /api/investigations/{id}`
+  and `/statistics` return an `evidence` block with `status`:
+  `complete` (the engine finished and its report is built on these results), `in_progress`, `partial`
+  (real results, but that run fell back, failed or was cancelled, so the report shown does not use them) or
+  `none`. Each statistic carries the same status and its own `provenance`.
+- On fallback to the deterministic investigator, the engine's earlier results are kept as partial evidence
+  together with the framing they were computed under, and the API says whether the fallback report
+  compares the same metric and periods. `?include_superseded=true` also returns superseded results.
+
+## Provider diagnostics
+
+Each provider failure is logged once (`provider_event ...`) and recorded in the run trace (`kind:
+provider`): provider, step, failure kind (`rate_limited`, `overloaded`, `server_error`, `authentication`,
+`bad_request`, `malformed_output`, `network`, ...), HTTP status, finish reason, attempt number and what
+happens next. A malformed answer is further categorised (`prose_instead_of_function_call`,
+`malformed_function_call`, `output_truncated`, `content_filtered`, `wrong_function`, `empty_response`,
+`prompt_blocked`). Keys, headers, prompts, dataset values and generated text are never included. Retries
+are unchanged and bounded (`GEMINI_RATE_LIMIT_RETRIES`); a malformed answer is not retried on the same
+provider. Once a provider has failed in a run, the engine does not ask it again for the report wording.
 
 ## What reaches the model
 

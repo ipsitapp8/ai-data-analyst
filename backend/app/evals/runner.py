@@ -35,7 +35,7 @@ from app import config, runtime
 SUITE_PATH = Path(__file__).resolve().parents[2] / "evals" / "cases" / "suite.json"
 FIXTURES = Path(__file__).resolve().parents[2] / "evals" / "fixtures"
 COMPONENTS = ("routing", "fastpath", "engine", "verification", "verification_narrative", "investigator",
-              "drift", "scenario", "pipeline")
+              "statistics", "drift", "scenario", "pipeline")
 
 
 def load_suite(path: Path | None = None) -> dict:
@@ -197,6 +197,54 @@ def _run_investigator(case: dict, chk: _Check) -> dict:
     chk.add("bounded", report["budget"]["engine_calls"] <= report["budget"]["limits"]["engine_calls"],
             f"{report['budget']['engine_calls']} engine calls")
     return {"status": report["status"], "summary": report["summary"], "budget": report["budget"]}
+
+
+def _run_statistics(case: dict, chk: _Check) -> dict:
+    """One statistical operation on a fixture: is the right method selected,
+    is the number right, is the result read correctly, and does it abstain
+    when it should?"""
+    from app import analysis_ops as ops
+    from app import metric_engine as me
+
+    profile, path = _profile(case["fixture"])
+    df, spec, expect, tol = me.load_frame(path), case["spec"], case["expect"], case.get("tolerance", 0.0)
+    ctx = ops.AnalysisContext(formula=me.parse_formula(spec["formula"]), label=spec["label"], base_filters=[],
+                              time_column=spec["time_column"], period_a=spec["period_a"], period_b=spec["period_b"], profile=profile)
+    base = ops.execute(df, ctx, {"op": "metric_change", "params": {}})
+    ctx.total_a, ctx.total_b = base["facts"]["a"], base["facts"]["b"]
+    op = ops.normalize({"op": case["op"], "params": case["params"]}, ctx)
+    out = ops.execute(df, ctx, op)
+    stat = out["facts"]["stat"]
+    verdict = ops.evaluate(op, out, {"expect": expect["predict"]})
+    chk.add("status", verdict["status"] == expect["status"], verdict["status"])
+    if "method" in expect:
+        chk.add("method", stat["method"] == expect["method"], stat["method"])
+    if "unavailable" in expect:
+        chk.add("abstains", (stat["status"] == "unavailable") is expect["unavailable"] and stat["test"] is None, stat["status"])
+    if "estimate" in expect:
+        chk.add("estimate", _close(stat["estimate"], expect["estimate"], tol), str(stat["estimate"]))
+    if "significant" in expect:
+        chk.add("significant", stat["significant"] is expect["significant"], str(stat["significant"]))
+    if expect.get("interval_excludes_zero"):
+        iv = stat["interval"] or {}
+        chk.add("interval_excludes_zero", bool(iv) and (iv["low"] > 0 or iv["high"] < 0), str(iv))
+    if "interval_available" in expect:
+        chk.add("interval_available", (stat["interval"] is not None) is expect["interval_available"], str(stat["interval"]))
+    if "suggestion" in expect:
+        chk.add("suggestion", (stat["suggested_method"] or {}).get("outcome") == expect["suggestion"], str(stat["suggested_method"]))
+    if "rejects_method" in expect:
+        chk.add("rejects_method", expect["rejects_method"] in [r["method"] for r in stat["rejected_methods"]], str(stat["rejected_methods"]))
+    said = " ".join(verdict["reasons"]) + " " + " ".join(stat["interpretation"])
+    for phrase in expect.get("says", []):
+        chk.add(f"says:{phrase[:30]}", phrase in said, said[:160])
+    for phrase in expect.get("never_says", []):
+        chk.add(f"never_says:{phrase}", phrase not in said.lower(), said[:160])
+    for phrase in expect.get("limits", []):
+        chk.add(f"limits:{phrase[:30]}", any(phrase in l for l in stat["limitations"]), "")
+    for phrase in expect.get("warns", []):
+        chk.add(f"warns:{phrase[:30]}", any(phrase in w for w in stat["warnings"]), str(stat["warnings"])[:160])
+    chk.add("valid_result", stat["schema_version"] == "1" and (stat["test"] is None or 0 <= (stat["test"]["p_value"] or 0) <= 1), "")
+    return {"status": verdict["status"], "method": stat["method"], "reason": verdict["reasons"][0][:300]}
 
 
 def _run_drift(case: dict, chk: _Check) -> dict:
@@ -388,7 +436,7 @@ def _run_pipeline(case: dict, chk: _Check, live: bool) -> dict:
 _RUNNERS = {
     "routing": _run_routing, "fastpath": _run_fastpath, "engine": _run_engine,
     "verification": _run_verification, "verification_narrative": _run_verification_narrative,
-    "investigator": _run_investigator, "drift": _run_drift, "scenario": _run_scenario,
+    "investigator": _run_investigator, "statistics": _run_statistics, "drift": _run_drift, "scenario": _run_scenario,
 }
 
 

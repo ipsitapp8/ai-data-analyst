@@ -211,9 +211,9 @@ def test_price_volume_reconciles_and_not_applicable_without_a_quantity_column(sa
 
 # ====================================================== evidence rules ======
 
-def _cc(change_pct, a=100.0, rows=(200, 200), test=None):
+def _cc(change_pct, a=100.0, rows=(200, 200)):
     b = a * (1 + change_pct / 100)
-    return {"facts": {"formula": "sum(x)", "a": a, "b": b, "change": b - a, "change_pct": change_pct, **({"test": test} if test else {})},
+    return {"facts": {"formula": "sum(x)", "a": a, "b": b, "change": b - a, "change_pct": change_pct},
             "rows_a": rows[0], "rows_b": rows[1]}
 
 
@@ -231,32 +231,58 @@ def test_evidence_can_support_weaken_or_leave_inconclusive():
     assert ops.evaluate(CC, _cc(-15), {"expect": "decrease"})["effect"] == {"measure": "relative change, percent", "value": -15}
 
 
-def test_statistical_method_is_selected_and_interpreted(sales):
-    rng = np.random.default_rng(3)
-    noisy_a, noisy_b = rng.normal(100, 30, 200), rng.normal(97, 30, 200)
-    shifted_b = rng.normal(80, 30, 200)
-    weak, strong = ops.welch_test(noisy_a, noisy_b), ops.welch_test(noisy_a, shifted_b)
-    assert weak["p_value"] > 0.05 and strong["p_value"] < 0.001 and strong["cohens_d"] < -0.5
-    assert "Welch" in strong["method"]
-    small = ops.welch_test(noisy_a[:10], noisy_b[:10])
-    assert small["method"] == "none" and "fewer than 30" in small["skipped"] and "p_value" not in small
+def _two(mean_b, sd=30.0, n=200, seed=3):
+    """A real statistical result for two normal samples, attached to a component_change result."""
+    from app.stats import selector
 
-    not_significant = ops.evaluate(CC, _cc(-3, test=weak), {"expect": "decrease"})
-    assert not_significant["status"] == ops.INCONCLUSIVE and "not statistically" in not_significant["reasons"][0]
-    significant = ops.evaluate(CC, _cc(-20, test=strong), {"expect": "decrease"})
-    assert significant["status"] == ops.SUPPORTED and "p = " in significant["reasons"][0]
-    untested = ops.evaluate(CC, _cc(-20, test=small), {"expect": "decrease"})
-    assert untested["status"] == ops.SUPPORTED and "No significance test" in untested["reasons"][0]
+    rng = np.random.default_rng(seed)
+    a, b = rng.normal(100, sd, n), rng.normal(mean_b, sd, n)
+    r = selector.two_groups(a, b, what="x", units="x")
+    ma, mb = float(a.mean()), float(b.mean())
+    return {"facts": {"formula": "avg(x)", "a": ma, "b": mb, "change": mb - ma, "change_pct": (mb - ma) / ma * 100, "stat": r},
+            "rows_a": n, "rows_b": n}
+
+
+def test_statistical_method_is_selected_and_interpreted(sales):
+    """The engine's inferential operations go through the selector (numerical
+    correctness of the methods themselves is covered in test_statistics.py)."""
+    clear = ops.evaluate(CC, _two(80), {"expect": "decrease"})
+    assert clear["status"] == ops.SUPPORTED and "Welch's t-test, p < 0.001" in clear["reasons"][0]
+    assert clear["effect"]["interval"][1] < 0, "the interval for the difference is carried with the verdict"
+    opposite = ops.evaluate(CC, _two(80), {"expect": "increase"})
+    assert opposite["status"] == ops.WEAKENED and "other way" in opposite["reasons"][0]
+
+    noisy = ops.evaluate(CC, _two(97), {"expect": "decrease"})
+    assert noisy["status"] == ops.INCONCLUSIVE and "not evidence that nothing changed" in noisy["reasons"][0], \
+        "a non-significant difference is never read as 'no effect'"
+    tight = ops.evaluate(CC, _two(100.0, sd=1.0, n=5000), {"expect": "decrease"})
+    assert tight["status"] == ops.WEAKENED and "not compatible with the data" in tight["reasons"][0], \
+        "only an interval that excludes a material move counts against the hypothesis"
+    tiny_but_real = ops.evaluate(CC, _two(99.0, sd=1.0, n=5000), {"expect": "decrease"})
+    assert tiny_but_real["status"] == ops.WEAKENED and "statistically distinguishable, practically small" in tiny_but_real["reasons"][0], \
+        "significance alone does not support a hypothesis"
 
     df, profile = sales
     ctx = context(df, profile)
-    avg = ops.execute(df, ctx, ops.normalize({"op": "component_change", "params": {"formula": "avg(unit_price)"}}, ctx))
-    assert "Welch" in avg["facts"]["test"]["method"], "a mean gets Welch's test"
+    avg = ops.execute(df, ctx, ops.normalize({"op": "component_change", "params": {"formula": "avg(unit_price)", "method": "t-test"}}, ctx))
+    stat = avg["facts"]["stat"]
+    assert stat["method"] == "welch_t" and stat["suggested_method"]["outcome"] == "accepted" and stat["test"]["df"] > 100
     total = ops.execute(df, ctx, ops.normalize({"op": "component_change", "params": {"formula": "sum(units)"}}, ctx))
-    assert "test" not in total["facts"], "a plain total has no row-level significance test"
+    assert "stat" not in total["facts"], "a plain total has no row-level test"
+    assert "No significance test applies" in ops.evaluate(CC, total, {"expect": "decrease"})["reasons"][0]
     share = ops.execute(df, ctx, ops.normalize({"op": "share_change", "params": {"filters": [{"column": "region", "op": "==", "value": "West"}]}}, ctx))
-    assert share["facts"]["test"]["method"] == "two-proportion z-test" and share["facts"]["share_a"] == pytest.approx(0.25)
-    assert ops.two_proportion_test(1, 20, 2, 20)["method"] == "none"
+    assert share["facts"]["stat"]["method"] == "chi_square" and share["facts"]["share_a"] == pytest.approx(0.25)
+    assert share["facts"]["stat"]["interval"]["method"] == "Newcombe hybrid score interval"
+
+    few = df.groupby(df["order_date"] >= SPLIT).head(1)                 # one row per period
+    unavailable = ops.execute(few, context(few, profile), ops.normalize({"op": "distribution_shift", "params": {"column": "units"}}, ctx))
+    verdict = ops.evaluate({"op": "distribution_shift", "params": {}}, unavailable, {"expect": "decrease"})
+    assert unavailable["facts"]["stat"]["status"] == "unavailable" and unavailable["facts"]["stat"]["test"] is None
+    assert verdict["status"] == ops.INCONCLUSIVE and "at least 2 values" in verdict["reasons"][0], "too little data is not evidence against"
+
+    a = ops.normalize({"op": "distribution_shift", "params": {"column": "units", "method": "welch"}}, ctx)
+    b = ops.normalize({"op": "distribution_shift", "params": {"column": "units", "method": "mann-whitney"}}, ctx)
+    assert ops.signature(a) == ops.signature(b), "a suggested method does not make a different analysis"
 
 
 def test_concentration_is_judged_against_the_segment_s_size(sales):
@@ -351,10 +377,12 @@ def test_every_status_comes_from_an_executed_analysis(full_run):
     assert analyses[west["evidence"][0]["analysis_id"]]["op"] == "segment_contribution"
     assert by_statement["Fewer units were sold overall"]["status"] == "supported"
     prices = by_statement["Unit prices were cut"]
-    assert prices["status"] == "weakened" and "other way" in prices["reasons"][0], "prices rose; the data contradicts the hypothesis"
+    assert prices["status"] == "inconclusive" and "not evidence that nothing changed" in prices["reasons"][0], \
+        "prices measured higher, but a cut is still inside the interval: not contradicted, not supported"
+    assert prices["effect"]["interval"][0] < 0 < prices["effect"]["interval"][1]
     assert by_statement["The drop is spread across channels in proportion"]["status"] == "weakened"
     assert by_statement["The later period is incomplete"]["status"] == "weakened"
-    assert report["hypothesis_counts"] == {"supported": 2, "weakened": 3, "inconclusive": 0, "not_testable": 0, "failed": 0, "proposed": 0}
+    assert report["hypothesis_counts"] == {"supported": 2, "weakened": 2, "inconclusive": 1, "not_testable": 0, "failed": 0, "proposed": 0}
     assert [f["status"] for f in report["findings"]][:2] == ["supported", "supported"], "findings ranked by evidence"
 
 
@@ -377,7 +405,7 @@ def test_the_loop_adapts_then_stops_and_stays_inside_its_budget(full_run):
     assert any("reason for stopping (unverified wording): Every hypothesis is resolved." in n for n in eng.model_notes)
     b = report["budget"]
     assert b["model_calls"] == provider.count() == 6 <= b["limits"]["model_calls"]
-    assert b["analyses"] == len(report["analyses"]) == 11 <= b["limits"]["analyses"]
+    assert b["analyses"] == len(report["analyses"]) == 12 <= b["limits"]["analyses"]
     assert [t for _, t in provider.calls] == ["submit_understanding", "submit_hypotheses", "submit_next_step",
                                                "submit_next_step", "submit_next_step", "submit_report"]
 
@@ -392,7 +420,7 @@ def test_report_is_grounded_and_separates_fact_from_explanation(full_run):
     assert any("Welch" in s for s in report["statistical_interpretations"])
     assert any("not proof of cause" in s for s in report["limitations"])
     repro = report["reproducibility"]
-    assert repro["analysis_ids"] == [a["id"] for a in report["analyses"]] and len(repro["analysis_signatures"]) == 11
+    assert repro["analysis_ids"] == [a["id"] for a in report["analyses"]] and len(repro["analysis_signatures"]) == 12
     assert repro["evidence_thresholds"]["strong_share"] == config.HYP_STRONG_SHARE and "deterministic" in repro["note"]
     assert report["charts"] and report["charts"][0]["plotly_json"]["data"][0]["type"] == "bar"
 
@@ -427,7 +455,7 @@ def test_a_concentration_the_model_overlooks_is_still_reported(sales):
     west = [f for f in report["observed_facts"] if "region = West" in f]
     assert len(west) == 1 and "117% of the change" in west[0] and west[0].endswith("No supported hypothesis covers this.")
     assert not any("channel" in f or "product" in f for f in report["observed_facts"]), "proportional segments are not findings"
-    assert "'segment': 'West'" in prompts_seen["submit_hypotheses"], "the scan result is in front of the model before it proposes anything"
+    assert '"segment":"West"' in prompts_seen["submit_hypotheses"], "the scan result is in front of the model before it proposes anything"
     assert report["executive_summary"]["source"] == "model", "a share stated as a percentage is a faithful form of the computed fraction"
     assert report["possible_explanations"] == ["West demand may have weakened."], "an explanation carrying an invented figure is dropped"
     assert report["follow_ups"] == ["Look at West by week."]
@@ -501,9 +529,9 @@ def test_budgets_stop_the_loop_and_are_reported(sales):
     assert report["executive_summary"]["source"] == "template" and "no model call was left" in report["executive_summary"]["rejected_reason"]
     assert any("model calls limit" in l for l in report["limitations"]) and len(report["hypotheses"]) == 5
 
-    eng, _ = engine_for(df, profile, script(), budget=he.Budget(max_analyses=8))     # 3 baseline + 3 scan + 2 tests
+    eng, _ = engine_for(df, profile, script(), budget=he.Budget(max_analyses=9))     # 4 baseline + 3 scan + 2 tests
     report = eng.run()
-    assert report["budget"]["analyses"] == 8 and report["stop_reason"] == "budget:analyses"
+    assert report["budget"]["analyses"] == 9 and report["stop_reason"] == "budget:analyses"
     untested = [h for h in report["hypotheses"] if h["status"] == "proposed"]
     assert len(untested) == 3 and all(h["evidence"] == [] for h in untested), "untested stays untested, not weakened"
 
@@ -538,7 +566,7 @@ def test_equivalent_analyses_are_never_executed_twice(sales, monkeypatch):
               "prediction": {"expect": "decrease"}, "rationale": "check again"}
     eng, provider = engine_for(df, profile, script(submit_hypotheses=[two], submit_next_step=[repeat]))
     report = eng.run()
-    assert len(executed) == len(set(executed)) == 7, "3 baseline analyses + 3 scans + 1 shared test"
+    assert len(executed) == len(set(executed)) == 8, "4 baseline analyses + 3 scans + 1 shared test"
     h1, h2 = report["hypotheses"][0], next(h for h in report["hypotheses"] if h["statement"] == "Units rose")
     assert h1["evidence"][0]["analysis_id"] == h2["evidence"][0]["analysis_id"], "one execution, judged against both predictions"
     assert (h1["status"], h2["status"]) == ("supported", "weakened")
@@ -625,7 +653,7 @@ def test_an_interrupted_run_resumes_without_repeating_work(sales, monkeypatch):
 
     def die_late():
         calls["n"] += 1
-        if calls["n"] == 12:                      # after the baseline, the scan and three hypothesis tests
+        if calls["n"] == 13:                      # after the baseline, the scan and three hypothesis tests
             raise runtime.RunCancelled()
 
     eng, first = engine_for(df, profile, script(), store=store, checkpoint=die_late)
@@ -633,7 +661,7 @@ def test_an_interrupted_run_resumes_without_repeating_work(sales, monkeypatch):
         eng.run()
     done_before = [a["id"] for a in store.analyses]
     tested_before = [h["id"] for h in store.hypotheses if h["evidence"]]
-    assert store.understanding and len(store.hypotheses) == 5 and 3 < len(done_before) < 9 and tested_before
+    assert store.understanding and len(store.hypotheses) == 5 and 3 < len(done_before) < 12 and tested_before
 
     executed = []
     real = ops.execute
@@ -643,7 +671,7 @@ def test_an_interrupted_run_resumes_without_repeating_work(sales, monkeypatch):
     assert report["resumed"] is True
     assert "submit_understanding" not in [t for _, t in second.calls] and "submit_hypotheses" not in [t for _, t in second.calls]
     assert "metric_change" not in executed and "period_coverage" not in executed, "finished analyses are reused, not re-run"
-    assert len(report["analyses"]) == 11 and [a["id"] for a in report["analyses"]][:len(done_before)] == done_before
+    assert len(report["analyses"]) == 12 and [a["id"] for a in report["analyses"]][:len(done_before)] == done_before
     assert report["hypothesis_counts"]["supported"] == 2 and report["determination"]["code"] == "explanations_supported"
 
 
@@ -754,7 +782,7 @@ def test_a_question_runs_the_whole_investigation_through_the_job_system(client, 
     inv = client.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]
     assert inv["engine"] == "hypothesis" and inv["status"] == "complete" and inv["question_id"] == q.id
     detail = client.get(f"/api/investigations/{inv['id']}", headers=ws["h"]).json()
-    assert [h["status"] for h in detail["hypotheses"]].count("supported") == 2 and len(detail["analyses"]) == 11
+    assert [h["status"] for h in detail["hypotheses"]].count("supported") == 2 and len(detail["analyses"]) == 12
     assert all(a["status"] == "ok" and a["signature"] for a in detail["analyses"])
     assert detail["report"]["reproducibility"]["dataset_fingerprint"] and detail["report"]["reproducibility"]["models"] == ["scripted:scripted"]
     assert detail["report"]["reproducibility"]["investigation_id"] == inv["id"]
@@ -815,8 +843,8 @@ def test_progress_is_visible_and_a_cancelled_run_resumes_on_retry(client, ws):
     assert state == "cancelled" and job_row(created["job_id"]).failure_class == "cancelled"
     assert question_row(created["question_id"]).status == "cancelled"
     live = seen["live"]
-    assert live["status"] == "running" and len(live["hypotheses"]) == 5 and len(live["analyses"]) == 9, "state is readable mid-run"
-    assert {h["status"] for h in live["hypotheses"]} == {"supported", "weakened"}
+    assert live["status"] == "running" and len(live["hypotheses"]) == 5 and len(live["analyses"]) == 10, "state is readable mid-run"
+    assert {h["status"] for h in live["hypotheses"]} == {"supported", "weakened", "inconclusive"}
     assert seen["stage"]["current_stage"] == "investigating" and "choosing the next analysis" in seen["stage"]["stage_detail"]
     assert client.get(f"/api/questions/{created['question_id']}/dashboard", headers=ws["h"]).status_code == 404
 
@@ -829,7 +857,7 @@ def test_progress_is_visible_and_a_cancelled_run_resumes_on_retry(client, ws):
     db = SessionLocal()
     try:
         inv_id = live["id"]
-        assert db.query(InvestigationAnalysis).filter_by(investigation_id=inv_id).count() == 11
+        assert db.query(InvestigationAnalysis).filter_by(investigation_id=inv_id).count() == 12
         assert db.query(InvestigationHypothesis).filter_by(investigation_id=inv_id).count() == 5
     finally:
         db.close()

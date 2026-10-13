@@ -190,7 +190,8 @@ Deterministic decomposition of a metric's change between two periods.
 
 When a model provider is configured, "why" questions go to the hypothesis-driven engine instead, which
 builds on these decompositions: a model proposes competing explanations and the same deterministic code
-tests them. See [HYPOTHESIS_ENGINE.md](HYPOTHESIS_ENGINE.md). Without a provider, or with
+tests them. See [HYPOTHESIS_ENGINE.md](HYPOTHESIS_ENGINE.md); the statistical methods it uses and how they are
+selected are in [STATISTICAL_REASONING.md](STATISTICAL_REASONING.md). Without a provider, or with
 `HYPOTHESIS_ENGINE_ENABLED=false`, this investigator answers them as before.
 
 - Additive metrics (`sum`, `count`): segment contributions that add up exactly to the change.

@@ -58,6 +58,8 @@ Dataset profile:
     # Scheduled re-runs watch for change, so they plan fresh instead of
     # anchoring on their own earlier results.
     db = SessionLocal()
+    # Both lookups below search with the same question text, model and settings: one embedding serves both.
+    question_vector = memory.QueryEmbedding()
     try:
         question = db.get(Question, question_id)
         if question is not None:
@@ -66,12 +68,13 @@ Dataset profile:
             user_content += knowledge.format_for_prompt(
                 knowledge.get_knowledge(db, team_id=question.team_id, dataset_id=question.dataset_id),
                 knowledge.retrieve_lessons(db, team_id=question.team_id, dataset_id=question.dataset_id,
-                                           question_text=question.text),
+                                           question_text=question.text, query_embedding=question_vector),
             )
         if question is not None and question.trigger != "scheduled":
             user_content += memory.format_for_prompt(memory.retrieve(
                 db, team_id=question.team_id, dataset_id=question.dataset_id,
                 question_text=question.text, exclude_question_id=question_id,
+                query_embedding=question_vector,
             ))
     finally:
         db.close()
