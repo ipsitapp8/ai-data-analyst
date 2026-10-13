@@ -102,7 +102,7 @@ def infer_spec(profile: dict, question: str, resolved_metrics: list[dict] | None
         text = re.sub(r"[_\-]+", " ", question.lower())
         numeric = [c["name"] for c in columns if c.get("kind") == "numeric"]
         hits = [n for n in numeric
-                if re.search(rf"(?<![a-z0-9]){re.escape(re.sub(r'[_\-]+', ' ', n.lower()))}(?![a-z0-9])", text)]
+                if re.search(rf"(?<![a-z0-9]){re.escape(re.sub('[_-]+', ' ', n.lower()))}(?![a-z0-9])", text)]
         if len(hits) == 1:
             formula, label = f'sum("{hits[0]}")', f"Total {hits[0]}"
         elif not hits and len(numeric) == 1:
