@@ -29,7 +29,6 @@ from __future__ import annotations
 import datetime as dt
 import html as _html
 import logging
-import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import update

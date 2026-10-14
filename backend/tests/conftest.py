@@ -38,6 +38,7 @@ os.environ["LLAMA_API_KEY"] = ""
 # addresses.
 # Tests drive the scheduler tick by hand; a live background tick would race them.
 os.environ["SCHEDULER_ENABLED"] = "false"
+os.environ["INTERNAL_AUTH_SECRET"] = ""  # a dev .env with Google sign-in on must not switch it on in tests
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASSWORD"] = ""
 # Same reasoning as SMTP above: a developer's real local .env DATABASE_URL

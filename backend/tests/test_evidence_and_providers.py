@@ -744,7 +744,7 @@ def test_running_migrations_does_not_silence_application_logging():
     application logging -- provider diagnostics included."""
     from logging.config import fileConfig
 
-    env = (Path(__file__).resolve().parents[1] / "alembic" / "env.py").read_text()
+    env = (Path(__file__).resolve().parents[1] / "alembic" / "env.py").read_text(encoding="utf-8")
     assert "disable_existing_loggers=False" in env
     probe = logging.getLogger("app.agents.llm_client")
     probe.disabled = False
@@ -931,7 +931,7 @@ def test_the_empty_statistics_message_follows_the_same_indentation_choice(client
 
     # The page asks the API for the statistics; here the answer is an empty list.
     monkeypatch.setattr(api_client, "get_investigation_statistics", lambda investigation_id: {"statistics": []})
-    page_module_text = (Path(__file__).resolve().parents[2] / "frontend" / "pages" / "13_Investigations.py").read_text()
+    page_module_text = (Path(__file__).resolve().parents[2] / "frontend" / "pages" / "13_Investigations.py").read_text(encoding="utf-8")
     assert page_module_text.count("padding:{padding};") == 2, "the statistic lines and the empty message share one padding choice"
     merged = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
     assert 'style="padding:4px 0 4px 18px;">The run left analysis results but no statistical tests.' in raw(merged)

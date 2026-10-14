@@ -167,7 +167,7 @@ def two_groups(a: Any, b: Any, *, what: str, units: str | None = None, labels: t
                    {"name": "relative difference, percent", "value": pieces["estimate"] / abs(da["mean"]) * 100 if da["mean"] else None,
                     "note": None if da["mean"] else "not defined: the earlier mean is zero"},
                    {"name": "Hedges' g (standardised mean difference)", "value": m.hedges_g(a, b)}]
-    null = (f"values in the two groups are equally likely to be higher" if typical else f"the two groups have the same mean {what}")
+    null = ("values in the two groups are equally likely to be higher" if typical else f"the two groups have the same mean {what}")
     return build(status="ok", method=method, method_label=label, selection=reasons, rejected_methods=rejected,
                  suggested_method=_suggestion(suggested, method, why_not), assumptions=assumptions,
                  estimate=pieces["estimate"], interval=pieces["interval"],

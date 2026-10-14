@@ -56,7 +56,7 @@ key trends"), informally worded, or slightly misspelled. Be permissive with real
 strict with noise. When rejecting, base `reason` on what the dataset actually contains, and give
 2-3 concrete `suggestions` phrased as questions that THIS dataset's columns could answer.
 
-""" + UNTRUSTED_DATA_NOTICE + f"""
+""" + UNTRUSTED_DATA_NOTICE + """
 Respond only via the submit_triage tool.
 """
 
@@ -99,7 +99,7 @@ Rules:
   and end with a step that ties findings back to the original question.
 - Only reference columns that actually exist in the provided profile.
 {SANDBOX_CONTRACT}
-""" + UNTRUSTED_DATA_NOTICE + f"""
+""" + UNTRUSTED_DATA_NOTICE + """
 Respond only via the submit_plan tool.
 """
 
@@ -113,7 +113,7 @@ If you are given a previous error, fix the root cause — do not just suppress t
 issues: wrong column names (check the provided profile), datetime columns still being strings
 (parse with pd.to_datetime), or division by zero on empty slices (guard for that).
 
-""" + UNTRUSTED_DATA_NOTICE + f"""
+""" + UNTRUSTED_DATA_NOTICE + """
 Respond only via the submit_code tool.
 """
 
@@ -132,7 +132,7 @@ claimed.
 
 {SANDBOX_CONTRACT}
 
-""" + UNTRUSTED_DATA_NOTICE + f"""
+""" + UNTRUSTED_DATA_NOTICE + """
 Respond only via the submit_verification_code tool.
 """
 

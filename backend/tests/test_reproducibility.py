@@ -12,7 +12,7 @@ from app import provenance
 from app.database import SessionLocal
 from app.models import Dashboard, DatasetVersion, EvidenceRecord, ExecutionLog, Question, RunManifest
 
-SUITE = json.loads((provenance.config.BACKEND_DIR / "evals" / "cases" / "suite.json").read_text())
+SUITE = json.loads((provenance.config.BACKEND_DIR / "evals" / "cases" / "suite.json").read_text(encoding="utf-8"))
 PIPELINE = next(c for c in SUITE["cases"] if c["id"] == "pipeline-correct")
 
 

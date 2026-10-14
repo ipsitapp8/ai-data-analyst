@@ -157,7 +157,7 @@ def test_keys_lose_the_whitespace_and_quotes_a_pasted_value_can_carry(monkeypatc
 
 
 def test_the_default_model_is_not_the_retired_one_and_health_names_the_models(client):
-    source = (config.BACKEND_DIR / "app" / "config.py").read_text()
+    source = (config.BACKEND_DIR / "app" / "config.py").read_text(encoding="utf-8")
     assert 'or "gemini-3.6-flash"' in source and '"gemini-2.5-flash")' not in source
     assert config.GEMINI_MODEL and config.LLAMA_MODEL
     body = client.get("/api/health").json()

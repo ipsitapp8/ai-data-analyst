@@ -49,6 +49,23 @@ from pathlib import Path
 
 from app import config, runtime
 
+
+def _force_rmtree(path) -> None:
+    """rmtree that also removes read-only files (the dataset copies are chmod 0o444, which on
+    Windows blocks deletion), and never raises."""
+    def _retry(func, p, *_exc):
+        try:
+            os.chmod(p, 0o700)
+            func(p)
+        except OSError:
+            pass
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_retry)
+    else:
+        shutil.rmtree(path, onerror=_retry)
+
+
 logger = logging.getLogger(__name__)
 
 RESULT_MARKER = "RESULT_JSON:"
@@ -192,7 +209,7 @@ class SandboxRunner:
     def cleanup_workspace(self, question_id: int) -> None:
         """Remove everything a question's executions left on disk."""
         ws = config.WORKSPACES_DIR / f"q{int(question_id)}"
-        shutil.rmtree(ws, ignore_errors=True)
+        _force_rmtree(ws)
 
     # --------------------------------------------------------------- output --
     def _parse_stdout(self, stdout: str, marker: str = RESULT_MARKER) -> dict | None:
@@ -274,7 +291,7 @@ class SandboxRunner:
             raw = self._execute(ws, exec_dir, code, timeout)
             charts, rejected = self._collect_artifacts(out_dir, ws / "artifacts" / run_id)
         finally:
-            shutil.rmtree(exec_dir, ignore_errors=True)
+            _force_rmtree(exec_dir)
 
         success = raw.exit_code == 0 and not (raw.timed_out or raw.cancelled)
         stderr = raw.stderr
@@ -596,7 +613,7 @@ def sweep_workspaces(max_age_days: int, keep_question_ids: set[int]) -> int:
             continue
         try:
             if entry.stat(follow_symlinks=False).st_mtime < cutoff:
-                shutil.rmtree(entry.path, ignore_errors=True)
+                _force_rmtree(entry.path)
                 removed += 1
         except OSError:
             continue
