@@ -257,15 +257,20 @@ def require_login() -> None:
     st.markdown(_GATE_FONTS, unsafe_allow_html=True)
     st.markdown(
         f'<div class="lp-nav"><div class="lp-brand">{_GATE_LOGO}Silt</div>'
-        '<a class="lp-pill" href="#auth">Log in</a></div>'
-        '<div class="lp-hero">'
-        '<h1 class="lp-title">Ask your data anything.<br><b>Trust every answer.</b></h1>'
+        '<div class="lp-nav-r"><a class="lp-ghost" href="#auth">Log in</a>'
+        '<a class="lp-pill" href="#auth">Get started</a></div></div>'
+        '<div class="lp-hero"><div>'
+        '<div class="lp-badge"><b>AGENTIC</b>Your autonomous data analyst</div>'
+        '<h1 class="lp-title">Ask your data anything.<br><span>Trust every answer.</span></h1>'
         '<p class="lp-sub">Silt is an AI data analyst for teams. Ask a question in plain English; an agent plans, '
         'runs and explains the analysis, and an independent model checks it before it reaches you.</p>'
-        '<p class="lp-tag">Invisible when it works. Essential when it matters.</p>'
-        '<a class="lp-cta" href="#auth">Get started</a>'
+        '<a class="lp-cta" href="#auth">Get started<i>&rarr;</i></a>'
         '<div class="lp-points"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
         '<span>Fully auditable</span></div></div>'
+        '<div class="lp-stage"><div class="lp-orb"></div>'
+        '<div class="lp-float lp-q"><small>Ask Silt</small>Which region grew fastest last quarter?</div>'
+        '<div class="lp-float lp-v"><div class="row"><span class="ok">&#10003;</span>Checked by an independent model</div>'
+        '<div class="bar"></div><div class="bar s"></div></div></div></div>'
         '<div id="auth"></div>',
         unsafe_allow_html=True,
     )

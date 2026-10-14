@@ -1,17 +1,14 @@
-"""Landing page — hero, how it works, and a live workspace snapshot.
+"""Landing page — hero, capability strip, how it works, and a live workspace snapshot.
 
 The dataset/analysis counts and recent activity come straight from the
-backend, same as the Overview page. Drop a picture at frontend/assets/hero.jpg
-to replace the drawn hero artwork.
+backend, same as the Overview page. The hero stage is drawn in CSS (no image asset).
 """
 from __future__ import annotations
-
-from pathlib import Path
 
 import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
-from style.theme import asset_data_uri, esc, html, page_setup, render_sidebar, verdict_badge
+from style.theme import esc, html, page_setup, render_sidebar, verdict_badge
 
 page_setup("Home")
 render_sidebar("home")
@@ -44,24 +41,18 @@ I_CHART = _icon('<path d="M5 20V11M12 20V4M19 20v-6"/>')
 I_DB = _icon('<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>', 16)
 I_SPARK = _icon('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 22)
 
-# Drawn stand-in for a hero photo: a tilted dashboard tablet, a CSV tile, and warm light arcs.
-HERO_SVG = """
-<svg viewBox="0 0 640 380" xmlns="http://www.w3.org/2000/svg">
-  <rect x="40" y="40" width="470" height="290" rx="14" fill="#ffffff" stroke="#e4e4e7"/>
-  <text x="68" y="76" fill="#18181b" font-size="14" font-weight="600" font-family="Inter, sans-serif">Sales overview</text>
-  <rect x="68" y="96" width="130" height="64" rx="8" fill="#fafafa" stroke="#e4e4e7"/>
-  <rect x="212" y="96" width="130" height="64" rx="8" fill="#fafafa" stroke="#e4e4e7"/>
-  <rect x="356" y="96" width="130" height="64" rx="8" fill="#f6eef6" stroke="#e6cfe2"/>
-  <polyline points="68,290 130,262 190,272 250,232 310,242 370,200 430,190 486,170" fill="none" stroke="#837ab6" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-  <polyline points="68,300 130,290 190,294 250,274 310,282 370,262 430,256 486,248" fill="none" stroke="#cc8db3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-  <g transform="translate(470 250)">
-    <rect width="130" height="96" rx="12" fill="#ffffff" stroke="#e4e4e7"/>
-    <circle cx="28" cy="30" r="12" fill="#dcfce7"/><path d="M22 30l4 4 8-8" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="48" y="35" fill="#18181b" font-size="12" font-weight="600" font-family="Inter, sans-serif">Verified</text>
-    <rect x="18" y="58" width="94" height="6" rx="3" fill="#f0f0f2"/><rect x="18" y="72" width="64" height="6" rx="3" fill="#f0f0f2"/>
-  </g>
-</svg>
-"""
+I_SHIELD = _icon('<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/>', 17)
+I_BOX = _icon('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5L12 12l8-4.5M12 12v9"/>', 17)
+I_LOG = _icon('<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>', 17)
+I_DASH = _icon('<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/>', 17)
+I_FILE = _icon('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>', 17)
+
+EXAMPLE_QUESTIONS = [
+    "Which region grew fastest last quarter?",
+    "Why did revenue dip in March?",
+    "Which customers are most at risk of churning?",
+    "Is the lift from the new campaign significant?",
+]
 
 
 def _steps() -> str:
@@ -85,30 +76,54 @@ def _steps() -> str:
 if not _has_team:
     st.info("You're not on a team yet — create or join one to upload data and run analyses.")
 
-hero_img = Path(__file__).parent / "assets" / "hero.jpg"
 with st.container(key="home_hero"):
-    left, right = st.columns([1.15, 1.0], gap="large")
+    left, right = st.columns([1.0, 1.0], gap="large")
     with left:
-        html('<div class="h-eyebrow">Your data. <b>Our analysis.</b></div>')
-        html('<div class="h-hero">Ask a question about a CSV in plain English.</div>')
+        html('<div class="h-badge"><span class="tag">AGENTIC</span>Your autonomous data analyst</div>')
+        html('<div class="h-hero">Ask your data anything.<br><span>Trust every answer.</span></div>')
         html('<div class="h-lede">An AI agent plans the analysis, writes and runs the code in a sandbox, '
              'and a second, <em>independent model checks the result</em> before it reaches you.</div>')
         with st.container(key="home_ctas"):
-            b1, b2, _ = st.columns([1.25, 1, 0.6])
+            b1, b2, _ = st.columns([1.15, 1, 0.5])
             with b1:
                 if _has_team:
-                    if st.button("New analysis  →", type="primary", key="btn_ask", use_container_width=True):
+                    if st.button("New analysis", type="primary", key="btn_ask", use_container_width=True):
                         st.switch_page("pages/3_Analyses.py")
-                elif st.button("Go to Workspaces  →", type="primary", key="btn_ws", use_container_width=True):
+                elif st.button("Go to Workspaces", type="primary", key="btn_ws", use_container_width=True):
                     st.switch_page("pages/8_Workspaces.py")
             with b2:
                 if st.button("Upload data", key="btn_upload", use_container_width=True):
                     st.switch_page("pages/2_Datasets.py")
+        html('<div class="h-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
+             '<span>Fully auditable</span></div>')
     with right:
-        if hero_img.exists():
-            html(f'<div class="h-art photo" style="background-image:url({asset_data_uri("hero.jpg")})"></div>')
-        else:
-            html(f'<div class="h-art">{HERO_SVG}</div>')
+        suggestions = "".join(f"<div>{esc(q)}</div>" for q in EXAMPLE_QUESTIONS[1:])
+        html(
+            f"""
+            <div class="h-stage">
+              <div class="h-orb"></div>
+              <div class="h-float h-ask">
+                <div class="h-ask-head"><div class="h-ask-ico">{I_SPARK}</div>
+                  <div class="h-ask-q"><small>Ask Silt</small>{esc(EXAMPLE_QUESTIONS[0])}</div></div>
+                <div class="h-ask-list">{suggestions}</div>
+              </div>
+              <div class="h-float h-metric">
+                <div class="lbl">Analyses verified</div>
+                <div class="num">{len(_verified)}</div>
+                <div class="sub"><b>of {len(_questions)}</b> run in this workspace</div>
+              </div>
+              <div class="h-stage-title">Every number,<br>checked twice.</div>
+            </div>
+            """
+        )
+
+# ------------------------------------------------------ capability strip --
+html(
+    '<div class="h-strip-eyebrow">Built for answers you can defend</div>'
+    '<div class="h-strip">'
+    f'<div>{I_FILE}CSV upload</div><div>{I_BOX}Sandboxed code</div><div>{I_SHIELD}Independent critic</div>'
+    f'<div>{I_LOG}Audit trail</div><div>{I_DASH}Dashboards</div></div>'
+)
 
 # ------------------------------------------------- how it works + snapshot --
 how_l, snap_r = st.columns([1.75, 1.0], gap="large")
