@@ -13,13 +13,19 @@
   --shadow-lg: 0 24px 60px rgba(37,14,44,0.14), 0 4px 12px rgba(37,14,44,0.05);
   --liquid: linear-gradient(135deg, #837ab6 0%, #9d85b6 48%, #cc8db3 100%);
   --r-card: 20px;
+  /* glass buttons */
+  --glass-fill: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.46) 100%);
+  --glass-edge: rgba(131,122,182,0.28);
+  --glass-shadow: 0 8px 22px rgba(37,14,44,0.10), 0 1px 3px rgba(37,14,44,0.06);
+  --glass-gloss: inset 0 1px 0 rgba(255,255,255,0.98), inset 0 -8px 14px rgba(131,122,182,0.14);
+  --plum-glass: radial-gradient(130% 95% at 50% -25%, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0) 58%), linear-gradient(180deg, #4a2457 0%, #250e2c 100%);
 }
 
 /* near-white page with one faint plum/pink wash in the top corners */
 .stApp, [data-testid="stAppViewContainer"] {
   background:
-    radial-gradient(42% 34% at 100% 0%, rgba(246,165,192,0.16) 0%, rgba(246,165,192,0) 70%),
-    radial-gradient(40% 32% at 0% 0%, rgba(131,122,182,0.12) 0%, rgba(131,122,182,0) 70%),
+    radial-gradient(42% 34% at 100% 0%, rgba(246,165,192,0.26) 0%, rgba(246,165,192,0) 70%),
+    radial-gradient(40% 32% at 0% 0%, rgba(131,122,182,0.20) 0%, rgba(131,122,182,0) 70%),
     var(--page) !important;
 
 }
@@ -33,20 +39,25 @@ h1, h2, h3, h4, h5, .ds-page-title { color: var(--ink); letter-spacing: -0.025em
   transition: transform .16s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease !important;
 }
 button[kind="secondary"], .stDownloadButton > button, .stLinkButton > a {
-  background: var(--surface) !important; color: var(--ink) !important;
-  border: 1px solid var(--line-strong) !important; box-shadow: var(--shadow-sm) !important;
+  background: var(--glass-fill) !important; color: var(--ink) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%);
+  border: 1px solid rgba(255,255,255,0.95) !important;
+  box-shadow: var(--glass-shadow), var(--glass-gloss), 0 0 0 1px var(--glass-edge) !important;
 }
 button[kind="secondary"]:hover, .stDownloadButton > button:hover {
-  background: #fff !important; border-color: var(--ink) !important; transform: translateY(-1px);
-  box-shadow: var(--shadow-md) !important;
+  background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.7) 100%) !important; transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(37,14,44,0.16), var(--glass-gloss), 0 0 0 1px rgba(131,122,182,0.5) !important;
 }
 button[kind="primary"], .stFormSubmitButton > button, button[kind="primaryFormSubmit"] {
-  background: var(--ink) !important; color: #fff !important; border: 1px solid var(--ink) !important;
-  box-shadow: 0 10px 22px rgba(37,14,44,0.22) !important; text-shadow: none;
+  background: var(--plum-glass) !important; color: #fff !important;
+  -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(255,255,255,0.32) !important; text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  box-shadow: 0 14px 28px rgba(37,14,44,0.30), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -10px 16px rgba(255,255,255,0.06) !important;
 }
 button[kind="primary"]:hover, .stFormSubmitButton > button:hover, button[kind="primaryFormSubmit"]:hover {
-  background: #33193d !important; border-color: #33193d !important; color: #fff !important;
-  transform: translateY(-1px); box-shadow: 0 16px 30px rgba(37,14,44,0.28) !important;
+  background: radial-gradient(130% 95% at 50% -25%, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 58%), linear-gradient(180deg, #5a2c69 0%, #33193d 100%) !important;
+  border-color: rgba(255,255,255,0.45) !important; color: #fff !important; transform: translateY(-2px);
+  box-shadow: 0 20px 36px rgba(37,14,44,0.36), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -10px 16px rgba(255,255,255,0.08) !important;
 }
 button:active { transform: translateY(0) scale(0.985) !important; }
 button:disabled { opacity: 0.55; }
@@ -72,7 +83,7 @@ button:disabled { opacity: 0.55; }
 [data-testid="stAlert"] { border-radius: 14px !important; }
 .stTabs [data-baseweb="tab-list"] { gap: 4px; background: #f1edf3; border-radius: 999px; padding: 4px; width: fit-content; }
 .stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 6px 16px; }
-.stTabs [aria-selected="true"] { background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
+.stTabs [aria-selected="true"] { background: var(--glass-fill); box-shadow: var(--glass-shadow), var(--glass-gloss); color: var(--ink); }
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
 
 /* ---------- top strip ---------- */
@@ -93,10 +104,14 @@ button:disabled { opacity: 0.55; }
   background: transparent !important; border: 1px solid transparent !important; box-shadow: none !important;
   border-radius: 999px !important; color: var(--ink-soft) !important; text-shadow: none;
 }
-.st-key-nav .stButton > button:hover { background: #f4f0f6 !important; color: var(--ink) !important; transform: none; }
+.st-key-nav .stButton > button:hover {
+  background: var(--glass-fill) !important; color: var(--ink) !important; transform: none;
+  border: 1px solid rgba(255,255,255,0.95) !important; box-shadow: 0 6px 16px rgba(37,14,44,0.08), var(--glass-gloss), 0 0 0 1px var(--glass-edge) !important;
+}
 .st-key-nav .stButton > button:disabled {
-  background: var(--ink) !important; color: #fff !important; opacity: 1 !important; font-weight: 600 !important;
-  box-shadow: 0 8px 18px rgba(37,14,44,0.22) !important;
+  background: var(--plum-glass) !important; color: #fff !important; opacity: 1 !important; font-weight: 600 !important;
+  border: 1px solid rgba(255,255,255,0.32) !important; text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  box-shadow: 0 10px 22px rgba(37,14,44,0.28), inset 0 1px 0 rgba(255,255,255,0.45) !important;
 }
 .st-key-nav .stButton > button::before { opacity: 1; }
 .st-key-nav_logout button { color: var(--ink-soft) !important; }
