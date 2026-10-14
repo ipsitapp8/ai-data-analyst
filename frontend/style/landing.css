@@ -92,3 +92,9 @@
   background: var(--lp-glass) !important; -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%);
   border: 1px solid rgba(255,255,255,.95) !important;
   box-shadow: 0 8px 22px rgba(37,14,44,.10), inset 0 1px 0 rgba(255,255,255,.98), inset 0 -8px 14px rgba(131,122,182,.14), 0 0 0 1px rgba(131,122,182,.28) !important; }
+
+/* sign-in page */
+.lp-login-pad { height: 13vh; }
+.lp-brand { text-decoration: none; }
+.st-key-auth_card { margin-top: 0; }
+.lp-brand, .lp-brand:hover { color: var(--lp-ink) !important; text-decoration: none !important; }

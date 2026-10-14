@@ -450,7 +450,9 @@ def test_the_session_notice_is_shown_once_and_signing_in_again_works(api, ws):
 
 
 def test_a_wrong_password_is_a_login_error_not_an_expired_session(api, ws):
-    at = AppTest.from_file(str(FRONTEND_DIR / "pages" / "13_Investigations.py"), default_timeout=60).run()
+    at = AppTest.from_file(str(FRONTEND_DIR / "pages" / "13_Investigations.py"), default_timeout=60)
+    at.query_params["view"] = "login"  # the sign-in page; the bare address is the landing page
+    at.run()
     at.text_input(key="login_email").set_value(ws["email"])
     at.text_input(key="login_password").set_value("definitely-wrong")
     next(b for b in at.button if b.label == "Log in").click().run()
@@ -748,3 +750,25 @@ def test_session_cookie_script_sets_and_clears_the_token_safely():
     assert on.count("</script>") == 1, "a hostile token cannot close the script tag early"
     off = auth._cookie_js(None)
     assert "max-age=0" in off and "silt_token=" in off
+
+
+def _signed_out(view: str | None) -> AppTest:
+    at = AppTest.from_file(str(FRONTEND_DIR / "Home.py"), default_timeout=60)
+    if view:
+        at.query_params["view"] = view
+    return at.run()
+
+
+def test_signed_out_visitors_get_a_landing_page_and_a_separate_sign_in_page(api):
+    landing = _signed_out(None)
+    assert not landing.exception
+    assert not landing.text_input, "the landing page has no form on it"
+    page_html = " ".join(str(m.value) for m in landing.markdown)
+    assert 'href="?view=signup"' in page_html and 'href="?view=login"' in page_html, "Get started and Log in are links"
+
+    login = _signed_out("login")
+    assert not login.exception and {t.key for t in login.text_input} >= {"login_email", "login_password"}
+    assert [t.label for t in login.tabs][0] == "Log in"
+
+    signup = _signed_out("signup")
+    assert not signup.exception and [t.label for t in signup.tabs][0] == "Create account", "Get started opens sign-up first"

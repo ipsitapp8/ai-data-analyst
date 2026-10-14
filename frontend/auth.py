@@ -236,6 +236,8 @@ def require_login() -> None:
     from api_client import ApiError, login as api_login, signup as api_signup
 
     if st.session_state.get(_USER_SESSION_KEY) and st.session_state.get("auth_token"):
+        if "view" in st.query_params:  # leftover from the sign-in page address
+            del st.query_params["view"]
         pending = st.session_state.pop("_set_cookie", None)
         if pending:
             _write_cookie(pending)
@@ -248,39 +250,57 @@ def require_login() -> None:
     if st.session_state.pop("_clear_cookie", None):
         _write_cookie(None)
 
+    # Two pages on one URL: the marketing landing page (default) and the sign-in page (?view=login or
+    # ?view=signup). "Get started" and "Log in" are plain links, so each page is its own address.
+    view = str(st.query_params.get("view", "")).lower()
     # Why the visitor is back at this form (set when the API rejects a session token). Shown once.
     notice = st.session_state.pop("auth_notice", None)
-    if notice:
-        st.warning(notice)
+    if notice and view not in ("login", "signup"):
+        view = "login"
+        st.query_params["view"] = "login"  # stay on the sign-in page across reruns
 
     st.markdown(_landing_css(), unsafe_allow_html=True)
     st.markdown(_GATE_FONTS, unsafe_allow_html=True)
+
+    if view not in ("login", "signup"):
+        st.markdown(
+            f'<div class="lp-nav"><a class="lp-brand" href="?">{_GATE_LOGO}Silt</a>'
+            '<div class="lp-nav-r"><a class="lp-ghost" href="?view=login" target="_self">Log in</a>'
+            '<a class="lp-pill" href="?view=signup" target="_self">Get started</a></div></div>'
+            '<div class="lp-hero"><div>'
+            '<div class="lp-badge"><b>AGENTIC</b>Your autonomous data analyst</div>'
+            '<h1 class="lp-title">Ask your data anything.<br><span>Trust every answer.</span></h1>'
+            '<p class="lp-sub">Silt is an AI data analyst for teams. Ask a question in plain English; an agent plans, '
+            'runs and explains the analysis, and an independent model checks it before it reaches you.</p>'
+            '<a class="lp-cta" href="?view=signup" target="_self">Get started<i>&rarr;</i></a>'
+            '<div class="lp-points"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
+            '<span>Fully auditable</span></div></div>'
+            '<div class="lp-stage"><div class="lp-orb"></div>'
+            '<div class="lp-float lp-q"><small>Ask Silt</small>Which region grew fastest last quarter?</div>'
+            '<div class="lp-float lp-v"><div class="row"><span class="ok">&#10003;</span>Checked by an independent model</div>'
+            '<div class="bar"></div><div class="bar s"></div></div></div></div>',
+            unsafe_allow_html=True,
+        )
+        st.stop()
+
+    # ---- sign-in page ----
     st.markdown(
-        f'<div class="lp-nav"><div class="lp-brand">{_GATE_LOGO}Silt</div>'
-        '<div class="lp-nav-r"><a class="lp-ghost" href="#auth">Log in</a>'
-        '<a class="lp-pill" href="#auth">Get started</a></div></div>'
-        '<div class="lp-hero"><div>'
-        '<div class="lp-badge"><b>AGENTIC</b>Your autonomous data analyst</div>'
-        '<h1 class="lp-title">Ask your data anything.<br><span>Trust every answer.</span></h1>'
-        '<p class="lp-sub">Silt is an AI data analyst for teams. Ask a question in plain English; an agent plans, '
-        'runs and explains the analysis, and an independent model checks it before it reaches you.</p>'
-        '<a class="lp-cta" href="#auth">Get started<i>&rarr;</i></a>'
-        '<div class="lp-points"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
-        '<span>Fully auditable</span></div></div>'
-        '<div class="lp-stage"><div class="lp-orb"></div>'
-        '<div class="lp-float lp-q"><small>Ask Silt</small>Which region grew fastest last quarter?</div>'
-        '<div class="lp-float lp-v"><div class="row"><span class="ok">&#10003;</span>Checked by an independent model</div>'
-        '<div class="bar"></div><div class="bar s"></div></div></div></div>'
-        '<div id="auth"></div>',
+        f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
+        '<div class="lp-nav-r"><a class="lp-ghost" href="?" target="_self">&larr; Back to home</a></div></div>'
+        '<div class="lp-login-pad"></div>',
         unsafe_allow_html=True,
     )
+    if notice:
+        st.warning(notice)
 
     with st.container(key="auth_card"):
         if _google_enabled():
             if st.button("Continue with Google", key="google_login", use_container_width=True):
                 st.login()
             st.markdown('<div class="lp-or"><span>or use email</span></div>', unsafe_allow_html=True)
-        tab_login, tab_signup = st.tabs(["Log in", "Create account"])
+        labels = ["Create account", "Log in"] if view == "signup" else ["Log in", "Create account"]
+        _tabs = dict(zip(labels, st.tabs(labels), strict=True))
+        tab_login, tab_signup = _tabs["Log in"], _tabs["Create account"]
 
         with tab_login:
             st.markdown('<div class="lp-card-title">Welcome back.</div>'
