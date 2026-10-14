@@ -1108,6 +1108,12 @@ def render_topbar() -> None:
         </div>
         """
     )
+    if user:
+        # Always visible, unlike the sidebar one at the bottom of the long nav list.
+        with st.container(key="topbar_logout"):
+            if st.button("Log out", key="topbar_logout_btn"):
+                logout()
+                st.rerun()
 
 
 _LOGO = (

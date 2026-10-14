@@ -89,7 +89,7 @@ button:disabled { opacity: 0.55; }
 /* ---------- top strip ---------- */
 .silt-topbar {
   left: auto; right: 16px; width: fit-content; max-width: calc(100vw - 32px); top: 12px; height: 52px; border-radius: 999px; border: 1px solid var(--line);
-  background: rgba(255,255,255,0.92); box-shadow: var(--shadow-md); padding: 0 22px;
+  background: rgba(255,255,255,0.92); box-shadow: var(--shadow-md); padding: 0 118px 0 22px;
 }
 .silt-tb-user { border-left-color: var(--line); }
 .silt-tb-avatar { background: var(--ink); color: #fff; }
@@ -213,3 +213,8 @@ button:disabled { opacity: 0.55; }
   .h-strip { flex-wrap: wrap; } .h-strip > div { flex: 1 1 45%; border-top: 1px solid var(--line); }
   .h-steps { flex-wrap: wrap; row-gap: 22px; } .h-step { flex: 1 1 40%; } .h-arrow { display: none; }
 }
+
+/* Log out lives inside the top-bar pill, pinned so it never scrolls away */
+.st-key-topbar_logout { position: fixed !important; top: 19px; right: 24px; z-index: 1000003; width: auto !important; }
+.st-key-topbar_logout button { padding: 0.3em 1.1em !important; min-height: 0 !important; font-size: 0.82rem !important; }
+@media (max-width: 900px) { .st-key-topbar_logout { right: 18px; } }
