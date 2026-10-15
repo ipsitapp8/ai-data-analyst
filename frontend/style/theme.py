@@ -687,6 +687,8 @@ def dashboard_theme_css(tokens: dict[str, str] | None = None) -> str:
 def inject_dashboard_theme() -> None:
     """Call after page_setup() on a page that should use the dashboard look."""
     st.markdown(dashboard_theme_css(), unsafe_allow_html=True)
+    glass = (Path(__file__).with_name("dashboard_glass.css")).read_text(encoding="utf-8")
+    st.markdown("<style>" + " ".join(line.strip() for line in glass.splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
 
 
 def esc(value) -> str:

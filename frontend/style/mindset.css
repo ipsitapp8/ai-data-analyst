@@ -18,18 +18,28 @@
   --plum-glass: #151515;
 }
 
-/* backdrop: yellow glow left, purple glow right, faint masked grid */
-.stApp, [data-testid="stAppViewContainer"] {
-  background:
-    radial-gradient(34% 40% at 82% 6%, rgba(190,120,255,.26) 0%, rgba(190,120,255,0) 100%),
-    radial-gradient(32% 38% at 14% 12%, rgba(255,205,120,.30) 0%, rgba(255,205,120,0) 100%),
-    var(--page) !important;
+/* backdrop: animated colour glows + faint grid, painted behind every page; all app layers are transparent so glass can blur it */
+html, body { background: #fbf9fc !important; }
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .stMain, [data-testid="stBottom"], [data-testid="stBottom"] > div { background: transparent !important; }
+@keyframes app-drift {
+  0%, 100% { background-position: 8% 6%, 92% 4%, 55% 100%, 0% 70%; }
+  50% { background-position: 24% 20%, 78% 18%, 40% 84%, 14% 52%; }
 }
 .stApp::before {
-  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background-image: linear-gradient(rgba(21,21,21,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(21,21,21,.10) 1px, transparent 1px);
-  background-size: 56px 56px; -webkit-mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 100%); mask-image: radial-gradient(70% 55% at 50% 0%, #000 0%, transparent 100%);
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -2;
+  background:
+    radial-gradient(circle at center, rgba(255,205,120,.62) 0%, rgba(255,205,120,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(176,104,255,.50) 0%, rgba(176,104,255,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(255,143,184,.38) 0%, rgba(255,143,184,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(111,139,255,.30) 0%, rgba(111,139,255,0) 62%) no-repeat;
+  background-size: 52vw 52vw, 58vw 58vw, 48vw 48vw, 40vw 40vw; animation: app-drift 26s ease-in-out infinite;
 }
+.stApp::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background-image: linear-gradient(rgba(21,21,21,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(21,21,21,.10) 1px, transparent 1px);
+  background-size: 56px 56px; -webkit-mask-image: radial-gradient(75% 60% at 50% 0%, #000 0%, transparent 100%); mask-image: radial-gradient(75% 60% at 50% 0%, #000 0%, transparent 100%);
+}
+@media (prefers-reduced-motion: reduce) { .stApp::before { animation: none; } }
 
 /* type */
 html, body, .stApp, p, span, div, label, li, button, input, textarea, h1, h2, h3, h4, h5,
@@ -83,3 +93,32 @@ button[kind="secondary"]:hover, .stDownloadButton > button:hover {
 .h-orb { background: radial-gradient(circle at 34% 28%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 34%), radial-gradient(circle at 70% 76%, #a855f7 0%, rgba(168,85,247,0) 58%), radial-gradient(circle at 30% 70%, #ffcd78 0%, rgba(255,205,120,0) 62%), linear-gradient(150deg, #fde7b8 0%, #d8a8fb 55%, #a855f7 100%); box-shadow: inset 0 0 60px rgba(255,255,255,.45), 0 40px 90px rgba(168,85,247,.3); }
 .h-hero span { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); -webkit-background-clip: text; background-clip: text; }
 .h-step-ico svg, .h-strip svg, .h-snap-ico { color: var(--accent-ink); }
+
+/* ================= glass on every card, panel and control surface ================= */
+:root { --glass-bg: linear-gradient(145deg, rgba(255,255,255,.58) 0%, rgba(255,255,255,.26) 100%);
+  --glass-line: rgba(255,255,255,.78);
+  --glass-sh: 0 18px 44px rgba(70,30,120,.14), inset 0 1.5px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.35), inset 0 0 36px rgba(255,255,255,.16); }
+.stApp .ds-card, .stApp [class*="st-key-card"], .stApp [class*="st-key-flat"], .stApp [class*="st-key-chartcard_"],
+.stApp [data-testid="stMetric"], .stApp [data-testid="stExpander"], .stApp [data-testid="stForm"],
+.stApp [data-testid="stVerticalBlockBorderWrapper"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]),
+.stApp .h-snap, .stApp .h-strip, .stApp .h-float, .stApp .h-step-ico, .stApp .h-tile {
+  background: var(--glass-bg) !important; border: 1px solid var(--glass-line) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%); box-shadow: var(--glass-sh) !important;
+}
+.stApp [class*="st-key-card"], .stApp [class*="st-key-chartcard_"], .stApp .ds-card, .stApp [data-testid="stMetric"] { transition: transform .2s ease, box-shadow .2s ease; }
+.stApp [class*="st-key-card"]:hover, .stApp [class*="st-key-chartcard_"]:hover, .stApp .ds-card:hover, .stApp [data-testid="stMetric"]:hover {
+  transform: translateY(-3px); box-shadow: 0 26px 56px rgba(70,30,120,.20), inset 0 1.5px 0 #fff, inset 0 0 36px rgba(255,255,255,.2) !important;
+}
+.stApp .st-key-card_studio, .stApp .st-key-card_verif { background: rgba(255,255,255,.30) !important; }
+.stApp [data-testid="stSidebarContent"], .stApp .silt-topbar {
+  background: var(--glass-bg) !important; border: 1px solid var(--glass-line) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(190%); backdrop-filter: blur(26px) saturate(190%); box-shadow: var(--glass-sh) !important;
+}
+.stApp [data-testid="stTextInputRootElement"], .stApp [data-testid="stTextAreaRootElement"], .stApp [data-testid="stNumberInputRootElement"],
+.stApp [data-baseweb="select"] > div, .stApp [data-testid="stFileUploaderDropzone"], .stApp .stTextInput input, .stApp .stTextArea textarea {
+  background: rgba(255,255,255,.5) !important; border: 1px solid rgba(255,255,255,.85) !important;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: inset 0 1px 2px rgba(21,21,21,.06) !important;
+}
+.stApp [data-testid="stDataFrame"], .stApp [data-testid="stTable"] { border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-line); box-shadow: var(--glass-sh); }
+.stApp [data-testid="stAlert"] { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+

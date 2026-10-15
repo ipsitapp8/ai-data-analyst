@@ -90,7 +90,8 @@
 .lp-or::before, .lp-or::after { content: ""; flex: 1; height: 1px; background: rgba(37,14,44,.14); }
 .st-key-google_login button { border-radius: 999px !important; background: #fff !important; color: var(--lp-ink) !important; border: 1px solid rgba(37,14,44,.16) !important; box-shadow: 0 1px 2px rgba(37,14,44,.05) !important; font-weight: 550; }
 
-@media (max-width: 1000px) { .lp-float, .lp-dark, .lp-purp, .lp-arrow, .lp-plus, .lp-navpill { display: none; } }
+@media (max-width: 1240px) { .lp-float, .lp-dark, .lp-purp, .lp-arrow, .lp-plus { display: none; } }
+@media (max-width: 760px) { .lp-navpill { display: none; } }
 @media (max-width: 860px) { .st-key-auth_card { padding: 22px 20px; } }
 .lp-title [data-testid="stHeaderActionElements"] { display: none !important; }
 
@@ -196,3 +197,12 @@
 .lp-chip-l { left: 6%; top: 34vh; animation-delay: -1s; } .lp-chip-r { right: 6%; top: 28vh; animation-delay: -3s; } .lp-chip-b { right: 12%; bottom: 14vh; animation-delay: -2s; }
 @media (max-width: 1100px) { .lp-chip { display: none; } }
 @media (prefers-reduced-motion: reduce) { .lp-blobs i, .lp-chip { animation: none; } }
+
+/* no sideways scroll from the full-bleed grid, glow and strip; keep long words and buttons inside their boxes */
+html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"] { overflow-x: hidden !important; }
+.lp-title { overflow-wrap: anywhere; } .lp-ctas { flex-wrap: wrap; justify-content: center; }
+.lp-feat, .lp-steps > div, .lp-final { min-width: 0; overflow-wrap: anywhere; }
+.lp-chip { max-width: 260px; }
+@media (max-width: 1240px) { .lp-chip-l { left: 2%; } .lp-chip-r { right: 2%; } }
+@media (max-width: 1100px) { .lp-chip { display: none; } }
+@media (max-width: 600px) { .lp-btn { padding: 13px 22px; } .lp-nav a.lp-pill { padding: 10px 16px; } .lp-strip { font-size: .9rem; } }
