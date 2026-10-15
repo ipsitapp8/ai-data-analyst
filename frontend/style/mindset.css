@@ -122,3 +122,10 @@ button[kind="secondary"]:hover, .stDownloadButton > button:hover {
 .stApp [data-testid="stDataFrame"], .stApp [data-testid="stTable"] { border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-line); box-shadow: var(--glass-sh); }
 .stApp [data-testid="stAlert"] { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 
+
+/* a form inside a glass card is not a second box: let the card be the only surface */
+.stApp [class*="st-key-card"] [data-testid="stForm"], .stApp [class*="st-key-flat"] [data-testid="stForm"],
+.stApp [class*="st-key-card"] [data-testid="stExpander"] [data-testid="stForm"] {
+  background: transparent !important; border: none !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0 !important; }
+.stApp [class*="st-key-card"] [data-testid="stVerticalBlockBorderWrapper"] { background: transparent !important; border: none !important; box-shadow: none !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
