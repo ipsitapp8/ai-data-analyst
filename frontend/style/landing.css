@@ -168,11 +168,11 @@
 @keyframes lp-blob3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-10vw,-14vh) scale(1.3); } }
 @keyframes lp-pulse { 0% { box-shadow: 0 0 0 0 rgba(168,85,247,.55); } 100% { box-shadow: 0 0 0 10px rgba(168,85,247,0); } }
 .lp-blobs { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.lp-blobs i { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .85; }
-.lp-blobs .b1 { width: 46vw; height: 46vw; left: -8vw; top: -6vw; background: #ffcd78; animation: lp-blob1 16s ease-in-out infinite; }
-.lp-blobs .b2 { width: 44vw; height: 44vw; right: -10vw; top: 8vh; background: #b86bff; animation: lp-blob2 19s ease-in-out infinite; }
-.lp-blobs .b3 { width: 36vw; height: 36vw; left: 28vw; bottom: -14vw; background: #ff8fb8; animation: lp-blob3 22s ease-in-out infinite; }
-.lp-blobs .b4 { width: 26vw; height: 26vw; left: 8vw; bottom: 6vh; background: #6f8bff; opacity: .6; animation: lp-blob2 25s ease-in-out infinite reverse; }
+.lp-blobs i { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .34; }
+.lp-blobs .b1 { width: 34vw; height: 34vw; left: -8vw; top: -6vw; background: #ffcd78; animation: lp-blob1 16s ease-in-out infinite; }
+.lp-blobs .b2 { width: 32vw; height: 32vw; right: -10vw; top: 8vh; background: #b86bff; animation: lp-blob2 19s ease-in-out infinite; }
+.lp-blobs .b3 { width: 28vw; height: 28vw; left: 28vw; bottom: -14vw; background: #ff8fb8; animation: lp-blob3 22s ease-in-out infinite; }
+.lp-blobs .b4 { width: 20vw; height: 20vw; left: 8vw; bottom: 6vh; background: #6f8bff; opacity: .22; animation: lp-blob2 25s ease-in-out infinite reverse; }
 .lp-blobs .g { position: absolute; inset: 0; background-image: linear-gradient(rgba(21,21,21,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(21,21,21,.10) 1px, transparent 1px);
   background-size: 56px 56px; -webkit-mask-image: radial-gradient(60% 60% at 50% 45%, #000, transparent); mask-image: radial-gradient(60% 60% at 50% 45%, #000, transparent); }
 .st-key-auth_card { position: relative; z-index: 2; }

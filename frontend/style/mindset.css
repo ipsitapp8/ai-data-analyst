@@ -28,10 +28,10 @@ html, body { background: #fbf9fc !important; }
 .stApp::before {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -2;
   background:
-    radial-gradient(circle at center, rgba(255,205,120,.62) 0%, rgba(255,205,120,0) 62%) no-repeat,
-    radial-gradient(circle at center, rgba(176,104,255,.50) 0%, rgba(176,104,255,0) 62%) no-repeat,
-    radial-gradient(circle at center, rgba(255,143,184,.38) 0%, rgba(255,143,184,0) 62%) no-repeat,
-    radial-gradient(circle at center, rgba(111,139,255,.30) 0%, rgba(111,139,255,0) 62%) no-repeat;
+    radial-gradient(circle at center, rgba(255,205,120,.26) 0%, rgba(255,205,120,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(176,104,255,.20) 0%, rgba(176,104,255,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(255,143,184,.15) 0%, rgba(255,143,184,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(111,139,255,.12) 0%, rgba(111,139,255,0) 62%) no-repeat;
   background-size: 52vw 52vw, 58vw 58vw, 48vw 48vw, 40vw 40vw; animation: app-drift 26s ease-in-out infinite;
 }
 .stApp::after {
