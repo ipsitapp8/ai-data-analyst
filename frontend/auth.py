@@ -36,7 +36,7 @@ def _gate_css() -> str:
 _GATE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700'
     '&display=swap" rel="stylesheet">'
 )
 _GATE_LOGO = (
@@ -264,21 +264,52 @@ def require_login() -> None:
 
     if view not in ("login", "signup"):
         st.markdown(
-            f'<div class="lp-nav"><a class="lp-brand" href="?">{_GATE_LOGO}Silt</a>'
-            '<div class="lp-nav-r"><a class="lp-ghost" href="?view=login" target="_self">Log in</a>'
-            '<a class="lp-pill" href="?view=signup" target="_self">Get started</a></div></div>'
-            '<div class="lp-hero"><div>'
-            '<div class="lp-badge"><b>AGENTIC</b>Your autonomous data analyst</div>'
-            '<h1 class="lp-title">Ask your data anything.<br><span>Trust every answer.</span></h1>'
-            '<p class="lp-sub">Silt is an AI data analyst for teams. Ask a question in plain English; an agent plans, '
-            'runs and explains the analysis, and an independent model checks it before it reaches you.</p>'
-            '<a class="lp-cta" href="?view=signup" target="_self">Get started<i>&rarr;</i></a>'
-            '<div class="lp-points"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
-            '<span>Fully auditable</span></div></div>'
-            '<div class="lp-stage"><div class="lp-orb"></div>'
-            '<div class="lp-float lp-q"><small>Ask Silt</small>Which region grew fastest last quarter?</div>'
-            '<div class="lp-float lp-v"><div class="row"><span class="ok">&#10003;</span>Checked by an independent model</div>'
-            '<div class="bar"></div><div class="bar s"></div></div></div></div>',
+            f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
+            '<div class="lp-navpill"><a href="?" target="_self">Home</a><a class="off" href="?view=login" target="_self">Log in</a></div>'
+            '<div class="lp-nav-r"><a class="lp-pill" href="?view=signup" target="_self">Get started &#8599;</a></div></div>'
+            '<div class="lp-hero"><div class="lp-glow"></div><div class="lp-grid"></div>'
+            '<span class="lp-plus" style="left:30%;top:16vh"></span><span class="lp-plus" style="right:26%;top:14vh"></span>'
+            '<span class="lp-plus" style="left:20%;top:52vh"></span><span class="lp-plus" style="right:14%;top:50vh"></span>'
+            '<div class="lp-float lp-c1"><div class="who"><span class="lp-av" style="background:#837ab6">Q</span><div>Which region grew fastest?'
+            '<small>Asked Wed 14 Oct, 2026</small></div></div><div class="wk">Step 3 of 4 &middot; Running analysis</div>'
+            '<div class="lp-bar"><i style="width:75%"></i></div></div>'
+            '<div class="lp-float lp-c2"><div class="who"><span class="lp-av" style="background:#16a34a">&#10003;</span><div>Independent check passed'
+            '<small>Critic model &middot; 0 issues</small></div></div><div class="wk">Verified &middot; 12 of 12 numbers</div>'
+            '<div class="lp-bar"><i style="width:100%"></i></div></div>'
+            '<div class="lp-float lp-c3"><small>Analysis by</small><b>Silt Agent</b><em>Sales</em><em>Growth</em>'
+            '<div class="t">Q3 &middot; 2,481 rows</div></div>'
+            '<div class="lp-dark"><span class="lp-av">&#9881;</span><div>Planner agent<small>Plans the analysis</small></div></div>'
+            '<div class="lp-purp"><span class="lp-av">&#10003;</span><div>Critic agent<small>Checks every number</small></div></div>'
+            '<span class="lp-arrow" style="left:21%;top:45vh"></span>'
+            '<h1 class="lp-title">Data Matters.<br>Ask Your Data<br><span class="fade">In Plain English</span><br>Trust Every Answer</h1>'
+            '<p class="lp-sub">An autonomous AI data analyst for teams. An agent plans, runs and explains the analysis, '
+            'and an independent model checks it before it reaches you.</p>'
+            '<div class="lp-ctas"><a class="lp-btn light" href="?view=login" target="_self">Log in</a>'
+            '<a class="lp-btn dark" href="?view=signup" target="_self">Get Started &rarr;</a></div></div>'
+            '<div class="lp-strip"><span>CSV &amp; Excel</span><span>PostgreSQL</span><span>Sandboxed Python</span>'
+            '<span>Audit trail</span><span>Scheduled reports</span></div>'
+            '<div class="lp-sec"><div class="lp-eyebrow">Why Silt</div>'
+            '<h2 class="lp-h2">An analyst that shows its work.</h2>'
+            '<div class="lp-feats">'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-chat"><span class="u">Which region grew fastest?</span>'
+            '<span class="a">West, up 18.4% quarter over quarter.<i class="caret"></i></span></div></div>'
+            '<b>Ask in plain English</b><p>No SQL, no dashboards to build. Type the question and the agent plans the analysis.</p></div>'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-checks"><span><i>&#10003;</i>Totals match source</span>'
+            '<span><i>&#10003;</i>No double counting</span><span><i>&#10003;</i>Dates align</span></div></div>'
+            '<b>A second model checks it</b><p>An independent critic re-verifies every number before the answer reaches you.</p></div>'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-log"><span><u></u>Loaded sales.csv</span>'
+            '<span><u></u>Grouped by region</span><span><u></u>Compared Q2 vs Q3</span></div></div>'
+            '<b>Every step is logged</b><p>See the plan, the code and the evidence behind each answer in the audit trail.</p></div>'
+            '</div></div>'
+            '<div class="lp-sec"><div class="lp-eyebrow">How it works</div>'
+            '<h2 class="lp-h2">From question to trusted answer.</h2>'
+            '<div class="lp-steps"><div><em>1</em><b>Upload your data</b><p>CSV, Excel or a database.</p></div>'
+            '<div><em>2</em><b>Ask a question</b><p>The planner agent writes the analysis.</p></div>'
+            '<div><em>3</em><b>Run in a sandbox</b><p>Code executes in isolation.</p></div>'
+            '<div><em>4</em><b>Verified answer</b><p>The critic signs off, then you see it.</p></div></div></div>'
+            '<div class="lp-final"><h2>Ready to trust your numbers?</h2>'
+            '<p>Create a workspace and ask your first question in minutes.</p>'
+            '<a class="lp-btn light" href="?view=signup" target="_self">Get Started &rarr;</a></div>',
             unsafe_allow_html=True,
         )
         st.stop()
@@ -287,7 +318,11 @@ def require_login() -> None:
     st.markdown(
         f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
         '<div class="lp-nav-r"><a class="lp-ghost" href="?" target="_self">&larr; Back to home</a></div></div>'
-        '<div class="lp-login-pad"></div>',
+        '<div class="lp-login-pad"></div>'
+        '<div class="lp-blobs"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><span class="g"></span></div>'
+        '<div class="lp-chip lp-chip-l"><span class="ok">&#10003;</span>Checked by an independent model</div>'
+        '<div class="lp-chip lp-chip-r"><b>12 / 12</b>numbers verified</div>'
+        '<div class="lp-chip lp-chip-b"><span class="pulse"></span>Planner agent is thinking&hellip;</div>',
         unsafe_allow_html=True,
     )
     if notice:

@@ -723,7 +723,7 @@ def html(markup: str) -> None:
 _FONTS_LINK = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@400;500;600;700'
     '&display=swap" rel="stylesheet">'
 )
 
@@ -763,7 +763,8 @@ def _nav_icon_css() -> str:
 
 def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
-        Path(__file__).with_name("glass.css")).read_text(encoding="utf-8")
+        Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
+        Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8")
     # Flatten to one line: markdown ends an HTML block at the first blank line,
     # which would spill the rest of the stylesheet onto the page as text.
     skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())
