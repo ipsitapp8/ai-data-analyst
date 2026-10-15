@@ -206,3 +206,15 @@ html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-tes
 @media (max-width: 1240px) { .lp-chip-l { left: 2%; } .lp-chip-r { right: 2%; } }
 @media (max-width: 1100px) { .lp-chip { display: none; } }
 @media (max-width: 600px) { .lp-btn { padding: 13px 22px; } .lp-nav a.lp-pill { padding: 10px 16px; } .lp-strip { font-size: .9rem; } }
+
+/* ---- hero layout fix: cards live in the side gutters only; text always clear; beat Streamlit's own <p>/<h1> rules ---- */
+.lp-hero .lp-title { font-size: clamp(2.2rem, 4.2vw, 3.7rem) !important; line-height: 1.12 !important; margin: 0 auto 20px !important; max-width: 760px; padding: 0 !important; }
+.lp-hero .lp-sub { max-width: 560px !important; width: 100% !important; margin: 0 auto 28px !important; font-size: 1.05rem !important; text-align: center !important; }
+.lp-hero .lp-ctas { margin: 0 auto; }
+.lp-hero { max-width: 1120px; margin: 0 auto; }
+.lp-c1 { left: 0; top: 17vh; width: 230px; } .lp-dark { left: 1%; top: 46vh; }
+.lp-c2 { right: 0; top: 14vh; width: 230px; }
+.lp-c3 { left: auto; right: 2%; top: 34vh; margin-left: 0; width: 176px; transform: rotate(7deg); }
+.lp-purp { right: 1%; top: 60vh; }
+.lp-hero .lp-plus, .lp-hero .lp-arrow { display: none; }
+@media (max-width: 1320px) { .lp-float, .lp-dark, .lp-purp { display: none; } }
