@@ -68,8 +68,8 @@ with left:
         )
         if not questions:
             html(
-                '<div class="ds-row"><div class="ds-row-meta">No analyses yet — '
-                'start one from the Analyses page.</div></div>'
+                '<div class="ds-empty">No analyses yet — '
+                'start one from the Analyses page.</div>'
             )
         icon = ('<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
                 'stroke-width="1.8"><path d="M4 18l5-6 4 3.5L20 7" stroke-linecap="round" '
@@ -154,5 +154,5 @@ with st.container(key="flat_dash"):
                     st.session_state["active_question_id"] = q["id"]
                     st.switch_page("pages/4_Dashboards.py")
     else:
-        html('<div class="ds-row-meta">No verified dashboards yet.</div>')
+        html('<div class="ds-empty">No verified dashboards yet.</div>')
     html("</div>")

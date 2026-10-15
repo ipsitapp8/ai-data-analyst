@@ -129,3 +129,16 @@ button[kind="secondary"]:hover, .stDownloadButton > button:hover {
   background: transparent !important; border: none !important; box-shadow: none !important;
   -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0 !important; }
 .stApp [class*="st-key-card"] [data-testid="stVerticalBlockBorderWrapper"] { background: transparent !important; border: none !important; box-shadow: none !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* keep Streamlit's icon font: the Poppins rule above must not turn icon ligatures (e.g. the sidebar arrow) into text */
+.stApp [data-testid="stIconMaterial"], .stApp [data-testid="stIconMaterial"] *, .stApp span[class*="material-symbols"], .stApp .material-icons,
+.stApp [data-testid="stExpandSidebarButton"] span, .stApp [data-testid="stSidebarCollapseButton"] span, .stApp [data-testid="stExpanderToggleIcon"] * {
+  font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+  font-feature-settings: "liga"; -webkit-font-feature-settings: "liga"; letter-spacing: normal; text-transform: none; white-space: nowrap;
+}
+
+/* empty states and list rows: always have room, never clipped by the card's rounded corners, hover stays translucent */
+.ds-empty { padding: 18px 22px 22px; font-size: .88rem; line-height: 1.55; color: var(--ink-soft); font-family: var(--font); overflow-wrap: anywhere; }
+.stApp .ds-row { background: transparent; min-height: 52px; overflow-wrap: anywhere; }
+.stApp .ds-row:hover { background: rgba(255,255,255,.55); }
+.stApp [class*="st-key-flat"] { overflow: hidden; padding-bottom: 4px; }

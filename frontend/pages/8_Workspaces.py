@@ -69,7 +69,7 @@ with col_l:
         html('<div class="ds-section-title">Your communities</div>')
         html("<div style='height:8px'></div>")
         if not communities:
-            html('<div class="ds-row-meta">No communities yet — create one to get started.</div>')
+            html('<div class="ds-empty">No communities yet — create one to get started.</div>')
         for c in communities:
             team_count_badge = badge(f"{len(c['teams'])} team(s)", "neutral")
             is_active_community = st.session_state.get("active_community_id") == c["id"]
@@ -167,7 +167,7 @@ with col_r:
         html('<div class="ds-section-title">Team members</div>')
         html("<div style='height:8px'></div>")
         if not active_team_id:
-            html('<div class="ds-row-meta">No active team selected.</div>')
+            html('<div class="ds-empty">No active team selected.</div>')
         else:
             try:
                 members = list_members(active_team_id)
