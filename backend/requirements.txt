@@ -18,3 +18,6 @@ alembic==1.19.2
 psycopg2-binary==2.9.12
 apscheduler==3.11.0
 pgvector==0.4.1
+openpyxl==3.1.5
+pypdf==6.21.4
+scikit-learn==1.9.1
