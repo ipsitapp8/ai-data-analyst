@@ -146,7 +146,9 @@ CATALOGUE = [
            r"\b(?:total |gross )?(?:pay|wages|earnings)\b(?!\s*(?:rate|per))", "row", ("labor", "labour", "payroll", "wages", "pay")),
     Metric("shift_hours", "shift duration", r"\bshift (?:duration|length|hours|time)s?\b|\bhours? worked\b|\bwork(?:ed|ing)? "
            r"hours\b|\btime (?:worked|on (?:the )?clock)\b|\bduration\b|\blength of (?:the |each |a )?shifts?\b|"
-           r"\bhow (?:many hours|long)\b|\b(?:total|average|mean|median) hours\b|\bhours per (?:shift|day|employee|person)\b",
+           r"\bhow (?:many hours|long)\b|\b(?:total|average|mean|median) hours\b|\bhours per (?:shift|day|employee|person)\b|"
+           r"\b(?:time|hours?)\b(?:\s+\w+){0,4}?\s+(?:works?|worked|working|spends? working|is at work|was at work|clocks?)\b|"
+           r"\bworking (?:time|duration|length)\b|\btime (?:spent )?(?:at work|working|on shift)\b",
            "row", ("hours", "duration", "hrs")),
     Metric("profit_margin", "profit margin", r"\b(?:profit|gross|net|operating)? ?margins?\b", "ratio", ("margin",)),
     Metric("roas", "ROAS", r"\broas\b|\breturn on ad(?:vertising)? spend\b", "ratio", ("roas",)),
@@ -231,11 +233,32 @@ def _abbrev(token: str, word: str) -> bool:
     return all(ch in it for ch in token)
 
 
+_NOUN_TOTALS = re.compile(r"\b([a-z][a-z_]*)\s+(?:totals?|averages?|sums?|breakdown|summary|split)\b", re.I)
+
+
+def available(df: pd.DataFrame) -> list[str]:
+    """Standard metrics whose inputs this data has (and which are not already columns), by label."""
+    out = []
+    for m in CATALOGUE:
+        if physical(m, df) or m.name == "overtime_hours":
+            continue
+        if m.name == "average_order_value" and not _role_columns(df, "orders") and not [
+                c for c in map(str, df.columns) if _tokens(c) & {"order", "transaction", "invoice"} and _tokens(c) & {"id", "no", "number"}]:
+            continue
+        try:
+            p = _BUILDERS[m.name](m.label, df, Plan(m.name, m.label))
+        except Exception:  # noqa: BLE001
+            continue
+        if p is not None and (not p.clarify or "more than one column could be" in p.clarify):
+            out.append(m.label)          # inputs present (a choice between columns is asked when it is used)
+    return out
+
+
 def group_column(message: str, df: pd.DataFrame, skip: set[str] = frozenset()) -> tuple[str | None, str | None]:
     """The column a question breaks its result down by ("by department", "for each employee", "which channel has").
     (column, phrase) -- column None with a phrase when the phrase names nothing in the data."""
     cats = [c for c in map(str, df.columns) if kind_of(df[c]) == "categorical" and not _time_like(df[c]) and c not in skip]
-    for rx in (_WHICH, _GROUP):
+    for rx in (_WHICH, _GROUP, _NOUN_TOTALS):
         for m in rx.finditer(message):
             phrase = m.group(1).lower()
             words = phrase.split()

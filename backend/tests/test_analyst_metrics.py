@@ -322,7 +322,12 @@ def test_follow_ups_refine_the_previous_calculation_without_a_model(no_model):
     assert _res(dedup)["totals"]["labor_cost"] == pytest.approx(
         _labor_truth(mira, None, "clock_in", "clock_out", "hourly_rate", drop_dupes=True)["all"])
     pie = _ask("Show the same result as a pie chart.", df, mem, use_model=True)
-    assert not pie["charts"] and "single value" in pie["answer"], "one person's total has no parts to draw"
+    # one person's total has no parts by group: the chart shows the records it was computed from
+    per = {d["shift_date"]: d["labor cost"] for d in pie["charts"][0]["data"]}
+    mira_rows = mira[(mira.clock_out.map(_hhmm) >= mira.clock_in.map(_hhmm)) & (mira.hourly_rate >= 0)]
+    assert sorted(per.values()) == pytest.approx(sorted(
+        (_hhmm(o) - _hhmm(i)) * r for i, o, r in zip(mira_rows.clock_in, mira_rows.clock_out, mira_rows.hourly_rate)))
+    assert "each of the" in pie["answer"]
     what_if = _ask("What if the rate increases by 10%?", df, mem, use_model=True)
     assert "hourly rate" in what_if["answer"] and "+10%" in what_if["answer"]
 
