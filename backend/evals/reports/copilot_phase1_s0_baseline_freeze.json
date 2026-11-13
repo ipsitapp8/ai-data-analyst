@@ -1,0 +1,90 @@
+{
+ "frozen_at": "2026-11-11T04:35:29+00:00",
+ "git_head": "7ac5972",
+ "branch": "fix/provider-diagnostics",
+ "purpose": "S0 baseline of the restored Phase 1 copilot, before the S1 interpretation contract. Not a held-out evaluation freeze: nothing was scored and no evaluation was run.",
+ "note": "working-tree files (uncommitted changes included); SHA-256 of the exact bytes",
+ "phase1_vs_v3_freeze": "app/copilot.py differs from spider_numeric_copilot_rules_v3_freeze.json (Phase 2 rules rolled back after that freeze); every other file in the v3 freeze matches it. The v3 held-out figures therefore do not describe this copilot.py.",
+ "files": {
+  "interpretation": {
+   "app/copilot.py": "ddb28e61cffeae42c07bb3a845b1595869d9da63b74dded9e2ce557aee1800be",
+   "app/fastpath.py": "1d996a01c5018c1a6721f8aba55278fee74800fd627657ce2ed22ceec697f910",
+   "app/routers/copilot.py": "9507868bdce86a716475b9d7bb347b78f0aa6cdd7071db8a05a4aa67f9bbc33c",
+   "app/agents/router.py": "53b59e51038a0c8a1159e922e120d91a353fdde92dd28014290a5f44950ba185",
+   "app/agents/llm_client.py": "780d2210e63c619d37b09050f90b76a56402abdc94eb4e3d1c252c4b04475590"
+  },
+  "semantic": {
+   "app/semantic.py": "33f089dcb00815e014d1cd13ef8de1e52da8cb92e2aa7a12783ee6983eb0f9c7",
+   "app/routers/semantic.py": "0e1970aefe476ee7b8118cc1b24cb2e1b41c91a13a774276b6891c75d3be2dbf",
+   "app/agents/planner.py": "aec889c6d5f4a56cbab58bb5e74a3ec2121b692067ead14415c06e84746748bf",
+   "app/models.py": "54b7805a54f033d0926f2251afca4713875bab5f6282d1ea8287ccaa76346a7f"
+  },
+  "engine": {
+   "app/metric_engine.py": "4df6203d172611931631cf4d93a477b26b5b3193b573f702808cca1662ffae06",
+   "app/profiling.py": "15721f9d9587991acb74872f151f6ff56cb2b9e0592ec86f544b6002f10ca57a",
+   "app/provenance.py": "8b5965b72691f8028fbb493c949d60256119b356095fd73cde5eaec462145f1e",
+   "app/dataset_versions.py": "e37c24b38b78b5d24cbc7dbb7cdc694281d13f6a470cc3f8fe1d346d93841584"
+  },
+  "evaluation": {
+   "app/evals/spider.py": "7e8a8b3258fe56f88e118f442a8aecfcb5c670da3049a3f5f90b2c3831a662c6",
+   "app/evals/runner.py": "3506819782b96edf6e3ed12edfd4d7d75e7206046cfc8eb38637b84a48ad025a",
+   "app/evals/__main__.py": "da23ab22ce015d41cc6c85b3c7af1c5264b86e9bfa8ab748ac6a6045d371e9fc",
+   "app/evals/scripted.py": "e188e44908bd20a4b7217d99d9863a8a2c53f4103b75511e40eda3d1d0b7569d",
+   "evals/cases/spider_numeric.json": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce",
+   "evals/cases/suite.json": "8b1dc099ed38bbf491fad0bd4eb10df8d246e22f292292194cc9029f87ab7386",
+   "evals/cases/comparison.json": "dbfe6b3f88339eaad5b36269b9a66056c7ec4b19d471e98f2f9c9459a72cd096",
+   "evals/spider_heldout_report.py": "421e5dc5aa713465fcc370d971f5e4da537d6b739012fa28166fd0528ff9d03b",
+   "evals/spider_baseline_report.py": "9f1d6eb61e7b92f4be265add8ba6de89aa3c2d77b07fd0e2bb0c562227b66582",
+   "evals/build_spider_cases.py": "52e88a5496ac585110a403e985154db533a36626b6f768473fae8f2c63068be7"
+  },
+  "tests": {
+   "tests/test_copilot_understanding.py": "19b281ace3d586bfa25dfed878a11335f83ba1fdb64b537cf66f312c9ccf86d7",
+   "tests/test_copilot_and_scenarios.py": "72a12b28fe7e2201c3d74dc9931222ee2f109a22e48e07d9e75f8956517989b3",
+   "tests/test_routing_and_semantic.py": "d37d91e02e0cb6cc3805e36e9bae887eb2837ff0da676386144e93f50a3ad441",
+   "tests/test_spider_eval.py": "ac53a9d3fcfb6b70e4e6573096801e86bbe57cdebbacd474e2a75fa3fa0f24a8",
+   "tests/test_evals.py": "96a068db1bd9873411a1527f00e1cb09994b3a6cb83e0129e126874f0d083a6c",
+   "tests/conftest.py": "239403100309772fc32206900007a8aa70fd7d3a6dd7ac27737df595ff67f044",
+   "tests/platform_helpers.py": "a4c22f2110ef1525b3102f7fe524ae53aa322804e1397f122ce78e4205b56eef"
+  }
+ },
+ "existing_reports_sha256": {
+  "comparison_calibration.json": "9d56f72ed6676e687b9eed2d66b6612bd4a54171e234cc187ccffcf30e214a4f",
+  "comparison_calibration_large_null.json": "7f68d1e2a915468c4166221594cbbf4cef18ae6f6ae4e31f6abf3398c66682e2",
+  "comparison_calibration_v1.json": "691a3385c9ddb8065d177d10d6aaddd860457a3c97fde20c1de6844ecd866dc5",
+  "comparison_calibration_v2.json": "cfdf1ecb1356cd8ad2fd19ad360e0724cdf9400ba22e38c2671b958ded0371b2",
+  "comparison_calibration_v4.json": "14887a8d162359f9112033460918d1ff5b4cacdb8a17ecc2fa26a108f8fd6b11",
+  "inference_policy_v4.json": "d0e329bd1c6cbeba1ad00af242bcd13edef8b5e7e5372950336507ce45fd20b3",
+  "method_decisions_v3.json": "4b981c8f0bb6f86f823df471c6ed22778629e29a60401d4b68ae6ce13f9fea02",
+  "paired_interval_by_sample_size.json": "dc5bc0dca0f3761ed7fcaf6b432974eb6c3d199f49d2eeff2407769b95a3e637",
+  "permutation_audit.json": "7a6d7847bb6490b944a85b763850cb9f8b211af498f54bb419ce5792373fc20e",
+  "permutation_audit_before.json": "abe9a9020d2dec6fc7c4c84298e98b6200c2738bd7fa9519cd48db55f8a646ab",
+  "rank_test_alternative.json": "ac5790939d5f54d9a5f3737dd4a868417dc60ed4939c02425142f6041682c0e2",
+  "small_sample_interval_study.json": "173dccd442d05c168e0cb9a491c9732a474165c0b3215d084e21131c55a9f309",
+  "spider_numeric_copilot_baseline_v1.json": "9e94dcce92271433c8a86e2388f5046ddfb936c9de144c954d7f96deac9e2587",
+  "spider_numeric_copilot_baseline_v1.md": "cd05d4483d8e808e81880f7a291de89803b8a96f0718fb8467ebbde8b55a1e24",
+  "spider_numeric_copilot_heldout_v2.json": "3978ccc04971e5a7914210e80ad55e435ddda97884e227ba254e49bdb86e6c6f",
+  "spider_numeric_copilot_heldout_v2.md": "2f4c8afb0b0db6b8bbc50e64a40534ecab63afa1c45fcadff333961d6ed8fe58",
+  "spider_numeric_copilot_heldout_v3.json": "6faf4dc55e63eb8a35f96d6996efcdf50d979f617adef887c325e876ac5ac6b3",
+  "spider_numeric_copilot_heldout_v3.md": "df3fdc1d724c3210719f7de19b89ae1a8c852f5fdf3aae07919c5b9890cf5297",
+  "spider_numeric_copilot_rules_v2_freeze.json": "1b8010bba498d403e9468896cd8b2c9073f6dd8da6f70f62e812476159e64bda",
+  "spider_numeric_copilot_rules_v3_freeze.json": "bb69af5de52a2d7efde821f8fbf899cab726ce4e0db91891e6097d87dd173aa7",
+  "welch_interval_stress.json": "26098745f59c9800a9d37adbf8d303eca5ff848d039eba18f1980648f66ff21e"
+ },
+ "test_baseline": {
+  "command": "SPIDER_HELDOUT_TESTS=0 .venv313/bin/python -m pytest backend/tests frontend/tests -q -p no:cacheprovider",
+  "python": "3.13.15",
+  "pytest": "9.1.1",
+  "summary": {
+   "passed": 1230,
+   "skipped": 30,
+   "failed": 3
+  },
+  "pre_existing_failures": [
+   "backend.tests.test_comparison::test_measured_but_not_tested_is_a_state_of_its_own_everywhere",
+   "backend.tests.test_comparison::test_the_policy_report_records_its_criteria_and_the_failures_with_them",
+   "backend.tests.test_statistics::test_k_group_test_reduces_to_welch_and_pairwise_is_holm_adjusted"
+  ],
+  "not_run": "test_spider_eval.py::test_spider_suite_runs_without_a_model_or_generated_code (all-165 held-out crash check; opt-in, skipped)",
+  "outcomes_sha256": "faf5c2c760076a0815c520cfb02becc3aea8fac904f8014c8c329f38d07368a5"
+ }
+}

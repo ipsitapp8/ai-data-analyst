@@ -1,0 +1,5166 @@
+{
+ "report": "spider-numeric copilot no-model baseline",
+ "suite_version": "spider-numeric.1",
+ "mode": "offline",
+ "provider": "scripted",
+ "stored_run_id": 5,
+ "started_at": "2026-11-10T07:01:00.927565",
+ "finished_at": "2026-11-10T07:01:02.265261",
+ "case_file_sha256": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce",
+ "path_measured": "copilot.handle_message with allow_model=False, first turn of a new session: rule interpretation, validated operations, deterministic metric engine. No model call, no generated code.",
+ "scoring": {
+  "exact": "equal to the reference at 6 decimal places",
+  "within_tolerance": "within 0.1% of the reference or 0.005 absolute; includes exact",
+  "scalar_row": "correct only if every number the question asks for is returned"
+ },
+ "model_calls": 0,
+ "code_runs": 0,
+ "accuracy": {
+  "all_165": {
+   "cases": 165,
+   "exact": 4,
+   "exact_rate": 0.0242,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.0242
+  },
+  "numeric_reference_160": {
+   "cases": 160,
+   "exact": 4,
+   "exact_rate": 0.025,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.025
+  },
+  "numeric_reference_cleanly_held_out": {
+   "cases": 138,
+   "exact": 3,
+   "exact_rate": 0.0217,
+   "within_tolerance": 3,
+   "tolerance_rate": 0.0217
+  },
+  "single_number_questions": {
+   "cases": 142,
+   "exact": 4,
+   "exact_rate": 0.0282,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.0282
+  },
+  "multi_number_questions": {
+   "cases": 18,
+   "exact": 0,
+   "exact_rate": 0.0,
+   "within_tolerance": 0,
+   "tolerance_rate": 0.0
+  },
+  "distinct_reference_queries": {
+   "queries": 87,
+   "all_paraphrases_correct": 1,
+   "some_paraphrase_correct": 3
+  }
+ },
+ "correct_with_a_different_computation": [
+  "spider-dev-0087",
+  "spider-dev-0088",
+  "spider-dev-0195"
+ ],
+ "outcomes": {
+  "not_understood": 102,
+  "no_metric": 40,
+  "clarification": 18,
+  "correct_exact": 4,
+  "wrong_value": 1
+ },
+ "outcome_groups": {
+  "correct": 4,
+  "unsupported_declined": 160,
+  "answered_wrong": 1,
+  "errors": 0
+ },
+ "failure_causes": {
+  "question_understanding": 135,
+  "deterministic_limitation": 19,
+  "data_representation": 7
+ },
+ "failure_cause_detail": {
+  "question_understanding": [
+   [
+    "a count of entities ('how many singers') was not read as a row count",
+    63
+   ],
+   [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    56
+   ],
+   [
+    "the metric wording matched several columns, and the rules asked which one",
+    6
+   ],
+   [
+    "a year in the question was read as a date range, but the table has no date column",
+    5
+   ],
+   [
+    "a value in the question occurs in several columns, and the rules asked which one",
+    4
+   ],
+   [
+    "wrong metric: computed count_distinct(\"state\"), the question asks for count()",
+    1
+   ]
+  ],
+  "deterministic_limitation": [
+   [
+    "the question asks for several numbers; the copilot answers with one metric",
+    18
+   ],
+   [
+    "OR across different columns or operators (engine filters are AND-ed)",
+    1
+   ]
+  ],
+  "data_representation": [
+   [
+    "the reference answer is not a number",
+    3
+   ],
+   [
+    "the engine, reading the CSV as the application does, gets a different number for the same spec",
+    2
+   ],
+   [
+    "the reference SQL returns NULL",
+    2
+   ]
+  ]
+ },
+ "question_understanding_issues": {
+  "a count of entities ('how many singers') was not read as a row count": 63,
+  "the aggregation or the column is worded in a way the rules do not recognise": 56,
+  "a condition in the question was not turned into a filter": 29,
+  "a filter was applied that the question does not state": 19,
+  "the metric wording matched several columns, and the rules asked which one": 6,
+  "a year in the question was read as a date range, but the table has no date column": 5,
+  "a value in the question occurs in several columns, and the rules asked which one": 4,
+  "wrong metric": 1
+ },
+ "engine_ceiling": {
+  "description": "single-number questions with a numeric reference whose reference SQL translates into a metric-engine spec that reproduces the reference value: what perfect question reading would reach with the current engine",
+  "cases": 139,
+  "of": 142,
+  "currently_correct": 4
+ },
+ "timing_ms": {
+  "total": 1254,
+  "mean": 7.6,
+  "median": 2,
+  "p95": 22,
+  "max": 363,
+  "note": "per case, including reading and profiling the CSV (cached after the first case on a table)"
+ },
+ "cases_correct": [
+  {
+   "case_id": "spider-dev-0087",
+   "question": "How many continents are there?",
+   "reference_sql": "SELECT count(*) FROM CONTINENTS;",
+   "reference": [
+    5
+   ],
+   "outcome": "correct_exact",
+   "copilot_formula": "count_distinct(\"Continent\")",
+   "copilot_filters": [],
+   "copilot_value": 5.0,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": null,
+   "cause_detail": null,
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0088",
+   "question": "What is the number of continents?",
+   "reference_sql": "SELECT count(*) FROM CONTINENTS;",
+   "reference": [
+    5
+   ],
+   "outcome": "correct_exact",
+   "copilot_formula": "count_distinct(\"Continent\")",
+   "copilot_filters": [],
+   "copilot_value": 5.0,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": null,
+   "cause_detail": null,
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0195",
+   "question": "How many airlines are from USA?",
+   "reference_sql": "SELECT count(*) FROM AIRLINES WHERE Country  =  \"USA\"",
+   "reference": [
+    12
+   ],
+   "outcome": "correct_exact",
+   "copilot_formula": "count_distinct(\"Airline\")",
+   "copilot_filters": [
+    {
+     "column": "Country",
+     "op": "==",
+     "value": "USA"
+    }
+   ],
+   "copilot_value": 12.0,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Country",
+      "op": "==",
+      "value": "USA"
+     }
+    ],
+    "reason": null
+   },
+   "cause": null,
+   "cause_detail": null,
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0444",
+   "question": "How many different loser names are there?",
+   "reference_sql": "SELECT count(DISTINCT loser_name) FROM matches",
+   "reference": [
+    49
+   ],
+   "outcome": "correct_exact",
+   "copilot_formula": "count_distinct(\"loser_name\")",
+   "copilot_filters": [],
+   "copilot_value": 49.0,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"loser_name\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": null,
+   "cause_detail": null,
+   "understanding_issues": []
+  }
+ ],
+ "cases_answered_wrong": [
+  {
+   "case_id": "spider-dev-0687",
+   "question": "How many states are there?",
+   "reference_sql": "SELECT count(*) FROM area_code_state",
+   "reference": [
+    305
+   ],
+   "outcome": "wrong_value",
+   "copilot_formula": "count_distinct(\"state\")",
+   "copilot_filters": [],
+   "copilot_value": 51.0,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "wrong metric: computed count_distinct(\"state\"), the question asks for count()",
+   "understanding_issues": [
+    "wrong metric: computed count_distinct(\"state\"), the question asks for count()"
+   ]
+  }
+ ],
+ "cases_failed": [
+  {
+   "case_id": "spider-dev-0000",
+   "question": "How many singers do we have?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    6
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0001",
+   "question": "What is the total number of singers?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    6
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0004",
+   "question": "What is the average, minimum, and maximum age of all singers from France?",
+   "reference_sql": "SELECT avg(age) ,  min(age) ,  max(age) FROM singer WHERE country  =  'France'",
+   "reference": [
+    34.5,
+    25,
+    43
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Country",
+     "op": "==",
+     "value": "France"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Age\")",
+     "min(\"Age\")",
+     "max(\"Age\")"
+    ],
+    "filters": [
+     {
+      "column": "Country",
+      "op": "==",
+      "value": "France"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0005",
+   "question": "What is the average, minimum, and maximum age for all French singers?",
+   "reference_sql": "SELECT avg(age) ,  min(age) ,  max(age) FROM singer WHERE country  =  'France'",
+   "reference": [
+    34.5,
+    25,
+    43
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Age\")",
+     "min(\"Age\")",
+     "max(\"Age\")"
+    ],
+    "filters": [
+     {
+      "column": "Country",
+      "op": "==",
+      "value": "France"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0017",
+   "question": "What is the average and maximum capacities for all stadiums ?",
+   "reference_sql": "select avg(capacity) ,  max(capacity) from stadium",
+   "reference": [
+    10621.666667,
+    52500
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Capacity\")",
+     "max(\"Capacity\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0020",
+   "question": "How many concerts are there in year 2014 or 2015?",
+   "reference_sql": "SELECT count(*) FROM concert WHERE YEAR  =  2014 OR YEAR  =  2015",
+   "reference": [
+    6
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Year",
+      "op": "in",
+      "value": [
+       2014.0,
+       2015.0
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0021",
+   "question": "How many concerts occurred in 2014 or 2015?",
+   "reference_sql": "SELECT count(*) FROM concert WHERE YEAR  =  2014 OR YEAR  =  2015",
+   "reference": [
+    6
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Year",
+      "op": "in",
+      "value": [
+       2014.0,
+       2015.0
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a year in the question was read as a date range, but the table has no date column",
+   "understanding_issues": [
+    "a year in the question was read as a date range, but the table has no date column"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0045",
+   "question": "Find the number of pets whose weight is heavier than 10.",
+   "reference_sql": "SELECT count(*) FROM pets WHERE weight  >  10",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "weight",
+     "op": "==",
+     "value": "heavier"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "weight",
+      "op": ">",
+      "value": 10.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0046",
+   "question": "How many pets have a greater weight than 10?",
+   "reference_sql": "SELECT count(*) FROM pets WHERE weight  >  10",
+   "reference": [
+    2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "weight",
+      "op": ">",
+      "value": 10.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0055",
+   "question": "Find the number of distinct type of pets.",
+   "reference_sql": "SELECT count(DISTINCT pettype) FROM pets",
+   "reference": [
+    2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"PetType\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0056",
+   "question": "How many different types of pet are there?",
+   "reference_sql": "SELECT count(DISTINCT pettype) FROM pets",
+   "reference": [
+    2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"PetType\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0091",
+   "question": "How many countries are listed?",
+   "reference_sql": "SELECT count(*) FROM COUNTRIES;",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0092",
+   "question": "How many countries exist?",
+   "reference_sql": "SELECT count(*) FROM COUNTRIES;",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0119",
+   "question": "What is the smallest weight of the car produced with 8 cylinders on 1974 ?",
+   "reference_sql": "select min(weight) from cars_data where cylinders  =  8 and year  =  1974",
+   "reference": [
+    4141
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "min(\"Weight\")"
+    ],
+    "filters": [
+     {
+      "column": "Cylinders",
+      "op": "==",
+      "value": 8.0
+     },
+     {
+      "column": "Year",
+      "op": "==",
+      "value": 1974.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0120",
+   "question": "What is the minimum weight of the car with 8 cylinders produced in 1974 ?",
+   "reference_sql": "select min(weight) from cars_data where cylinders  =  8 and year  =  1974",
+   "reference": [
+    4141
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "min(\"Weight\")"
+    ],
+    "filters": [
+     {
+      "column": "Cylinders",
+      "op": "==",
+      "value": 8.0
+     },
+     {
+      "column": "Year",
+      "op": "==",
+      "value": 1974.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a year in the question was read as a date range, but the table has no date column",
+   "understanding_issues": [
+    "a year in the question was read as a date range, but the table has no date column"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0143",
+   "question": "How many cars have more than 4 cylinders?",
+   "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE Cylinders  >  4;",
+   "reference": [
+    195
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 4.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0144",
+   "question": "What is the number of cars with more than 4 cylinders?",
+   "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE Cylinders  >  4;",
+   "reference": [
+    195
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 4.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0145",
+   "question": "how many cars were produced in 1980?",
+   "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE YEAR  =  1980;",
+   "reference": [
+    29
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Year",
+      "op": "==",
+      "value": 1980.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a year in the question was read as a date range, but the table has no date column",
+   "understanding_issues": [
+    "a year in the question was read as a date range, but the table has no date column"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0146",
+   "question": "In 1980, how many cars were made?",
+   "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE YEAR  =  1980;",
+   "reference": [
+    29
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Year",
+      "op": "==",
+      "value": 1980.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a year in the question was read as a date range, but the table has no date column",
+   "understanding_issues": [
+    "a year in the question was read as a date range, but the table has no date column"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0163",
+   "question": "How many cars has over 6 cylinders?",
+   "reference_sql": "SELECT COUNT(*) FROM CARS_DATA WHERE Cylinders  >  6;",
+   "reference": [
+    108
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 6.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0164",
+   "question": "What is the number of carsw ith over 6 cylinders?",
+   "reference_sql": "SELECT COUNT(*) FROM CARS_DATA WHERE Cylinders  >  6;",
+   "reference": [
+    108
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 6.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0187",
+   "question": "How many airlines do we have?",
+   "reference_sql": "SELECT count(*) FROM AIRLINES",
+   "reference": [
+    12
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0188",
+   "question": "What is the total number of airlines?",
+   "reference_sql": "SELECT count(*) FROM AIRLINES",
+   "reference": [
+    12
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0189",
+   "question": "How many airports do we have?",
+   "reference_sql": "SELECT count(*) FROM AIRPORTS",
+   "reference": [
+    100
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0190",
+   "question": "Return the number of  airports.",
+   "reference_sql": "SELECT count(*) FROM AIRPORTS",
+   "reference": [
+    100
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0191",
+   "question": "How many flights do we have?",
+   "reference_sql": "SELECT count(*) FROM FLIGHTS",
+   "reference": [
+    1200
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0192",
+   "question": "Return the number of flights.",
+   "reference_sql": "SELECT count(*) FROM FLIGHTS",
+   "reference": [
+    1200
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0196",
+   "question": "Return the number of airlines in the USA.",
+   "reference_sql": "SELECT count(*) FROM AIRLINES WHERE Country  =  \"USA\"",
+   "reference": [
+    12
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Country",
+     "op": "==",
+     "value": "USA"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Country",
+      "op": "==",
+      "value": "USA"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0203",
+   "question": "How many flights depart from 'APG'?",
+   "reference_sql": "SELECT count(*) FROM FLIGHTS WHERE SourceAirport  =  \"APG\"",
+   "reference": [
+    0
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "SourceAirport",
+      "op": "==",
+      "value": "APG"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a value in the question occurs in several columns, and the rules asked which one",
+   "understanding_issues": [
+    "a value in the question occurs in several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0204",
+   "question": "Count the number of flights departing from 'APG'.",
+   "reference_sql": "SELECT count(*) FROM FLIGHTS WHERE SourceAirport  =  \"APG\"",
+   "reference": [
+    0
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "SourceAirport",
+      "op": "==",
+      "value": "APG"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a value in the question occurs in several columns, and the rules asked which one",
+   "understanding_issues": [
+    "a value in the question occurs in several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0205",
+   "question": "How many flights have destination ATO?",
+   "reference_sql": "SELECT count(*) FROM FLIGHTS WHERE DestAirport  =  \"ATO\"",
+   "reference": [
+    0
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "DestAirport",
+      "op": "==",
+      "value": "ATO"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a value in the question occurs in several columns, and the rules asked which one",
+   "understanding_issues": [
+    "a value in the question occurs in several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0206",
+   "question": "Count the number of flights into ATO.",
+   "reference_sql": "SELECT count(*) FROM FLIGHTS WHERE DestAirport  =  \"ATO\"",
+   "reference": [
+    0
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "DestAirport",
+      "op": "==",
+      "value": "ATO"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a value in the question occurs in several columns, and the rules asked which one",
+   "understanding_issues": [
+    "a value in the question occurs in several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0259",
+   "question": "How many employees are there?",
+   "reference_sql": "SELECT count(*) FROM employee",
+   "reference": [
+    10
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0260",
+   "question": "Count the number of employees",
+   "reference_sql": "SELECT count(*) FROM employee",
+   "reference": [
+    10
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0271",
+   "question": "find the minimum and maximum number of products of all stores.",
+   "reference_sql": "SELECT min(Number_products) ,  max(Number_products) FROM shop",
+   "reference": [
+    1600,
+    15000
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "min(\"Number_products\")",
+     "max(\"Number_products\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0272",
+   "question": "What are the minimum and maximum number of products across all the shops?",
+   "reference_sql": "SELECT min(Number_products) ,  max(Number_products) FROM shop",
+   "reference": [
+    1600,
+    15000
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "min(\"Number_products\")",
+     "max(\"Number_products\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0289",
+   "question": "What is total bonus given in all evaluations?",
+   "reference_sql": "SELECT sum(bonus) FROM evaluation",
+   "reference": [
+    19500.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"Bonus\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0290",
+   "question": "Find the total amount of bonus given in all the evaluations.",
+   "reference_sql": "SELECT sum(bonus) FROM evaluation",
+   "reference": [
+    19500.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"Bonus\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0295",
+   "question": "How many different store locations are there?",
+   "reference_sql": "SELECT count(DISTINCT LOCATION) FROM shop",
+   "reference": [
+    9
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Location\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0296",
+   "question": "Count the number of distinct store locations.",
+   "reference_sql": "SELECT count(DISTINCT LOCATION) FROM shop",
+   "reference": [
+    9
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Location\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0297",
+   "question": "How many documents do we have?",
+   "reference_sql": "SELECT count(*) FROM Documents",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0298",
+   "question": "Count the number of documents.",
+   "reference_sql": "SELECT count(*) FROM Documents",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0305",
+   "question": "How many different templates do all document use?",
+   "reference_sql": "SELECT count(DISTINCT template_id) FROM Documents",
+   "reference": [
+    12
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Template_ID\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the metric wording matched several columns, and the rules asked which one",
+   "understanding_issues": [
+    "the metric wording matched several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0306",
+   "question": "Count the number of different templates used for documents.",
+   "reference_sql": "SELECT count(DISTINCT template_id) FROM Documents",
+   "reference": [
+    12
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Template_ID\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0317",
+   "question": "How many templates do we have?",
+   "reference_sql": "SELECT count(*) FROM Templates",
+   "reference": [
+    20
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0318",
+   "question": "Count the number of templates.",
+   "reference_sql": "SELECT count(*) FROM Templates",
+   "reference": [
+    20
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0325",
+   "question": "How many templates have template type code CV?",
+   "reference_sql": "SELECT count(*) FROM Templates WHERE template_type_code  =  \"CV\"",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Template_Type_Code",
+     "op": "==",
+     "value": "CV"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Template_Type_Code",
+      "op": "==",
+      "value": "CV"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0326",
+   "question": "Count the number of templates of the type CV.",
+   "reference_sql": "SELECT count(*) FROM Templates WHERE template_type_code  =  \"CV\"",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Template_Type_Code",
+     "op": "==",
+     "value": "CV"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Template_Type_Code",
+      "op": "==",
+      "value": "CV"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0357",
+   "question": "How many paragraphs in total?",
+   "reference_sql": "SELECT count(*) FROM Paragraphs",
+   "reference": [
+    15
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0358",
+   "question": "Count the number of paragraphs.",
+   "reference_sql": "SELECT count(*) FROM Paragraphs",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0381",
+   "question": "How many teachers are there?",
+   "reference_sql": "SELECT count(*) FROM teacher",
+   "reference": [
+    7
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0382",
+   "question": "What is the total count of teachers?",
+   "reference_sql": "SELECT count(*) FROM teacher",
+   "reference": [
+    7
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0411",
+   "question": "How many visitors below age 30 are there?",
+   "reference_sql": "SELECT count(*) FROM visitor WHERE age  <  30",
+   "reference": [
+    3
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Age",
+      "op": "<",
+      "value": 30.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0413",
+   "question": "What is the average age of the visitors whose membership level is not higher than 4?",
+   "reference_sql": "SELECT avg(age) FROM visitor WHERE Level_of_membership  <=  4",
+   "reference": [
+    36.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Age\")"
+    ],
+    "filters": [
+     {
+      "column": "Level_of_membership",
+      "op": "<=",
+      "value": 4.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0416",
+   "question": "Find the average number of staff working for the museums that were open before 2009.",
+   "reference_sql": "SELECT avg(num_of_staff) FROM museum WHERE open_year  <  2009",
+   "reference": [
+    31.333333
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Num_of_Staff\")"
+    ],
+    "filters": [
+     {
+      "column": "Open_Year",
+      "op": "<",
+      "value": 2009.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0424",
+   "question": "What are the average and maximum number of tickets bought in all visits?",
+   "reference_sql": "SELECT avg(num_of_ticket) ,  max(num_of_ticket) FROM visit",
+   "reference": [
+    10.5,
+    24
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Num_of_Ticket\")",
+     "max(\"Num_of_Ticket\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0428",
+   "question": "How many museums were opened after 2013 or before 2008?",
+   "reference_sql": "SELECT count(*) FROM museum WHERE open_year  >  2013 OR open_year  <  2008",
+   "reference": [
+    1
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "not_expressible",
+    "formulas": null,
+    "filters": null,
+    "reason": "OR across different columns or operators (engine filters are AND-ed)"
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "OR across different columns or operators (engine filters are AND-ed)",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0429",
+   "question": "Find the total number of players.",
+   "reference_sql": "SELECT count(*) FROM players",
+   "reference": [
+    20662
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0430",
+   "question": "How many players are there?",
+   "reference_sql": "SELECT count(*) FROM players",
+   "reference": [
+    20662
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0431",
+   "question": "Find the total number of matches.",
+   "reference_sql": "SELECT count(*) FROM matches",
+   "reference": [
+    278
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0432",
+   "question": "Count the number of matches.",
+   "reference_sql": "SELECT count(*) FROM matches",
+   "reference": [
+    278
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0435",
+   "question": "Find the average age of losers and winners of all matches.",
+   "reference_sql": "SELECT avg(loser_age) ,  avg(winner_age) FROM matches",
+   "reference": [
+    27.311214,
+    27.062178
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"loser_age\")",
+     "avg(\"winner_age\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0436",
+   "question": "What are the average ages of losers and winners across matches?",
+   "reference_sql": "SELECT avg(loser_age) ,  avg(winner_age) FROM matches",
+   "reference": [
+    27.311214,
+    27.062178
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"loser_age\")",
+     "avg(\"winner_age\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0437",
+   "question": "Find the average rank of winners in all matches.",
+   "reference_sql": "SELECT avg(winner_rank) FROM matches",
+   "reference": [
+    13.715827
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"winner_rank\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the metric wording matched several columns, and the rules asked which one",
+   "understanding_issues": [
+    "the metric wording matched several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0438",
+   "question": "What is the average rank for winners in all matches?",
+   "reference_sql": "SELECT avg(winner_rank) FROM matches",
+   "reference": [
+    13.715827
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"winner_rank\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the metric wording matched several columns, and the rules asked which one",
+   "understanding_issues": [
+    "the metric wording matched several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0439",
+   "question": "Find the highest rank of losers in all matches.",
+   "reference_sql": "SELECT min(loser_rank) FROM matches",
+   "reference": [
+    1
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "min(\"loser_rank\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the metric wording matched several columns, and the rules asked which one",
+   "understanding_issues": [
+    "the metric wording matched several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0440",
+   "question": "What is the best rank of losers across all matches?",
+   "reference_sql": "SELECT min(loser_rank) FROM matches",
+   "reference": [
+    1
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "min(\"loser_rank\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0441",
+   "question": "find the number of distinct country codes of all players.",
+   "reference_sql": "SELECT count(DISTINCT country_code) FROM players",
+   "reference": [
+    153
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"country_code\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0442",
+   "question": "How many distinct countries do players come from?",
+   "reference_sql": "SELECT count(DISTINCT country_code) FROM players",
+   "reference": [
+    153
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"country_code\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0443",
+   "question": "Find the number of distinct name of losers.",
+   "reference_sql": "SELECT count(DISTINCT loser_name) FROM matches",
+   "reference": [
+    49
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"loser_name\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the metric wording matched several columns, and the rules asked which one",
+   "understanding_issues": [
+    "the metric wording matched several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0449",
+   "question": "List the number of all matches who played in years of 2013 or 2016.",
+   "reference_sql": "SELECT count(*) FROM matches WHERE YEAR  =  2013 OR YEAR  =  2016",
+   "reference": [
+    170
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "year",
+      "op": "in",
+      "value": [
+       2013.0,
+       2016.0
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0450",
+   "question": "How many matches were played in 2013 or 2016?",
+   "reference_sql": "SELECT count(*) FROM matches WHERE YEAR  =  2013 OR YEAR  =  2016",
+   "reference": [
+    170
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "year",
+      "op": "in",
+      "value": [
+       2013.0,
+       2016.0
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a year in the question was read as a date range, but the table has no date column",
+   "understanding_issues": [
+    "a year in the question was read as a date range, but the table has no date column"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0485",
+   "question": "How many different winners both participated in the WTA Championships and were left handed?",
+   "reference_sql": "SELECT count(DISTINCT winner_name) FROM matches WHERE tourney_name  =  'WTA Championships' AND winner_hand  =  'L'",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "tourney_name",
+     "op": "==",
+     "value": "WTA Championships"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"winner_name\")"
+    ],
+    "filters": [
+     {
+      "column": "tourney_name",
+      "op": "==",
+      "value": "WTA Championships"
+     },
+     {
+      "column": "winner_hand",
+      "op": "==",
+      "value": "L"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0486",
+   "question": "Find the number of left handed winners who participated in the WTA Championships.",
+   "reference_sql": "SELECT count(DISTINCT winner_name) FROM matches WHERE tourney_name  =  'WTA Championships' AND winner_hand  =  'L'",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "tourney_name",
+     "op": "==",
+     "value": "WTA Championships"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"winner_name\")"
+    ],
+    "filters": [
+     {
+      "column": "tourney_name",
+      "op": "==",
+      "value": "WTA Championships"
+     },
+     {
+      "column": "winner_hand",
+      "op": "==",
+      "value": "L"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0491",
+   "question": "How many ships ended up being 'Captured'?",
+   "reference_sql": "SELECT count(*) FROM ship WHERE disposition_of_ship  =  'Captured'",
+   "reference": [
+    4
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "disposition_of_ship",
+     "op": "==",
+     "value": "Captured"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "disposition_of_ship",
+      "op": "==",
+      "value": "Captured"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0494",
+   "question": "What is maximum and minimum death toll caused each time?",
+   "reference_sql": "SELECT max(killed) ,  min(killed) FROM death",
+   "reference": [
+    29,
+    0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"killed\")",
+     "min(\"killed\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0495",
+   "question": "What is the average number of injuries caused each time?",
+   "reference_sql": "SELECT avg(injured) FROM death",
+   "reference": [
+    1.076923
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"injured\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0502",
+   "question": "How many different results are there for the battles?",
+   "reference_sql": "SELECT count(DISTINCT RESULT) FROM battle",
+   "reference": [
+    3
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"result\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0509",
+   "question": "How many courses in total are listed?",
+   "reference_sql": "SELECT count(*) FROM Courses",
+   "reference": [
+    15
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0510",
+   "question": "How many courses are there?",
+   "reference_sql": "SELECT count(*) FROM Courses",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0517",
+   "question": "How many departments offer any degree?",
+   "reference_sql": "SELECT count(DISTINCT department_id) FROM Degree_Programs",
+   "reference": [
+    10
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"department_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0518",
+   "question": "How many different departments offer degrees?",
+   "reference_sql": "SELECT count(DISTINCT department_id) FROM Degree_Programs",
+   "reference": [
+    10
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"department_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0519",
+   "question": "How many different degree names are offered?",
+   "reference_sql": "SELECT count(DISTINCT degree_summary_name) FROM Degree_Programs",
+   "reference": [
+    3
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"degree_summary_name\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the metric wording matched several columns, and the rules asked which one",
+   "understanding_issues": [
+    "the metric wording matched several columns, and the rules asked which one"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0520",
+   "question": "How many different degrees are offered?",
+   "reference_sql": "SELECT count(DISTINCT degree_summary_name) FROM Degree_Programs",
+   "reference": [
+    3
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"degree_summary_name\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0563",
+   "question": "On average, when were the transcripts printed?",
+   "reference_sql": "SELECT avg(transcript_date) FROM Transcripts",
+   "reference": [
+    1989.933333
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "avg(\"transcript_date\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the engine, reading the CSV as the application does, gets a different number for the same spec",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0564",
+   "question": "What is the average transcript date?",
+   "reference_sql": "SELECT avg(transcript_date) FROM Transcripts",
+   "reference": [
+    1989.933333
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "avg(\"transcript_date\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the engine, reading the CSV as the application does, gets a different number for the same spec",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0567",
+   "question": "How many transcripts are released?",
+   "reference_sql": "SELECT count(*) FROM Transcripts",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0568",
+   "question": "How many transcripts are listed?",
+   "reference_sql": "SELECT count(*) FROM Transcripts",
+   "reference": [
+    15
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0577",
+   "question": "How many different addresses do the students currently live?",
+   "reference_sql": "SELECT count(DISTINCT current_address_id) FROM Students",
+   "reference": [
+    9
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"current_address_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0578",
+   "question": "What are the different addresses that have students living there?",
+   "reference_sql": "SELECT count(DISTINCT current_address_id) FROM Students",
+   "reference": [
+    9
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"current_address_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0589",
+   "question": "How many cartoons were written by \"Joseph Kuhr\"?",
+   "reference_sql": "SELECT count(*) FROM Cartoon WHERE Written_by = \"Joseph Kuhr\";",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Written_by",
+     "op": "==",
+     "value": "Joseph Kuhr"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Written_by",
+      "op": "==",
+      "value": "Joseph Kuhr"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0590",
+   "question": "What is the number of cartoones written by Joseph Kuhr?",
+   "reference_sql": "SELECT count(*) FROM Cartoon WHERE Written_by = \"Joseph Kuhr\";",
+   "reference": [
+    2
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Written_by",
+     "op": "==",
+     "value": "Joseph Kuhr"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Written_by",
+      "op": "==",
+      "value": "Joseph Kuhr"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0597",
+   "question": "List the number of different series names and contents in the TV Channel table.",
+   "reference_sql": "SELECT count(DISTINCT series_name) ,  count(DISTINCT content) FROM TV_Channel;",
+   "reference": [
+    15,
+    1
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"series_name\")",
+     "count_distinct(\"Content\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0598",
+   "question": "How many different series and contents are listed in the TV Channel table?",
+   "reference_sql": "SELECT count(DISTINCT series_name) ,  count(DISTINCT content) FROM TV_Channel;",
+   "reference": [
+    15,
+    1
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"series_name\")",
+     "count_distinct(\"Content\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0603",
+   "question": "How many TV Channel using language English?",
+   "reference_sql": "SELECT count(*) FROM TV_Channel WHERE LANGUAGE = \"English\";",
+   "reference": [
+    3
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Language",
+     "op": "==",
+     "value": "English"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Language",
+      "op": "==",
+      "value": "English"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0604",
+   "question": "How many TV Channels use the English language?",
+   "reference_sql": "SELECT count(*) FROM TV_Channel WHERE LANGUAGE = \"English\";",
+   "reference": [
+    3
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Language",
+     "op": "==",
+     "value": "English"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Language",
+      "op": "==",
+      "value": "English"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0617",
+   "question": "What is minimum and maximum share of TV series?",
+   "reference_sql": "SELECT max(SHARE) , min(SHARE) FROM TV_series;",
+   "reference": [
+    9.0,
+    5.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"Share\")",
+     "min(\"Share\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0618",
+   "question": "What is the maximum and minimum share for the TV series?",
+   "reference_sql": "SELECT max(SHARE) , min(SHARE) FROM TV_series;",
+   "reference": [
+    9.0,
+    5.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"Share\")",
+     "min(\"Share\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0647",
+   "question": "How many poker players are there?",
+   "reference_sql": "SELECT count(*) FROM poker_player",
+   "reference": [
+    5
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0648",
+   "question": "Count the number of poker players.",
+   "reference_sql": "SELECT count(*) FROM poker_player",
+   "reference": [
+    5
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0653",
+   "question": "What is the average earnings of poker players?",
+   "reference_sql": "SELECT avg(Earnings) FROM poker_player",
+   "reference": [
+    301891.2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Earnings\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0654",
+   "question": "Return the average earnings across all poker players.",
+   "reference_sql": "SELECT avg(Earnings) FROM poker_player",
+   "reference": [
+    301891.2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Earnings\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0657",
+   "question": "What is the maximum number of final tables made among poker players with earnings less than 200000?",
+   "reference_sql": "SELECT max(Final_Table_Made) FROM poker_player WHERE Earnings  <  200000",
+   "reference": [
+    26.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"Final_Table_Made\")"
+    ],
+    "filters": [
+     {
+      "column": "Earnings",
+      "op": "<",
+      "value": 200000.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0658",
+   "question": "Return the maximum final tables made across all poker players who have earnings below 200000.",
+   "reference_sql": "SELECT max(Final_Table_Made) FROM poker_player WHERE Earnings  <  200000",
+   "reference": [
+    26.0
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"Final_Table_Made\")"
+    ],
+    "filters": [
+     {
+      "column": "Earnings",
+      "op": "<",
+      "value": 200000.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0685",
+   "question": "How many distinct nationalities are there?",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM people",
+   "reference": [
+    2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Nationality\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0686",
+   "question": "Count the number of different nationalities.",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM people",
+   "reference": [
+    2
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Nationality\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0687",
+   "question": "How many states are there?",
+   "reference_sql": "SELECT count(*) FROM area_code_state",
+   "reference": [
+    305
+   ],
+   "outcome": "wrong_value",
+   "copilot_formula": "count_distinct(\"state\")",
+   "copilot_filters": [],
+   "copilot_value": 51.0,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "wrong metric: computed count_distinct(\"state\"), the question asks for count()",
+   "understanding_issues": [
+    "wrong metric: computed count_distinct(\"state\"), the question asks for count()"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0690",
+   "question": "What are the maximum and minimum values of area codes?",
+   "reference_sql": "SELECT max(area_code) ,  min(area_code) FROM area_code_state",
+   "reference": [
+    989,
+    201
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"area_code\")",
+     "min(\"area_code\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0691",
+   "question": "What is last date created of votes from the state 'CA'?",
+   "reference_sql": "SELECT max(created) FROM votes WHERE state  =  'CA'",
+   "reference": [
+    "2018-03-09 19:03:39"
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "state",
+     "op": "==",
+     "value": "CA"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "max(\"created\")"
+    ],
+    "filters": [
+     {
+      "column": "state",
+      "op": "==",
+      "value": "CA"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the reference answer is not a number",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0696",
+   "question": "What are the number of votes from state 'NY' or 'CA'?",
+   "reference_sql": "SELECT count(*) FROM votes WHERE state  =  'NY' OR state  =  'CA'",
+   "reference": [
+    3
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "state",
+     "op": "==",
+     "value": "NY"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "state",
+      "op": "in",
+      "value": [
+       "NY",
+       "CA"
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0704",
+   "question": "How many countries have a republic as their form of government?",
+   "reference_sql": "SELECT count(*) FROM country WHERE GovernmentForm  =  \"Republic\"",
+   "reference": [
+    122
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "GovernmentForm",
+     "op": "==",
+     "value": "Republic"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "AS"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "Republic"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0705",
+   "question": "How many countries have governments that are republics?",
+   "reference_sql": "SELECT count(*) FROM country WHERE GovernmentForm  =  \"Republic\"",
+   "reference": [
+    122
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "ARE"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "Republic"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0706",
+   "question": "What is the total surface area of the countries in the Caribbean region?",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Region  =  \"Caribbean\"",
+   "reference": [
+    234423.0
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Region",
+     "op": "==",
+     "value": "Caribbean"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"SurfaceArea\")"
+    ],
+    "filters": [
+     {
+      "column": "Region",
+      "op": "==",
+      "value": "Caribbean"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0707",
+   "question": "How much surface area do the countires in the Carribean cover together?",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Region  =  \"Caribbean\"",
+   "reference": [
+    234423.0
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "DO"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"SurfaceArea\")"
+    ],
+    "filters": [
+     {
+      "column": "Region",
+      "op": "==",
+      "value": "Caribbean"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0718",
+   "question": "What is the average expected life expectancy for countries in the region of Central Africa?",
+   "reference_sql": "SELECT avg(LifeExpectancy) FROM country WHERE Region  =  \"Central Africa\"",
+   "reference": [
+    50.311111
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Region",
+     "op": "==",
+     "value": "Central Africa"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"LifeExpectancy\")"
+    ],
+    "filters": [
+     {
+      "column": "Region",
+      "op": "==",
+      "value": "Central Africa"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0719",
+   "question": "How long is the people’s average life expectancy in Central Africa?",
+   "reference_sql": "SELECT avg(LifeExpectancy) FROM country WHERE Region  =  \"Central Africa\"",
+   "reference": [
+    50.311111
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Region",
+     "op": "==",
+     "value": "Central Africa"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"LifeExpectancy\")"
+    ],
+    "filters": [
+     {
+      "column": "Region",
+      "op": "==",
+      "value": "Central Africa"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0722",
+   "question": "What is the total population and maximum GNP in Asia?",
+   "reference_sql": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+   "reference": [
+    3705025700,
+    3787042.0
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "AND"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"Population\")",
+     "max(\"GNP\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0723",
+   "question": "How many people live in Asia, and what is the largest GNP among them?",
+   "reference_sql": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+   "reference": [
+    3705025700,
+    3787042.0
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "AND"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"Population\")",
+     "max(\"GNP\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0724",
+   "question": "What is the average life expectancy in African countries that are republics?",
+   "reference_sql": "SELECT avg(LifeExpectancy) FROM country WHERE Continent  =  \"Africa\" AND GovernmentForm  =  \"Republic\"",
+   "reference": [
+    50.843478
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "ARE"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"LifeExpectancy\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Africa"
+     },
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "Republic"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0725",
+   "question": "Give the average life expectancy for countries in Africa which are republics?",
+   "reference_sql": "SELECT avg(LifeExpectancy) FROM country WHERE Continent  =  \"Africa\" AND GovernmentForm  =  \"Republic\"",
+   "reference": [
+    50.843478
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Africa"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "ARE"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"LifeExpectancy\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Africa"
+     },
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "Republic"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0726",
+   "question": "What is the total surface area of the continents Asia and Europe?",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Continent  =  \"Asia\" OR Continent  =  \"Europe\"",
+   "reference": [
+    54930138.9
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Europe"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "AND"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IS"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"SurfaceArea\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "in",
+      "value": [
+       "Asia",
+       "Europe"
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0727",
+   "question": "Give the total surface area covered by countries in Asia or Europe.",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Continent  =  \"Asia\" OR Continent  =  \"Europe\"",
+   "reference": [
+    54930138.9
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Europe"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "BY"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"SurfaceArea\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "in",
+      "value": [
+       "Asia",
+       "Europe"
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0728",
+   "question": "How many people live in Gelderland district?",
+   "reference_sql": "SELECT sum(Population) FROM city WHERE District  =  \"Gelderland\"",
+   "reference": [
+    545548
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"Population\")"
+    ],
+    "filters": [
+     {
+      "column": "District",
+      "op": "==",
+      "value": "Gelderland"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0729",
+   "question": "What is the total population of Gelderland district?",
+   "reference_sql": "SELECT sum(Population) FROM city WHERE District  =  \"Gelderland\"",
+   "reference": [
+    545548
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "sum(\"Population\")"
+    ],
+    "filters": [
+     {
+      "column": "District",
+      "op": "==",
+      "value": "Gelderland"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0730",
+   "question": "What is the average GNP and total population in all nations whose government is US territory?",
+   "reference_sql": "SELECT avg(GNP) ,  sum(population) FROM country WHERE GovernmentForm  =  \"US Territory\"",
+   "reference": [
+    510.333333,
+    329000
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "GovernmentForm",
+     "op": "==",
+     "value": "US Territory"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "AND"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"GNP\")",
+     "sum(\"Population\")"
+    ],
+    "filters": [
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "US Territory"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0731",
+   "question": "Give the mean GNP and total population of nations which are considered US territory.",
+   "reference_sql": "SELECT avg(GNP) ,  sum(population) FROM country WHERE GovernmentForm  =  \"US Territory\"",
+   "reference": [
+    510.333333,
+    329000
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "GovernmentForm",
+     "op": "==",
+     "value": "US Territory"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "AND"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"GNP\")",
+     "sum(\"Population\")"
+    ],
+    "filters": [
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "US Territory"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "deterministic_limitation",
+   "cause_detail": "the question asks for several numbers; the copilot answers with one metric",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0732",
+   "question": "How many unique languages are spoken in the world?",
+   "reference_sql": "SELECT count(DISTINCT LANGUAGE) FROM countrylanguage",
+   "reference": [
+    457
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "CountryCode",
+     "op": "==",
+     "value": "ARE"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Language\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0733",
+   "question": "What is the number of distinct languages used around the world?",
+   "reference_sql": "SELECT count(DISTINCT LANGUAGE) FROM countrylanguage",
+   "reference": [
+    457
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Language\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0734",
+   "question": "How many type of governments are in Africa?",
+   "reference_sql": "SELECT count(DISTINCT GovernmentForm) FROM country WHERE Continent  =  \"Africa\"",
+   "reference": [
+    10
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Africa"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "ARE"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"GovernmentForm\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Africa"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0735",
+   "question": "How many different forms of governments are there in Africa?",
+   "reference_sql": "SELECT count(DISTINCT GovernmentForm) FROM country WHERE Continent  =  \"Africa\"",
+   "reference": [
+    10
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Africa"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "ARE"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"GovernmentForm\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Africa"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0806",
+   "question": "how many countries are in Asia?",
+   "reference_sql": "SELECT count(*) FROM country WHERE continent  =  \"Asia\"",
+   "reference": [
+    51
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    },
+    {
+     "column": "Code",
+     "op": "==",
+     "value": "ARE"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0807",
+   "question": "Count the number of countries in Asia.",
+   "reference_sql": "SELECT count(*) FROM country WHERE continent  =  \"Asia\"",
+   "reference": [
+    51
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    },
+    {
+     "column": "Code2",
+     "op": "==",
+     "value": "IN"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0810",
+   "question": "What is the total population and average area of countries in the continent of North America whose area is bigger than 3000 ?",
+   "reference_sql": "select sum(population) ,  avg(surfacearea) from country where continent  =  \"north america\" and surfacearea  >  3000",
+   "reference": [
+    null,
+    null
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "sum(\"Population\")",
+     "avg(\"SurfaceArea\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "north america"
+     },
+     {
+      "column": "SurfaceArea",
+      "op": ">",
+      "value": 3000.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the reference SQL returns NULL",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0811",
+   "question": "Give the total population and average surface area corresponding to countries in North America that have a surface area greater than 3000 .",
+   "reference_sql": "select sum(population) ,  avg(surfacearea) from country where continent  =  \"north america\" and surfacearea  >  3000",
+   "reference": [
+    null,
+    null
+   ],
+   "outcome": "clarification",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "sum(\"Population\")",
+     "avg(\"SurfaceArea\")"
+    ],
+    "filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "north america"
+     },
+     {
+      "column": "SurfaceArea",
+      "op": ">",
+      "value": 3000.0
+     }
+    ],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the reference SQL returns NULL",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0822",
+   "question": "How many conductors are there?",
+   "reference_sql": "SELECT count(*) FROM conductor",
+   "reference": [
+    12
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0823",
+   "question": "Count the number of conductors.",
+   "reference_sql": "SELECT count(*) FROM conductor",
+   "reference": [
+    12
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0830",
+   "question": "What is the average attendance of shows?",
+   "reference_sql": "SELECT avg(Attendance) FROM SHOW",
+   "reference": [
+    1326.4
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Attendance\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0831",
+   "question": "Return the average attendance across all shows.",
+   "reference_sql": "SELECT avg(Attendance) FROM SHOW",
+   "reference": [
+    1326.4
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"Attendance\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0832",
+   "question": "What are the maximum and minimum share of performances whose type is not \"Live final\".",
+   "reference_sql": "SELECT max(SHARE) ,  min(SHARE) FROM performance WHERE TYPE != \"Live final\"",
+   "reference": [
+    "44.7%",
+    "22.7%"
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Type",
+     "op": "!=",
+     "value": "Live final"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "max(\"Share\")",
+     "min(\"Share\")"
+    ],
+    "filters": [
+     {
+      "column": "Type",
+      "op": "!=",
+      "value": "Live final"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the reference answer is not a number",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0833",
+   "question": "Return the maximum and minimum shares for performances that do not have the type \"Live final\".",
+   "reference_sql": "SELECT max(SHARE) ,  min(SHARE) FROM performance WHERE TYPE != \"Live final\"",
+   "reference": [
+    "44.7%",
+    "22.7%"
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Type",
+     "op": "!=",
+     "value": "Live final"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "differs",
+    "formulas": [
+     "max(\"Share\")",
+     "min(\"Share\")"
+    ],
+    "filters": [
+     {
+      "column": "Type",
+      "op": "!=",
+      "value": "Live final"
+     }
+    ],
+    "reason": null
+   },
+   "cause": "data_representation",
+   "cause_detail": "the reference answer is not a number",
+   "understanding_issues": []
+  },
+  {
+   "case_id": "spider-dev-0834",
+   "question": "How many different nationalities do conductors have?",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM conductor",
+   "reference": [
+    3
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Nationality\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0835",
+   "question": "Count the number of different nationalities of conductors.",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM conductor",
+   "reference": [
+    3
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"Nationality\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0858",
+   "question": "Find the number of orchestras whose record format is \"CD\" or \"DVD\".",
+   "reference_sql": "SELECT COUNT(*) FROM orchestra WHERE Major_Record_Format  =  \"CD\" OR Major_Record_Format  =  \"DVD\"",
+   "reference": [
+    11
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "==",
+     "value": "DVD"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Major_Record_Format",
+      "op": "in",
+      "value": [
+       "CD",
+       "DVD"
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0859",
+   "question": "Count the number of orchestras that have CD or DVD as their record format.",
+   "reference_sql": "SELECT COUNT(*) FROM orchestra WHERE Major_Record_Format  =  \"CD\" OR Major_Record_Format  =  \"DVD\"",
+   "reference": [
+    11
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "==",
+     "value": "DVD"
+    }
+   ],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "Major_Record_Format",
+      "op": "in",
+      "value": [
+       "CD",
+       "DVD"
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter",
+    "a filter was applied that the question does not state"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0862",
+   "question": "How many high schoolers are there?",
+   "reference_sql": "SELECT count(*) FROM Highschooler",
+   "reference": [
+    16
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0863",
+   "question": "Count the number of high schoolers.",
+   "reference_sql": "SELECT count(*) FROM Highschooler",
+   "reference": [
+    16
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0874",
+   "question": "How many high schoolers are there in grade 9 or 10?",
+   "reference_sql": "SELECT count(*) FROM Highschooler WHERE grade  =  9 OR grade  =  10",
+   "reference": [
+    8
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "grade",
+      "op": "in",
+      "value": [
+       9.0,
+       10.0
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0875",
+   "question": "Count the number of high schoolers in grades 9 or 10.",
+   "reference_sql": "SELECT count(*) FROM Highschooler WHERE grade  =  9 OR grade  =  10",
+   "reference": [
+    8
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [
+     {
+      "column": "grade",
+      "op": "in",
+      "value": [
+       9.0,
+       10.0
+      ]
+     }
+    ],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count",
+    "a condition in the question was not turned into a filter"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0966",
+   "question": "How many dogs went through any treatments?",
+   "reference_sql": "SELECT count(DISTINCT dog_id) FROM Treatments",
+   "reference": [
+    9
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"dog_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0967",
+   "question": "Count the number of dogs that went through a treatment.",
+   "reference_sql": "SELECT count(DISTINCT dog_id) FROM Treatments",
+   "reference": [
+    9
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"dog_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0968",
+   "question": "How many professionals have performed any treatment to dogs?",
+   "reference_sql": "SELECT count(DISTINCT professional_id) FROM Treatments",
+   "reference": [
+    8
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"professional_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0969",
+   "question": "Find the number of professionals who have ever treated dogs.",
+   "reference_sql": "SELECT count(DISTINCT professional_id) FROM Treatments",
+   "reference": [
+    8
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count_distinct(\"professional_id\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0986",
+   "question": "What is the average age of all the dogs?",
+   "reference_sql": "SELECT avg(age) FROM Dogs",
+   "reference": [
+    5.066667
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"age\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0987",
+   "question": "Compute the average age of all the dogs.",
+   "reference_sql": "SELECT avg(age) FROM Dogs",
+   "reference": [
+    5.066667
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "avg(\"age\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0988",
+   "question": "What is the age of the oldest dog?",
+   "reference_sql": "SELECT max(age) FROM Dogs",
+   "reference": [
+    "9"
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"age\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0989",
+   "question": "Tell me the age of the oldest dog.",
+   "reference_sql": "SELECT max(age) FROM Dogs",
+   "reference": [
+    "9"
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"age\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0992",
+   "question": "How much does the most expensive charge type costs?",
+   "reference_sql": "SELECT max(charge_amount) FROM Charges",
+   "reference": [
+    640
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"charge_amount\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-0993",
+   "question": "What is the charge amount of the most expensive charge type?",
+   "reference_sql": "SELECT max(charge_amount) FROM Charges",
+   "reference": [
+    640
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "max(\"charge_amount\")"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "the aggregation or the column is worded in a way the rules do not recognise",
+   "understanding_issues": [
+    "the aggregation or the column is worded in a way the rules do not recognise"
+   ]
+  },
+  {
+   "case_id": "spider-dev-1000",
+   "question": "How many singers are there?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    8
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-1001",
+   "question": "What is the count of singers?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    8
+   ],
+   "outcome": "not_understood",
+   "copilot_formula": null,
+   "copilot_filters": null,
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  },
+  {
+   "case_id": "spider-dev-1030",
+   "question": "How many available features are there in total?",
+   "reference_sql": "SELECT count(*) FROM Other_Available_Features",
+   "reference": [
+    3
+   ],
+   "outcome": "no_metric",
+   "copilot_formula": null,
+   "copilot_filters": [],
+   "copilot_value": null,
+   "oracle": {
+    "status": "matches",
+    "formulas": [
+     "count()"
+    ],
+    "filters": [],
+    "reason": null
+   },
+   "cause": "question_understanding",
+   "cause_detail": "a count of entities ('how many singers') was not read as a row count",
+   "understanding_issues": [
+    "a count of entities ('how many singers') was not read as a row count"
+   ]
+  }
+ ]
+}

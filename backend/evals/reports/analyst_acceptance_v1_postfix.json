@@ -1,0 +1,709 @@
+{
+ "label": "v1_postfix",
+ "model": "on",
+ "passed": 14,
+ "first_pass_passed": 11,
+ "total": 14,
+ "model_planned": 11,
+ "rows": [
+  {
+   "n": 1,
+   "dataset": "employees",
+   "question": "Hello.",
+   "expected": "conversational answer, no tools",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"chat\", \"reply\": \"Hello! I'm Silt's analyst. I can compute figures from your dataset, run statistical tests, build Random Forest predictions and give evidence-based recommendations. What would you like to know?\"}",
+    "plan": {
+     "type": "chat",
+     "reply": "Hello! I'm Silt's analyst. I can compute figures from your dataset, run statistical tests, build Random Forest predictions and give evidence-based recommendations. What would you like to know?"
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "chat",
+    "reply": "Hello! I'm Silt's analyst. I can compute figures from your dataset, run statistical tests, build Random Forest predictions and give evidence-based recommendations. What would you like to know?"
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 2823,
+   "answer": "Hello! I'm Silt's analyst. I can compute figures from your dataset, run statistical tests, build Random Forest predictions and give evidence-based recommendations. What would you like to know?"
+  },
+  {
+   "n": 2,
+   "dataset": "employees",
+   "question": "What is Random Forest?",
+   "expected": "general explanation",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"chat\", \"reply\": \"A Random Forest is an ensemble of decision trees. Each tree is trained on a bootstrap sample of the rows and considers a random subset of features at each split; the forest averages the trees (regression) or takes a vote (classification). It handles non-linear effects and mixed feature types well. Its feature importance shows what the model relied on, not what causes the outcome.\"}",
+    "plan": {
+     "type": "chat",
+     "reply": "A Random Forest is an ensemble of decision trees. Each tree is trained on a bootstrap sample of the rows and considers a random subset of features at each split; the forest averages the trees (regression) or takes a vote (classification). It handles non-linear effects and mixed feature types well. Its feature importance shows what the model relied on, not what causes the outcome."
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "chat",
+    "reply": "A Random Forest is an ensemble of decision trees. Each tree is trained on a bootstrap sample of the rows and considers a random subset of features at each split; the forest averages the trees (regression) or takes a vote (classification). It handles non-linear effects and mixed feature types well. Its feature importance shows what the model relied on, not what causes the outcome."
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 2456,
+   "answer": "A Random Forest is an ensemble of decision trees. Each tree is trained on a bootstrap sample of the rows and considers a random subset of features at each split; the forest averages the trees (regression) or takes a vote (classification). It handles non-linear effects and mixed feature types well. Its feature importance shows what the model relied on, not what causes the outcome."
+  },
+  {
+   "n": 3,
+   "dataset": "employees",
+   "question": "What is the average salary?",
+   "expected": "correct computed value",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"salary\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "metric",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "avg",
+        "column": "salary"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "metric",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "avg",
+       "column": "salary"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "compute_metric"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [
+    "The model's summary cited numbers not in the results (98,087.40); it was not shown."
+   ],
+   "grounding": {
+    "checked": true,
+    "ungrounded": [
+     "98,087.40"
+    ]
+   },
+   "elapsed_ms": 2116,
+   "answer": "The average salary is **98,087.50** (computed over 240 rows)."
+  },
+  {
+   "n": 4,
+   "dataset": "employees",
+   "question": "Which department pays the most?",
+   "expected": "grouping and comparison",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"group_comparison\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"salary\", \"group_by\": \"department\", \"order\": \"desc\"}}, {\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"salary\", \"group\": \"department\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "group_comparison",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "avg",
+        "column": "salary",
+        "group_by": "department",
+        "order": "desc"
+       }
+      },
+      {
+       "tool": "compare_groups",
+       "args": {
+        "outcome": "salary",
+        "group": "department"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "group_comparison",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "avg",
+       "column": "salary",
+       "group_by": "department",
+       "order": "desc"
+      }
+     },
+     {
+      "tool": "compare_groups",
+      "args": {
+       "outcome": "salary",
+       "group": "department"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "compute_metric",
+    "compare_groups"
+   ],
+   "statuses": [
+    "ok",
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 4307,
+   "answer": "Engineering has the highest average salary at 115,055.77, and Support the lowest at 71,615.68. This compares averages only; see the statistical test before treating the gap as real.\n\n---\n\n**Average salary by department**:\n\n| department | average salary | rows |\n|---|---:|---:|\n| Engineering | 115,055.77 | 71 |\n| Finance | 99,219.70 | 43 |\n| Marketing | 95,817.16 | 32 |\n| Sales | 92,370.75 | 63 |\n| Support | 71,615.68 | 31 |\n\nHighest: **Engineering** (115,055.77).\n\n**salary by department**\n\n| group | n | mean | median | sd |\n|---|---:|---:|---:|---:|\n| Engineering | 71 | 115,055.77 | 115,238 | 14,097.91 |\n| Finance | 43 | 99,219.70 | 98,462 | 11,985.48 |\n| Marketing | 32 | 95,817.16 | 96,201.50 | 17,637.86 |\n| Sales | 63 | 92,370.75 | 92,765 | 13,017.05 |\n| Support | 31 | 71,615.68 | 70,243 | 14,591.69 |\n\n**Welch's one-way test**: p < 0.001; effect size eta squared = 0.49. Rank-based check (Kruskal-Wallis test): p < 0.001.\nStatistically significant at the 5% level.\n- Welch's tests do not assume equal variances."
+  },
+  {
+   "n": 5,
+   "dataset": "customers",
+   "question": "Predict customer churn.",
+   "expected": "Random Forest classification",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"clarify\", \"question\": \"There is no churn column. Which column should I predict?\", \"options\": [\"contract\", \"monthly_charges\", \"region\", \"tenure_months\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "There is no churn column. Which column should I predict?",
+     "options": [
+      "contract",
+      "monthly_charges",
+      "region",
+      "tenure_months"
+     ]
+    },
+    "valid": false,
+    "error": "contradicts the dataset: it says there is no 'churn' column, but the dataset has 'churn'",
+    "retry": {
+     "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"churn\", \"task\": \"classification\"}}]}",
+     "plan": {
+      "type": "tools",
+      "intent": "prediction",
+      "calls": [
+       {
+        "tool": "random_forest",
+        "args": {
+         "target": "churn",
+         "task": "classification"
+        }
+       }
+      ]
+     },
+     "valid": true,
+     "error": null
+    }
+   },
+   "plan_source": "model_retry",
+   "plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "churn",
+       "task": "classification"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "random_forest"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [
+    "The model's first plan contradicted the dataset (it says there is no 'churn' column, but the dataset has 'churn'); it reconsidered once."
+   ],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 8680,
+   "answer": "The model achieved an accuracy of 72.0% and an ROC-AUC of 81.2% to predict churn. The features ranked by importance were: contract (17.4%), tenure_months (7.2%), support_tickets (1.8%), monthly_charges (0.55%), and region (-0.30%). The evidence is weak, so the model's predictions should be treated as probabilities, not facts.\n\n---\n\n**Random Forest classification for 'churn'**\n\nHeld-out performance (150 test rows, trained on 450): balanced accuracy 0.73, accuracy 0.72 vs baseline 0.59 (always predicting the most common class 'No'), macro F1 0.72, ROC AUC 0.81.\nThe model beats the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| contract | 0.1735 | 0.0394 |\n| tenure_months | 0.0717 | 0.0264 |\n| support_tickets | 0.0182 | 0.0177 |\n| monthly_charges | 0.0055 | 0.0223 |\n| region | -0.0030 | 0.0210 |\n\nLeft out: customer_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 150 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 6,
+   "dataset": "employees",
+   "question": "Predict salary.",
+   "expected": "Random Forest regression",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"salary\", \"task\": \"regression\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "prediction",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "salary",
+        "task": "regression"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "salary",
+       "task": "regression"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "random_forest"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 4771,
+   "answer": "The model predicted salary with R\u00b2 = 0.818, so the model explained 81.8% of the variance. The average absolute error (MAE) was 6,752.34, and the baseline MAE was 16,668.02. The model performed better than the baseline, so the prediction is reliable.\n\n---\n\n**Random Forest regression for 'salary'**\n\nHeld-out performance (60 test rows, trained on 180): R\u00b2 0.82, MAE 6,752.34 vs baseline MAE 16,668.02 (always predicting the training mean), RMSE 8,733.84.\nThe model beats the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| department | 9,151.9992 | 1,020.9884 |\n| years_experience | 4,817.6700 | 767.6444 |\n| level | 3,449.5705 | 561.7706 |\n| remote | 19.2081 | 74.5210 |\n| age | -204.5601 | 136.1644 |\n\nLeft out: employee_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest regressor, 300 trees, 75/25 split, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 60 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 7,
+   "dataset": "campaigns",
+   "question": "Which area should receive our next advertising campaign?",
+   "expected": "historical campaign analysis and recommendation",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it.\"}",
+    "plan": {
+     "type": "decline",
+     "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+    },
+    "valid": false,
+    "error": "contradicts the dataset: the dataset does contain advertising history: spend column 'ad_spend', outcome column 'revenue', grouped by 'area'",
+    "retry": {
+     "output": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"where\"}}]}",
+     "plan": {
+      "type": "tools",
+      "intent": "recommendation",
+      "calls": [
+       {
+        "tool": "recommend",
+        "args": {
+         "kind": "where"
+        }
+       }
+      ]
+     },
+     "valid": true,
+     "error": null
+    }
+   },
+   "plan_source": "model_retry",
+   "plan": {
+    "type": "tools",
+    "intent": "recommendation",
+    "calls": [
+     {
+      "tool": "recommend",
+      "args": {
+       "kind": "where"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "recommend"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [
+    "The model's first plan contradicted the dataset (the dataset does contain advertising history: spend column 'ad_spend', outcome column 'revenue', grouped by 'area'); it reconsidered once."
+   ],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 6905,
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Prioritise Area A for the next campaign. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### Recommendation\nPrioritise Area A for the next campaign.\nEvidence level: **strong** (strong = 95% interval of the difference excludes zero and >= 10 campaign rows; negative ROI = do not expand; otherwise a limited controlled test).\n\n### Evidence\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n\n### Methodology\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n\n### Limitations\n- Observational data: it shows results where money was spent, not what spending caused (areas that received more budget may differ in other ways).\n- Not compared (fewer than 3 rows): Area E.\n- Past returns may not hold at a higher budget (diminishing returns are not visible in this data).\n\n### Next action\nRun a controlled experiment: raise spend in part of the area (or for a period) and keep a comparable holdout, then compare conversions and ROI between them."
+  },
+  {
+   "n": 8,
+   "dataset": "campaigns",
+   "question": "Should we increase the advertising budget in Area A?",
+   "expected": "performance, ROI, comparison, uncertainty, recommendation",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"increase\", \"focus\": \"Area A\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "recommendation",
+     "calls": [
+      {
+       "tool": "recommend",
+       "args": {
+        "kind": "increase",
+        "focus": "Area A"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "recommendation",
+    "calls": [
+     {
+      "tool": "recommend",
+      "args": {
+       "kind": "increase",
+       "focus": "Area A"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "recommend"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 5631,
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Increase the budget in Area A gradually, monitoring ROI as spend grows. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### Recommendation\nIncrease the budget in Area A gradually, monitoring ROI as spend grows.\nEvidence level: **strong** (strong = 95% interval of the difference excludes zero and >= 10 campaign rows; negative ROI = do not expand; otherwise a limited controlled test).\n\n### Evidence\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n\n### Methodology\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n\n### Limitations\n- Observational data: it shows results where money was spent, not what spending caused (areas that received more budget may differ in other ways).\n- Not compared (fewer than 3 rows): Area E.\n- Past returns may not hold at a higher budget (diminishing returns are not visible in this data).\n\n### Next action\nRun a controlled experiment: raise spend in part of the area (or for a period) and keep a comparable holdout, then compare conversions and ROI between them."
+  },
+  {
+   "n": 9,
+   "dataset": "campaigns",
+   "question": "Why do you recommend Area A?",
+   "expected": "statistics, method and limitations of the previous recommendation",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"explain_previous\"}",
+    "plan": {
+     "type": "explain_previous"
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "explain_previous"
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 4891,
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Increase the budget in Area A gradually, monitoring ROI as spend grows. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### 1. The business question\nWhere advertising money has worked best, and what to do about Area A.\n### 2. The data used\n58 historical campaign rows, grouped by 'area'.\n### 3. The analytical method\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n### 4. The computed results\nArea A: spend 81,053.04, revenue 169,616.36, ROI 109.3%, CAC 80.01, conversion rate 6.7% over 14 campaign rows.\n\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n### 5. The statistical evidence\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n### 6. The uncertainty\nThe 95% intervals above are the plausible range of each difference; an interval that includes zero means the data cannot rule out no real difference.\n### 7. Why this supports the recommendation\nRule applied: strong = 95% interval of the difference excludes zero and >= 10 campaign rows; negative ROI = do not expand; otherwise a limited controlled test. Result: evidence level **strong**, so the recommendation is: Increase the budget in Area A gradually, monitoring ROI as spend grows.\n### 8. Limitations\n- Observational data: it shows results where money was spent, not what spending caused (areas that received more budget may differ in other ways).\n- Not compared (fewer than 3 rows): Area E.\n- Past returns may not hold at a higher budget (diminishing returns are not visible in this data)."
+  },
+  {
+   "n": 10,
+   "dataset": "customers",
+   "question": "Which factors influenced your prediction?",
+   "expected": "feature importance from the trained model",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"explain_prediction\", \"calls\": [{\"tool\": \"feature_importance\", \"args\": {}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "explain_prediction",
+     "calls": [
+      {
+       "tool": "feature_importance",
+       "args": {}
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "explain_prediction",
+    "calls": [
+     {
+      "tool": "feature_importance",
+      "args": {}
+     }
+    ]
+   },
+   "tools": [
+    "feature_importance"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 3116,
+   "answer": "The model relied on contract (0.174) and tenure_months (0.072) the most, and region the least (-0.003). This is based on the Random Forest classifier, which averaged the trees and considered the class distribution when evaluating.\n\n---\n\n**What the 'churn' model relied on** (permutation importance: how much held-out performance drops when the input is shuffled)\n\n| feature | importance | sd |\n|---|---:|---:|\n| contract | 0.1735 | 0.0394 |\n| tenure_months | 0.0717 | 0.0264 |\n| support_tickets | 0.0182 | 0.0177 |\n| monthly_charges | 0.0055 | 0.0223 |\n| region | -0.0030 | 0.0210 |\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 150 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 11,
+   "dataset": "campaigns",
+   "question": "What if we increase the budget by 20%?",
+   "expected": "scenario with disclosed assumptions",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"scenario\", \"calls\": [{\"tool\": \"budget_scenario\", \"args\": {\"change_pct\": 20.0}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "scenario",
+     "calls": [
+      {
+       "tool": "budget_scenario",
+       "args": {
+        "change_pct": 20.0
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "scenario",
+    "calls": [
+     {
+      "tool": "budget_scenario",
+      "args": {
+       "change_pct": 20.0
+      }
+     }
+    ]
+   },
+   "tools": [
+    "budget_scenario"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 4130,
+   "answer": "The budget increases by 20.0% to 397,206.05, and the extra spend is 66,201.01. The revenue would grow in proportion to the spend, so the revenue would be 506,945.28. The break-even extra revenue is 66,201.01, so the revenue must increase by at least that amount to make the spend worthwhile.\n\n---\n\n**Scenario: change the budget by +20% (all rows)**\n\nBaseline: spend 331,005.04, revenue 422,454.40, ROI 27.6%.\nNew spend: 397,206.05 (extra 66,201.01).\n\n| assumption | revenue | profit | ROI |\n|---|---:|---:|---:|\n| revenue grows in proportion to spend (constant ROI) | 506,945.28 | 109,739.23 | 27.6% |\n| the extra spend brings no extra revenue | 422,454.40 | 25,248.35 | 6.4% |\n\nTo break even on the extra spend, it must bring at least 66,201.01 of extra revenue.\n\n_Scenario arithmetic under stated assumptions, not a prediction: the data does not show how revenue responds to more spend._"
+  },
+  {
+   "n": 12,
+   "dataset": "employees",
+   "question": "Predict churn.",
+   "expected": "clarification, no guess",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"clarify\", \"question\": \"There is no churn column. Which column should I predict?\", \"options\": [\"department\", \"level\", \"years_experience\", \"age\", \"remote\", \"salary\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "There is no churn column. Which column should I predict?",
+     "options": [
+      "department",
+      "level",
+      "years_experience",
+      "age",
+      "remote",
+      "salary"
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "clarify",
+    "question": "There is no churn column. Which column should I predict?",
+    "options": [
+     "department",
+     "level",
+     "years_experience",
+     "age",
+     "remote",
+     "salary"
+    ]
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1455,
+   "answer": "There is no churn column. Which column should I predict?\n\nOptions: `department`, `level`, `years_experience`, `age`, `remote`, `salary`"
+  },
+  {
+   "n": 13,
+   "dataset": "inventory",
+   "question": "Which area should receive our next advertising campaign?",
+   "expected": "explains the data is insufficient",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it.\"}",
+    "plan": {
+     "type": "decline",
+     "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "decline",
+    "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1363,
+   "answer": "**The available data is not sufficient for this.** This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+  },
+  {
+   "n": 14,
+   "dataset": "stores_small",
+   "question": "Predict churn.",
+   "expected": "explains why a prediction cannot responsibly be made",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"clarify\", \"question\": \"There is no churn column. Which column should I predict?\", \"options\": [\"store\", \"size_sqm\", \"churn\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "There is no churn column. Which column should I predict?",
+     "options": [
+      "store",
+      "size_sqm",
+      "churn"
+     ]
+    },
+    "valid": false,
+    "error": "contradicts the dataset: it says there is no 'churn' column, but the dataset has 'churn'",
+    "retry": {
+     "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"churn\", \"task\": \"classification\"}}]}",
+     "plan": {
+      "type": "tools",
+      "intent": "prediction",
+      "calls": [
+       {
+        "tool": "random_forest",
+        "args": {
+         "target": "churn",
+         "task": "classification"
+        }
+       }
+      ]
+     },
+     "valid": true,
+     "error": null
+    }
+   },
+   "plan_source": "model_retry",
+   "plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "churn",
+       "task": "classification"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "random_forest"
+   ],
+   "statuses": [
+    "refused"
+   ],
+   "notes": [
+    "The model's first plan contradicted the dataset (it says there is no 'churn' column, but the dataset has 'churn'); it reconsidered once."
+   ],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 2625,
+   "answer": "**I can't responsibly do that with this data.** Only 12 rows have a value for 'churn'; at least 40 are needed to train and test a model honestly."
+  }
+ ]
+}

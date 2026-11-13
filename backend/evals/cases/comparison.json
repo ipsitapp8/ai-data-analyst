@@ -1,0 +1,521 @@
+{
+ "version": "2026.10.5",
+ "level": 0.95,
+ "description": "Comparison workflow: expected method and values from build_comparison_fixtures.py (standard library only).",
+ "cases": [
+  {
+   "id": "cmp-welch-planted-difference",
+   "component": "comparison",
+   "fixture": "comparison/s01_two_groups_effect.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "segment"
+   },
+   "question": "Is spend different between segment groups?",
+   "seed": 101,
+   "n": [
+    60,
+    60
+   ],
+   "why": "two independent groups, means, both satisfy Cochran's rule",
+   "expect": {
+    "method": "welch_t",
+    "estimate": 8.018411666666665,
+    "statistic": 2.9438641890460446,
+    "df": 117.74523997892459,
+    "p_value": 0.0039059806841718883,
+    "interval_low": 2.6244828046053295,
+    "interval_high": 13.412340528728002,
+    "significant": true
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-welch-no-difference",
+   "component": "comparison",
+   "fixture": "comparison/s02_two_groups_null.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "segment"
+   },
+   "seed": 102,
+   "n": [
+    60,
+    60
+   ],
+   "why": "as above; nothing planted, so the test should not reject",
+   "expect": {
+    "method": "welch_t",
+    "estimate": 3.2556849999999997,
+    "statistic": 1.183164774540769,
+    "df": 117.99941532120107,
+    "p_value": 0.2391221326072288,
+    "interval_low": -2.1933810367267013,
+    "interval_high": 8.704751036726702,
+    "significant": false
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-small-skewed-not-tested",
+   "component": "comparison",
+   "fixture": "comparison/s03_two_groups_skewed.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "segment"
+   },
+   "seed": 103,
+   "n": [
+    7,
+    7
+   ],
+   "why": "7 and 7 values, visibly skewed: the mean difference is reported, and no test or interval, because the only test left assumes the groups have the same shape",
+   "expect": {
+    "method": "none",
+    "status": "unavailable",
+    "inference_unavailable": "too_skewed_for_sample_size",
+    "estimate": 89.22915714285713
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-permutation-small",
+   "component": "comparison",
+   "fixture": "comparison/s03a_two_groups_small.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "segment"
+   },
+   "seed": 1030,
+   "n": [
+    7,
+    7
+   ],
+   "why": "7 skewed values a side: Cochran's rule fails; all 3432 splits are enumerated",
+   "expect": {
+    "method": "permutation_means",
+    "estimate": 15.962800000000001,
+    "statistic": 2.1238985515036113,
+    "p_value": 0.058857808857808856,
+    "exact": true,
+    "rejects_method": "welch_t",
+    "interval_low": -0.4931750102886738,
+    "interval_high": 32.50000002062064,
+    "interval_method": "permutation test inversion"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-permutation-unequal-sizes-and-spread",
+   "component": "comparison",
+   "fixture": "comparison/s03b_two_groups_unequal.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "segment"
+   },
+   "seed": 1047,
+   "n": [
+    9,
+    4
+   ],
+   "why": "9 and 4 values with unequal spread: Welch's t is permuted over all 715 splits",
+   "expect": {
+    "method": "permutation_means",
+    "estimate": -12.062586111111102,
+    "statistic": -2.7230396803791286,
+    "p_value": 0.012587412587412588,
+    "exact": true,
+    "interval_low": -21.773600015763893,
+    "interval_high": -2.000427389077949,
+    "interval_method": "permutation test inversion"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-brunner-munzel-typical",
+   "component": "comparison",
+   "fixture": "comparison/s04_two_groups_typical.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "segment",
+    "estimand": "typical"
+   },
+   "seed": 104,
+   "n": [
+    7,
+    7
+   ],
+   "why": "the plan asks about typical values: the Brunner-Munzel statistic is referred to all 3432 splits",
+   "expect": {
+    "method": "brunner_munzel",
+    "estimate": 10.7734,
+    "statistic": 1.30084107407477,
+    "p_value": 0.2062937062937063,
+    "exact": true,
+    "probability_of_superiority": 0.6938775510204083
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-brunner-munzel-ties",
+   "component": "comparison",
+   "fixture": "comparison/s04b_two_groups_ratings.csv",
+   "plan": {
+    "outcome": "rating",
+    "explanatory": "segment",
+    "estimand": "typical"
+   },
+   "seed": 1041,
+   "n": [
+    9,
+    5
+   ],
+   "why": "tied ratings, unequal sizes and spread: ties are handled by midranks",
+   "expect": {
+    "method": "brunner_munzel",
+    "estimate": 2.0,
+    "statistic": 1.4999999999999996,
+    "p_value": 0.14785214785214784,
+    "exact": true,
+    "probability_of_superiority": 0.7999999999999999
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-paired-t",
+   "component": "comparison",
+   "fixture": "comparison/s05_paired.csv",
+   "plan": {
+    "outcome": "sales",
+    "explanatory": "period",
+    "levels": [
+     "before",
+     "after"
+    ],
+    "design": "paired",
+    "unit": "store"
+   },
+   "seed": 105,
+   "n": [
+    40
+   ],
+   "why": "each store appears once in each period: the differences are analysed, not the two groups",
+   "expect": {
+    "method": "paired_t",
+    "estimate": 2.4730250000000003,
+    "statistic": 3.8670399041378762,
+    "df": 39,
+    "p_value": 0.00040665022689201694,
+    "interval_low": 1.1794864442764343,
+    "interval_high": 3.7665635557235664,
+    "significant": true
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-paired-skewed-not-tested",
+   "component": "comparison",
+   "fixture": "comparison/s06_paired_skewed.csv",
+   "plan": {
+    "outcome": "sales",
+    "explanatory": "period",
+    "levels": [
+     "before",
+     "after"
+    ],
+    "design": "paired",
+    "unit": "store"
+   },
+   "seed": 106,
+   "n": [
+    10
+   ],
+   "why": "10 visibly skewed differences: the mean change is reported, and no test or interval, because the sign-flip test assumes symmetric changes",
+   "expect": {
+    "method": "none",
+    "status": "unavailable",
+    "inference_unavailable": "too_skewed_for_sample_size",
+    "estimate": 4.01963
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-sign-flip-small",
+   "component": "comparison",
+   "fixture": "comparison/s06a_paired_small.csv",
+   "plan": {
+    "outcome": "sales",
+    "explanatory": "period",
+    "levels": [
+     "before",
+     "after"
+    ],
+    "design": "paired",
+    "unit": "store"
+   },
+   "seed": 1062,
+   "n": [
+    10
+   ],
+   "why": "10 differences, too few for a t interval: all 1024 sign patterns are enumerated",
+   "expect": {
+    "method": "sign_flip_permutation",
+    "estimate": 4.198100000000001,
+    "p_value": 0.0078125,
+    "exact": true,
+    "interval_low": 1.5203799999990024,
+    "interval_high": 7.00532500000125,
+    "interval_method": "sign-flip test inversion"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-sign-flip-no-interval",
+   "component": "comparison",
+   "fixture": "comparison/s06b_paired_five.csv",
+   "plan": {
+    "outcome": "sales",
+    "explanatory": "period",
+    "levels": [
+     "before",
+     "after"
+    ],
+    "design": "paired",
+    "unit": "store"
+   },
+   "seed": 1070,
+   "n": [
+    5
+   ],
+   "why": "5 pairs allow 32 sign patterns: no value can be rejected at 0.05, so no interval is reported",
+   "expect": {
+    "method": "sign_flip_permutation",
+    "estimate": 7.186099999999999,
+    "p_value": 0.0625,
+    "exact": true,
+    "interval_available": false,
+    "significant": false
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-welch-anova",
+   "component": "comparison",
+   "fixture": "comparison/s07_four_groups.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "region"
+   },
+   "question": "Does spend differ by region?",
+   "seed": 107,
+   "n": [
+    50,
+    50,
+    50,
+    50
+   ],
+   "why": "several groups with unequal variances, each satisfying Cochran's rule",
+   "expect": {
+    "method": "welch_anova",
+    "statistic": 9.486209009101158,
+    "df": [
+     3,
+     106.3490902586401
+    ],
+    "p_value": 1.3149577785569407e-05,
+    "significant": true
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-three-groups-skewed-not-tested",
+   "component": "comparison",
+   "fixture": "comparison/s08_three_groups_small.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "tier"
+   },
+   "seed": 108,
+   "n": [
+    3,
+    3,
+    4
+   ],
+   "why": "groups of 3, 3 and 4, visibly skewed: the group means are reported, and no test, because the only test left assumes every group has the same shape",
+   "expect": {
+    "method": "none",
+    "status": "unavailable",
+    "inference_unavailable": "too_skewed_for_sample_size"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-permutation-anova-small",
+   "component": "comparison",
+   "fixture": "comparison/s08a_three_groups_small.csv",
+   "plan": {
+    "outcome": "spend",
+    "explanatory": "tier"
+   },
+   "seed": 1295,
+   "n": [
+    3,
+    3,
+    4
+   ],
+   "why": "groups of 3, 3 and 4: an F distribution is not justified; all 4200 deals are enumerated",
+   "expect": {
+    "method": "permutation_anova",
+    "statistic": 4.435483741977393,
+    "p_value": 0.041428571428571426,
+    "rejects_method": "welch_anova"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-pearson",
+   "component": "comparison",
+   "fixture": "comparison/s09_linear.csv",
+   "plan": {
+    "outcome": "units",
+    "explanatory": "price"
+   },
+   "question": "Is units related to price?",
+   "seed": 109,
+   "n": [
+    80
+   ],
+   "why": "two numeric variables, no extreme values",
+   "expect": {
+    "method": "pearson",
+    "estimate": 0.5427973086571138,
+    "df": 78,
+    "p_value": 1.9769135814743466e-07,
+    "interval_low": 0.3668290877321178,
+    "interval_high": 0.6812653177042433,
+    "significant": true
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-spearman-extreme-values",
+   "component": "comparison",
+   "fixture": "comparison/s10_outliers.csv",
+   "plan": {
+    "outcome": "units",
+    "explanatory": "price"
+   },
+   "seed": 110,
+   "n": [
+    60
+   ],
+   "why": "three extreme prices: ranks are used so that they cannot decide the answer",
+   "expect": {
+    "method": "spearman",
+    "estimate": 0.4173937204779105,
+    "p_value": 0.0009067960294474147,
+    "interval_low": 0.1754201541477413,
+    "interval_high": 0.6118105521232413,
+    "rejects_method": "pearson"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-two-proportions-chi-square",
+   "component": "comparison",
+   "fixture": "comparison/s11_proportions.csv",
+   "plan": {
+    "outcome": "converted",
+    "explanatory": "arm",
+    "outcome_level": "yes"
+   },
+   "seed": 111,
+   "n": [
+    200,
+    200
+   ],
+   "why": "two proportions, every expected count at least 5",
+   "expect": {
+    "method": "chi_square",
+    "estimate": 0.14500000000000002,
+    "interval_low": 0.0505237035494385,
+    "interval_high": 0.23591058221609895,
+    "statistic": 9.045199107310909,
+    "df": 1,
+    "p_value": 0.0026338554299260787
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-two-proportions-fisher",
+   "component": "comparison",
+   "fixture": "comparison/s12_proportions_sparse.csv",
+   "plan": {
+    "outcome": "converted",
+    "explanatory": "arm",
+    "outcome_level": "yes"
+   },
+   "seed": 112,
+   "n": [
+    10,
+    10
+   ],
+   "why": "an expected count below 5: the exact test replaces the approximation",
+   "expect": {
+    "method": "fisher_exact",
+    "estimate": 0.5,
+    "interval_low": 0.08159397542744318,
+    "interval_high": 0.745936324910972,
+    "p_value": 0.05727554179566564,
+    "rejects_method": "chi_square"
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-contingency-chi-square",
+   "component": "comparison",
+   "fixture": "comparison/s13_table.csv",
+   "plan": {
+    "outcome": "plan",
+    "explanatory": "region"
+   },
+   "seed": 113,
+   "n": [
+    360
+   ],
+   "why": "a 3 x 3 table with adequate expected counts; Cram\u00e9r's V is the effect size",
+   "expect": {
+    "method": "chi_square",
+    "estimate": 0.2570140763289735,
+    "statistic": 47.56048951048951,
+    "df": 4,
+    "p_value": 1.1654040314233984e-09,
+    "significant": true
+   },
+   "rel_tolerance": 1e-06
+  },
+  {
+   "id": "cmp-pipeline-question-to-dashboard",
+   "component": "pipeline",
+   "fixture": "sales.csv",
+   "question": "Is average revenue different between regions?",
+   "expect": {
+    "route": "comparison",
+    "status": "verified",
+    "verdict_state": "VERIFIED_WITH_CAVEATS",
+    "kpi_values": {
+     "Mean revenue: South": 432.0,
+     "Mean revenue: East": 344.0,
+     "Number of region groups": 4
+    },
+    "kpi_evidence": {
+     "Mean revenue: South": "verified",
+     "Mean revenue: East": "verified"
+    },
+    "charts": 0,
+    "max_llm_calls": 0
+   },
+   "tolerance": 0.005
+  }
+ ]
+}

@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silt Feature Guide</title>
+<style>
+:root {
+  --bg: #f6f7f9; --paper: #ffffff; --ink: #1b1f24; --muted: #5b636e;
+  --rule: #dde1e6; --tint: #f1f4f8; --accent: #2f5fb3; --accent-soft: #e8eef9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --paper: #181c21; --ink: #e8ebef; --muted: #9aa3ad;
+    --rule: #2b3139; --tint: #1f242b; --accent: #7aa2ec; --accent-soft: #1d2a40;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --paper: #181c21; --ink: #e8ebef; --muted: #9aa3ad;
+  --rule: #2b3139; --tint: #1f242b; --accent: #7aa2ec; --accent-soft: #1d2a40;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+}
+code { font: 0.86em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: var(--tint); padding: 1px 5px; border-radius: 4px; word-break: break-word; }
+a { color: var(--accent); text-decoration: none; }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px; }
+
+.toolbar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent);
+            border-bottom: 1px solid var(--rule); backdrop-filter: saturate(1.2); }
+.toolbar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 52px; }
+.toolbar b { font-size: 14px; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; font: inherit; font-size: 13.5px;
+        padding: 7px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+
+.hero { padding: 56px 0 28px; }
+.kicker { color: var(--accent); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.08; margin: 8px 0 10px; letter-spacing: -0.02em; }
+.lede { color: var(--muted); font-size: 17px; max-width: 720px; margin: 0; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 26px; }
+.fact { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; }
+.fact span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.fact b { font-size: 15px; }
+
+h2 { font-size: 24px; margin: 44px 0 6px; letter-spacing: -0.01em; }
+h2 + .sub { color: var(--muted); margin: 0 0 16px; }
+h3 { font-size: 17px; margin: 30px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+
+.panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px; }
+.toc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px 24px; }
+.toc li { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--rule); padding: 6px 0; }
+.toc span { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+th { background: var(--tint); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+
+.flow { list-style: none; counter-reset: s; padding: 0; margin: 0;
+         display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
+.flow li { counter-increment: s; background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px 12px 52px; position: relative; }
+.flow li::before { content: counter(s); position: absolute; left: 14px; top: 13px; width: 26px; height: 26px; border-radius: 50%;
+                    background: var(--accent-soft); color: var(--accent); font-weight: 700; display: grid; place-items: center; font-size: 13px; }
+.flow p { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 14px; }
+.card { background: var(--paper); border: 1px solid var(--rule); border-top: 3px solid var(--accent); border-radius: 12px; overflow: hidden; }
+.card header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap;
+                padding: 12px 16px; background: var(--tint); }
+.card h4 { margin: 0; font-size: 15.5px; }
+.where { color: var(--muted); font-size: 12.5px; }
+.card dl { margin: 0; padding: 4px 16px 12px; }
+.card dt { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; margin-top: 10px; }
+.card dd { margin: 3px 0 0; font-size: 14px; }
+
+footer { color: var(--muted); font-size: 13px; padding: 40px 0 50px; }
+
+@media (max-width: 560px) {
+  .cards { grid-template-columns: 1fr; }
+  td:first-child { white-space: normal; }
+  .toolbar b { font-size: 13px; }
+}
+
+@page { size: A4; margin: 14mm 13mm 16mm; }
+@media print {
+  :root, :root[data-theme] { --bg: #fff; --paper: #fff; --ink: #1b1f24; --muted: #5b636e;
+           --rule: #d5d9df; --tint: #f2f4f7; --accent: #2f5fb3; --accent-soft: #e8eef9; }
+  body { font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .toolbar { display: none; }
+  .wrap { max-width: none; padding: 0; }
+  .hero { padding: 30mm 0 0; min-height: 250mm; break-after: page; }
+  h2 { break-after: avoid; margin-top: 0; }
+  h3 { break-after: avoid; }
+  .page { break-before: page; }
+  .cards { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .card, .flow li, tr, .fact { break-inside: avoid; }
+  .card dd, td { font-size: 9.3pt; }
+  .table-wrap { overflow: visible; }
+  a { color: inherit; }
+}
+</style>
+</head>
+<body>
+<div class="toolbar"><div class="wrap"><b>Silt &middot; Feature Guide</b>
+  <button class="btn" onclick="window.print()">Save as PDF</button></div></div>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="kicker">Project feature guide</div>
+    <h1>Silt &mdash; AI Data Analyst</h1>
+    <p class="lede">Every feature: what it does, what it is built with, and how it is shown in the app.</p>
+    <div class="facts">
+      <div class="fact"><span>Product</span><b>Silt</b> (repo and marketing site: DataSage)</div>
+      <div class="fact"><span>Features covered</span><b>36</b> across 6 areas</div>
+      <div class="fact"><span>App pages</span><b>17</b> + a public share page</div>
+      <div class="fact"><span>Date</span><b>16 October 2026</b></div>
+    </div>
+    <div class="panel" style="margin-top:22px">
+      <p style="margin:0">Upload a CSV, ask a business question in plain English, and get a dashboard whose
+      every number is traced back to the code, data and verification that produced it.</p>
+    </div>
+    <h2 style="margin-top:30px">Contents</h2>
+    <div class="panel"><ul class="toc">
+      <li><a href="#overview">1. Overview &amp; architecture</a><span></span></li>
+      <li><a href="#a-accounts-and-teams">A. Accounts and teams</a><span>5</span></li><li><a href="#b-data">B. Data</a><span>6</span></li><li><a href="#c-asking-questions-and-analysis">C. Asking questions and analysis</a><span>7</span></li><li><a href="#d-results-and-trust">D. Results and trust</a><span>9</span></li><li><a href="#e-governance-and-quality-of-the-ai">E. Governance and quality of the AI</a><span>3</span></li><li><a href="#f-platform-security-and-deployment">F. Platform, security and deployment</a><span>6</span></li>
+      <li><a href="#sidebar">3. Sidebar map</a><span></span></li>
+    </ul></div>
+  </section>
+
+  <section id="overview" class="page">
+    <h2>1. Overview</h2>
+    <p class="sub">What the product is and how it is put together.</p>
+    <div class="panel">
+      <p style="margin-top:0">Silt is an AI data analyst for teams. A user uploads a CSV file and asks a question such as
+      <i>"Why did revenue drop in March?"</i>. A pipeline of AI agents plans the analysis, writes and runs Python code
+      in a locked-down sandbox, has an independent <b>Critic</b> re-check the results, and publishes a dashboard of
+      KPIs, charts and a written summary. Every number on that dashboard can be clicked to see the exact code, data
+      rows and verification behind it.</p>
+      <p style="margin-bottom:0">Where the answer does not need a model, Silt answers <b>deterministically</b>
+      (plain code, no AI): simple totals, comparisons and statistical tests, root-cause breakdowns and what-if
+      scenarios all have model-free paths. That keeps answers cheaper, faster and reproducible.</p>
+    </div>
+    <h3>Architecture</h3>
+    <div class="table-wrap"><table class=""><thead><tr><th>Layer</th><th>What runs there</th><th>Technology</th></tr></thead><tbody><tr><td>Marketing site</td><td>Public landing page that links into the app</td><td>Next.js 16, React 19, Tailwind CSS v4</td></tr><tr><td>Web app (UI)</td><td>17 pages: datasets, analyses, dashboards, audit trail, teams, settings ...</td><td>Streamlit 1.62, Plotly, custom CSS design system (style/theme.py)</td></tr><tr><td>API</td><td>REST endpoints for auth, data, analyses, dashboards, teams</td><td>FastAPI, Pydantic, Uvicorn, JWT (PyJWT), bcrypt</td></tr><tr><td>AI pipeline</td><td>Router, Triage, Planner, Executor, Critic, Dashboard agents</td><td>LangGraph state machine; Google Gemini with Llama failover</td></tr><tr><td>Analysis engines</td><td>Statistics, metric formulas, root cause, scenarios, data quality</td><td>pandas, NumPy, SciPy (no model involved)</td></tr><tr><td>Code sandbox</td><td>Runs the Python the agents write, isolated from the app</td><td>Docker container: no network, non-root, CPU / memory / time limits</td></tr><tr><td>Database</td><td>Users, teams, datasets, questions, dashboards, audit trail, jobs ...</td><td>SQLAlchemy 2.0 + Alembic; PostgreSQL (Neon) with pgvector in production, SQLite locally</td></tr><tr><td>Background work</td><td>Durable job queue and scheduled re-runs</td><td>Database-backed job queue, APScheduler</td></tr><tr><td>Deployment</td><td>One container serving API + UI</td><td>Docker, start.sh, Render blueprint (render.yaml)</td></tr></tbody></table></div>
+    <h3>How a question becomes a dashboard</h3>
+    <ol class="flow"><li><b>Upload</b><p>The CSV is streamed to disk (size-capped), then profiled: column types, row count, missing values, basic statistics.</p></li><li><b>Ask</b><p><code>POST /api/questions</code> stores the question and queues an analysis job. An Idempotency-Key header stops double submissions.</p></li><li><b>Route</b><p>The Router picks the cheapest path that can answer properly and records why.</p></li><li><b>Plan &amp; execute</b><p>The Planner breaks the question into steps; the Executor writes Python for each step and runs it in the sandbox, retrying with the error if it fails.</p></li><li><b>Verify</b><p>The Critic independently recomputes the key numbers in its own sandbox and accepts or rejects each one.</p></li><li><b>Publish</b><p>The Dashboard agent builds KPIs, charts and a narrative, and links each element to its code, data and Critic review in the audit trail.</p></li></ol>
+    <h3>How each question is routed</h3>
+    <div class="table-wrap"><table class=""><thead><tr><th>Route</th><th>Used when</th><th>Model calls</th></tr></thead><tbody><tr><td>clarify</td><td>The question can be read more than one way; the user picks a reading</td><td>-</td></tr><tr><td>fast</td><td>A simple aggregation (totals, averages, counts)</td><td>None</td></tr><tr><td>comparison</td><td>"Is there a difference between A and B?" - answered by the statistics engine</td><td>1</td></tr><tr><td>statistical</td><td>Questions needing a formal statistical method</td><td>Few</td></tr><tr><td>root_cause</td><td>"Why did X change?" - deterministic decomposition</td><td>None</td></tr><tr><td>hypothesis</td><td>Open-ended "why" questions over time data - the model proposes, code tests</td><td>Bounded</td></tr><tr><td>standard</td><td>Everything else - full Planner / Executor / Critic run</td><td>Several</td></tr></tbody></table></div>
+  </section>
+
+  <section class="page">
+    <h2>2. Features</h2>
+    <p class="sub">Each card names the feature and where to find it in the app, then explains what it does,
+    what it is built with, and how it appears on screen.</p>
+    <section class="group" id="a-accounts-and-teams"><h3>A. Accounts and teams</h3><div class="cards">
+        <article class="card">
+          <header><h4>Sign up and log in</h4><span class="where">Login screen (before any page)</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Creates an account and signs the user in. New accounts automatically claim any team invites already sent to that email address.</dd>
+            <dt>Built with</dt><dd>FastAPI <code>/api/auth</code> routes, bcrypt password hashing, JWT tokens (HS256, 7-day expiry), in-memory rate limiting on login.</dd>
+            <dt>How it is shown</dt><dd>A full-screen login / sign-up form. Once signed in, the user's name and a log-out button appear at the bottom of the sidebar.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Workspaces: communities and teams</h4><span class="where">Sidebar - Workspaces</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Users create communities and teams inside them. All data is private to a team: every request carries the active team and the server checks membership.</dd>
+            <dt>Built with</dt><dd>FastAPI workspaces router, <code>X-Team-Id</code> header + membership check, SQLAlchemy models (communities, teams, team_members).</dd>
+            <dt>How it is shown</dt><dd>Lists of communities and teams with a Select button; a team switcher (two drop-downs) at the top of the sidebar. Pages that need a team show a "You're not on a team yet" message with a button to Workspaces.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Team invites by email</h4><span class="where">Workspaces - Invite one / Invite many</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Owners and admins invite people by email, singly or in bulk. A real email is sent, invites can be accepted, and members can be removed. Malformed addresses are rejected.</dd>
+            <dt>Built with</dt><dd>SMTP email (Gmail by default) in <code>email_sender.py</code>; pending membership rows with <code>invited_email</code>.</dd>
+            <dt>How it is shown</dt><dd>Two tabs, "Invite one" and "Invite many at once"; a members table with roles; a notice saying whether the email was actually delivered; pending invites with an Accept button.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Team overview</h4><span class="where">Sidebar - Team overview</span></header>
+          <dl>
+            <dt>What it does</dt><dd>A timeline of every analysis the team has run.</dd>
+            <dt>Built with</dt><dd>Streamlit page reading <code>GET /api/questions</code>.</dd>
+            <dt>How it is shown</dt><dd>A chronological list, newest first, each with a status badge (Verified, Running, Rejected).</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Settings</h4><span class="where">Sidebar - Settings</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Shows the signed-in account, the active community / team and role, and a read-only view of the live backend configuration (models, job workers, version).</dd>
+            <dt>Built with</dt><dd>Streamlit page reading <code>/api/auth/me</code> and <code>/api/health</code>.</dd>
+            <dt>How it is shown</dt><dd>Account and team cards with a role badge, plus a configuration panel.</dd>
+          </dl>
+        </article></div></section><section class="group" id="b-data"><h3>B. Data</h3><div class="cards">
+        <article class="card">
+          <header><h4>Dataset upload and profiling</h4><span class="where">Sidebar - Datasets - Upload Data</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Uploads a CSV (up to 200 MB by default) and profiles it automatically: column types, row and column counts, missing values and basic statistics.</dd>
+            <dt>Built with</dt><dd>FastAPI multipart upload streamed to disk, pandas profiling in <code>profiling.py</code>, stored as JSON / JSONB.</dd>
+            <dt>How it is shown</dt><dd>An Upload Data button opens a drag-and-drop box and a "Profile this dataset" button; the dataset table lists each file with rows, columns and upload time; selecting one shows its column profile.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Dataset versions (Replace data)</h4><span class="where">Datasets - Replace data</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Uploads a new version of an existing dataset so analyses can be re-run on fresh data while keeping the history. Each version is fingerprinted for reproducibility.</dd>
+            <dt>Built with</dt><dd><code>dataset_versions</code> table, <code>provenance.py</code> fingerprints.</dd>
+            <dt>How it is shown</dt><dd>A "Replace data - currently vN" expander on the dataset; the version number is shown on the dataset row.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Auto-insights</h4><span class="where">Datasets (selected dataset)</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Generates headline observations about a freshly uploaded dataset.</dd>
+            <dt>Built with</dt><dd><code>insights.py</code> and the insights router.</dd>
+            <dt>How it is shown</dt><dd>An insights panel on the dataset view, with a button to generate them.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Correlation explorer</h4><span class="where">Datasets (selected dataset)</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Finds the strongest relationships between numeric columns. Purely deterministic, no AI.</dd>
+            <dt>Built with</dt><dd>pandas / NumPy in <code>correlations.py</code>.</dd>
+            <dt>How it is shown</dt><dd>A ranked list of column pairs with their correlation strength.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Knowledge notes and lessons</h4><span class="where">Datasets - notes tabs</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Short team-owned notes about a dataset (meaning of columns, known issues, lessons). The Planner agent is given these notes when it plans an analysis.</dd>
+            <dt>Built with</dt><dd><code>knowledge_notes</code> table with optional embeddings; knowledge router (CRUD).</dd>
+            <dt>How it is shown</dt><dd>Tabs for each kind of note, with an add box and delete buttons.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Data quality monitoring</h4><span class="where">Sidebar - Data quality</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Runs quality checks on every dataset version, measures drift against a baseline version, and opens incidents when a threshold is crossed.</dd>
+            <dt>Built with</dt><dd><code>data_quality.py</code>, quality router, dq_snapshots / dq_configs / dq_incidents tables.</dd>
+            <dt>How it is shown</dt><dd>Quality results per version, a "Compare two versions" expander, a "Baseline and thresholds" settings expander, and an incident list with Acknowledge / Resolve actions.</dd>
+          </dl>
+        </article></div></section><section class="group" id="c-asking-questions-and-analysis"><h3>C. Asking questions and analysis</h3><div class="cards">
+        <article class="card">
+          <header><h4>Analyses: ask a question and watch it run</h4><span class="where">Sidebar - Analyses</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Pick a dataset, type a question, and watch the agents plan, execute and verify it live. Runs are durable jobs that can be cancelled or retried.</dd>
+            <dt>Built with</dt><dd>LangGraph pipeline (Router, Triage, Planner, Executor, Critic, Dashboard); Gemini with automatic Llama failover; database-backed job queue (<code>jobs.py</code>); Docker sandbox.</dd>
+            <dt>How it is shown</dt><dd>A question box and dataset picker; a live progress view showing each stage and step updating every few seconds; a "Run trace" expander with the chosen route, model calls, code runs and cost.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Smart routing and fast path</h4><span class="where">Automatic, inside Analyses</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Chooses the cheapest correct path for each question. Simple aggregations are answered with no model call and no generated code; ambiguous questions ask the user to clarify.</dd>
+            <dt>Built with</dt><dd><code>agents/router.py</code>, <code>fastpath.py</code>, per-route budgets in <code>runtime.py</code>.</dd>
+            <dt>How it is shown</dt><dd>The chosen route and the reasons for it are shown in the run trace; clarification options appear as buttons.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Statistical reasoning and comparisons</h4><span class="where">Automatic, inside Analyses</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Answers "is there a difference?" and similar questions with a formal statistical method chosen by rules, not by the model. Each result records why the method was chosen, which assumptions were checked and what the result does not show.</dd>
+            <dt>Built with</dt><dd><code>stats/</code> package (method selection, tests, confidence intervals, robust regression), SciPy, NumPy; <code>comparison.py</code>.</dd>
+            <dt>How it is shown</dt><dd>Results shown with estimate, interval and test, plus a "Technical details of the statistical methods" expander.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Copilot</h4><span class="where">Sidebar - Copilot</span></header>
+          <dl>
+            <dt>What it does</dt><dd>A multi-turn chat over one dataset: ask, add filters, drill down. Every answer is recomputed from the data; the conversation only records the decisions taken.</dd>
+            <dt>Built with</dt><dd><code>copilot.py</code>, copilot router, copilot_sessions / copilot_turns tables.</dd>
+            <dt>How it is shown</dt><dd>A chat interface with a message box ("Ask about this dataset, add a filter, or drill down") and a list of saved sessions.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Root-cause investigations</h4><span class="where">Sidebar - Root cause</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Explains where a change in a metric came from: contribution by segment, price versus volume, tested hypotheses, and what could not be established. Works without a model; an optional hypothesis engine lets the model propose ideas that code then tests.</dd>
+            <dt>Built with</dt><dd><code>investigator.py</code>, <code>hypothesis_engine.py</code>, <code>analysis_ops.py</code>, investigations router.</dd>
+            <dt>How it is shown</dt><dd>A "New investigation" form; a report with segment contributions, accepted hypotheses, an expander of hypotheses rejected before testing, and an expander listing every analysis executed.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>What-if scenarios</h4><span class="where">Sidebar - What-if</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Scenario arithmetic on explicit inputs and assumptions (for example price +5%, volume -3%). Outputs are labelled as scenarios, never forecasts.</dd>
+            <dt>Built with</dt><dd>Deterministic models in <code>scenarios.py</code>, scenarios router.</dd>
+            <dt>How it is shown</dt><dd>Two tabs, "Build a scenario" and "Saved scenarios"; expanders for the formulas used and for taking the baseline from a dataset; side-by-side comparison of scenarios.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Scheduled analyses and alerts</h4><span class="where">Sidebar - Scheduled</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Saves a question to re-run on an interval. After each run the KPIs are compared with the last run, and the team is alerted only if a KPI moves past its threshold or the Critic cannot verify the result.</dd>
+            <dt>Built with</dt><dd>APScheduler (<code>scheduler.py</code>), <code>change_detection.py</code>, alerts router, email.</dd>
+            <dt>How it is shown</dt><dd>A list of scheduled questions with pause / resume / delete; an alert inbox with Acknowledge and Resolve; an unread-alert count next to "Scheduled" in the sidebar.</dd>
+          </dl>
+        </article></div></section><section class="group" id="d-results-and-trust"><h3>D. Results and trust</h3><div class="cards">
+        <article class="card">
+          <header><h4>Dashboards</h4><span class="where">Sidebar - Dashboards</span></header>
+          <dl>
+            <dt>What it does</dt><dd>The finished result of an analysis: KPI cards, charts and a written narrative, with an overall verdict - Verified, Verified with caveats, or Unverified.</dd>
+            <dt>Built with</dt><dd>Dashboard agent (<code>agents/dashboard.py</code>), Plotly figures stored as JSON, <code>verdict.py</code>.</dd>
+            <dt>How it is shown</dt><dd>A row of KPI cards, chart cards and the narrative, each with a verification badge.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Chart Studio</h4><span class="where">Dashboards - Chart Studio bar</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Re-draws any dashboard chart as one of 40 chart types and restyles it. Only the presentation changes; the verified numbers are never recomputed. Views are saved for the whole team.</dd>
+            <dt>Built with</dt><dd><code>chart_studio.py</code> (pure functions, unit-tested), Plotly, <code>PUT/DELETE .../charts/{key}/view</code>.</dd>
+            <dt>How it is shown</dt><dd>A toolbar above the dashboard to pick a chart type and style; the Inspect panel shows the exact Python code that drew the new chart and the formula it applies.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Click-to-inspect</h4><span class="where">Dashboards - any KPI or chart</span></header>
+          <dl>
+            <dt>What it does</dt><dd>For one dashboard element, shows the exact code, a plain-English formula and the data slice that produced it, including the original CSV line numbers.</dd>
+            <dt>Built with</dt><dd>Inspect router, audit_trail table, <code>csv_lines.py</code>.</dd>
+            <dt>How it is shown</dt><dd>A pop-up dialog opened from the element, with code, formula and a table of the rows used.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Ask your dashboard</h4><span class="where">Dashboards - chat box at the bottom</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Follow-up questions answered from one finished analysis.</dd>
+            <dt>Built with</dt><dd><code>chat.py</code>, <code>POST /api/questions/{id}/chat</code>.</dd>
+            <dt>How it is shown</dt><dd>A chat input: "Ask a follow-up about this analysis...".</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Evidence, run record and reruns</h4><span class="where">Dashboards - evidence expander</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Lists the evidence behind each claim, keeps a run manifest (dataset version, route, models), and lets the user rerun the analysis and compare the two runs.</dd>
+            <dt>Built with</dt><dd><code>provenance.py</code>, <code>verification.py</code>, evidence router, evidence_records / run_manifests tables.</dd>
+            <dt>How it is shown</dt><dd>Tabs "Evidence", "Run record" and "Rerun and compare", plus a "Download run record (JSON)" button.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Share links</h4><span class="where">Dashboards - share</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Creates a read-only link to one verified dashboard, with an expiry (7 days by default), which can be revoked. Anyone with the link can view it without logging in.</dd>
+            <dt>Built with</dt><dd>Sharing router, share_links table with random tokens, public endpoint <code>/api/public/shared/{token}</code>.</dd>
+            <dt>How it is shown</dt><dd>The link is created and revoked from the dashboard; the viewer sees a clean page (<code>/Shared?t=...</code>) with no sidebar and no login.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Audit trail</h4><span class="where">Sidebar - Audit trail</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Traces every dashboard number back to the code, data and reasoning behind it, and to the Critic review that verified it.</dd>
+            <dt>Built with</dt><dd>audit_trail, execution_logs and critic_reviews tables; <code>storage/audit.py</code>.</dd>
+            <dt>How it is shown</dt><dd>Four tabs: Overview, Code &amp; Logs, Data Lineage and Verifications, with expanders for raw output and for the Critic's verification code and recomputed values.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Reports</h4><span class="where">Sidebar - Reports</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Packages every completed analysis as a downloadable summary.</dd>
+            <dt>Built with</dt><dd>Streamlit page over the questions and dashboards endpoints.</dd>
+            <dt>How it is shown</dt><dd>A list of completed analyses, each with a download button that saves a text report.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Overview and Home</h4><span class="where">Sidebar - Home / Overview</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Home introduces the product and shows a live snapshot of the workspace; Overview shows counters, recent analyses, an insights chart and dashboards.</dd>
+            <dt>Built with</dt><dd>Streamlit, Plotly, custom stat-card components.</dd>
+            <dt>How it is shown</dt><dd>Hero section and "how it works" on Home; stat cards, a recent-activity list and a chart on Overview.</dd>
+          </dl>
+        </article></div></section><section class="group" id="e-governance-and-quality-of-the-ai"><h3>E. Governance and quality of the AI</h3><div class="cards">
+        <article class="card">
+          <header><h4>Semantic layer</h4><span class="where">Sidebar - Semantic layer</span></header>
+          <dl>
+            <dt>What it does</dt><dd>The team's approved business metric definitions (with versions, approval and deprecation), the words people use for them, and how they connect to datasets and columns. Metrics are computed by a small whitelisted formula language, with no AI involved.</dd>
+            <dt>Built with</dt><dd><code>semantic.py</code>, <code>metric_engine.py</code>, semantic router and tables.</dd>
+            <dt>How it is shown</dt><dd>Tabs: Metrics, New metric, Dimensions and entities, Knowledge graph, and Search.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Memory of past analyses (RAG)</h4><span class="where">Automatic</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Each finished dashboard is embedded so the Planner can retrieve the most similar earlier analyses on the same team and dataset as context.</dd>
+            <dt>Built with</dt><dd>Gemini embeddings (768 dimensions), pgvector in PostgreSQL, <code>memory.py</code>.</dd>
+            <dt>How it is shown</dt><dd>Not a separate screen; it improves plans in the background.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Evaluation suite</h4><span class="where">Sidebar - Evaluation</span></header>
+          <dl>
+            <dt>What it does</dt><dd>A regression test suite for the agents, run from the command line (<code>python -m app.evals run</code>). The page only reads the results.</dd>
+            <dt>Built with</dt><dd><code>app/evals</code> runner with scripted cases and calibration.</dd>
+            <dt>How it is shown</dt><dd>A list of runs; each case shows a pass / fail mark and expands to show details; runs can be compared.</dd>
+          </dl>
+        </article></div></section><section class="group" id="f-platform-security-and-deployment"><h3>F. Platform, security and deployment</h3><div class="cards">
+        <article class="card">
+          <header><h4>Secure code sandbox</h4><span class="where">Behind every analysis</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Runs the Python the agents write in isolation, so generated code cannot reach the app's data, network or secrets.</dd>
+            <dt>Built with</dt><dd>Docker container: no network, non-root user, 60 s time limit, 512 MB memory, 1 CPU, process and output limits (<code>sandbox/runner.py</code>).</dd>
+            <dt>How it is shown</dt><dd>Not visible directly; its code and output appear in the Audit trail.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>AI provider failover</h4><span class="where">Behind every model call</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Uses Google Gemini by default and switches to a Llama model automatically if Gemini fails, saying which provider failed. Model calls are forced to return structured output.</dd>
+            <dt>Built with</dt><dd><code>agents/llm_client.py</code> (google-genai), <code>llm_client_llama.py</code> (OpenAI-compatible client).</dd>
+            <dt>How it is shown</dt><dd>The provider and cost per run appear in the run trace; models are listed on Settings.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Security hardening</h4><span class="where">Whole app</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Escapes all user- and AI-written text before display (prevents stored XSS), hides internal errors, limits upload size, rate-limits login, and keeps every team's data separate.</dd>
+            <dt>Built with</dt><dd><code>esc()</code> helper in the UI, FastAPI exception handlers, per-team checks on every query, structured logging.</dd>
+            <dt>How it is shown</dt><dd>Invisible when working; users see clear error messages instead of tracebacks.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Testing and CI</h4><span class="where">Repository</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Automated tests for the backend (auth, team isolation, statistics, routing, evals ...) and the frontend (Chart Studio, escaping), run in continuous integration. Dependency versions are pinned.</dd>
+            <dt>Built with</dt><dd>pytest, GitHub Actions.</dd>
+            <dt>How it is shown</dt><dd>Not part of the app UI.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Deployment</h4><span class="where">Render / Docker</span></header>
+          <dl>
+            <dt>What it does</dt><dd>Ships the API and UI together in one container, with an external PostgreSQL (Neon) database.</dd>
+            <dt>Built with</dt><dd>Dockerfile, <code>start.sh</code> (starts the API, waits until healthy, then starts Streamlit), Render blueprint, Alembic migrations.</dd>
+            <dt>How it is shown</dt><dd>Users simply open the app URL.</dd>
+          </dl>
+        </article>
+        <article class="card">
+          <header><h4>Marketing website</h4><span class="where">Separate site (web/)</span></header>
+          <dl>
+            <dt>What it does</dt><dd>A public landing page that explains the product and links to the app.</dd>
+            <dt>Built with</dt><dd>Next.js 16, React 19, Tailwind CSS v4, TypeScript; a printed "paper ledger" visual style.</dd>
+            <dt>How it is shown</dt><dd>A static site with scroll-driven animations; its buttons open the Streamlit app.</dd>
+          </dl>
+        </article></div></section>
+  </section>
+
+  <section id="sidebar" class="page">
+    <h2>3. Sidebar map</h2>
+    <p class="sub">The order of pages in the app's sidebar, and the main feature on each.</p>
+    <div class="table-wrap"><table class=""><thead><tr><th>Page</th><th>Main feature</th></tr></thead><tbody><tr><td>Home</td><td>Product introduction and live workspace snapshot</td></tr><tr><td>Overview</td><td>Counters, recent analyses, insights chart</td></tr><tr><td>Datasets</td><td>Upload, profile, versions, insights, correlations, notes</td></tr><tr><td>Analyses</td><td>Ask a question and watch the agents run it</td></tr><tr><td>Copilot</td><td>Multi-turn chat over one dataset</td></tr><tr><td>Root cause</td><td>Why a metric changed</td></tr><tr><td>What-if</td><td>Scenario arithmetic</td></tr><tr><td>Scheduled</td><td>Recurring questions and alerts</td></tr><tr><td>Dashboards</td><td>KPIs, charts, narrative, Chart Studio, inspect, chat, sharing, reruns</td></tr><tr><td>Reports</td><td>Downloadable summaries</td></tr><tr><td>Audit trail</td><td>Code, data lineage and verifications behind every number</td></tr><tr><td>Data quality</td><td>Checks, drift, incidents</td></tr><tr><td>Semantic layer</td><td>Approved metric definitions</td></tr><tr><td>Evaluation</td><td>Agent regression-suite results</td></tr><tr><td>Workspaces</td><td>Communities, teams, invites</td></tr><tr><td>Team overview</td><td>Timeline of the team's analyses</td></tr><tr><td>Settings</td><td>Account, team and backend configuration</td></tr><tr><td>Shared (no sidebar)</td><td>Public read-only dashboard opened from a share link</td></tr></tbody></table></div>
+  </section>
+
+  <footer>Silt (DataSage) &mdash; AI Data Analyst &mdash; Feature Guide</footer>
+</main>
+</body>
+</html>

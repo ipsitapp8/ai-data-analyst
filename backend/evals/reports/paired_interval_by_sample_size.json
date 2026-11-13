@@ -1,0 +1,76 @@
+{
+ "simulations": 2000,
+ "design": "paired differences = lognormal(1, sigma) - its mean + 3 (skewed about their mean)",
+ "rows": [
+  {
+   "sigma": 0.9,
+   "pairs": 15,
+   "bca": 86.9,
+   "boot_t": 92.0,
+   "paired_t": 87.8
+  },
+  {
+   "sigma": 0.9,
+   "pairs": 20,
+   "bca": 88.6,
+   "boot_t": 92.0,
+   "paired_t": 88.1
+  },
+  {
+   "sigma": 0.9,
+   "pairs": 30,
+   "bca": 91.3,
+   "boot_t": 93.5,
+   "paired_t": 90.7
+  },
+  {
+   "sigma": 0.9,
+   "pairs": 50,
+   "bca": 90.9,
+   "boot_t": 93.0,
+   "paired_t": 90.5
+  },
+  {
+   "sigma": 0.9,
+   "pairs": 80,
+   "bca": 92.7,
+   "boot_t": 94.6,
+   "paired_t": 92.5
+  },
+  {
+   "sigma": 1.3,
+   "pairs": 15,
+   "bca": 82.5,
+   "boot_t": 89.3,
+   "paired_t": 79.3
+  },
+  {
+   "sigma": 1.3,
+   "pairs": 20,
+   "bca": 83.0,
+   "boot_t": 89.6,
+   "paired_t": 80.4
+  },
+  {
+   "sigma": 1.3,
+   "pairs": 30,
+   "bca": 86.7,
+   "boot_t": 91.8,
+   "paired_t": 84.5
+  },
+  {
+   "sigma": 1.3,
+   "pairs": 50,
+   "bca": 87.1,
+   "boot_t": 91.0,
+   "paired_t": 84.7
+  },
+  {
+   "sigma": 1.3,
+   "pairs": 80,
+   "bca": 89.7,
+   "boot_t": 92.5,
+   "paired_t": 87.1
+  }
+ ]
+}

@@ -351,8 +351,13 @@ def test_a_brief_keeps_the_estimate_its_uncertainty_and_the_test(sales):
                          ("adjusted_change", {"outcome": "units", "controls": ["region", "product"]})):
         result = _executed(df, profile, name, params)
         stat = result["facts"]["stat"]
-        assert stat["status"] == "ok", name
         brief = ops.analysis_brief(name, result)["statistics"]
+        if name == "paired_change":
+            # four visibly skewed changes: measured and not tested. The brief keeps the measurement and says which it is.
+            assert stat["inference_unavailable"] and brief["status"] == "unavailable" and brief["estimate"] == stat["estimate"]
+            assert brief["n"] == 4 and "not available" in brief["inference"] and "significant" not in brief and "p_value" not in brief
+            continue
+        assert stat["status"] == "ok", name
         assert brief["method"] == stat["method_label"] and brief["estimand"] == stat["estimand"]
         assert brief["estimate"] == stat["estimate"] and brief["significant"] == stat["significant"]
         iv = stat.get("interval")

@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Executor Code Walkthrough</title>
+<style>
+:root { --bg:#f6f7f9; --paper:#fff; --ink:#1b1f24; --muted:#5b636e; --rule:#dde1e6; --tint:#f1f4f8;
+        --accent:#2f5fb3; --soft:#e8eef9; --codebg:#0f1720; --codeink:#dbe4ee; --ln:#5c6b7a; --warn:#9a5b00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#111418; --paper:#181c21; --ink:#e8ebef; --muted:#9aa3ad; --rule:#2b3139; --tint:#1f242b;
+  --accent:#7aa2ec; --soft:#1d2a40; --warn:#e0a95a; } }
+:root[data-theme="dark"] { --bg:#111418; --paper:#181c21; --ink:#e8ebef; --muted:#9aa3ad; --rule:#2b3139;
+  --tint:#1f242b; --accent:#7aa2ec; --soft:#1d2a40; --warn:#e0a95a; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif; }
+code { font:.86em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; background:var(--tint);
+        padding:1px 5px; border-radius:4px; word-break:break-word; }
+.wrap { max-width:1000px; margin:0 auto; padding:0 16px; }
+.toolbar { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--rule); }
+.toolbar .wrap { display:flex; justify-content:space-between; align-items:center; height:52px; gap:12px; }
+.btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:7px 14px; font:inherit; font-size:13.5px; cursor:pointer; }
+.hero { padding:50px 0 10px; }
+.kicker { color:var(--accent); font-weight:700; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+h1 { font-size:clamp(28px,5.5vw,42px); line-height:1.1; margin:8px 0 10px; letter-spacing:-.02em; }
+h1 code { font-size:.8em; background:none; padding:0; }
+.lede { color:var(--muted); font-size:17px; margin:0; max-width:760px; }
+h2 { font-size:23px; margin:42px 0 8px; }
+h2 small { color:var(--muted); font-weight:500; font-size:14px; margin-left:6px; }
+.panel { background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:16px 18px; }
+.facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin-top:22px; }
+.fact { background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:12px 14px; }
+.fact span { display:block; color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; }
+.pipe { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 4px; }
+.node { background:var(--paper); border:1px solid var(--rule); border-radius:10px; padding:8px 12px; font-weight:600; font-size:14px; }
+.node.hot { background:var(--soft); border-color:var(--accent); color:var(--accent); }
+.node small { display:block; font-weight:500; font-size:11px; color:var(--muted); }
+.arr { color:var(--muted); }
+.flow { list-style:none; counter-reset:s; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px; }
+.flow li { counter-increment:s; position:relative; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:12px 14px 10px 50px; }
+.flow li::before { content:counter(s); position:absolute; left:13px; top:12px; width:26px; height:26px; border-radius:50%;
+  background:var(--soft); color:var(--accent); font-weight:700; display:grid; place-items:center; font-size:13px; }
+.flow p { margin:3px 0 0; color:var(--muted); font-size:14px; }
+.tw { overflow-x:auto; border:1px solid var(--rule); border-radius:12px; background:var(--paper); }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th,td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--rule); }
+th { background:var(--tint); }
+tr:last-child td { border-bottom:none; }
+figure.code { margin:12px 0; border-radius:10px; overflow:hidden; border:1px solid var(--rule); }
+figure.code figcaption { background:var(--tint); color:var(--muted); font:12px ui-monospace,Menlo,monospace; padding:6px 12px; }
+pre { margin:0; background:var(--codebg); color:var(--codeink); padding:12px 14px; overflow-x:auto;
+       font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:pre; }
+.ln { color:var(--ln); display:inline-block; margin-right:14px; user-select:none; }
+.fn { background:var(--paper); border:1px solid var(--rule); border-top:3px solid var(--accent); border-radius:12px; padding:0 18px 14px; margin:16px 0; }
+.fn > header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;
+                margin:0 -18px; padding:12px 18px; background:var(--tint); }
+.fn h3 { margin:0; font-size:17px; }
+.fn h3 code { background:none; padding:0; font-size:1em; }
+.fn > header span { color:var(--muted); font-size:13px; }
+pre.sig { margin:12px 0 0; border-radius:8px; white-space:pre-wrap; }
+.purpose { font-size:15px; margin:12px 0 4px; }
+.fn h4 { color:var(--accent); font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; margin:14px 0 6px; }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.two table td { padding:5px 8px; font-size:13.5px; }
+.two table td:first-child { white-space:nowrap; width:1%; }
+.two table td:first-child code { word-break:normal; }
+.two table { border:1px solid var(--rule); border-radius:8px; }
+.two p { margin:0; font-size:14px; }
+.steps { margin:0; padding-left:20px; }
+.steps li { margin:4px 0; font-size:14px; }
+.note { border-left:3px solid var(--warn); padding:6px 10px; background:var(--tint); font-size:13.5px; border-radius:0 8px 8px 0; }
+.ex { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.ex h4 { margin:0 0 6px; font-size:13px; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; }
+.ex pre { border-radius:10px; white-space:pre-wrap; font-size:12px; }
+.qa { background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:12px 16px; margin:10px 0; }
+.qa p { margin:0; font-size:14px; }
+.qa .q { font-weight:700; margin-bottom:4px; font-size:15px; }
+.muted { color:var(--muted); font-size:13.5px; }
+footer { color:var(--muted); font-size:13px; padding:36px 0 46px; }
+@media (max-width:640px) { .two, .ex { grid-template-columns:1fr; } }
+@page { size:A4; margin:13mm 12mm 15mm; }
+@media print {
+  :root, :root[data-theme] { --bg:#fff; --paper:#fff; --ink:#1b1f24; --muted:#5b636e; --rule:#d5d9df; --tint:#f2f4f7;
+    --accent:#2f5fb3; --soft:#e8eef9; --warn:#9a5b00; }
+  body { font-size:10.3pt; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .toolbar { display:none; } .wrap { max-width:none; padding:0; }
+  .hero { padding-top:8mm; }
+  h2 { break-after:avoid; } .page { break-before:page; }
+  .flow li, .qa, tr, .fact, .two { break-inside:avoid; }
+  figure.code figcaption { break-after:avoid; }
+  .fn > header, .fn pre.sig, .purpose { break-after:avoid; }
+  pre { white-space:pre-wrap; word-break:break-all; font-size:8.4pt; }
+  .tw { overflow:visible; }
+}
+</style></head><body>
+<div class="toolbar"><div class="wrap"><b>executor.py &middot; walkthrough</b>
+<button class="btn" onclick="window.print()">Save as PDF</button></div></div>
+<main class="wrap">
+
+<section class="hero">
+  <div class="kicker">Code walkthrough &middot; Silt AI Data Analyst</div>
+  <h1>The Executor agent: <code>backend/app/agents/executor.py</code></h1>
+  <p class="lede">The file where <b>Gemini writes Python code</b> for one analysis step and the
+  <b>sandbox runs it</b>. This document explains it function by function, with the real code and line numbers.</p>
+  <div class="facts">
+    <div class="fact"><span>File size</span><b>173 lines</b>, 2 functions + 1 schema</div>
+    <div class="fact"><span>AI used</span><b>Google Gemini</b> (Llama as backup)</div>
+    <div class="fact"><span>Code runs in</span><b>Docker sandbox</b>, no network</div>
+    <div class="fact"><span>Retries per step</span><b>3</b> (<code>MAX_EXECUTOR_RETRIES</code>)</div>
+  </div>
+</section>
+
+<h2>1. Where this file sits</h2>
+<div class="panel">
+  
+<div class="pipe">
+  <div class="node">Router</div><div class="arr">&rarr;</div>
+  <div class="node">Triage</div><div class="arr">&rarr;</div>
+  <div class="node">Planner</div><div class="arr">&rarr;</div>
+  <div class="node hot">Executor<small>this file &middot; loops once per step</small></div><div class="arr">&rarr;</div>
+  <div class="node">Critic</div><div class="arr">&rarr;</div>
+  <div class="node">Dashboard</div>
+</div>
+  <p class="muted" style="margin:10px 0 0">The Planner turns the question into an ordered list of steps. The Executor
+  runs once for every attempt of every step. When all steps are done, the Critic independently re-checks the numbers.
+  The Executor is used on the <b>standard</b> route (the full AI pipeline); simpler questions take model-free routes.</p>
+</div>
+
+<h2>2. What happens in one call <small>overview of executor_node</small></h2>
+<ol class="flow"><li><b>Read the state</b><p>Which question, which step of the plan, and how many times this step has already been tried.</p></li><li><b>Show progress</b><p>Writes "Executing step 2/4 ..." (or "Retry 1/3 ...") to the database so the Analyses page updates live.</p></li><li><b>Build the prompt</b><p>Question + dataset profile + results of earlier steps + this step's goal + the last error, if any.</p></li><li><b>Ask Gemini for code</b><p><code>llm_client.call_tool()</code> forces Gemini to answer through the <code>submit_code</code> tool: reasoning, a plain-English formula and a Python script. Falls back to Llama if Gemini fails.</p></li><li><b>Run it in the sandbox</b><p><code>get_runner()</code> picks the Docker sandbox, the CSV is copied in read-only, and the script runs in a fresh container with no network.</p></li><li><b>Save the evidence</b><p>One <code>ExecutionLog</code> row per attempt: code, stdout, stderr, result, charts, data slice. This is what the Audit trail shows.</p></li><li><b>Decide what next</b><p>Success: move to the next step. Failure: retry with the error message. Third failure: stop the whole run.</p></li></ol>
+
+<h2 class="page">3. Imports and the tool schema</h2>
+<div class="tw"><table><thead><tr><th>Import</th><th>From</th><th>Used for</th></tr></thead><tbody><tr><td><code>config</code></td><td><code>app/config.py</code></td><td>Settings, e.g. <code>MAX_EXECUTOR_RETRIES</code> (default 3).</td></tr><tr><td><code>llm_client</code></td><td><code>app/agents/llm_client.py</code></td><td>Talks to Gemini (and Llama as backup). Used via <code>call_tool()</code>.</td></tr><tr><td><code>prompts</code></td><td><code>app/agents/prompts.py</code></td><td><code>EXECUTOR_SYSTEM</code> instructions and <code>profile_block()</code> which formats the dataset profile.</td></tr><tr><td><code>AgentState, update_stage</code></td><td><code>app/agents/state.py</code></td><td>The shared state passed between agents, and the live-progress writer.</td></tr><tr><td><code>SessionLocal</code></td><td><code>app/database.py</code></td><td>Opens a database session (SQLAlchemy).</td></tr><tr><td><code>ExecutionLog</code></td><td><code>app/models.py</code></td><td>The table where every code attempt is stored.</td></tr><tr><td><code>get_runner</code></td><td><code>app/sandbox/runner.py</code></td><td>Returns the configured sandbox (Docker in production).</td></tr></tbody></table></div>
+<h3 style="margin:22px 0 4px">CODE_TOOL_SCHEMA <span class="muted">(lines 12-34)</span></h3>
+<p>Not a function, but the most important definition in the file. It is a JSON Schema that tells Gemini the exact shape of its
+answer. Because the call is forced to use this tool, Gemini cannot reply with free text; it must fill in three fields:</p>
+<div class="tw"><table><thead><tr><th>Field</th><th>What Gemini puts there</th><th>Where it ends up</th></tr></thead><tbody>
+<tr><td><code>reasoning</code></td><td>A short explanation of the approach</td><td>ExecutionLog, Audit trail</td></tr>
+<tr><td><code>formula_explanation</code></td><td>The calculation in plain English, e.g. <i>growth % = (this month - last month) / last month x 100</i></td><td>Click-to-inspect panel on the dashboard</td></tr>
+<tr><td><code>code</code></td><td>A complete Python script that follows the sandbox contract</td><td>Run in the sandbox</td></tr>
+</tbody></table></div>
+<figure class="code"><figcaption>backend/app/agents/executor.py : lines 12-34</figcaption><pre><span class="ln">12</span>CODE_TOOL_SCHEMA = {
+<span class="ln">13</span>    &quot;type&quot;: &quot;object&quot;,
+<span class="ln">14</span>    &quot;properties&quot;: {
+<span class="ln">15</span>        &quot;reasoning&quot;: {
+<span class="ln">16</span>            &quot;type&quot;: &quot;string&quot;,
+<span class="ln">17</span>            &quot;description&quot;: &quot;Brief explanation of the approach this code takes.&quot;,
+<span class="ln">18</span>        },
+<span class="ln">19</span>        &quot;formula_explanation&quot;: {
+<span class="ln">20</span>            &quot;type&quot;: &quot;string&quot;,
+<span class="ln">21</span>            &quot;description&quot;: (
+<span class="ln">22</span>                &quot;The calculation this step performs, in one or two plain-English sentences a &quot;
+<span class="ln">23</span>                &quot;non-technical reader could follow (e.g. &#x27;Revenue growth % = (this month&#x27;s &quot;
+<span class="ln">24</span>                &quot;revenue - last month&#x27;s revenue) / last month&#x27;s revenue x 100&#x27;). Describe the &quot;
+<span class="ln">25</span>                &quot;actual arithmetic/logic the code below carries out, not a restatement of the goal.&quot;
+<span class="ln">26</span>            ),
+<span class="ln">27</span>        },
+<span class="ln">28</span>        &quot;code&quot;: {
+<span class="ln">29</span>            &quot;type&quot;: &quot;string&quot;,
+<span class="ln">30</span>            &quot;description&quot;: &quot;Complete, self-contained Python script following the sandbox contract.&quot;,
+<span class="ln">31</span>        },
+<span class="ln">32</span>    },
+<span class="ln">33</span>    &quot;required&quot;: [&quot;reasoning&quot;, &quot;formula_explanation&quot;, &quot;code&quot;],
+<span class="ln">34</span>}</pre></figure>
+<p class="muted">The sandbox contract (in <code>prompts.py</code>, part of <code>EXECUTOR_SYSTEM</code>) tells Gemini the rules the script must follow:</p>
+<figure class="code"><figcaption>backend/app/agents/prompts.py : lines 63-85 (SANDBOX_CONTRACT)</figcaption><pre><span class="ln">63</span>SANDBOX_CONTRACT = &quot;&quot;&quot;
+<span class="ln">64</span>SANDBOX CODE CONTRACT (follow exactly):
+<span class="ln">65</span>- Your code runs headless in an isolated container with no network access.
+<span class="ln">66</span>- Load the dataset with: df = pd.read_csv(&quot;/workspace/data/input.csv&quot;)
+<span class="ln">67</span>- Available libraries: pandas as pd, numpy as np, plotly.express / plotly.graph_objects, matplotlib (json, sys are stdlib).
+<span class="ln">68</span>  Import everything you use explicitly at the top of your script.
+<span class="ln">69</span>- To return a structured result, print EXACTLY ONE line of the form:
+<span class="ln">70</span>    print(&quot;RESULT_JSON:&quot; + json.dumps(result_dict))
+<span class="ln">71</span>  where result_dict contains the concrete numbers/findings for this step (plain JSON-serializable types only).
+<span class="ln">72</span>- To emit a chart, build a Plotly figure and save it with:
+<span class="ln">73</span>    fig.write_json(&quot;/workspace/output/&lt;short_name&gt;.json&quot;)
+<span class="ln">74</span>  Use a unique, descriptive &lt;short_name&gt; for each chart. Do not use matplotlib for charts that belong on the dashboard.
+<span class="ln">75</span>  Do not set custom colors, themes, or templates on the figure — leave that to Plotly&#x27;s defaults.
+<span class="ln">76</span>  The dashboard applies its own consistent dark theme/colorway on top of every chart at render time.
+<span class="ln">77</span>- So a reviewer can trace this result back to the exact data it came from, ALSO print exactly one
+<span class="ln">78</span>  more line:
+<span class="ln">79</span>    print(&quot;DATA_SLICE_JSON:&quot; + json.dumps({&quot;columns&quot;: [...], &quot;rows&quot;: [[...], ...]}))
+<span class="ln">80</span>  containing the real column names and up to 50 rows of the actual dataframe subset your computation
+<span class="ln">81</span>  is based on (after your filtering/grouping, before collapsing it into the final printed result) —
+<span class="ln">82</span>  not a re-description or a fabricated sample.
+<span class="ln">83</span>- Do not read/write any path outside /workspace. Do not attempt network access, subprocess calls, or file deletion.
+<span class="ln">84</span>- Keep the script self-contained and runnable top to bottom with no user input.
+<span class="ln">85</span>&quot;&quot;&quot;</pre></figure>
+
+<h2 class="page">4. Functions in executor.py</h2>
+
+<section class="fn">
+  <header><h3><code>_prior_results_summary</code></h3><span>executor.py &middot; helper</span></header>
+  <pre class="sig">def _prior_results_summary(step_results: list[dict]) -&gt; str</pre>
+  <p class="purpose">Turns the results of the steps already finished into short text, so Gemini knows what has been computed and does not recompute it.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>step_results</code></td><td>List of finished steps. Each is a dict with <code>step_index</code>, <code>description</code>, <code>result</code>.</td></tr></table></div>
+    <div><h4>Returns</h4><p>A string, one block per step: <code>Step 0: ...&nbsp;&nbsp;result: {...}</code>. If nothing has run yet, <code>"(none yet)"</code>.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>If the list is empty, return <code>"(none yet)"</code> (first step of the plan).</li><li>Otherwise build one line per step with its index, description and result.</li><li>Join the lines with newlines and return.</li></ol>
+  <figure class="code"><figcaption>backend/app/agents/executor.py : lines 37-45</figcaption><pre><span class="ln">37</span>def _prior_results_summary(step_results: list[dict]) -&gt; str:
+<span class="ln">38</span>    if not step_results:
+<span class="ln">39</span>        return &quot;(none yet)&quot;
+<span class="ln">40</span>    lines = []
+<span class="ln">41</span>    for r in step_results:
+<span class="ln">42</span>        lines.append(
+<span class="ln">43</span>            f&quot;Step {r[&#x27;step_index&#x27;]}: {r[&#x27;description&#x27;]}\n  result: {r.get(&#x27;result&#x27;)}&quot;
+<span class="ln">44</span>        )
+<span class="ln">45</span>    return &quot;\n&quot;.join(lines)</pre></figure>
+  <p class="note">Uses <code>r.get('result')</code> instead of <code>r['result']</code> so a step without a result does not crash the prompt.</p>
+</section>
+
+<section class="fn">
+  <header><h3><code>executor_node</code></h3><span>executor.py &middot; the LangGraph node</span></header>
+  <pre class="sig">def executor_node(state: AgentState) -&gt; dict</pre>
+  <p class="purpose">The main function. LangGraph calls it once per attempt of each plan step. It asks Gemini to write the Python code for the current step, runs that code in the sandbox, records the attempt, and tells the graph what to do next.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>state</code></td><td>The shared <code>AgentState</code>: <code>question_id</code>, <code>question_text</code>, <code>plan</code>, <code>step_index</code>, <code>retry_count</code>, <code>last_error</code>, <code>profile</code>, <code>csv_path</code>, <code>step_results</code>.</td></tr></table></div>
+    <div><h4>Returns</h4><p>A dict with <b>only the fields that changed</b>. LangGraph merges it into the state. There are three possible shapes (see section 5).</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li><b>Lines 49-53. Read the state.</b> Get the question id, the current step and the retry count. <code>attempt_number</code> is human-friendly (1, 2, 3) while <code>retry_count</code> starts at 0.</li><li><b>Lines 55-58. Report progress.</b> Build a message like <i>"Executing step 2/4: Monthly revenue"</i>, or <i>"Retry 1/3 on step 2 ..."</i> on a retry, and save it with <code>update_stage()</code>. <code>update_stage()</code> is also a checkpoint: if the user cancelled the run, it stops here.</li><li><b>Lines 60-72. Build the prompt.</b> An f-string with the business question, the dataset profile (<code>prompts.profile_block</code>), the earlier results (<code>_prior_results_summary</code>) and this step's description and goal.</li><li><b>Lines 74-80. Add the error on a retry.</b> If the last attempt failed, its error text is appended with <i>"Fix the root cause and provide corrected code"</i>. This is how the model learns from its mistake.</li><li><b>Lines 82-91. Call Gemini.</b> <code>llm_client.call_tool()</code> sends the system prompt <code>EXECUTOR_SYSTEM</code> (which contains the sandbox rules), the prompt above and <code>CODE_TOOL_SCHEMA</code>. The reply is a dict; the code takes out <code>code</code>, <code>reasoning</code> and <code>formula_explanation</code>.</li><li><b>Lines 93-95. Run in the sandbox.</b> <code>get_runner()</code> returns the Docker runner, <code>seed_input_data()</code> copies the CSV in as read-only <code>input.csv</code>, and <code>run()</code> executes the script and returns a <code>SandboxResult</code>.</li><li><b>Lines 97-119. Save the attempt.</b> Open a database session, insert an <code>ExecutionLog</code> row with the code, stdout, stderr, success flag, result, charts, reasoning, formula and data slice, commit, and keep its id. <code>finally: db.close()</code> always closes the session, even on an error.</li><li><b>Lines 121-142. If it succeeded:</b> build a <code>step_result</code> dict, add it to the list, move <code>step_index</code> forward, and reset <code>retry_count</code> and <code>last_error</code>.</li><li><b>Lines 145-168. If it failed and this was the last allowed attempt:</b> record the failed step and return <code>failed=True</code> with a readable <code>failure_reason</code> that includes the last error.</li><li><b>Lines 170-173. If it failed but retries remain:</b> return only <code>retry_count + 1</code> and the error text. The graph sends the same step back to this function.</li></ol>
+  <figure class="code"><figcaption>backend/app/agents/executor.py : lines 48-95 (prompt, Gemini call, sandbox run)</figcaption><pre><span class="ln">48</span>def executor_node(state: AgentState) -&gt; dict:
+<span class="ln">49</span>    question_id = state[&quot;question_id&quot;]
+<span class="ln">50</span>    step_index = state[&quot;step_index&quot;]
+<span class="ln">51</span>    retry_count = state.get(&quot;retry_count&quot;, 0)
+<span class="ln">52</span>    attempt_number = retry_count + 1
+<span class="ln">53</span>    step = state[&quot;plan&quot;][step_index]
+<span class="ln">54</span>
+<span class="ln">55</span>    stage_detail = f&quot;Executing step {step_index + 1}/{len(state[&#x27;plan&#x27;])}: {step[&#x27;description&#x27;]}&quot;
+<span class="ln">56</span>    if retry_count &gt; 0:
+<span class="ln">57</span>        stage_detail = f&quot;Retry {retry_count}/{config.MAX_EXECUTOR_RETRIES} on step {step_index + 1}: {step[&#x27;description&#x27;]}&quot;
+<span class="ln">58</span>    update_stage(question_id, &quot;executing&quot;, stage_detail)
+<span class="ln">59</span>
+<span class="ln">60</span>    user_content = f&quot;&quot;&quot;Business question: {state[&#x27;question_text&#x27;]}
+<span class="ln">61</span>
+<span class="ln">62</span>Dataset profile:
+<span class="ln">63</span>{prompts.profile_block(state[&#x27;profile&#x27;])}
+<span class="ln">64</span>
+<span class="ln">65</span>Prior step results (already computed, available context — do not recompute them, but you may
+<span class="ln">66</span>reference their numbers in your own analysis if directly relevant):
+<span class="ln">67</span>{_prior_results_summary(state.get(&#x27;step_results&#x27;, []))}
+<span class="ln">68</span>
+<span class="ln">69</span>Current step ({step_index + 1}/{len(state[&#x27;plan&#x27;])}):
+<span class="ln">70</span>Description: {step[&#x27;description&#x27;]}
+<span class="ln">71</span>Goal: {step[&#x27;goal&#x27;]}
+<span class="ln">72</span>&quot;&quot;&quot;
+<span class="ln">73</span>
+<span class="ln">74</span>    if state.get(&quot;last_error&quot;):
+<span class="ln">75</span>        user_content += f&quot;&quot;&quot;
+<span class="ln">76</span>Your previous attempt at this step failed with this error:
+<span class="ln">77</span>{state[&#x27;last_error&#x27;]}
+<span class="ln">78</span>
+<span class="ln">79</span>Fix the root cause and provide corrected code.
+<span class="ln">80</span>&quot;&quot;&quot;
+<span class="ln">81</span>
+<span class="ln">82</span>    output = llm_client.call_tool(
+<span class="ln">83</span>        system=prompts.EXECUTOR_SYSTEM,
+<span class="ln">84</span>        user_content=user_content,
+<span class="ln">85</span>        tool_name=&quot;submit_code&quot;,
+<span class="ln">86</span>        tool_schema=CODE_TOOL_SCHEMA,
+<span class="ln">87</span>        tool_description=&quot;Submit the Python script for this analysis step.&quot;,
+<span class="ln">88</span>    )
+<span class="ln">89</span>    code = output[&quot;code&quot;]
+<span class="ln">90</span>    reasoning = output.get(&quot;reasoning&quot;, &quot;&quot;)
+<span class="ln">91</span>    formula_explanation = output.get(&quot;formula_explanation&quot;, &quot;&quot;)
+<span class="ln">92</span>
+<span class="ln">93</span>    runner = get_runner()
+<span class="ln">94</span>    runner.seed_input_data(question_id, state[&quot;csv_path&quot;])
+<span class="ln">95</span>    sandbox_result = runner.run(question_id, code, step_index, attempt_number)</pre></figure><figure class="code"><figcaption>backend/app/agents/executor.py : lines 97-119 (save the attempt)</figcaption><pre><span class="ln"> 97</span>    db = SessionLocal()
+<span class="ln"> 98</span>    try:
+<span class="ln"> 99</span>        log_row = ExecutionLog(
+<span class="ln">100</span>            question_id=question_id,
+<span class="ln">101</span>            step_index=step_index,
+<span class="ln">102</span>            step_description=step[&quot;description&quot;],
+<span class="ln">103</span>            attempt_number=attempt_number,
+<span class="ln">104</span>            code=code,
+<span class="ln">105</span>            stdout=sandbox_result.stdout,
+<span class="ln">106</span>            stderr=sandbox_result.stderr,
+<span class="ln">107</span>            success=sandbox_result.success,
+<span class="ln">108</span>            result_json=sandbox_result.result or {},
+<span class="ln">109</span>            chart_paths_json=sandbox_result.chart_paths,
+<span class="ln">110</span>            reasoning=reasoning,
+<span class="ln">111</span>            formula_explanation=formula_explanation,
+<span class="ln">112</span>            data_slice_json=sandbox_result.data_slice or {},
+<span class="ln">113</span>        )
+<span class="ln">114</span>        db.add(log_row)
+<span class="ln">115</span>        db.commit()
+<span class="ln">116</span>        db.refresh(log_row)
+<span class="ln">117</span>        log_id = log_row.id
+<span class="ln">118</span>    finally:
+<span class="ln">119</span>        db.close()</pre></figure><figure class="code"><figcaption>backend/app/agents/executor.py : lines 121-173 (success, retry or fail)</figcaption><pre><span class="ln">121</span>    if sandbox_result.success:
+<span class="ln">122</span>        step_result = {
+<span class="ln">123</span>            &quot;step_index&quot;: step_index,
+<span class="ln">124</span>            &quot;description&quot;: step[&quot;description&quot;],
+<span class="ln">125</span>            &quot;code&quot;: code,
+<span class="ln">126</span>            &quot;stdout&quot;: sandbox_result.stdout,
+<span class="ln">127</span>            &quot;stderr&quot;: sandbox_result.stderr,
+<span class="ln">128</span>            &quot;result&quot;: sandbox_result.result,
+<span class="ln">129</span>            &quot;chart_paths&quot;: sandbox_result.chart_paths,
+<span class="ln">130</span>            &quot;success&quot;: True,
+<span class="ln">131</span>            &quot;reasoning&quot;: reasoning,
+<span class="ln">132</span>            &quot;attempts&quot;: attempt_number,
+<span class="ln">133</span>            &quot;execution_log_id&quot;: log_id,
+<span class="ln">134</span>            &quot;formula_explanation&quot;: formula_explanation,
+<span class="ln">135</span>        }
+<span class="ln">136</span>        new_results = state.get(&quot;step_results&quot;, []) + [step_result]
+<span class="ln">137</span>        return {
+<span class="ln">138</span>            &quot;step_results&quot;: new_results,
+<span class="ln">139</span>            &quot;step_index&quot;: step_index + 1,
+<span class="ln">140</span>            &quot;retry_count&quot;: 0,
+<span class="ln">141</span>            &quot;last_error&quot;: None,
+<span class="ln">142</span>        }
+<span class="ln">143</span>
+<span class="ln">144</span>    # Failure: either retry, or exhaust retries and fail the whole run.
+<span class="ln">145</span>    error_text = sandbox_result.stderr or &quot;(no stderr captured)&quot;
+<span class="ln">146</span>    if retry_count + 1 &gt;= config.MAX_EXECUTOR_RETRIES:
+<span class="ln">147</span>        step_result = {
+<span class="ln">148</span>            &quot;step_index&quot;: step_index,
+<span class="ln">149</span>            &quot;description&quot;: step[&quot;description&quot;],
+<span class="ln">150</span>            &quot;code&quot;: code,
+<span class="ln">151</span>            &quot;stdout&quot;: sandbox_result.stdout,
+<span class="ln">152</span>            &quot;stderr&quot;: sandbox_result.stderr,
+<span class="ln">153</span>            &quot;result&quot;: None,
+<span class="ln">154</span>            &quot;chart_paths&quot;: [],
+<span class="ln">155</span>            &quot;success&quot;: False,
+<span class="ln">156</span>            &quot;reasoning&quot;: reasoning,
+<span class="ln">157</span>            &quot;attempts&quot;: attempt_number,
+<span class="ln">158</span>            &quot;execution_log_id&quot;: log_id,
+<span class="ln">159</span>        }
+<span class="ln">160</span>        new_results = state.get(&quot;step_results&quot;, []) + [step_result]
+<span class="ln">161</span>        return {
+<span class="ln">162</span>            &quot;step_results&quot;: new_results,
+<span class="ln">163</span>            &quot;failed&quot;: True,
+<span class="ln">164</span>            &quot;failure_reason&quot;: (
+<span class="ln">165</span>                f&quot;Step {step_index + 1} (&#x27;{step[&#x27;description&#x27;]}&#x27;) failed after &quot;
+<span class="ln">166</span>                f&quot;{config.MAX_EXECUTOR_RETRIES} attempts. Last error:\n{error_text}&quot;
+<span class="ln">167</span>            ),
+<span class="ln">168</span>        }
+<span class="ln">169</span>
+<span class="ln">170</span>    return {
+<span class="ln">171</span>        &quot;retry_count&quot;: retry_count + 1,
+<span class="ln">172</span>        &quot;last_error&quot;: error_text,
+<span class="ln">173</span>    }</pre></figure>
+  
+</section>
+
+<h2>5. What executor_node returns</h2>
+<p>LangGraph merges the returned dict into the shared state, then <code>route_after_executor()</code> decides the next node.</p>
+<div class="tw"><table><thead><tr><th>Outcome</th><th>Fields returned</th><th>What runs next</th></tr></thead><tbody><tr><td><b>Success</b></td><td><code>step_results</code> + this step, <code>step_index</code> + 1, <code>retry_count</code> = 0, <code>last_error</code> = None</td><td>Next step, or the Critic if this was the last step</td></tr><tr><td><b>Failed, retries left</b></td><td><code>retry_count</code> + 1, <code>last_error</code> = the stderr text</td><td>Executor again, same step; Gemini now sees the error</td></tr><tr><td><b>Failed, no retries left</b></td><td><code>step_results</code> + failed step, <code>failed</code> = True, <code>failure_reason</code></td><td>END: the run stops and the user sees the reason</td></tr></tbody></table></div>
+
+<h2>6. Functions it calls in other files</h2>
+<p class="muted">These are not defined in executor.py, but you need them to explain how Gemini and the sandbox actually work.</p>
+
+<section class="fn">
+  <header><h3><code>llm_client.call_tool</code></h3><span>llm_client.py &middot; Gemini, then Llama</span></header>
+  <pre class="sig">def call_tool(system, user_content, tool_name, tool_schema, tool_description, max_tokens=4096) -&gt; dict</pre>
+  <p class="purpose">The model call used on line 82. It tries Gemini first and, if Gemini cannot answer, fails over to Llama so the run does not die mid-way.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>system</code></td><td>The agent's instructions (<code>EXECUTOR_SYSTEM</code>).</td></tr><tr><td><code>user_content</code></td><td>The prompt built in <code>executor_node</code>.</td></tr><tr><td><code>tool_name / tool_schema</code></td><td><code>submit_code</code> and <code>CODE_TOOL_SCHEMA</code>: the exact shape the answer must have.</td></tr></table></div>
+    <div><h4>Returns</h4><p>The tool's arguments as a dict, e.g. <code>{"reasoning": ..., "formula_explanation": ..., "code": ...}</code>. Raises <code>ProviderUnavailable</code> if both providers fail.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>If a <code>GEMINI_API_KEY</code> is set, call <code>call_tool_gemini()</code> in a loop.</li><li>On a 429 (rate limit) or a retryable 5xx error, wait and retry, up to <code>GEMINI_RATE_LIMIT_RETRIES</code> (2) times.</li><li>On any other error, including a reply without the tool call (<code>MalformedOutput</code>), stop trying Gemini.</li><li>If failover is enabled and a <code>LLAMA_API_KEY</code> is set, make the same call on Llama.</li><li>If that fails too, raise <code>ProviderUnavailable</code> listing why each provider failed.</li><li><code>RunAborted</code> (user cancelled, budget exceeded) is re-raised at once and never triggers failover.</li></ol>
+  <figure class="code"><figcaption>backend/app/agents/llm_client.py : lines 381-406 (Gemini try + rate-limit retry)</figcaption><pre><span class="ln">381</span>    if config.GEMINI_API_KEY:
+<span class="ln">382</span>        attempt = 0
+<span class="ln">383</span>        while True:
+<span class="ln">384</span>            started = time.monotonic()
+<span class="ln">385</span>            try:
+<span class="ln">386</span>                out = call_tool_gemini(**kwargs)
+<span class="ln">387</span>                LAST_PROVIDER = f&quot;gemini:{config.GEMINI_MODEL}&quot;
+<span class="ln">388</span>                return out
+<span class="ln">389</span>            except runtime.RunAborted:
+<span class="ln">390</span>                raise  # cancelled / over budget: not a provider failure, never fail over
+<span class="ln">391</span>            except errors.ClientError as e:
+<span class="ln">392</span>                failure = classify_failure(e)
+<span class="ln">393</span>                if e.code == 429 and attempt &lt; config.GEMINI_RATE_LIMIT_RETRIES:
+<span class="ln">394</span>                    wait_s = _retry_delay_seconds(e, attempt)
+<span class="ln">395</span>                    attempt += 1
+<span class="ln">396</span>                    log_provider_event(&quot;gemini&quot;, tool_name, failure, attempt=attempt, max_attempts=tries, action=&quot;retry&quot;,
+<span class="ln">397</span>                                       wait_s=wait_s, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+<span class="ln">398</span>                                       elapsed_ms=_elapsed_ms(started))
+<span class="ln">399</span>                    time.sleep(wait_s)
+<span class="ln">400</span>                    continue
+<span class="ln">401</span>                failures.append(f&quot;gemini({config.GEMINI_MODEL}): {e}&quot;)
+<span class="ln">402</span>                reasons.append(_failed(&quot;gemini&quot;, config.GEMINI_MODEL, e))
+<span class="ln">403</span>                log_provider_event(&quot;gemini&quot;, tool_name, failure, attempt=attempt + 1, max_attempts=tries,
+<span class="ln">404</span>                                   action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+<span class="ln">405</span>                                   elapsed_ms=_elapsed_ms(started))
+<span class="ln">406</span>                break</pre></figure>
+  
+</section>
+<section class="fn">
+  <header><h3><code>llm_client.call_tool_gemini</code></h3><span>llm_client.py &middot; the actual Gemini request</span></header>
+  <pre class="sig">def call_tool_gemini(system, user_content, tool_name, tool_schema, tool_description, max_tokens=4096) -&gt; dict</pre>
+  <p class="purpose">Makes one request to Google Gemini and <b>forces</b> it to answer by calling exactly one named function.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>same as call_tool</code></td><td>Passed straight through.</td></tr></table></div>
+    <div><h4>Returns</h4><p>The function call's arguments as a dict.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li><code>runtime.checkpoint(about_to="llm")</code>: stop if the run was cancelled or is over budget.</li><li>Wrap the schema in a <code>FunctionDeclaration</code>.</li><li>Call <code>client.models.generate_content()</code> with <code>mode="ANY"</code> and <code>allowed_function_names=[tool_name]</code>, which means Gemini <i>must</i> call that tool.</li><li>Record token usage and time with <code>runtime.note_llm_call()</code> (shown in the run trace and cost).</li><li>Find the function call in the response and return its arguments.</li></ol>
+  <figure class="code"><figcaption>backend/app/agents/llm_client.py : lines 290-311</figcaption><pre><span class="ln">290</span>    client = get_client()
+<span class="ln">291</span>    function_decl = types.FunctionDeclaration(
+<span class="ln">292</span>        name=tool_name,
+<span class="ln">293</span>        description=tool_description,
+<span class="ln">294</span>        parameters=tool_schema,
+<span class="ln">295</span>    )
+<span class="ln">296</span>
+<span class="ln">297</span>    response = client.models.generate_content(
+<span class="ln">298</span>        model=config.GEMINI_MODEL,
+<span class="ln">299</span>        contents=user_content,
+<span class="ln">300</span>        config=types.GenerateContentConfig(
+<span class="ln">301</span>            system_instruction=system,
+<span class="ln">302</span>            max_output_tokens=max_tokens,
+<span class="ln">303</span>            tools=[types.Tool(function_declarations=[function_decl])],
+<span class="ln">304</span>            tool_config=types.ToolConfig(
+<span class="ln">305</span>                function_calling_config=types.FunctionCallingConfig(
+<span class="ln">306</span>                    mode=&quot;ANY&quot;,
+<span class="ln">307</span>                    allowed_function_names=[tool_name],
+<span class="ln">308</span>                )
+<span class="ln">309</span>            ),
+<span class="ln">310</span>        ),
+<span class="ln">311</span>    )</pre></figure>
+  
+</section>
+<section class="fn">
+  <header><h3><code>get_runner</code></h3><span>sandbox/runner.py</span></header>
+  <pre class="sig">def get_runner() -&gt; SandboxRunner</pre>
+  <p class="purpose">Chooses which sandbox to use from the <code>SANDBOX_BACKEND</code> setting.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>(none)</code></td><td>Reads <code>config.SANDBOX_BACKEND</code>, default <code>"docker"</code>.</td></tr></table></div>
+    <div><h4>Returns</h4><p>A <code>DockerSandboxRunner</code>, or a <code>SubprocessSandboxRunner</code> for local development only.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li><code>"docker"</code> returns the Docker runner, the real security boundary.</li><li><code>"subprocess"</code> is allowed only when <code>SANDBOX_ALLOW_UNSAFE_SUBPROCESS=true</code>; it is not isolated.</li><li>Anything else raises <code>SandboxUnavailable</code>. It never quietly falls back to a weaker sandbox.</li></ol>
+  <figure class="code"><figcaption>backend/app/sandbox/runner.py : lines 557-567</figcaption><pre><span class="ln">557</span>def get_runner() -&gt; SandboxRunner:
+<span class="ln">558</span>    &quot;&quot;&quot;The configured runner. Raises SandboxUnavailable instead of ever
+<span class="ln">559</span>    returning a weaker runner than the one asked for.&quot;&quot;&quot;
+<span class="ln">560</span>    backend = (config.SANDBOX_BACKEND or &quot;&quot;).strip().lower()
+<span class="ln">561</span>    if backend == &quot;docker&quot;:
+<span class="ln">562</span>        return DockerSandboxRunner()
+<span class="ln">563</span>    if backend == &quot;subprocess&quot;:
+<span class="ln">564</span>        runner = SubprocessSandboxRunner()
+<span class="ln">565</span>        runner.ensure_available()
+<span class="ln">566</span>        return runner
+<span class="ln">567</span>    raise SandboxUnavailable(f&quot;Unknown SANDBOX_BACKEND &#x27;{backend}&#x27;&quot;)</pre></figure>
+  
+</section>
+<section class="fn">
+  <header><h3><code>SandboxRunner.seed_input_data</code></h3><span>sandbox/runner.py</span></header>
+  <pre class="sig">def seed_input_data(self, question_id: int, source_csv_path: str) -&gt; Path</pre>
+  <p class="purpose">Copies the uploaded CSV into this question's private workspace as <code>data/input.csv</code>.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>question_id</code></td><td>Each question gets its own folder <code>q&lt;id&gt;</code>.</td></tr><tr><td><code>source_csv_path</code></td><td>Where the uploaded file is stored.</td></tr></table></div>
+    <div><h4>Returns</h4><p>The path of the copy.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>Create <code>q&lt;id&gt;/data</code>, <code>runs</code> and <code>artifacts</code> folders if needed.</li><li>Copy the CSV only if it is not already there (later steps reuse it).</li><li>Make it read-only (<code>chmod 0o444</code>) so generated code cannot change the data.</li></ol>
+  <figure class="code"><figcaption>backend/app/sandbox/runner.py : lines 181-190</figcaption><pre><span class="ln">181</span>    def seed_input_data(self, question_id: int, source_csv_path: str) -&gt; Path:
+<span class="ln">182</span>        ws = self.workspace_for(question_id)
+<span class="ln">183</span>        dest = ws / &quot;data&quot; / &quot;input.csv&quot;
+<span class="ln">184</span>        if not dest.exists():
+<span class="ln">185</span>            shutil.copyfile(source_csv_path, dest)
+<span class="ln">186</span>            try:
+<span class="ln">187</span>                os.chmod(dest, 0o444)
+<span class="ln">188</span>            except OSError:
+<span class="ln">189</span>                pass
+<span class="ln">190</span>        return dest</pre></figure>
+  
+</section>
+<section class="fn">
+  <header><h3><code>SandboxRunner.run</code></h3><span>sandbox/runner.py</span></header>
+  <pre class="sig">def run(self, question_id: int, code: str, step_index: int, attempt: int) -&gt; SandboxResult</pre>
+  <p class="purpose">Runs one script safely and packages everything that came out of it. Called on line 95.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>code</code></td><td>The Python script from Gemini.</td></tr><tr><td><code>step_index / attempt</code></td><td>Used to name this execution, e.g. <code>s1_a2_3f9c...</code>.</td></tr></table></div>
+    <div><h4>Returns</h4><p>A <code>SandboxResult</code>: <code>success</code>, <code>stdout</code>, <code>stderr</code>, <code>exit_code</code>, <code>result</code>, <code>chart_paths</code>, <code>data_slice</code>, <code>timed_out</code> and more.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>Check the run is not cancelled, and that the sandbox is available.</li><li>Reject the script if it is empty, too large (over 200 KB) or contains a null byte.</li><li>Create a fresh folder for this execution with an <code>out</code> folder for charts.</li><li>Run it with <code>_execute()</code> (Docker), then validate the charts with <code>_collect_artifacts()</code>.</li><li>Always delete the execution folder afterwards (<code>finally</code>).</li><li>Success means exit code 0 and no timeout or cancellation. Add a hint if the process was killed (exit 137).</li><li>Parse <code>RESULT_JSON:</code> and <code>DATA_SLICE_JSON:</code> from stdout and record the run in the trace.</li></ol>
+  <figure class="code"><figcaption>backend/app/sandbox/runner.py : lines 259-302</figcaption><pre><span class="ln">259</span>    def run(self, question_id: int, code: str, step_index: int, attempt: int) -&gt; SandboxResult:
+<span class="ln">260</span>        runtime.checkpoint(about_to=&quot;sandbox&quot;)
+<span class="ln">261</span>        self.ensure_available()
+<span class="ln">262</span>        started = time.monotonic()
+<span class="ln">263</span>        if not isinstance(code, str) or &quot;\x00&quot; in code or len(code.encode(&quot;utf-8&quot;, &quot;replace&quot;)) &gt; config.SANDBOX_MAX_CODE_BYTES:
+<span class="ln">264</span>            return SandboxResult(False, &quot;&quot;, &quot;[sandbox] script rejected: empty, too large or not text&quot;,
+<span class="ln">265</span>                                 None, None, isolation=self.isolation)
+<span class="ln">266</span>
+<span class="ln">267</span>        ws = self.workspace_for(question_id)
+<span class="ln">268</span>        run_id = f&quot;s{step_index}_a{attempt}_{uuid.uuid4().hex[:8]}&quot;
+<span class="ln">269</span>        exec_dir = ws / &quot;runs&quot; / run_id
+<span class="ln">270</span>        out_dir = exec_dir / &quot;out&quot;
+<span class="ln">271</span>        out_dir.mkdir(parents=True)
+<span class="ln">272</span>        timeout = runtime.remaining_seconds(float(config.SANDBOX_TIMEOUT_SECONDS))
+<span class="ln">273</span>        try:
+<span class="ln">274</span>            raw = self._execute(ws, exec_dir, code, timeout)
+<span class="ln">275</span>            charts, rejected = self._collect_artifacts(out_dir, ws / &quot;artifacts&quot; / run_id)
+<span class="ln">276</span>        finally:
+<span class="ln">277</span>            shutil.rmtree(exec_dir, ignore_errors=True)
+<span class="ln">278</span>
+<span class="ln">279</span>        success = raw.exit_code == 0 and not (raw.timed_out or raw.cancelled)
+<span class="ln">280</span>        stderr = raw.stderr
+<span class="ln">281</span>        if raw.exit_code in (137, -9) and not raw.timed_out:
+<span class="ln">282</span>            stderr += &quot;\n[sandbox] process was killed (memory or another resource limit)&quot;
+<span class="ln">283</span>        result = SandboxResult(
+<span class="ln">284</span>            success=success,
+<span class="ln">285</span>            stdout=raw.stdout,
+<span class="ln">286</span>            stderr=stderr,
+<span class="ln">287</span>            exit_code=raw.exit_code,
+<span class="ln">288</span>            result=self._parse_stdout(raw.stdout) if success else None,
+<span class="ln">289</span>            chart_paths=charts if success else [],
+<span class="ln">290</span>            timed_out=raw.timed_out,
+<span class="ln">291</span>            data_slice=self._parse_stdout(raw.stdout, DATA_SLICE_MARKER) if success else None,
+<span class="ln">292</span>            cancelled=raw.cancelled,
+<span class="ln">293</span>            output_truncated=raw.overflow,
+<span class="ln">294</span>            rejected_artifacts=rejected,
+<span class="ln">295</span>            isolation=self.isolation,
+<span class="ln">296</span>        )
+<span class="ln">297</span>        runtime.note_sandbox_run(self.name, step_index, attempt, success, raw.timed_out,
+<span class="ln">298</span>                                 int((time.monotonic() - started) * 1000),
+<span class="ln">299</span>                                 {&quot;rejected_artifacts&quot;: len(rejected), &quot;output_truncated&quot;: raw.overflow})
+<span class="ln">300</span>        if raw.cancelled:
+<span class="ln">301</span>            runtime.checkpoint()  # raises RunCancelled / DeadlineExceeded
+<span class="ln">302</span>        return result</pre></figure>
+  
+</section>
+<section class="fn">
+  <header><h3><code>DockerSandboxRunner._execute and _command</code></h3><span>sandbox/runner.py &middot; the container</span></header>
+  <pre class="sig">def _execute(self, ws, exec_dir, code, timeout) -&gt; _RawRun</pre>
+  <p class="purpose">Writes the script to <code>main.py</code> and starts a brand-new Docker container just for it.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>ws / exec_dir</code></td><td>The question's workspace and this execution's folder.</td></tr><tr><td><code>timeout</code></td><td>Seconds left, at most <code>SANDBOX_TIMEOUT_SECONDS</code> (60).</td></tr></table></div>
+    <div><h4>Returns</h4><p>A <code>_RawRun</code> with stdout, stderr, exit code and flags for timeout, cancellation and overflow.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>Write <code>main.py</code> and allow the container user to write to <code>out</code>.</li><li>Start <code>docker run</code> with the locked-down options below.</li><li>Hand the process to <code>_supervise()</code>, with a <code>kill()</code> that runs <code>docker kill</code> on the container.</li><li>Always <code>docker rm -f</code> the container at the end.</li></ol>
+  <figure class="code"><figcaption>backend/app/sandbox/runner.py : lines 341-371 (the docker run command)</figcaption><pre><span class="ln">341</span>    def _command(self, ws: Path, exec_dir: Path, container: str) -&gt; list[str]:
+<span class="ln">342</span>        docker_bin = shutil.which(&quot;docker&quot;) or &quot;docker&quot;
+<span class="ln">343</span>        fsize = _parse_size(config.SANDBOX_MAX_OUTPUT_BYTES, 256 * 1024 ** 2)
+<span class="ln">344</span>        cmd = [
+<span class="ln">345</span>            docker_bin, &quot;run&quot;, &quot;--rm&quot;, &quot;--name&quot;, container,
+<span class="ln">346</span>            &quot;--network&quot;, &quot;none&quot;,              # no egress at all: no internet, no host, no metadata endpoint
+<span class="ln">347</span>            &quot;--read-only&quot;,                    # root filesystem is immutable
+<span class="ln">348</span>            &quot;--cap-drop&quot;, &quot;ALL&quot;,
+<span class="ln">349</span>            &quot;--security-opt&quot;, &quot;no-new-privileges&quot;,
+<span class="ln">350</span>            &quot;--pids-limit&quot;, str(config.SANDBOX_PIDS_LIMIT),
+<span class="ln">351</span>            &quot;--memory&quot;, config.SANDBOX_MEMORY_LIMIT,
+<span class="ln">352</span>            &quot;--memory-swap&quot;, config.SANDBOX_MEMORY_LIMIT,  # equal to --memory: no swap
+<span class="ln">353</span>            &quot;--cpus&quot;, config.SANDBOX_CPU_LIMIT,
+<span class="ln">354</span>            &quot;--ulimit&quot;, f&quot;fsize={fsize}:{fsize}&quot;,
+<span class="ln">355</span>            &quot;--ulimit&quot;, &quot;nofile=256:256&quot;,
+<span class="ln">356</span>            &quot;--ulimit&quot;, &quot;core=0:0&quot;,
+<span class="ln">357</span>            &quot;--ipc&quot;, &quot;none&quot;,
+<span class="ln">358</span>            &quot;--tmpfs&quot;, f&quot;/tmp:rw,noexec,nosuid,nodev,size={config.SANDBOX_TMPFS_SIZE}&quot;,
+<span class="ln">359</span>            &quot;-e&quot;, &quot;HOME=/tmp&quot;, &quot;-e&quot;, &quot;MPLCONFIGDIR=/tmp&quot;, &quot;-e&quot;, &quot;MPLBACKEND=Agg&quot;,
+<span class="ln">360</span>            &quot;-e&quot;, &quot;OPENBLAS_NUM_THREADS=1&quot;, &quot;-e&quot;, &quot;OMP_NUM_THREADS=1&quot;,
+<span class="ln">361</span>            &quot;-e&quot;, &quot;PYTHONDONTWRITEBYTECODE=1&quot;,
+<span class="ln">362</span>            &quot;-v&quot;, f&quot;{ws / &#x27;data&#x27;}:/workspace/data:ro&quot;,
+<span class="ln">363</span>            &quot;-v&quot;, f&quot;{exec_dir / &#x27;out&#x27;}:/workspace/output:rw&quot;,
+<span class="ln">364</span>            &quot;-v&quot;, f&quot;{exec_dir / &#x27;main.py&#x27;}:/workspace/main.py:ro&quot;,
+<span class="ln">365</span>            &quot;-w&quot;, &quot;/tmp&quot;,
+<span class="ln">366</span>        ]
+<span class="ln">367</span>        if config.SANDBOX_DOCKER_RUNTIME:
+<span class="ln">368</span>            cmd += [&quot;--runtime&quot;, config.SANDBOX_DOCKER_RUNTIME]
+<span class="ln">369</span>        # -I: isolated mode (no user site, no PYTHON* variables, cwd not on sys.path)
+<span class="ln">370</span>        cmd += [config.SANDBOX_IMAGE, &quot;-I&quot;, &quot;-B&quot;, &quot;/workspace/main.py&quot;]
+<span class="ln">371</span>        return cmd</pre></figure>
+  <p class="note">Key options: <code>--network none</code> (no internet), <code>--read-only</code>, <code>--cap-drop ALL</code>, <code>no-new-privileges</code>, memory 512 MB with no swap, 1 CPU, a process limit, the data mounted read-only and only <code>/workspace/output</code> writable.</p>
+</section>
+<section class="fn">
+  <header><h3><code>_supervise</code></h3><span>sandbox/runner.py &middot; the watchdog</span></header>
+  <pre class="sig">def _supervise(proc, kill, timeout: float, output_limit: int) -&gt; _RawRun</pre>
+  <p class="purpose">Watches the running container and kills it if it takes too long, is cancelled, or prints too much.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>proc</code></td><td>The running <code>docker run</code> process.</td></tr><tr><td><code>kill</code></td><td>Function that stops the whole container.</td></tr><tr><td><code>timeout / output_limit</code></td><td>Time and stdout limits.</td></tr></table></div>
+    <div><h4>Returns</h4><p>A <code>_RawRun</code>.</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>Start two <code>_Pump</code> threads that read stdout and stderr, keeping at most the limit.</li><li>Every 0.2 s check: deadline passed? user cancelled? output far over the limit?</li><li>If any is true, call <code>kill()</code>.</li><li>Add a clear note to stderr, e.g. <code>[sandbox] execution timed out</code>, which Gemini then sees on the retry.</li></ol>
+  <figure class="code"><figcaption>backend/app/sandbox/runner.py : lines 122-140</figcaption><pre><span class="ln">122</span>def _supervise(proc: subprocess.Popen, kill, timeout: float, output_limit: int) -&gt; _RawRun:
+<span class="ln">123</span>    &quot;&quot;&quot;Wait for the child while enforcing the wall clock, cancellation and the
+<span class="ln">124</span>    output cap. `kill` must terminate the whole execution, not just `proc`.&quot;&quot;&quot;
+<span class="ln">125</span>    out, err = _Pump(proc.stdout, output_limit), _Pump(proc.stderr, output_limit)
+<span class="ln">126</span>    out.start()
+<span class="ln">127</span>    err.start()
+<span class="ln">128</span>    deadline = time.monotonic() + timeout
+<span class="ln">129</span>    timed_out = cancelled = overflow = False
+<span class="ln">130</span>    while proc.poll() is None:
+<span class="ln">131</span>        if time.monotonic() &gt;= deadline:
+<span class="ln">132</span>            timed_out = True
+<span class="ln">133</span>        elif runtime.is_cancel_requested():
+<span class="ln">134</span>            cancelled = True
+<span class="ln">135</span>        elif out.total &gt; output_limit * 4 or err.total &gt; output_limit * 4:
+<span class="ln">136</span>            overflow = True
+<span class="ln">137</span>        if timed_out or cancelled or overflow:
+<span class="ln">138</span>            kill()
+<span class="ln">139</span>            break
+<span class="ln">140</span>        time.sleep(_POLL_SECONDS)</pre></figure>
+  
+</section>
+<section class="fn">
+  <header><h3><code>route_after_executor</code></h3><span>graph.py &middot; what runs next</span></header>
+  <pre class="sig">def route_after_executor(state: AgentState) -&gt; str</pre>
+  <p class="purpose">Not in executor.py, but it reads what <code>executor_node</code> returned and picks the next node.</p>
+  <div class="two">
+    <div><h4>Inputs</h4><table><tr><td><code>state</code></td><td>The state after the Executor's update was merged.</td></tr></table></div>
+    <div><h4>Returns</h4><p><code>"failed"</code> (end), <code>"critic"</code> (all steps done) or <code>"executor"</code> (next step or retry).</p></div>
+  </div>
+  <h4>Step by step</h4><ol class="steps"><li>If <code>failed</code> is set, end the run.</li><li>If <code>step_index</code> has reached the end of the plan, go to the Critic.</li><li>Otherwise run the Executor again.</li></ol>
+  <figure class="code"><figcaption>backend/app/agents/graph.py : lines 94-99</figcaption><pre><span class="ln">94</span>def route_after_executor(state: AgentState) -&gt; str:
+<span class="ln">95</span>    if state.get(&quot;failed&quot;):
+<span class="ln">96</span>        return &quot;failed&quot;
+<span class="ln">97</span>    if state[&quot;step_index&quot;] &gt;= len(state[&quot;plan&quot;]):
+<span class="ln">98</span>        return &quot;critic&quot;
+<span class="ln">99</span>    return &quot;executor&quot;</pre></figure>
+  
+</section>
+
+<h2>7. Worked example <small>illustrative values</small></h2>
+<p>Question: <i>"Why did revenue drop in March?"</i>. The Planner made 4 steps; this is step 2. The numbers below are made up
+to show the shape of the data at each stage.</p>
+<div class="ex">
+  <div><h4>a. Prompt sent to Gemini</h4><pre>Business question: Why did revenue drop in March?
+
+Dataset profile:
+{ &quot;row_count&quot;: 1200, &quot;col_count&quot;: 6, &quot;columns&quot;: [ {&quot;name&quot;: &quot;order_date&quot;, ...}, {&quot;name&quot;: &quot;revenue&quot;, ...} ] }
+
+Prior step results (already computed ...):
+Step 0: Load data and parse dates
+  result: {&#x27;rows&#x27;: 1200, &#x27;months&#x27;: 6}
+
+Current step (2/4):
+Description: Monthly revenue totals
+Goal: Compute total revenue per month to locate the drop</pre></div>
+  <div><h4>b. Gemini's tool call (submit_code)</h4><pre>{
+  &quot;reasoning&quot;: &quot;Group by calendar month and sum revenue.&quot;,
+  &quot;formula_explanation&quot;: &quot;Monthly revenue = sum of revenue for all orders in that month.&quot;,
+  &quot;code&quot;: &quot;import pandas as pd, json\n
+           df = pd.read_csv(&#x27;/workspace/data/input.csv&#x27;)\n
+           df[&#x27;order_date&#x27;] = pd.to_datetime(df[&#x27;order_date&#x27;])\n
+           m = df.groupby(df[&#x27;order_date&#x27;].dt.to_period(&#x27;M&#x27;))[&#x27;revenue&#x27;].sum()\n
+           print(&#x27;RESULT_JSON:&#x27; + json.dumps({str(k): float(v) for k, v in m.items()}))\n
+           print(&#x27;DATA_SLICE_JSON:&#x27; + json.dumps({...}))&quot;
+}</pre></div>
+  <div><h4>c. Sandbox stdout</h4><pre>RESULT_JSON:{&quot;2026-01&quot;: 182300.0, &quot;2026-02&quot;: 179950.0, &quot;2026-03&quot;: 141200.0}
+DATA_SLICE_JSON:{&quot;columns&quot;: [&quot;order_date&quot;, &quot;revenue&quot;], &quot;rows&quot;: [[&quot;2026-03-01&quot;, 120.0], ...]}</pre></div>
+  <div><h4>d. executor_node returns</h4><pre>{ &quot;step_results&quot;: [ ...step 0..., {&quot;step_index&quot;: 1, &quot;result&quot;: {&quot;2026-03&quot;: 141200.0, ...},
+                                     &quot;success&quot;: True, &quot;attempts&quot;: 1, &quot;execution_log_id&quot;: 512, ...} ],
+  &quot;step_index&quot;: 2, &quot;retry_count&quot;: 0, &quot;last_error&quot;: None }</pre></div>
+</div>
+<p class="muted">If the script had crashed, for example with <code>KeyError: 'Revenue'</code> because of a wrong column name,
+step d would instead return <code>{"retry_count": 1, "last_error": "KeyError: 'Revenue' ..."}</code>, and the next prompt
+would end with that error and <i>"Fix the root cause and provide corrected code."</i></p>
+
+<h2>8. Likely viva questions</h2>
+<div class='qa'><p class='q'>Why force Gemini to use a tool instead of normal text?</p><p>A tool call returns structured JSON with fixed fields (<code>reasoning</code>, <code>formula_explanation</code>, <code>code</code>). Free text would need fragile parsing, and the model might wrap code in prose or markdown.</p></div><div class='qa'><p class='q'>Why not just run the generated code with <code>exec()</code>?</p><p>The code is written by a model that read a user's question and a user's CSV, so it is treated as hostile input. It runs in a separate Docker container with no network, a read-only filesystem, no Linux capabilities, and CPU, memory, process and time limits.</p></div><div class='qa'><p class='q'>What happens if the code crashes?</p><p>The stderr (error text) is saved and put into the next prompt with "Fix the root cause". Gemini gets up to 3 attempts per step (<code>MAX_EXECUTOR_RETRIES</code>). This is the self-correction loop.</p></div><div class='qa'><p class='q'>What if Gemini is down or rate-limited?</p><p><code>call_tool()</code> retries a 429 or 5xx error up to 2 times with a wait, then automatically switches to a Llama model. Only if both fail does the run stop with <code>ProviderUnavailable</code>.</p></div><div class='qa'><p class='q'>How does the result get back from the container?</p><p>Through stdout. The script must print one line starting <code>RESULT_JSON:</code> and one starting <code>DATA_SLICE_JSON:</code>. Charts are saved as Plotly JSON in <code>/workspace/output</code>. The runner parses these and validates every file.</p></div><div class='qa'><p class='q'>Why save an ExecutionLog for failed attempts too?</p><p>Auditability. The Audit trail shows every attempt, including the ones that failed and why, so nothing is hidden.</p></div><div class='qa'><p class='q'>Why does the Executor not compute everything in one script?</p><p>The Planner splits the question into small steps. Each step is easier to get right, easier to verify, and a failure only retries one step instead of the whole analysis.</p></div><div class='qa'><p class='q'>What stops a script from running forever or printing gigabytes?</p><p><code>_supervise()</code> kills the container on timeout (60 s default), on cancellation, or when output exceeds the limit.</p></div>
+
+<footer>Generated from the repository source on 16 October 2026. Every code block is copied from the file and line range shown in its caption.</footer>
+</main></body></html>

@@ -11,7 +11,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 SCHEMA_VERSION = "1"
-METHODS_VERSION = "1"
+# Raise this whenever a method starts producing different numbers for the same data. It is part
+# of the evidence context (hypothesis_engine._evidence_context): a stored result made under
+# another version is kept on record and recomputed, never reused as current.
+#   2  Spearman interval uses Fieller's variance 1.06 / (n - 3), not the rounded 1.03 / sqrt(n - 3).
+#      Permutation tests of a mean report a test-inversion interval, or none, instead of a bootstrap one.
+#      A question about typical values is tested with Brunner-Munzel, not Mann-Whitney.
+#      A mean comparison on a small sample that is itself visibly skewed reports the measured difference
+#      without a test or interval (`inference_unavailable`).
+METHODS_VERSION = "2"
 
 # Said of every inferential result: what an interval or test can and cannot fix.
 FRAME_NOTE = ("The dataset holds every recorded row for the compared groups, so the measured difference is exact for "
@@ -113,6 +121,15 @@ class StatResult(BaseModel):
     assumptions: list[Assumption] = []
     estimate: float | None = None
     interval: Interval | None = None
+    # Why an "ok" result has no interval. Always set when `interval` is None, so that a reader
+    # never has to guess whether one was left out, failed, or does not exist for this method.
+    interval_unavailable: str | None = None
+    # Set when the quantity could be measured but no test or interval for it is supported by the data:
+    # {"code", "summary", "reason", "supported_instead", "supported_analysis"}. The estimate, the descriptives
+    # and the sample sizes are kept. `supported_analysis`, when present, is a test of a DIFFERENT, named
+    # question that the data does support; it never stands in for the one asked.
+    # Such a result is "unavailable", never "ok": it is neither a zero effect nor a non-significant one.
+    inference_unavailable: dict | None = None
     test: Test | None = None
     effects: list[Effect] = []
     alpha: float = Field(gt=0, lt=1)
@@ -140,6 +157,15 @@ class StatResult(BaseModel):
             raise ValueError("significance is stated exactly when a p-value exists")
         if p is not None and self.significant != (p < self.alpha):
             raise ValueError("significance must follow from the p-value and alpha")
+        if self.inference_unavailable is not None:
+            if self.status != "unavailable" or self.test is not None or self.interval is not None or self.significant is not None:
+                raise ValueError("a result without supported inference carries no test, interval or significance")
+            if not self.inference_unavailable.get("code") or not self.inference_unavailable.get("reason"):
+                raise ValueError("unavailable inference must carry a code and a reason")
+        if self.interval is not None and self.interval_unavailable:
+            raise ValueError("a result has an interval or a reason for not having one, never both")
+        if self.status == "ok" and self.interval is None and not self.interval_unavailable:
+            self.interval_unavailable = "this method does not produce an interval for its estimate"
         return self
 
 
@@ -162,6 +188,15 @@ def interpret(r: dict) -> list[str]:
     result is never read as 'no effect', a significant one never as 'large'
     or 'caused by'."""
     if r["status"] != "ok":
+        if r.get("inference_unavailable"):
+            other = r["inference_unavailable"].get("supported_analysis")
+            first = (f"Measured {r['estimand']}: {fmt(r['estimate'], r.get('units'))}." if r.get("estimate") is not None
+                     else f"The {r['estimand']} were measured (see the group figures).")
+            return [first, f"No test or interval is reported: {r['reason']}",
+                    "This is not a finding of no difference, and not a non-significant result: whether the difference "
+                    "is larger than chance would produce was not assessed."] + ([
+                        f"A different question the data can answer, {other['estimand']}: {fmt(other['estimate'])} "
+                        f"({other['method_label']}, {p_text(other['p_value'])}). {other['note']}"] if other else [])
         return [f"No statistical conclusion: {r['reason']}"]
     out = []
     units = r.get("units")

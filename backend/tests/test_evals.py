@@ -58,7 +58,8 @@ def test_pipeline_metrics_are_measured(report):
     assert hallucinated["llm_calls"] <= 14, "bounded: one recovery pass, then it stops"
     assert by_id["pipeline-fast-path-uses-no-model"]["llm_calls"] == 0
     p = report["summary"]["pipeline"]
-    assert p["runs"] == 9 and p["llm_calls"] == sum(by_id[k]["llm_calls"] for k in by_id if k.startswith("pipeline-"))
+    assert by_id["cmp-pipeline-question-to-dashboard"]["llm_calls"] == 0 and by_id["cmp-pipeline-question-to-dashboard"]["sandbox_runs"] == 0
+    assert p["runs"] == 10 and p["llm_calls"] == sum(by_id[k]["llm_calls"] for k in by_id if k.startswith("pipeline-"))
     assert p["retries"] == 3 and p["sandbox_timeouts"] == 0
 
 

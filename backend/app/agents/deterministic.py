@@ -1,16 +1,17 @@
-"""Deterministic graph nodes: the fast path and the root-cause investigator.
+"""Deterministic graph nodes: the fast path, the root-cause investigator and
+the comparison workflow.
 
-Neither calls a model nor runs generated code. Both compute through
-`metric_engine`, recompute the headline figures with its independent reference
-implementation, and publish through the same `publish_dashboard` as the
-model-driven route -- so their dashboards, audit trails and evidence records
-look the same to every reader.
+None calls a model or runs generated code. Each computes through trusted
+engines (`metric_engine`, `stats`), recomputes its headline figures with an
+independent reference implementation, and publishes through the same
+`publish_dashboard` as the model-driven route -- so their dashboards, audit
+trails and evidence records look the same to every reader.
 """
 from __future__ import annotations
 
 import uuid
 
-from app import fastpath, investigator, verification
+from app import comparison, fastpath, investigator, verification
 from app import metric_engine as me
 from app.agents.dashboard import dataset_evidence_for, publish_dashboard
 from app.agents.state import AgentState, update_stage
@@ -265,3 +266,128 @@ def investigate_node(state: AgentState) -> dict:
         critic_note="Deterministic root-cause investigator.",
     )
     return {"dashboard": dashboard, "evidence": records, "investigation_id": investigation_id}
+
+
+# -------------------------------------------------------------- comparison --
+
+def _reference_pair(engine_value, reference_value, formula: str, plan: dict, group_by: list[str] | None = None) -> dict:
+    return {"formula": formula, "filters": plan["filters"], "group_by": group_by or [], "engine_value": engine_value,
+            "reference_value": reference_value,
+            "error": None if reference_value is not None else "The independent reference produced no value for this figure."}
+
+
+def compare_node(state: AgentState) -> dict:
+    """Carry out a validated comparison plan with the statistics engine and
+    publish it. The plan was validated before it reached this node; the data
+    can still contradict it (a group that does not exist), and that is
+    reported as the reason no analysis was run, not as an internal error."""
+    question_id, plan = state["question_id"], state["route_spec"]
+    update_stage(question_id, "executing", "Comparing with the statistics engine")
+    try:
+        plan = comparison.validate({k: v for k, v in plan.items() if k in comparison.PLAN_TOOL_SCHEMA["properties"] or k == "source"},
+                                   state["profile"])
+        df = me.load_frame(state["csv_path"])
+        report = comparison.run(df, plan)
+        reference = comparison.reference(state["csv_path"], plan)
+    except comparison.PlanError as e:
+        return {"failed": True, "failure_reason": f"This comparison could not be run: {e}"}
+    except (me.FormulaError, OSError, UnicodeDecodeError) as e:
+        return {"failed": True, "failure_reason": f"The statistics engine could not read this dataset: {e}"}
+
+    stat_result, outcome, explanatory = report["statistic"], plan["outcome"], plan["explanatory"]
+    kpis: list[dict] = []
+    structured: dict[str, dict] = {}
+    ref_groups = reference.get("groups") or {}
+
+    def add(label: str, value: float | None, ref: float | None, formula: str, group_by: list[str] | None = None) -> None:
+        if value is None:
+            return
+        kpi = _kpi(label, fastpath.format_value(float(value)))
+        kpis.append(kpi)
+        structured[kpi["element_id"]] = _reference_pair(float(value), ref, formula, plan, group_by)
+
+    if report["family"] == "correlation":
+        if stat_result["status"] == "ok" and stat_result["method"] == "pearson":
+            add(f"Correlation: {explanatory} and {outcome}", stat_result["estimate"], reference.get("pearson_r"),
+                f"pearson({explanatory}, {outcome})")
+        add("Rows used", float(stat_result["sample"].get("n", 0)), float(reference["n"]) if reference.get("n") is not None else None,
+            "count()")
+    elif plan["design"] == "paired":
+        a, b = plan["levels"] or [g["level"] for g in report["groups"]][:2] or ("first", "second")
+        if (stat_result["status"] == "ok" or stat_result.get("inference_unavailable")) and plan["estimand"] != "typical":
+            add(f"Mean change in {outcome} ({b} − {a})", stat_result["estimate"], reference.get("mean_change"),
+                f'avg("{outcome}") change per {plan["unit"]}', [explanatory])
+        add(f"Pairs of {plan['unit']} compared", float(stat_result["sample"].get("pairs", 0)),
+            float(reference["pairs"]) if reference.get("pairs") is not None else None, "count of matched units")
+    elif report["family"] == "groups":
+        groups = [g for g in report["groups"] if g["mean"] is not None]
+        shown = groups if len(groups) == 2 else sorted(groups, key=lambda g: -g["mean"])[:1] + sorted(groups, key=lambda g: g["mean"])[:1]
+        for g in shown:
+            add(f"Mean {outcome}: {g['level']}", g["mean"], (ref_groups.get(g["level"]) or {}).get("mean"),
+                f'avg("{outcome}")', [explanatory])
+        if len(groups) == 2:
+            a, b = groups
+            ra, rb = (ref_groups.get(a["level"]) or {}).get("mean"), (ref_groups.get(b["level"]) or {}).get("mean")
+            add(f"Difference ({b['level']} − {a['level']})", b["mean"] - a["mean"],
+                None if ra is None or rb is None else rb - ra, f'avg("{outcome}") difference', [explanatory])
+        else:
+            add(f"Number of {explanatory} groups", float(len(groups)),
+                float(sum(1 for v in ref_groups.values() if v.get("n", 0) >= comparison.MIN_GROUP_ROWS)), "count of groups")
+    else:
+        for g in report["groups"]:
+            if g.get("share") is not None:
+                counts = (ref_groups.get(g["level"]) or {})
+                level = stat_result["estimand"].split("= ")[-1].split(" (")[0]
+                ref = counts["counts"].get(level, 0) / counts["n"] if counts.get("n") else None
+                add(f"Share with {outcome} = {level}: {g['level']}", g["share"], ref, "share of rows", [explanatory])
+        used = float(sum(g["n"] for g in report["groups"]))
+        add("Rows used", used, float(sum(v.get("n", 0) for k, v in ref_groups.items() if any(g["level"] == k for g in report["groups"]))),
+            "count()")
+
+    narrative = comparison.narrative(report)
+    description = f"Compare {outcome} by {explanatory}" if report["family"] != "correlation" else f"Relate {explanatory} and {outcome}"
+    method = stat_result.get("method_label") or "no test"
+    formula_text = (f"{report['family']}: {outcome} ~ {explanatory}  |  method: {method}  |  filters: {_filter_text(plan['filters'])}"
+                    f"  |  plan from: {plan['source']}")
+    data_slice = {"columns": ["group", "n", "mean"], "rows": [[g["level"], g.get("n"), g.get("mean", g.get("share"))]
+                                                              for g in report["groups"][:50]]}
+    log_id = _record_step(
+        question_id, description, "Measure the difference or association, with its uncertainty",
+        "# Comparison workflow (deterministic; no generated code was run).\n"
+        f"# plan    : {plan['outcome']} ~ {plan['explanatory']} ({plan['design']}, {plan['estimand']})\n"
+        f"# method  : {method}, chosen by the statistics engine from the data\n"
+        f"# rejected: {'; '.join(r['method'] for r in stat_result.get('rejected_methods') or []) or 'none'}",
+        report, formula_text, data_slice)
+    steps = {0: {"result": report, "execution_log_id": log_id, "formula": formula_text}}
+    dataset_ev = dataset_evidence_for(question_id)
+    narrative_id = uuid.uuid4().hex
+    records = verification.build_evidence(
+        kpis=kpis, charts=[], narrative=narrative, narrative_element_id=narrative_id, steps=steps,
+        critic=None, dataset=dataset_ev, question_text=state["question_text"], structured=structured,
+        deterministic=True,
+    )
+    assessed = "assessed" if stat_result["status"] == "ok" else f"not assessed: {stat_result.get('reason')}"
+    for r in records:
+        r["validity"]["statistical"] = assessed if r["validity"]["statistical"] == "not_assessed" else r["validity"]["statistical"]
+        if r["claim_type"] == "narrative":
+            # An association is published as an association whatever the question asked.
+            r["limitations"].append("association_not_causal")
+            if stat_result.get("inference_unavailable"):
+                # measured, but no test or interval is supported: not the same as nothing to conclude
+                r["limitations"].append("inference_not_available")
+            elif stat_result["status"] != "ok":
+                r["limitations"].append("no_statistical_conclusion")
+            elif stat_result.get("interval") is None and stat_result.get("estimate") is not None:
+                r["limitations"].append("interval_not_available")
+            r["validity"]["causal"] = "not_established"
+            r["status"], r["reasons"] = verification.decide_status(r["checks"], r["limitations"])
+    dashboard = publish_dashboard(
+        question_id=question_id, kpis=kpis, charts=[], narrative=narrative,
+        narrative_element_id=narrative_id, steps=steps, records=records, dataset_ev=dataset_ev,
+        base_state="VERIFIED" if kpis else "UNVERIFIED",
+        verification_summary=("The group figures were computed by the statistics engine and recomputed by an independent "
+                              "reference. The test and interval come from the statistics engine; they describe an "
+                              "association and do not establish cause."),
+        critic_note="Comparison workflow: validated plan, statistics engine, no generated code.",
+    )
+    return {"dashboard": dashboard, "evidence": records}

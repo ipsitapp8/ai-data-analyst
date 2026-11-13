@@ -1,0 +1,1871 @@
+{
+ "base_seed": 20261201,
+ "alpha": 0.05,
+ "alternatives": {
+  "simulations_per_design": 3000,
+  "permutations": 1999,
+  "designs": [
+   {
+    "design": "normal 12 + 12, equal spread",
+    "tests": "control: exchangeable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.05533333333333333,
+      "interval": [
+       0.04770621606483646,
+       0.06409777340155344
+      ],
+      "count": 166,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.053,
+      "interval": [
+       0.04553961731667641,
+       0.061603673443764995
+      ],
+      "count": 159,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.05366666666666667,
+      "interval": [
+       0.04615821902958661,
+       0.06231669993255437
+      ],
+      "count": 161,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 6 + 18, equal spread",
+    "tests": "control: unequal sizes only",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.050333333333333334,
+      "interval": [
+       0.04306877699858018,
+       0.05874800095506297
+      ],
+      "count": 151,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.051666666666666666,
+      "interval": [
+       0.04430347095281026,
+       0.060176563404232025
+      ],
+      "count": 155,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.056666666666666664,
+      "interval": [
+       0.04894610168340463,
+       0.06552114418638438
+      ],
+      "count": 170,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "lognormal 12 + 12, same shape",
+    "tests": "control: skewed, exchangeable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.05366666666666667,
+      "interval": [
+       0.04615821902958661,
+       0.06231669993255437
+      ],
+      "count": 161,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.05566666666666667,
+      "interval": [
+       0.04801606556145485,
+       0.06445373800578483
+      ],
+      "count": 167,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.036333333333333336,
+      "interval": [
+       0.030208539096929325,
+       0.043644046621022954
+      ],
+      "count": 109,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 12 + 12, spread 5 vs 20",
+    "tests": "unequal variances, equal sizes",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.061,
+      "interval": [
+       0.05298433102545966,
+       0.07013849815537654
+      ],
+      "count": 183,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.06166666666666667,
+      "interval": [
+       0.05360670722610212,
+       0.07084775015643364
+      ],
+      "count": 185,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.05333333333333334,
+      "interval": [
+       0.04584887477722538,
+       0.06196023008406583
+      ],
+      "count": 160,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 8 + 24, larger group has spread 20 (smaller 5)",
+    "tests": "unequal sizes, LARGER group more variable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.002,
+      "interval": [
+       0.000916930269583324,
+       0.004356803060841335
+      ],
+      "count": 6,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.037333333333333336,
+      "interval": [
+       0.03111977038239726,
+       0.04473025763810437
+      ],
+      "count": 112,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.04933333333333333,
+      "interval": [
+       0.04214374236315084,
+       0.05767559328794296
+      ],
+      "count": 148,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 24 + 8, smaller group has spread 20 (larger 5)",
+    "tests": "unequal sizes, SMALLER group more variable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.25566666666666665,
+      "interval": [
+       0.24037579553396396,
+       0.2715824685431452
+      ],
+      "count": 767,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.065,
+      "interval": [
+       0.056722755168535435,
+       0.07438984322249816
+      ],
+      "count": 195,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.052333333333333336,
+      "interval": [
+       0.04492136585872146,
+       0.0608902967000204
+      ],
+      "count": 157,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 30 + 10, smaller group has spread 20 (larger 5)",
+    "tests": "unequal sizes, SMALLER group more variable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.24033333333333334,
+      "interval": [
+       0.22538163181398,
+       0.2559491836240393
+      ],
+      "count": 721,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.063,
+      "interval": [
+       0.05485230532925785,
+       0.07226540845667705
+      ],
+      "count": 189,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.057,
+      "interval": [
+       0.04925627402901687,
+       0.06587678594162194
+      ],
+      "count": 171,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 15 + 5, smaller group has spread 20 (larger 5)",
+    "tests": "small sample, SMALLER group more variable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.257,
+      "interval": [
+       0.24168085253494,
+       0.2729406679455684
+      ],
+      "count": 771,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.081,
+      "interval": [
+       0.07176427979665034,
+       0.0913073954351728
+      ],
+      "count": 243,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.049666666666666665,
+      "interval": [
+       0.042451991585445485,
+       0.0580331581664981
+      ],
+      "count": 149,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 16 + 8, smaller group has spread 20 (larger 10)",
+    "tests": "milder: spread ratio 2",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.12166666666666667,
+      "interval": [
+       0.11045020543707107,
+       0.13385079009842557
+      ],
+      "count": 365,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.06433333333333334,
+      "interval": [
+       0.05609900349433693,
+       0.07368196669499709
+      ],
+      "count": 193,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.052,
+      "interval": [
+       0.044612373435453025,
+       0.06053347502243903
+      ],
+      "count": 156,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "lognormal 20 + 8, equal means, smaller group more skewed",
+    "tests": "skewed, SMALLER group more variable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.22833333333333333,
+      "interval": [
+       0.21366575160276177,
+       0.24369575620466535
+      ],
+      "count": 685,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.18933333333333333,
+      "interval": [
+       0.17571479854362831,
+       0.2037464594643742
+      ],
+      "count": 568,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.19133333333333333,
+      "interval": [
+       0.17765591635433178,
+       0.2058002262587694
+      ],
+      "count": 574,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "lognormal 8 + 20, equal means, larger group more skewed",
+    "tests": "skewed, LARGER group more variable",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.07766666666666666,
+      "interval": [
+       0.06862024174778868,
+       0.08779329247553662
+      ],
+      "count": 233,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.072,
+      "interval": [
+       0.06328737179829913,
+       0.08180732271057986
+      ],
+      "count": 216,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.076,
+      "interval": [
+       0.06705013576453428,
+       0.08603432795454213
+      ],
+      "count": 228,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "exponential 8 vs normal 20, equal means",
+    "tests": "different shapes, smaller group skewed",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.252,
+      "interval": [
+       0.23678787709258894,
+       0.26784643187517265
+      ],
+      "count": 756,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.124,
+      "interval": [
+       0.1126848784070766,
+       0.13627681583436854
+      ],
+      "count": 372,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.11166666666666666,
+      "interval": [
+       0.10088920659365967,
+       0.12343736591634348
+      ],
+      "count": 335,
+      "simulations": 3000
+     }
+    }
+   },
+   {
+    "design": "normal 5 + 5, spread 5 vs 20",
+    "tests": "very small, unequal variances",
+    "simulations": 3000,
+    "type_one_error": {
+     "permutation of the mean difference (engine's test)": {
+      "rate": 0.07333333333333333,
+      "interval": [
+       0.06454074216888286,
+       0.08321720874339528
+      ],
+      "count": 220,
+      "simulations": 3000
+     },
+     "permutation of Welch's t": {
+      "rate": 0.072,
+      "interval": [
+       0.06328737179829913,
+       0.08180732271057986
+      ],
+      "count": 216,
+      "simulations": 3000
+     },
+     "Welch's t-test": {
+      "rate": 0.056666666666666664,
+      "interval": [
+       0.04894610168340463,
+       0.06552114418638438
+      ],
+      "count": 170,
+      "simulations": 3000
+     }
+    }
+   }
+  ]
+ },
+ "engine": {
+  "simulations_per_design": 3000,
+  "typical_simulations_per_design": 2000,
+  "two_groups": [
+   {
+    "design": "normal 12 + 12, equal spread",
+    "tests": "control: exchangeable",
+    "seed_first": 20261201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.054,
+       "interval": [
+        0.046467649316585216,
+        0.06267308374640554
+       ],
+       "count": 162,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.946,
+       "interval": [
+        0.9373269162535944,
+        0.9535323506834148
+       ],
+       "count": 2838,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 6 + 18, equal spread",
+    "tests": "control: unequal sizes only",
+    "seed_first": 20361201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.054,
+       "interval": [
+        0.046467649316585216,
+        0.06267308374640554
+       ],
+       "count": 162,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9466666666666667,
+       "interval": [
+        0.9380397699159342,
+        0.9541511252227746
+       ],
+       "count": 2840,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 12 + 12, same shape",
+    "tests": "control: skewed, exchangeable",
+    "seed_first": 20461201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.056,
+       "interval": [
+        0.04832599678282378,
+        0.06480962088526569
+       ],
+       "count": 168,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9446666666666667,
+       "interval": [
+        0.9359022265984466,
+        0.9522937839351636
+       ],
+       "count": 2834,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 12 + 12, spread 5 vs 20",
+    "tests": "unequal variances, equal sizes",
+    "seed_first": 20561201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.06133333333333333,
+       "interval": [
+        0.05329548344499248,
+        0.07049315983669349
+       ],
+       "count": 184,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9386666666666666,
+       "interval": [
+        0.9295068401633065,
+        0.9467045165550075
+       ],
+       "count": 2816,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 8 + 24, larger group has spread 20 (smaller 5)",
+    "tests": "unequal sizes, LARGER group more variable",
+    "seed_first": 20661201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.03833333333333333,
+       "interval": [
+        0.03203229760214456,
+        0.045815172720906405
+       ],
+       "count": 115,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9623333333333334,
+       "interval": [
+        0.9549079624448719,
+        0.9685761954337769
+       ],
+       "count": 2887,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 24 + 8, smaller group has spread 20 (larger 5)",
+    "tests": "unequal sizes, SMALLER group more variable",
+    "seed_first": 20761201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.06666666666666667,
+       "interval": [
+        0.058283278209758996,
+        0.0761583906855235
+       ],
+       "count": 200,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9326666666666666,
+       "interval": [
+        0.9231346383309897,
+        0.9410920645720282
+       ],
+       "count": 2798,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 30 + 10, smaller group has spread 20 (larger 5)",
+    "tests": "unequal sizes, SMALLER group more variable",
+    "seed_first": 20861201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.06433333333333334,
+       "interval": [
+        0.05609900349433693,
+        0.07368196669499709
+       ],
+       "count": 193,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.936,
+       "interval": [
+        0.9266720714885675,
+        0.9442127724229483
+       ],
+       "count": 2808,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 15 + 5, smaller group has spread 20 (larger 5)",
+    "tests": "small sample, SMALLER group more variable",
+    "seed_first": 20961201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.08233333333333333,
+       "interval": [
+        0.07302327237296811,
+        0.09271165926225415
+       ],
+       "count": 247,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9173333333333333,
+       "interval": [
+        0.9069373943420365,
+        0.9266618599218914
+       ],
+       "count": 2752,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 16 + 8, smaller group has spread 20 (larger 10)",
+    "tests": "milder: spread ratio 2",
+    "seed_first": 21061201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.06333333333333334,
+       "interval": [
+        0.055163878001273065,
+        0.07261964988551162
+       ],
+       "count": 190,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.936,
+       "interval": [
+        0.9266720714885675,
+        0.9442127724229483
+       ],
+       "count": 2808,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 20 + 8, equal means, smaller group more skewed",
+    "tests": "skewed, SMALLER group more variable",
+    "seed_first": 21161201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.19033333333333333,
+       "interval": [
+        0.17668528374059891,
+        0.20477341656995293
+       ],
+       "count": 571,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.81,
+       "interval": [
+        0.795568886041757,
+        0.8236382277485409
+       ],
+       "count": 2430,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 8 + 20, equal means, larger group more skewed",
+    "tests": "skewed, LARGER group more variable",
+    "seed_first": 21261201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.07066666666666667,
+       "interval": [
+        0.06203491577815216,
+        0.08039652232732775
+       ],
+       "count": 212,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.929,
+       "interval": [
+        0.9192506905703182,
+        0.9376520572233522
+       ],
+       "count": 2787,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "exponential 8 vs normal 20, equal means",
+    "tests": "different shapes, smaller group skewed",
+    "seed_first": 21361201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.125,
+       "interval": [
+        0.11364301197128066,
+        0.13731612457271383
+       ],
+       "count": 375,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.876,
+       "interval": [
+        0.8637231841656314,
+        0.8873151215929234
+       ],
+       "count": 2628,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 5 + 5, spread 5 vs 20",
+    "tests": "very small, unequal variances",
+    "seed_first": 21461201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_means": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.076,
+       "interval": [
+        0.06705013576453428,
+        0.08603432795454213
+       ],
+       "count": 228,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.924,
+       "interval": [
+        0.913965672045458,
+        0.9329498642354658
+       ],
+       "count": 2772,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   }
+  ],
+  "k_groups": [
+   {
+    "design": "3 groups of 8, normal, equal spread",
+    "tests": "control: exchangeable",
+    "seed_first": 70261201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_anova": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.047,
+       "interval": [
+        0.03998876360822058,
+        0.055169873336924746
+       ],
+       "count": 141,
+       "simulations": 3000
+      },
+      "coverage": null,
+      "no_interval": 3000,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "3 groups 20 + 20 + 6, smallest has spread 20 (others 5)",
+    "tests": "unequal sizes, SMALLEST group most variable",
+    "seed_first": 70361201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_anova": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.074,
+       "interval": [
+        0.06516776307117575,
+        0.08392181604280197
+       ],
+       "count": 222,
+       "simulations": 3000
+      },
+      "coverage": null,
+      "no_interval": 3000,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "3 groups 6 + 6 + 20, largest has spread 20 (others 5)",
+    "tests": "unequal sizes, LARGEST group most variable",
+    "seed_first": 70461201,
+    "simulations": 3000,
+    "by_method": {
+     "permutation_anova": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.041666666666666664,
+       "interval": [
+        0.03508281968252068,
+        0.04942279164902812
+       ],
+       "count": 125,
+       "simulations": 3000
+      },
+      "coverage": null,
+      "no_interval": 3000,
+      "unavailable": 0
+     }
+    }
+   }
+  ],
+  "paired": [
+   {
+    "design": "8 pairs, normal",
+    "tests": "control: symmetric",
+    "seed_first": 21561201,
+    "simulations": 3000,
+    "by_method": {
+     "sign_flip_permutation": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.043333333333333335,
+       "interval": [
+        0.0366127910180945,
+        0.051221890817703224
+       ],
+       "count": 130,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9566666666666667,
+       "interval": [
+        0.9487781091822968,
+        0.9633872089819054
+       ],
+       "count": 2870,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "12 pairs, heavy-tailed symmetric",
+    "tests": "control: symmetric",
+    "seed_first": 21661201,
+    "simulations": 3000,
+    "by_method": {
+     "sign_flip_permutation": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.04833333333333333,
+       "interval": [
+        0.041219579683999655,
+        0.056602313664544796
+       ],
+       "count": 145,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9516666666666667,
+       "interval": [
+        0.9433976863354552,
+        0.9587804203160004
+       ],
+       "count": 2855,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "8 pairs, skewed",
+    "tests": "symmetry violated",
+    "seed_first": 21761201,
+    "simulations": 3000,
+    "by_method": {
+     "sign_flip_permutation": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.13766666666666666,
+       "interval": [
+        0.1257998833357534,
+        0.1504601890405328
+       ],
+       "count": 413,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.8623333333333333,
+       "interval": [
+        0.8495398109594672,
+        0.8742001166642466
+       ],
+       "count": 2587,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "12 pairs, skewed",
+    "tests": "symmetry violated",
+    "seed_first": 21861201,
+    "simulations": 3000,
+    "by_method": {
+     "sign_flip_permutation": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.13066666666666665,
+       "interval": [
+        0.11907701446295671,
+        0.14320096179548403
+       ],
+       "count": 392,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.8693333333333333,
+       "interval": [
+        0.8567990382045159,
+        0.8809229855370433
+       ],
+       "count": 2608,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "20 pairs, skewed",
+    "tests": "symmetry violated",
+    "seed_first": 21961201,
+    "simulations": 3000,
+    "by_method": {
+     "sign_flip_permutation": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.11566666666666667,
+       "interval": [
+        0.10471036265529521,
+        0.12760597906490534
+       ],
+       "count": 347,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.884,
+       "interval": [
+        0.8720468358394053,
+        0.8949710083395443
+       ],
+       "count": 2652,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "40 pairs, skewed",
+    "tests": "symmetry violated",
+    "seed_first": 22061201,
+    "simulations": 3000,
+    "by_method": {
+     "paired_t": {
+      "runs": 7,
+      "type_one_error": {
+       "rate": 0.7142857142857143,
+       "interval": [
+        0.35893445183261935,
+        0.9177810759959433
+       ],
+       "count": 5,
+       "simulations": 7
+      },
+      "coverage": {
+       "rate": 0.2857142857142857,
+       "interval": [
+        0.08221892400405678,
+        0.6410655481673808
+       ],
+       "count": 2,
+       "simulations": 7
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     },
+     "sign_flip_permutation": {
+      "runs": 2993,
+      "type_one_error": {
+       "rate": 0.09856331440026729,
+       "interval": [
+        0.08839359845109653,
+        0.10976218222019075
+       ],
+       "count": 295,
+       "simulations": 2993
+      },
+      "coverage": {
+       "rate": 0.8997661209488808,
+       "interval": [
+        0.8884895059303957,
+        0.9100178668759338
+       ],
+       "count": 2693,
+       "simulations": 2993
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "15 pairs, mostly small losses and a few large gains",
+    "tests": "symmetry violated",
+    "seed_first": 22161201,
+    "simulations": 3000,
+    "by_method": {
+     "sign_flip_permutation": {
+      "runs": 3000,
+      "type_one_error": {
+       "rate": 0.09633333333333334,
+       "interval": [
+        0.08628573714307874,
+        0.10741338672783443
+       ],
+       "count": 289,
+       "simulations": 3000
+      },
+      "coverage": {
+       "rate": 0.9033333333333333,
+       "interval": [
+        0.8922374570723152,
+        0.9133976049559219
+       ],
+       "count": 2710,
+       "simulations": 3000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   }
+  ],
+  "mann_whitney": [
+   {
+    "design": "lognormal 8 + 8, identical",
+    "tests": "null true",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 22261201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.045,
+       "interval": [
+        0.03675381704471326,
+        0.05499069598122689
+       ],
+       "count": 90,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.956,
+       "interval": [
+        0.9461034732959137,
+        0.9641481795835833
+       ],
+       "count": 1912,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 15 + 15, identical",
+    "tests": "null true",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 22361201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.043,
+       "interval": [
+        0.03495107254461269,
+        0.05280110867045247
+       ],
+       "count": 86,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9575,
+       "interval": [
+        0.9477470814477515,
+        0.965498820289902
+       ],
+       "count": 1915,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 30 + 30, identical",
+    "tests": "null true",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 22461201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.043,
+       "interval": [
+        0.03495107254461269,
+        0.05280110867045247
+       ],
+       "count": 86,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9515,
+       "interval": [
+        0.9411889997479057,
+        0.9600799065571228
+       ],
+       "count": 1903,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 10 + 30, identical",
+    "tests": "null true, unequal sizes",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 22561201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.047,
+       "interval": [
+        0.038561402365168564,
+        0.05717544247164658
+       ],
+       "count": 94,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.943,
+       "interval": [
+        0.9319642649870394,
+        0.9523372311217704
+       ],
+       "count": 1886,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 8 + 8, shifted by 10",
+    "tests": "interval coverage",
+    "true_median_difference": 10.0,
+    "test_null_is_true": false,
+    "seed_first": 22661201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.207,
+       "interval": [
+        0.18981343495635533,
+        0.22530995475045879
+       ],
+       "count": 414,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9545,
+       "interval": [
+        0.9444626753715425,
+        0.9627947286497985
+       ],
+       "count": 1909,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 15 + 15, shifted by 10",
+    "tests": "interval coverage",
+    "true_median_difference": 10.0,
+    "test_null_is_true": false,
+    "seed_first": 22761201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.344,
+       "interval": [
+        0.32349766533155805,
+        0.36510045342019276
+       ],
+       "count": 688,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9565,
+       "interval": [
+        0.9466510236907602,
+        0.9645987121414559
+       ],
+       "count": 1913,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 30 + 30, shifted by 10",
+    "tests": "interval coverage",
+    "true_median_difference": 10.0,
+    "test_null_is_true": false,
+    "seed_first": 22861201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.626,
+       "interval": [
+        0.6045715428037938,
+        0.6469453612813304
+       ],
+       "count": 1252,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.955,
+       "interval": [
+        0.9450093040187729,
+        0.9632461829552866
+       ],
+       "count": 1910,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 6 + 6, shifted by 8",
+    "tests": "very small",
+    "true_median_difference": 8.0,
+    "test_null_is_true": false,
+    "seed_first": 22961201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.1955,
+       "interval": [
+        0.17870981012231002,
+        0.213457671671973
+       ],
+       "count": 391,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.951,
+       "interval": [
+        0.9406443633026171,
+        0.9596264600496927
+       ],
+       "count": 1902,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "ratings 1 to 5, 20 + 20, identical",
+    "tests": "tied, discrete data",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 23061201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.055,
+       "interval": [
+        0.04583478836864504,
+        0.06587138371167006
+       ],
+       "count": 110,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.991,
+       "interval": [
+        0.9858179592983869,
+        0.9942995002714226
+       ],
+       "count": 1982,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 12 + 12, same median, spread 1 vs 4",
+    "tests": "equal medians, unequal spread",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 23161201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.0695,
+       "interval": [
+        0.059160340573897574,
+        0.08149023713526121
+       ],
+       "count": 139,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9415,
+       "interval": [
+        0.9303432888168623,
+        0.9509639584337912
+       ],
+       "count": 1883,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "normal 24 + 8, same median, smaller group spread 4",
+    "tests": "equal medians, SMALLER group more variable",
+    "true_median_difference": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 23261201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.14,
+       "interval": [
+        0.12548195561218853,
+        0.15589831843031357
+       ],
+       "count": 280,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.93,
+       "interval": [
+        0.9179739154089434,
+        0.9403774239291792
+       ],
+       "count": 1860,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "lognormal 20 + 8, same median, smaller group more skewed",
+    "tests": "equal medians, different shape",
+    "true_median_difference": 0.0,
+    "test_null_is_true": false,
+    "seed_first": 23361201,
+    "simulations": 2000,
+    "by_method": {
+     "mann_whitney": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.1165,
+       "interval": [
+        0.10316899183684573,
+        0.13130138342787528
+       ],
+       "count": 233,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9365,
+       "interval": [
+        0.9249532738540492,
+        0.9463731438694168
+       ],
+       "count": 1873,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   }
+  ],
+  "wilcoxon": [
+   {
+    "design": "8 pairs, normal, median 0",
+    "tests": "null true",
+    "true_median": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 23461201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.0425,
+       "interval": [
+        0.03450117971009799,
+        0.05225291855224844
+       ],
+       "count": 85,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9885,
+       "interval": [
+        0.9828022720924287,
+        0.9923247727137873
+       ],
+       "count": 1977,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "15 pairs, normal, median 0",
+    "tests": "null true",
+    "true_median": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 23561201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.056,
+       "interval": [
+        0.04674833393876454,
+        0.06695400404698805
+       ],
+       "count": 112,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9625,
+       "interval": [
+        0.9532479878280714,
+        0.9699787434367696
+       ],
+       "count": 1925,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "30 pairs, normal, median 0",
+    "tests": "null true",
+    "true_median": 0.0,
+    "test_null_is_true": true,
+    "seed_first": 23661201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.05,
+       "interval": [
+        0.04128123361873174,
+        0.0604441089343959
+       ],
+       "count": 100,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.954,
+       "interval": [
+        0.9439163444279334,
+        0.9623429766406889
+       ],
+       "count": 1908,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "8 pairs, normal, median 3",
+    "tests": "interval coverage",
+    "true_median": 3.0,
+    "test_null_is_true": false,
+    "seed_first": 23761201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.382,
+       "interval": [
+        0.36095134317424515,
+        0.40350107998413043
+       ],
+       "count": 764,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.992,
+       "interval": [
+        0.9870439223284629,
+        0.995069703146784
+       ],
+       "count": 1984,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "15 pairs, normal, median 3",
+    "tests": "interval coverage",
+    "true_median": 3.0,
+    "test_null_is_true": false,
+    "seed_first": 23861201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.7355,
+       "interval": [
+        0.7157315552920356,
+        0.7543655154384943
+       ],
+       "count": 1471,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9665,
+       "interval": [
+        0.9576766713572294,
+        0.9735347235293615
+       ],
+       "count": 1933,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "30 pairs, normal, median 3",
+    "tests": "interval coverage",
+    "true_median": 3.0,
+    "test_null_is_true": false,
+    "seed_first": 23961201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.9775,
+       "interval": [
+        0.9700270953304039,
+        0.9831421245159996
+       ],
+       "count": 1955,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.952,
+       "interval": [
+        0.9417339082484883,
+        0.9605330810092589
+       ],
+       "count": 1904,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "12 pairs, skewed, median 0",
+    "tests": "median zero but not symmetric",
+    "true_median": 0.0,
+    "test_null_is_true": false,
+    "seed_first": 24061201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.0655,
+       "interval": [
+        0.05546852874487852,
+        0.07719738534253028
+       ],
+       "count": 131,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9625,
+       "interval": [
+        0.9532479878280714,
+        0.9699787434367696
+       ],
+       "count": 1925,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "30 pairs, skewed, median 0",
+    "tests": "median zero but not symmetric",
+    "true_median": 0.0,
+    "test_null_is_true": false,
+    "seed_first": 24161201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.14,
+       "interval": [
+        0.12548195561218853,
+        0.15589831843031357
+       ],
+       "count": 280,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.963,
+       "interval": [
+        0.9538001190471888,
+        0.9704246951703708
+       ],
+       "count": 1926,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   },
+   {
+    "design": "20 pairs, whole numbers -2 to 3",
+    "tests": "ties and zeros",
+    "true_median": 0.0,
+    "test_null_is_true": false,
+    "seed_first": 24261201,
+    "simulations": 2000,
+    "by_method": {
+     "wilcoxon_signed_rank": {
+      "runs": 2000,
+      "type_one_error": {
+       "rate": 0.182,
+       "interval": [
+        0.16570477058207264,
+        0.19951447148880416
+       ],
+       "count": 364,
+       "simulations": 2000
+      },
+      "coverage": {
+       "rate": 0.9975,
+       "interval": [
+        0.9941608466835673,
+        0.9989316912715861
+       ],
+       "count": 1995,
+       "simulations": 2000
+      },
+      "no_interval": 0,
+      "unavailable": 0
+     }
+    }
+   }
+  ]
+ }
+}

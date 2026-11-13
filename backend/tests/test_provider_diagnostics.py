@@ -247,7 +247,7 @@ def test_the_question_completes_through_the_sandbox_when_a_model_answers(client,
     records = client.get(f"/api/questions/{created['question_id']}/evidence", headers=cities["h"]).json()["records"]
     assert len(records) == 3
     for r in records:
-        failed = [c["name"] for c in r["checks"] if c["outcome"] not in ("pass", "not_applicable")]
+        failed = [c["check"] for c in r["checks"] if c["outcome"] not in ("pass", "not_applicable")]
         assert not failed, (r["claim_type"], failed)
         assert r["reasons"] == ["limitation:small_sample"], "15 rows: the only caveat is the size of the fixture"
     assert dash["verdict_state"] == "VERIFIED_WITH_CAVEATS"

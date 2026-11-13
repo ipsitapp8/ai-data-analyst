@@ -266,6 +266,12 @@ STAT_MAX_CONTROL_LEVELS = int(os.getenv("STAT_MAX_CONTROL_LEVELS", "20"))
 STAT_ROWS_PER_COEFFICIENT = int(os.getenv("STAT_ROWS_PER_COEFFICIENT", "10"))
 # Correction applied across one investigation's confirmatory tests: holm | bh.
 STAT_MULTIPLICITY_METHOD = os.getenv("STAT_MULTIPLICITY_METHOD", "holm").lower()
+# Comparison and association questions ("is X different between groups?", "is X related to Y?")
+# are answered by the statistics engine from a validated plan, with no generated code.
+COMPARISON_ROUTE_ENABLED = _bool("COMPARISON_ROUTE_ENABLED", "true")
+# Whether a model may propose the plan when the deterministic planner cannot read the question.
+# The plan is validated either way. Off by default: it adds one model call to such questions.
+COMPARISON_MODEL_PLANNER = _bool("COMPARISON_MODEL_PLANNER", "false")
 # An adjusted difference that has lost at least this share of the unadjusted
 # one is read as "largely accounted for by the controls".
 STAT_ATTENUATION_SHARE = float(os.getenv("STAT_ATTENUATION_SHARE", "0.5"))

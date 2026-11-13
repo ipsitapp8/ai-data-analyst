@@ -1,0 +1,34 @@
+{
+ "written_at": "2026-11-11T16:27:48",
+ "why": "Browser E2E with the v1 adapter found three UI defects, fixed in the files below; plus files created during the base/v1/v2 comparison. analyst_postfix_hashes.json is left unchanged.",
+ "changed_during_e2e": {
+  "frontend/style/theme.py": {
+   "before_e2e": "957c212cad9777fcd232618e6bae70b1586a261e32fba42b1bb1bdf75e42c70c",
+   "now": "5857a174b623c7a0ed4e98ba3e45638962c7683f541e6b9eb140fa870d22315b"
+  },
+  "frontend/pages/18_AI_Analyst.py": {
+   "before_e2e": "83fce58c96951f6433f38bc761e1d9a4fc53681e22f73493728ff102af6ac8fb",
+   "now": "1932d1b9cea7591cc30733042b9c3d084cad2e288f0e5835c022ea5aee5c6255"
+  }
+ },
+ "created_during_comparison": {
+  "training/scripts/compare_analyst_evals.py": "2954e1536f88e4c86e3ebbbcba1d5ac05b0b53e73ffe0785c0f7fcb448f5ac7f",
+  "backend/evals/reports/analyst_model_selection_postfix.md": "6f0cab10a5ac78878086c9dc0f4fc97f4e40e0252c643edaa7b9a8377e68701b",
+  "training/reports/analyst_finetune_eval_v1_postfix.json": "be1c298ddd8d7540d54d78e788143b847fceae10dcb0d5a98ba93d0d9b08b232",
+  "training/reports/analyst_finetune_eval_v2.json": "3814d324691edc696d2692a6dc96c50e25dc15ab6dc0bf3e8cd426a8f44260ea",
+  "training/reports/analyst_finetune_comparison_postfix.json": "5433adef49d14028e549008ec7552fd0f02b4f17d0b61bc2a5dfbe48235d7570",
+  "backend/evals/reports/analyst_model_comparison_postfix_summary.json": "ef1f8c633c63cc63a1faa79355a3aeb8ecaac25993ceb2cf19a0024ca02c729c",
+  "backend/evals/reports/analyst_acceptance_v1_postfix.json": "9450a5f034a4cf3931a215cdb14724ac1afcbc3d44c77142489f10a1e237d8ab",
+  "backend/evals/reports/analyst_acceptance_v2.json": "09d1f5c746eed6804748b5e76d20097248c920c5761ed986a75fc3bf35ec0386",
+  "backend/evals/reports/analyst_acceptance_base_postfix.json": "5d708bf5252852ce187df8c5a77ba9f86bc1ab847b000354db94cb1fe1da5e4b"
+ },
+ "protected_and_frozen_check": {
+  "backend/app/copilot.py": "167388126430e61d91831bd009d0f25a67e181314d4b023d65e7ebff0a54c309",
+  "backend/app/fastpath.py": "a7500d75fce6d0dea975f9327d95c2877270b6fdb4f1eaf641d75c17eb478069",
+  "backend/app/interpretation.py": "c8b3b69dda7808a1698904d5f76ffd7075bee1bfa906e3c8267895c7de0129c7",
+  "backend/evals/reports/analyst_execution_baseline_rules_freeze.json": "2581772c4bc78929f1c6ec223a15a0d430d4eb52996a2c143d6f71bdbf4becb5",
+  "training/reports/analyst_finetune_eval_v1.json": "3a7168fc51118993999eedf5bcc774dc48dc3a97535d6f2704e1f761a2ffd6ab",
+  "backend/evals/reports/analyst_model_comparison_summary.json": "f54c9ee121620c6f95502cb05159a0d2b241ae441d0db7b991af0f44c22d55e2",
+  "backend/evals/reports/analyst_acceptance_fine_tuned_v1.json": "306d006dfc4bd041754b9dc4450c898870d0fbddcf95f7ab84347197d66c3645"
+ }
+}

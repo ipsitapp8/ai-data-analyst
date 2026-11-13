@@ -1,0 +1,160 @@
+{
+ "note": "evidence only; Brunner-Munzel is not implemented in the engine",
+ "seed_offset": 700000000,
+ "rows": [
+  {
+   "design": "lognormal 8 + 8, identical",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.047,
+    "interval": [
+     0.03998876360822058,
+     0.055169873336924746
+    ],
+    "count": 141,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.054,
+    "interval": [
+     0.046467649316585216,
+     0.06267308374640554
+    ],
+    "count": 162,
+    "simulations": 3000
+   }
+  },
+  {
+   "design": "lognormal 15 + 15, identical",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.043666666666666666,
+    "interval": [
+     0.036919139743031126,
+     0.05158135619361637
+    ],
+    "count": 131,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.056666666666666664,
+    "interval": [
+     0.04894610168340463,
+     0.06552114418638438
+    ],
+    "count": 170,
+    "simulations": 3000
+   }
+  },
+  {
+   "design": "lognormal 30 + 30, identical",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.048,
+    "interval": [
+     0.04091172361423537,
+     0.05624435563345931
+    ],
+    "count": 144,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.053,
+    "interval": [
+     0.04553961731667641,
+     0.061603673443764995
+    ],
+    "count": 159,
+    "simulations": 3000
+   }
+  },
+  {
+   "design": "lognormal 10 + 30, identical",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.047,
+    "interval": [
+     0.03998876360822058,
+     0.055169873336924746
+    ],
+    "count": 141,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.059,
+    "interval": [
+     0.051118946111304464,
+     0.06800899846443303
+    ],
+    "count": 177,
+    "simulations": 3000
+   }
+  },
+  {
+   "design": "ratings 1 to 5, 20 + 20, identical",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.053,
+    "interval": [
+     0.04553961731667641,
+     0.061603673443764995
+    ],
+    "count": 159,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.059,
+    "interval": [
+     0.051118946111304464,
+     0.06800899846443303
+    ],
+    "count": 177,
+    "simulations": 3000
+   }
+  },
+  {
+   "design": "normal 12 + 12, same median, spread 1 vs 4",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.063,
+    "interval": [
+     0.05485230532925785,
+     0.07226540845667705
+    ],
+    "count": 189,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.04766666666666667,
+    "interval": [
+     0.040603968243672725,
+     0.05588629690317218
+    ],
+    "count": 143,
+    "simulations": 3000
+   }
+  },
+  {
+   "design": "normal 24 + 8, same median, smaller group spread 4",
+   "simulations": 3000,
+   "mann_whitney": {
+    "rate": 0.142,
+    "interval": [
+     0.12996705446355725,
+     0.1549486012237761
+    ],
+    "count": 426,
+    "simulations": 3000
+   },
+   "brunner_munzel": {
+    "rate": 0.057,
+    "interval": [
+     0.04925627402901687,
+     0.06587678594162194
+    ],
+    "count": 171,
+    "simulations": 3000
+   }
+  }
+ ]
+}

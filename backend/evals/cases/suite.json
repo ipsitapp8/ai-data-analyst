@@ -1,5 +1,5 @@
 {
- "suite_version": "2026.10.2",
+ "suite_version": "2026.10.4",
  "description": "Reference answers computed by build_fixtures.py with plain Python.",
  "cases": [
   {
@@ -33,9 +33,18 @@
    "id": "route-statistical",
    "component": "routing",
    "fixture": "sales.csv",
-   "question": "Is there a correlation between units and unit price?",
+   "question": "Are there outliers in unit price?",
    "expect": {
     "route": "statistical"
+   }
+  },
+  {
+   "id": "route-comparison",
+   "component": "routing",
+   "fixture": "sales.csv",
+   "question": "Is there a correlation between units and unit price?",
+   "expect": {
+    "route": "comparison"
    }
   },
   {
@@ -1244,14 +1253,13 @@
    "expect": {
     "predict": "decrease",
     "status": "inconclusive",
-    "method": "sign_flip_permutation",
+    "method": "none",
+    "unavailable": true,
     "interval_available": false,
-    "significant": false,
     "says": [
-     "1 of 4 region values went down"
-    ],
-    "warns": [
-     "cannot detect an effect of any size"
+     "1 of 4 region values went down",
+     "but it was not tested",
+     "not a finding of no difference"
     ]
    },
    "tolerance": 0.005

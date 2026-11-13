@@ -3,6 +3,7 @@
     router ──clarify──────────────────────────────────────────> END
        │─────fast────────> fast ──────────────────────────────> END
        │─────root_cause──> investigate ───────────────────────> END
+       │─────comparison──> compare ───────────────────────────> END
        │─────hypothesis──> hypothesis ────────────────────────> END
        │                       └──no model at step 1──> investigate
        └─────otherwise───> triage ──rejected──────────────────> END
@@ -32,7 +33,7 @@ from langgraph.graph import END, StateGraph
 from app import config, runtime
 from app.agents.critic import critic_node
 from app.agents.dashboard import compile_node, publish_node, route_after_verify, verify_node
-from app.agents.deterministic import fast_node, investigate_node
+from app.agents.deterministic import compare_node, fast_node, investigate_node
 from app.agents.executor import executor_node
 from app.agents.hypothesis import hypothesis_node
 from app.agents.planner import planner_node
@@ -80,6 +81,8 @@ def route_after_router(state: AgentState) -> str:
         return "investigate"
     if route == "hypothesis":
         return "hypothesis"
+    if route == "comparison":
+        return "compare"
     return "triage"
 
 
@@ -124,16 +127,19 @@ def build_graph():
         ("executor", executor_node), ("critic", critic_node), ("prepare_revision", prepare_revision_node),
         ("compile", compile_node), ("verify", verify_node), ("publish", publish_node),
         ("fast", fast_node), ("investigate", investigate_node), ("hypothesis", hypothesis_node),
+        ("compare", compare_node),
     ):
         graph.add_node(name, _traced(name, fn))
 
     graph.set_entry_point("router")
     graph.add_conditional_edges(
         "router", route_after_router,
-        {"clarify": END, "fast": "fast", "investigate": "investigate", "hypothesis": "hypothesis", "triage": "triage"},
+        {"clarify": END, "fast": "fast", "investigate": "investigate", "hypothesis": "hypothesis", "compare": "compare",
+         "triage": "triage"},
     )
     graph.add_conditional_edges("hypothesis", route_after_hypothesis, {"investigate": "investigate", "done": END})
     graph.add_edge("fast", END)
+    graph.add_edge("compare", END)
     graph.add_edge("investigate", END)
     graph.add_conditional_edges(
         "triage", route_after_triage,

@@ -7,8 +7,11 @@ Routes
     fast          a simple aggregation: deterministic engine, no model, no
                   generated code
     root_cause    "why did X change": the deterministic investigator
-    statistical   trends, comparisons, outliers: the full pipeline, with the
-                  Planner told what a statistical answer needs
+    comparison    "is X different between groups", "is X related to Y": a
+                  validated plan carried out by the statistics engine
+    statistical   trends, outliers and comparisons the planner above could not
+                  read: the full pipeline, with the Planner told what a
+                  statistical answer needs
     standard      everything else: the full pipeline
 
 The decision is rule-based on purpose. It is deterministic, costs nothing, can
@@ -21,12 +24,12 @@ from __future__ import annotations
 import datetime as dt
 import re
 
-from app import config, fastpath, investigator, runtime, semantic
+from app import comparison, config, fastpath, investigator, runtime, semantic
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
 from app.models import Question
 
-ROUTES = ("clarify", "fast", "root_cause", "hypothesis", "statistical", "standard")
+ROUTES = ("clarify", "fast", "root_cause", "hypothesis", "comparison", "statistical", "standard")
 
 _ROOT_CAUSE = re.compile(
     r"\bwhy\b|root cause|what (?:caused|drove|is driving|explains|led to)|reasons? (?:for|behind)|"
@@ -43,6 +46,9 @@ ROUTE_BUDGETS = {
     "fast": {"llm_calls": 0, "sandbox_runs": 0, "seconds": 60},
     "root_cause": {"llm_calls": 0, "sandbox_runs": 0, "seconds": 120},
     "clarify": {"llm_calls": 0, "sandbox_runs": 0, "seconds": 30},
+    # A validated plan carried out by the statistics engine: no generated code. The one model call
+    # allowed is the plan proposal, made before routing and only when COMPARISON_MODEL_PLANNER is on.
+    "comparison": {"llm_calls": 1, "sandbox_runs": 0, "seconds": 120},
     # Model-driven, but with its own ceiling and no generated code at all.
     "hypothesis": {"llm_calls": config.HYP_MAX_LLM_CALLS, "sandbox_runs": 0, "seconds": config.HYP_MAX_SECONDS + 60},
 }
@@ -95,6 +101,16 @@ def decide(question_text: str, profile: dict, resolution: dict, forced: str | No
         if parsed is not None:
             return {"route": "fast", "reasons": reasons + [f"simple aggregation: {parsed['explanation']}"],
                     "spec": parsed, "metrics": metrics}
+        if config.COMPARISON_ROUTE_ENABLED and forced is None:
+            compared = comparison.parse(question_text, profile)
+            if compared is not None and compared["kind"] == "ambiguous":
+                return {"route": "clarify", "reasons": [compared["reason"]],
+                        "clarification": {"reason": compared["reason"] + " Which one do you mean?",
+                                          "options": compared["options"]}}
+            if compared is not None:
+                return {"route": "comparison", "reasons": reasons + [f"comparison of two columns: {compared['explanation']}",
+                                                                     "answered by the statistics engine from a validated plan"],
+                        "spec": compared["plan"], "metrics": metrics}
 
     if is_root_cause:
         spec = investigator.infer_spec(profile, question_text, metrics)
@@ -158,6 +174,15 @@ def router_node(state: AgentState) -> dict:
 
         decision = decide(state["question_text"], state["profile"], resolution, forced,
                           model_available=llm_client.provider_available("submit_understanding"))
+        if (decision["route"] in ("statistical", "standard") and forced is None and config.COMPARISON_ROUTE_ENABLED
+                and config.COMPARISON_MODEL_PLANNER and comparison.asks_for_comparison(state["question_text"])
+                and llm_client.provider_available(comparison.PLAN_TOOL_NAME)):
+            # The deterministic planner could not read the question. A model may propose a plan;
+            # it is used only if it validates, and the question keeps its route otherwise.
+            proposed = comparison.propose_with_model(state["question_text"], state["profile"])
+            if proposed is not None:
+                decision = {**decision, "route": "comparison", "spec": proposed,
+                            "reasons": decision["reasons"] + ["a model proposed a comparison plan, and it passed validation"]}
         if question is not None:
             question.route = decision["route"]
             if decision["route"] == "clarify":

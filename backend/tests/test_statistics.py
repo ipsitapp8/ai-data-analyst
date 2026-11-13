@@ -173,7 +173,12 @@ def test_k_group_test_reduces_to_welch_and_pairwise_is_holm_adjusted():
     assert many["comparisons"] == [] and any("pairwise comparisons were not run" in x for x in many["warnings"])
     skewed = sel.k_groups({"a": RNG(1).lognormal(0, 1.5, 12), "b": RNG(2).lognormal(0, 1.5, 12), "c": RNG(3).lognormal(0, 1.5, 12)},
                           what="units", group_name="region")
-    assert skewed["method"] == "permutation_anova"
+    assert skewed["method"] == "none" and skewed["inference_unavailable"]["code"] == "too_skewed_for_sample_size", \
+        "several groups follow the same rule as two: a visibly skewed group is measured, not tested"
+    assert skewed["test"] is None and skewed["sample"]["groups"] == {"a": 12, "b": 12, "c": 12} and skewed["descriptives"]["a"]["mean"]
+    assert [c["p_value"] for c in skewed["comparisons"]] == [None, None, None] and all(c["estimate"] is not None for c in skewed["comparisons"])
+    even = sel.k_groups({"a": np.arange(8.0), "b": np.arange(8.0) + 1, "c": np.arange(8.0) * 1.5}, what="units", group_name="region")
+    assert even["method"] == "permutation_anova", "small groups that do not look skewed are still tested by permutation"
     assert sel.k_groups({"a": [1, 2, 3], "b": [4]}, what="u", group_name="g")["status"] == "unavailable"
     total = sum(len(v) for v in groups.values())
     values = np.concatenate(list(groups.values()))
@@ -244,24 +249,39 @@ def test_the_selector_chooses_by_the_data_and_records_why():
 
     skew_a, skew_b = RNG(3).lognormal(0, 1.5, 25), RNG(4).lognormal(0.4, 1.5, 25)
     skewed = sel.two_groups(skew_a, skew_b, what="x")
-    assert skewed["method"] == "permutation_means" and skewed["interval"]["method"].startswith("bootstrap")
-    assert "difference in mean" in skewed["estimand"], "the fallback keeps the estimand; it does not switch to ranks"
-    assert {r["method"] for r in skewed["rejected_methods"]} == {"welch_t", "mann_whitney"}
+    # Visibly skewed for its size: the difference is measured and nothing is tested.
+    assert (skewed["status"], skewed["method"]) == ("unavailable", "none")
+    assert skewed["inference_unavailable"]["code"] == "too_skewed_for_sample_size"
+    assert skewed["estimate"] == pytest.approx(skew_b.mean() - skew_a.mean()) and skewed["sample"]["groups"] == {"earlier": 25, "later": 25}
+    assert skewed["test"] is None and skewed["interval"] is None and skewed["significant"] is None
+    assert "difference in mean" in skewed["estimand"], "the estimand is kept; it does not switch to ranks"
+    assert "typical values" in skewed["inference_unavailable"]["supported_instead"], "the question the data does support is named, not run"
+    assert {r["method"] for r in skewed["rejected_methods"]} == {"welch_t", "permutation_means"}
     assert any(a["status"] == "violated" and "Cochran's rule needs n >=" in a["detail"] for a in skewed["assumptions"])
-    again = sel.two_groups(skew_a, skew_b, what="x")
-    assert (again["test"]["p_value"], again["interval"]) == (skewed["test"]["p_value"], skewed["interval"]), "resampling is seeded"
+    assert any("not a finding of no difference" in line for line in skewed["interpretation"])
+
+    small_a, small_b = RNG(43).normal(0, 1, 12), RNG(44).normal(0.4, 1, 12)
+    small = sel.two_groups(small_a, small_b, what="x")
+    assert small["method"] == "permutation_means" and small["interval"]["method"] == m.SHIFT_INTERVAL
+    assert "bootstrap_interval" in [r["method"] for r in small["rejected_methods"]], "and the result says why not a bootstrap"
+    assert any(a["name"] == "the groups have the same shape" and a["status"] == "not_checked" for a in small["assumptions"])
+    assert "difference in mean" in small["estimand"], "the fallback keeps the estimand; it does not switch to ranks"
+    assert {r["method"] for r in small["rejected_methods"]} == {"welch_t", "brunner_munzel", "bootstrap_interval"}
+    assert any("does not look skewed is not proof" in l for l in small["limitations"])
+    again = sel.two_groups(small_a, small_b, what="x")
+    assert (again["test"]["p_value"], again["interval"]) == (small["test"]["p_value"], small["interval"]), "resampling is seeded"
 
     big = RNG(5).lognormal(0, 1.5, 4000)
-    assert sel.two_groups(big, RNG(6).lognormal(0, 1.5, 4000), what="x")["method"] in ("welch_t", "permutation_means")
+    assert sel.two_groups(big, RNG(6).lognormal(0, 1.5, 4000), what="x")["method"] in ("welch_t", "permutation_means", "none")
     mild = RNG(7).gamma(8, 1, 400)                          # skewness about 0.7: 400 >= 25 * 0.5
     assert sel.two_groups(mild, RNG(8).gamma(8, 1, 400), what="x")["method"] == "welch_t", "the rule scales with skewness, not a fixed n"
 
     typical = sel.two_groups(RNG(1).normal(0, 1, 50), RNG(2).normal(1, 1, 50), what="x", estimand="typical")
-    assert typical["method"] == "mann_whitney" and "median" in typical["estimand"]
+    assert typical["method"] == "brunner_munzel" and "median" in typical["estimand"]
     apart = sel.two_groups([1, 2, 3, 4, 5, 6, 7, 8], [11, 12, 13, 14, 15, 16, 17, 18], what="x", estimand="typical")
     assert apart["effects"][0]["value"] == pytest.approx(1.0), "every later value exceeds every earlier one"
 
-    tiny = sel.two_groups([1, 2, 3], [2, 3, 9], what="x")
+    tiny = sel.two_groups([1, 2, 3], [2, 3, 4], what="x")
     assert tiny["method"] == "permutation_means" and tiny["test"]["exact"] and tiny["interval"] is None
     assert any("smallest p-value any data could produce is 0.100" in w for w in tiny["warnings"])
     assert sel.two_groups([1], [2, 3], what="x")["reason"].startswith("each group needs at least 2 values")
@@ -287,7 +307,9 @@ def test_missing_values_and_outliers_are_reported_not_silently_handled():
     assert r["sample"]["groups"] == {"earlier": 14, "later": 16} and "nothing is imputed" in r["sample"]["exclusion_rule"]
     assert r["descriptives"]["later"]["extreme_outliers"] == 1 and r["descriptives"]["later"]["max"] == 400, "the outlier is kept"
     assert any("extreme value(s) in 'later'" in w and "they were kept" in w for w in r["warnings"])
-    assert r["method"] == "permutation_means", "one extreme value makes the mean too skewed for a t interval"
+    assert r["method"] == "none" and r["inference_unavailable"]["code"] == "too_skewed_for_sample_size", \
+        "one extreme value makes the mean too skewed for any test of means at this size"
+    assert r["estimate"] == pytest.approx(np.mean(b) - np.mean([v for v in a if isinstance(v, (int, float))])), "the measurement is kept"
     d = m.describe(np.array([1.0, 2.0, 3.0, 4.0, 100.0]))
     assert (d["n"], d["median"], d["outliers"]) == (5, 3.0, 1) and d["sd"] == pytest.approx(np.std([1, 2, 3, 4, 100], ddof=1))
     assert m.describe(np.array([]))["mean"] is None and m.describe(np.array([5.0]))["sd"] is None
@@ -503,8 +525,11 @@ def test_statistical_operations_on_the_sales_fixture(sales):
 
     out, verdict = run(df, ctx, "paired_change", {"unit": "region"}, "decrease")
     assert out["facts"]["units_compared"] == 4 and (out["facts"]["units_down"], out["facts"]["units_up"]) == (1, 3)
-    assert out["facts"]["stat"]["method"] == "sign_flip_permutation" and out["facts"]["stat"]["interval"] is None
+    paired = out["facts"]["stat"]
+    assert paired["method"] == "none" and paired["inference_unavailable"]["code"] == "too_skewed_for_sample_size"
+    assert paired["estimate"] is not None and paired["sample"]["pairs"] == 4 and paired["test"] is None and paired["interval"] is None
     assert verdict["status"] == ops.INCONCLUSIVE and "1 of 4 region values went down, 3 up" in verdict["reasons"][0]
+    assert "but it was not tested" in verdict["reasons"][0] and verdict["effect"] == {"estimate": paired["estimate"], "tested": False}
     assert out["table"][0]["unit"] == "West", "sorted by change: the one region that fell comes first"
 
     out, verdict = run(df, ctx, "composition_change", {"dimension": "region"}, "changed")
@@ -630,16 +655,19 @@ def test_the_headline_change_gets_its_own_uncertainty_and_is_outside_the_family(
     assert headline["op"] == "level_shift" and headline["hypothesis_ids"] == [] and headline["adjusted"] is None
     assert any(line.startswith(f"{headline['analysis_id']} (headline change)") for line in report["statistical_evidence"])
     m_ = report["multiplicity"]
-    assert m_["method"] == "Holm" and m_["comparisons"] == 6 and headline["analysis_id"] not in m_["analysis_ids"]
+    assert m_["method"] == "Holm" and m_["comparisons"] == 5 and headline["analysis_id"] not in m_["analysis_ids"]
+    not_tested = [s for s in report["statistics"] if s.get("inference_unavailable")]
+    assert [s["op"] for s in not_tested] == ["paired_change"], "4 visibly skewed changes: measured, not tested, so not in the family"
+    assert not_tested[0]["analysis_id"] not in m_["analysis_ids"] and not_tested[0]["adjusted"] is None
     assert m_["family"] == "statistical tests of this investigation's hypotheses"
     family = [s for s in report["statistics"] if s["analysis_id"] in m_["analysis_ids"]]
     raw = [s["test"]["p_value"] for s in family]
     assert [s["adjusted"]["p_value"] for s in family] == pytest.approx(m.holm(raw)), "raw and adjusted are both kept"
-    assert all(s["adjusted"]["comparisons"] == 6 and s["adjusted"]["method"] == "Holm" for s in family)
+    assert all(s["adjusted"]["comparisons"] == 5 and s["adjusted"]["method"] == "Holm" for s in family)
     assert not [s for s in report["statistics"] if s["requested_by"] == "scan"], "exploratory breakdowns carry no p-values"
-    assert any("6 statistical tests were run" in l and "Holm-adjusted" in l for l in report["limitations"])
+    assert any("5 statistical tests were run" in l and "Holm-adjusted" in l for l in report["limitations"])
     assert report["reproducibility"]["statistics"] == {
-        "schema_version": "1", "methods_version": "1", "significance_criterion": 0.05, "confidence_level": 0.95,
+        "schema_version": "1", "methods_version": "2", "significance_criterion": 0.05, "confidence_level": 0.95,
         "resampling_seed": config.STAT_SEED, "multiplicity_method": "holm"}
 
 
@@ -717,7 +745,7 @@ def test_statistics_survive_without_a_model_and_are_never_filled_in_by_one(sales
 
     report = he.HypothesisEngine(question=QUESTION, df=df, profile=profile, call_model=model).run()
     assert report["executive_summary"]["source"] == "template" and len(report["statistics"]) == 7
-    assert report["multiplicity"]["comparisons"] == 6 and report["hypothesis_counts"]["supported"] == 2
+    assert report["multiplicity"]["comparisons"] == 5 and report["hypothesis_counts"]["supported"] == 2
 
     bad = {"hypotheses": [hyp("Prices fell", "distribution_shift", {"column": "unit_price", "method": {"p": 0.001}, "estimand": "vibes"}, "decrease", 5),
                           hyp("Units and price move together", "correlation", {"x": "units", "y": "units"}, "positive", 4),
@@ -749,7 +777,8 @@ def test_too_little_data_gives_an_inconclusive_investigation_not_a_guess(sales):
     report = engine_fixtures.engine_for(few, profile_dataframe(few), stat_script(submit_hypotheses=[hyps]))[0].run()
     by = {h["statement"]: h for h in report["hypotheses"]}
     small = next(s for s in report["statistics"] if s["op"] == "distribution_shift")
-    assert small["method"] == "permutation_means" and small["interval"] is None and small["test"]["p_value"] == pytest.approx(0.1)
+    assert small["method"] == "none" and small["inference_unavailable"]["code"] == "too_skewed_for_sample_size"
+    assert small["estimate"] == pytest.approx(10 / 3 - 6) and small["interval"] is None and small["test"] is None
     assert by["Orders became smaller"]["status"] == "inconclusive"
     assert by["The level shifted"]["status"] == "inconclusive" and "no statistical conclusion" in by["The level shifted"]["reasons"][0]
     assert report["hypothesis_counts"]["supported"] == 0 and report["status"] == "inconclusive"
@@ -772,15 +801,17 @@ def test_statistics_are_persisted_and_served_with_tenancy(client, ws):
     out = client.get(f"/api/investigations/{inv['id']}/statistics", headers=ws["h"])
     assert out.status_code == 200
     body = out.json()
-    assert len(body["statistics"]) == 7 and body["multiplicity"]["comparisons"] == 6 and body["settings"]["significance_criterion"] == 0.05
+    assert len(body["statistics"]) == 7 and body["multiplicity"]["comparisons"] == 5 and body["settings"]["significance_criterion"] == 0.05
     welch = next(s for s in body["statistics"] if s["op"] == "distribution_shift" and s["params"]["column"] == "units")
     assert welch["test"]["p_value"] < 0.001 and welch["adjusted"]["p_value"] >= welch["test"]["p_value"]
     assert welch["interval"]["level"] == 0.95 and welch["hypothesis_ids"] == ["H1"]
     paired = next(s for s in body["statistics"] if s["op"] == "paired_change")
-    assert paired["interval"] is None and paired["test"]["p_value"] == 1.0, "unavailable is null in the API, never 0"
+    assert paired["interval"] is None and paired["test"] is None and paired["significant"] is None, "unavailable is null in the API, never 0"
+    assert paired["estimate"] is not None and paired["inference_unavailable"]["code"] == "too_skewed_for_sample_size", \
+        "measured but not tested is served as that, with the measurement"
     detail = client.get(f"/api/investigations/{inv['id']}", headers=ws["h"]).json()
     assert len(detail["report"]["statistics"]) == 7 and detail["report"]["practical_significance"]
-    stored = next(a for a in detail["analyses"] if a["op"] == "paired_change")
+    stored = next(a for a in detail["analyses"] if a["op"] == "distribution_shift" and a["params"]["column"] == "units")
     assert stored["result"]["facts"]["stat"]["adjusted"]["method"] == "Holm", "the adjusted value is persisted with the analysis"
     assert "rows" not in str(stored["result"].get("table", [{}])[0].keys()), "aggregates per unit, not raw rows"
 

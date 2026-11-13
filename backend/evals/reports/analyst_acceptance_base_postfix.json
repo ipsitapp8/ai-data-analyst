@@ -1,0 +1,683 @@
+{
+ "label": "base_postfix",
+ "model": "on",
+ "passed": 7,
+ "first_pass_passed": 3,
+ "total": 14,
+ "model_planned": 10,
+ "rows": [
+  {
+   "n": 1,
+   "dataset": "employees",
+   "question": "Hello.",
+   "expected": "conversational answer, no tools",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "{\"type\":\"chat\",\"reply\":\"Hello! How can I assist you today?\"}",
+    "plan": {
+     "type": "chat",
+     "reply": "Hello! How can I assist you today?"
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "chat",
+    "reply": "Hello! How can I assist you today?"
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1762,
+   "answer": "Hello! How can I assist you today?"
+  },
+  {
+   "n": 2,
+   "dataset": "employees",
+   "question": "What is Random Forest?",
+   "expected": "general explanation",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"explain_previous\"}",
+    "plan": {
+     "type": "explain_previous"
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "explain_previous"
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 303,
+   "answer": "I haven't made a recommendation or prediction in this conversation yet, so there is nothing to explain."
+  },
+  {
+   "n": 3,
+   "dataset": "employees",
+   "question": "What is the average salary?",
+   "expected": "correct computed value",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"compute average salary\",\"calls\":[{\"tool\":\"compute_metric\",\"args\":{\"aggregation\":\"avg\",\"column\":\"salary\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "compute average salary",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "avg",
+        "column": "salary"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "compute average salary",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "avg",
+       "column": "salary"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "compute_metric"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 2498,
+   "answer": "The average salary is $98,087. There are 240 salary records in this dataset. No filters were applied, so this represents the overall average. Evidence is strong for this figure based on the provided data.\n\n---\n\nThe average salary is **98,087.50** (computed over 240 rows)."
+  },
+  {
+   "n": 4,
+   "dataset": "employees",
+   "question": "Which department pays the most?",
+   "expected": "grouping and comparison",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"compare_groups\",\"calls\":[{\"tool\":\"compare_groups\",\"args\":{\"outcome\":\"salary\",\"group\":\"department\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "compare_groups",
+     "calls": [
+      {
+       "tool": "compare_groups",
+       "args": {
+        "outcome": "salary",
+        "group": "department"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "compare_groups",
+    "calls": [
+     {
+      "tool": "compare_groups",
+      "args": {
+       "outcome": "salary",
+       "group": "department"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "compare_groups"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [
+    "The model's summary cited numbers not in the results (99,219,, 0.0001); it was not shown."
+   ],
+   "grounding": {
+    "checked": true,
+    "ungrounded": [
+     "99,219,",
+     "0.0001"
+    ]
+   },
+   "elapsed_ms": 4104,
+   "answer": "**salary by department**\n\n| group | n | mean | median | sd |\n|---|---:|---:|---:|---:|\n| Engineering | 71 | 115,055.77 | 115,238 | 14,097.91 |\n| Finance | 43 | 99,219.70 | 98,462 | 11,985.48 |\n| Marketing | 32 | 95,817.16 | 96,201.50 | 17,637.86 |\n| Sales | 63 | 92,370.75 | 92,765 | 13,017.05 |\n| Support | 31 | 71,615.68 | 70,243 | 14,591.69 |\n\n**Welch's one-way test**: p < 0.001; effect size eta squared = 0.49. Rank-based check (Kruskal-Wallis test): p < 0.001.\nStatistically significant at the 5% level.\n- Welch's tests do not assume equal variances."
+  },
+  {
+   "n": 5,
+   "dataset": "customers",
+   "question": "Predict customer churn.",
+   "expected": "Random Forest classification",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"predict customer churn\",\"calls\":[{\"tool\":\"random_forest\",\"args\":{\"target\":\"churn\",\"task\":\"classification\",\"features\":[\"tenure_months\",\"contract\",\"monthly_charges\",\"support_tickets\",\"region\"]}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "predict customer churn",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "churn",
+        "task": "classification",
+        "features": [
+         "tenure_months",
+         "contract",
+         "monthly_charges",
+         "support_tickets",
+         "region"
+        ]
+       }
+      }
+     ]
+    },
+    "valid": false,
+    "error": "invalid tool call: random_forest: unknown argument(s) ['features']"
+   },
+   "plan_source": "rules",
+   "plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "churn"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "random_forest"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [
+    "The model proposed an invalid tool call (random_forest: unknown argument(s) ['features']); the deterministic planner was used."
+   ],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 3318,
+   "answer": "**Random Forest classification for 'churn'**\n\nHeld-out performance (150 test rows, trained on 450): balanced accuracy 0.73, accuracy 0.72 vs baseline 0.59 (always predicting the most common class 'No'), macro F1 0.72, ROC AUC 0.81.\nThe model beats the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| contract | 0.1735 | 0.0394 |\n| tenure_months | 0.0717 | 0.0264 |\n| support_tickets | 0.0182 | 0.0177 |\n| monthly_charges | 0.0055 | 0.0223 |\n| region | -0.0030 | 0.0210 |\n\nLeft out: customer_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 150 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 6,
+   "dataset": "employees",
+   "question": "Predict salary.",
+   "expected": "Random Forest regression",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"predict salary\",\"calls\":[{\"tool\":\"random_forest\",\"args\":{\"target\":\"salary\",\"features\":[\"department\",\"level\",\"years_experience\",\"age\",\"remote\"]}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "predict salary",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "salary",
+        "features": [
+         "department",
+         "level",
+         "years_experience",
+         "age",
+         "remote"
+        ]
+       }
+      }
+     ]
+    },
+    "valid": false,
+    "error": "invalid tool call: random_forest: unknown argument(s) ['features']"
+   },
+   "plan_source": "rules",
+   "plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "salary"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "random_forest"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [
+    "The model proposed an invalid tool call (random_forest: unknown argument(s) ['features']); the deterministic planner was used."
+   ],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 2242,
+   "answer": "**Random Forest regression for 'salary'**\n\nHeld-out performance (60 test rows, trained on 180): R\u00b2 0.82, MAE 6,752.34 vs baseline MAE 16,668.02 (always predicting the training mean), RMSE 8,733.84.\nThe model beats the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| department | 9,151.9992 | 1,020.9884 |\n| years_experience | 4,817.6700 | 767.6444 |\n| level | 3,449.5705 | 561.7706 |\n| remote | 19.2081 | 74.5210 |\n| age | -204.5601 | 136.1644 |\n\nLeft out: employee_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest regressor, 300 trees, 75/25 split, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 60 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 7,
+   "dataset": "campaigns",
+   "question": "Which area should receive our next advertising campaign?",
+   "expected": "historical campaign analysis and recommendation",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"clarify\",\"question\":\"Which performance metric should we prioritize for campaign allocation? (e.g., conversion rate, revenue per lead, ROI)\", \"options\":[\"conversion rate\", \"revenue per lead\", \"ROI\", \"lead volume\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "Which performance metric should we prioritize for campaign allocation? (e.g., conversion rate, revenue per lead, ROI)",
+     "options": [
+      "conversion rate",
+      "revenue per lead",
+      "ROI",
+      "lead volume"
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "clarify",
+    "question": "Which performance metric should we prioritize for campaign allocation? (e.g., conversion rate, revenue per lead, ROI)",
+    "options": [
+     "conversion rate",
+     "revenue per lead",
+     "ROI",
+     "lead volume"
+    ]
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1520,
+   "answer": "Which performance metric should we prioritize for campaign allocation? (e.g., conversion rate, revenue per lead, ROI)\n\nOptions: `conversion rate`, `revenue per lead`, `ROI`, `lead volume`"
+  },
+  {
+   "n": 8,
+   "dataset": "campaigns",
+   "question": "Should we increase the advertising budget in Area A?",
+   "expected": "performance, ROI, comparison, uncertainty, recommendation",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"clarify\",\"question\":\"Which metric should we evaluate to determine if we should increase the advertising budget in Area A? (e.g., conversion rate, ROI, revenue per lead)\",\"options\":[\"conversion rate\",\"revenue per lead\",\"ROI\",\"lead cost\",\"revenue per ad spend\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "Which metric should we evaluate to determine if we should increase the advertising budget in Area A? (e.g., conversion rate, ROI, revenue per lead)",
+     "options": [
+      "conversion rate",
+      "revenue per lead",
+      "ROI",
+      "lead cost",
+      "revenue per ad spend"
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "clarify",
+    "question": "Which metric should we evaluate to determine if we should increase the advertising budget in Area A? (e.g., conversion rate, ROI, revenue per lead)",
+    "options": [
+     "conversion rate",
+     "revenue per lead",
+     "ROI",
+     "lead cost",
+     "revenue per ad spend"
+    ]
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1756,
+   "answer": "Which metric should we evaluate to determine if we should increase the advertising budget in Area A? (e.g., conversion rate, ROI, revenue per lead)\n\nOptions: `conversion rate`, `revenue per lead`, `ROI`, `lead cost`, `revenue per ad spend`"
+  },
+  {
+   "n": 9,
+   "dataset": "campaigns",
+   "question": "Why do you recommend Area A?",
+   "expected": "statistics, method and limitations of the previous recommendation",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"clarify\",\"question\":\"Which performance metric are you using to evaluate Area A (e.g., revenue, conversion rate, ROI)?\",\"options\":[\"revenue\",\"conversion rate\",\"ROI\",\"lead-to-conversion ratio\",\"ad spend efficiency\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "Which performance metric are you using to evaluate Area A (e.g., revenue, conversion rate, ROI)?",
+     "options": [
+      "revenue",
+      "conversion rate",
+      "ROI",
+      "lead-to-conversion ratio",
+      "ad spend efficiency"
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "clarify",
+    "question": "Which performance metric are you using to evaluate Area A (e.g., revenue, conversion rate, ROI)?",
+    "options": [
+     "revenue",
+     "conversion rate",
+     "ROI",
+     "lead-to-conversion ratio",
+     "ad spend efficiency"
+    ]
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1463,
+   "answer": "Which performance metric are you using to evaluate Area A (e.g., revenue, conversion rate, ROI)?\n\nOptions: `revenue`, `conversion rate`, `ROI`, `lead-to-conversion ratio`, `ad spend efficiency`"
+  },
+  {
+   "n": 10,
+   "dataset": "customers",
+   "question": "Which factors influenced your prediction?",
+   "expected": "feature importance from the trained model",
+   "passed": true,
+   "first_pass_passed": true,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"explain_recommendation\",\"calls\":[{\"tool\":\"feature_importance\",\"args\":{}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "explain_recommendation",
+     "calls": [
+      {
+       "tool": "feature_importance",
+       "args": {}
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "explain_recommendation",
+    "calls": [
+     {
+      "tool": "feature_importance",
+      "args": {}
+     }
+    ]
+   },
+   "tools": [
+    "feature_importance"
+   ],
+   "statuses": [
+    "ok"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": true,
+    "ungrounded": []
+   },
+   "elapsed_ms": 4282,
+   "answer": "The model most relied on contract type (importance 0.174) and tenure months (0.072) to predict churn. Support tickets had a small influence (0.018), while monthly charges (0.005) had a very low impact. Region had a slight negative effect (-0.003), but this is weak and not significant. The model achieved 72% accuracy and 81% AUC, showing it outperformed the baseline of always predicting \"No\" churn.\n\n---\n\n**What the 'churn' model relied on** (permutation importance: how much held-out performance drops when the input is shuffled)\n\n| feature | importance | sd |\n|---|---:|---:|\n| contract | 0.1735 | 0.0394 |\n| tenure_months | 0.0717 | 0.0264 |\n| support_tickets | 0.0182 | 0.0177 |\n| monthly_charges | 0.0055 | 0.0223 |\n| region | -0.0030 | 0.0210 |\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 150 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 11,
+   "dataset": "campaigns",
+   "question": "What if we increase the budget by 20%?",
+   "expected": "scenario with disclosed assumptions",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"budget_scenario\",\"calls\":[{\"tool\":\"budget_scenario\",\"args\":{\"change_pct\":20,\"focus\":\"revenue\",\"group\":\"area\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "budget_scenario",
+     "calls": [
+      {
+       "tool": "budget_scenario",
+       "args": {
+        "change_pct": 20,
+        "focus": "revenue",
+        "group": "area"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "tools",
+    "intent": "budget_scenario",
+    "calls": [
+     {
+      "tool": "budget_scenario",
+      "args": {
+       "change_pct": 20,
+       "focus": "revenue",
+       "group": "area"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "budget_scenario"
+   ],
+   "statuses": [
+    "refused"
+   ],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1078,
+   "answer": "**I can't responsibly do that with this data.** 'revenue' does not occur in 'area'."
+  },
+  {
+   "n": 12,
+   "dataset": "employees",
+   "question": "Predict churn.",
+   "expected": "clarification, no guess",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"predict churn\",\"calls\":[{\"tool\":\"random_forest\",\"args\":{\"target\":\"churn\",\"features\":[\"department\",\"level\",\"years_experience\",\"age\",\"remote\"]}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "predict churn",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "churn",
+        "features": [
+         "department",
+         "level",
+         "years_experience",
+         "age",
+         "remote"
+        ]
+       }
+      }
+     ]
+    },
+    "valid": false,
+    "error": "invalid tool call: random_forest: unknown argument(s) ['features']"
+   },
+   "plan_source": "rules",
+   "plan": {
+    "type": "clarify",
+    "question": "Which column should I predict?",
+    "options": [
+     "department",
+     "level",
+     "years_experience",
+     "age",
+     "remote",
+     "salary"
+    ]
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [
+    "The model proposed an invalid tool call (random_forest: unknown argument(s) ['features']); the deterministic planner was used."
+   ],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1180,
+   "answer": "Which column should I predict?\n\nOptions: `department`, `level`, `years_experience`, `age`, `remote`, `salary`"
+  },
+  {
+   "n": 13,
+   "dataset": "inventory",
+   "question": "Which area should receive our next advertising campaign?",
+   "expected": "explains the data is insufficient",
+   "passed": false,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"clarify\",\"question\":\"Which target column (e.g., sales, revenue, conversion) should we use to determine the best area for the next advertising campaign?\",\"options\":[\"revenue\",\"sales\",\"conversion_rate\",\"stock\",\"unit_price\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "Which target column (e.g., sales, revenue, conversion) should we use to determine the best area for the next advertising campaign?",
+     "options": [
+      "revenue",
+      "sales",
+      "conversion_rate",
+      "stock",
+      "unit_price"
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "plan_source": "model",
+   "plan": {
+    "type": "clarify",
+    "question": "Which target column (e.g., sales, revenue, conversion) should we use to determine the best area for the next advertising campaign?",
+    "options": [
+     "revenue",
+     "sales",
+     "conversion_rate",
+     "stock",
+     "unit_price"
+    ]
+   },
+   "tools": [],
+   "statuses": [],
+   "notes": [],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1547,
+   "answer": "Which target column (e.g., sales, revenue, conversion) should we use to determine the best area for the next advertising campaign?\n\nOptions: `revenue`, `sales`, `conversion_rate`, `stock`, `unit_price`"
+  },
+  {
+   "n": 14,
+   "dataset": "stores_small",
+   "question": "Predict churn.",
+   "expected": "explains why a prediction cannot responsibly be made",
+   "passed": true,
+   "first_pass_passed": false,
+   "first_pass": {
+    "output": "{\"type\":\"tools\",\"intent\":\"predict churn\",\"calls\":[{\"tool\":\"random_forest\",\"args\":{\"target\":\"churn\",\"features\":[\"size_sqm\"]}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "predict churn",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "churn",
+        "features": [
+         "size_sqm"
+        ]
+       }
+      }
+     ]
+    },
+    "valid": false,
+    "error": "invalid tool call: random_forest: unknown argument(s) ['features']"
+   },
+   "plan_source": "rules",
+   "plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "churn"
+      }
+     }
+    ]
+   },
+   "tools": [
+    "random_forest"
+   ],
+   "statuses": [
+    "refused"
+   ],
+   "notes": [
+    "The model proposed an invalid tool call (random_forest: unknown argument(s) ['features']); the deterministic planner was used."
+   ],
+   "grounding": {
+    "checked": false
+   },
+   "elapsed_ms": 1111,
+   "answer": "**I can't responsibly do that with this data.** Only 12 rows have a value for 'churn'; at least 40 are needed to train and test a model honestly."
+  }
+ ]
+}

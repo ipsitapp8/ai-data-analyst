@@ -1,0 +1,86 @@
+{
+ "simulations": 2000,
+ "rows": [
+  {
+   "design": "30 + 30, lognormal(1.3), shift",
+   "welch": 96.5,
+   "bca": 84.5,
+   "welch_interval": [
+    95.5,
+    97.2
+   ]
+  },
+  {
+   "design": "30 + 30, lognormal(1.3), rescaled",
+   "welch": 94.4,
+   "bca": 84.0,
+   "welch_interval": [
+    93.3,
+    95.3
+   ]
+  },
+  {
+   "design": "60 + 60, lognormal(1.3), rescaled",
+   "welch": 95.2,
+   "bca": 87.4,
+   "welch_interval": [
+    94.2,
+    96.1
+   ]
+  },
+  {
+   "design": "10 + 40, lognormal(0.9), rescaled",
+   "welch": 95.1,
+   "bca": 87.3,
+   "welch_interval": [
+    94.1,
+    96.0
+   ]
+  },
+  {
+   "design": "40 + 10, lognormal(0.9), rescaled",
+   "welch": 89.5,
+   "bca": 84.5,
+   "welch_interval": [
+    88.1,
+    90.8
+   ]
+  },
+  {
+   "design": "10 + 40, skewed vs normal",
+   "welch": 84.7,
+   "bca": 83.0,
+   "welch_interval": [
+    83.0,
+    86.2
+   ]
+  },
+  {
+   "design": "40 + 10, normal vs skewed",
+   "welch": 83.7,
+   "bca": 82.1,
+   "welch_interval": [
+    82.0,
+    85.2
+   ]
+  },
+  {
+   "design": "4 + 4, normal, shift",
+   "welch": 95.6,
+   "bca": 84.8,
+   "welch_interval": [
+    94.6,
+    96.4
+   ]
+  },
+  {
+   "design": "3 + 3, normal, shift",
+   "welch": 96.7,
+   "bca": 79.5,
+   "welch_interval": [
+    95.8,
+    97.4
+   ]
+  }
+ ]
+}

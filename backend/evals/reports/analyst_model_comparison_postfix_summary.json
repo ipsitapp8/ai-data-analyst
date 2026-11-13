@@ -1,0 +1,197 @@
+{
+ "rules_frozen": {
+  "passed": 20,
+  "total": 25
+ },
+ "models": {
+  "base_postfix": {
+   "first_pass": 10,
+   "after_retry": 10,
+   "total": 25,
+   "fixes_rule_misses_first_pass": 3,
+   "regressions_on_rule_passes_first_pass": [
+    2,
+    4,
+    6,
+    7,
+    9,
+    10,
+    12,
+    14,
+    15,
+    17,
+    18,
+    19,
+    21
+   ],
+   "regressions_on_rule_passes_after_retry": [
+    2,
+    4,
+    6,
+    7,
+    9,
+    10,
+    12,
+    14,
+    15,
+    17,
+    18,
+    19,
+    21
+   ],
+   "inference": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": null,
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "server": "mlx_lm.server (OpenAI-compatible), request model 'default_model'",
+     "plan": {
+      "temperature": 0.0,
+      "max_tokens": 700
+     },
+     "narration": {
+      "temperature": 0.0,
+      "max_tokens": 350
+     },
+     "client": "app.analyst.planner.model_chat"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   }
+  },
+  "v1_postfix": {
+   "first_pass": 21,
+   "after_retry": 24,
+   "total": 25,
+   "fixes_rule_misses_first_pass": 4,
+   "regressions_on_rule_passes_first_pass": [
+    15,
+    19,
+    21
+   ],
+   "regressions_on_rule_passes_after_retry": [],
+   "inference": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": {
+     "path": "training/adapters/analyst_qwen3_4b_lora",
+     "files_sha256": {
+      "0000100_adapters.safetensors": "35fd84b345c861f8148e6439342708a8e70e7756a070c20d06f47d6b3939e6b6",
+      "0000200_adapters.safetensors": "4b6d5ab396aaaae5b89226e1830f3c29aed14c02482bf6807145acb58e280901",
+      "0000300_adapters.safetensors": "90fffde3b6c20ecff62b950bf8fb0c3b512374c6517907ffce3c98e42017a660",
+      "0000400_adapters.safetensors": "4197b0f9cae2661f673da511487cf7cd91917161ecb5cc9d48d0c69a1ee13531",
+      "0000500_adapters.safetensors": "eb48a263a291cc28dd3ef56b7297303a7974e0e83002d9620d0318131e58d2de",
+      "0000600_adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+      "adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+      "adapter_config.json": "d14997937eb86ca784f4761d863dec6cc4d5af62b7c1318e0656c0ceabfe4e59"
+     }
+    },
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "server": "mlx_lm.server (OpenAI-compatible), request model 'default_model'",
+     "plan": {
+      "temperature": 0.0,
+      "max_tokens": 700
+     },
+     "narration": {
+      "temperature": 0.0,
+      "max_tokens": 350
+     },
+     "client": "app.analyst.planner.model_chat"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   }
+  },
+  "v2": {
+   "first_pass": 20,
+   "after_retry": 23,
+   "total": 25,
+   "fixes_rule_misses_first_pass": 3,
+   "regressions_on_rule_passes_first_pass": [
+    18,
+    19,
+    21
+   ],
+   "regressions_on_rule_passes_after_retry": [],
+   "inference": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": {
+     "path": "training/adapters/analyst_qwen3_4b_lora_v2",
+     "files_sha256": {
+      "0000100_adapters.safetensors": "2973b5632c7e42428acc919abbaaa26ec16d29c9f1ba828b7d7be76955580ed1",
+      "0000200_adapters.safetensors": "7047dc19063a57ae9a9417efb9cb30c8304d71c1bd2c241ef38da81388a5cad4",
+      "0000300_adapters.safetensors": "54f91cbd6c27a87048d3a849e81910c707c7260f0bb4727a534187a60cf8ba80",
+      "0000400_adapters.safetensors": "82eebc98f7401a855c0f5a69c8e5a5a28f09a8ba3cd6e7710f8bfd3ea92b087a",
+      "0000500_adapters.safetensors": "889c7ebee9a737cea7006e03a6f680bde984a97acec55d7ca225bb9919d6abb3",
+      "0000600_adapters.safetensors": "60fb6b8858b15c30e7fc50b82f8f7b1f71407ba37b36d94e46cff741ddb3ab82",
+      "adapters.safetensors": "60fb6b8858b15c30e7fc50b82f8f7b1f71407ba37b36d94e46cff741ddb3ab82",
+      "adapter_config.json": "c3584a578f4d6e3bd0f57eaf39b3901be5a0ed77aaaadd2df4c10ebdcb3fd066"
+     }
+    },
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "server": "mlx_lm.server (OpenAI-compatible), request model 'default_model'",
+     "plan": {
+      "temperature": 0.0,
+      "max_tokens": 700
+     },
+     "narration": {
+      "temperature": 0.0,
+      "max_tokens": 350
+     },
+     "client": "app.analyst.planner.model_chat"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   }
+  }
+ }
+}

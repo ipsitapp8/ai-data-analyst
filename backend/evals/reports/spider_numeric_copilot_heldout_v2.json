@@ -1,0 +1,380 @@
+{
+ "report": "spider-numeric held-out evaluation: frozen deterministic copilot rules vs the v1 baseline",
+ "version": 2,
+ "suite_version": "spider-numeric.1",
+ "stored_run_id": 6,
+ "started_at": "2026-11-10T07:40:51.838708",
+ "provider": "none:rules-only",
+ "model_calls": 0,
+ "code_runs": 0,
+ "freeze": {
+  "frozen_at": "2026-11-10T07:40:51+00:00",
+  "git_head": "7ac5972",
+  "note": "working-tree files (uncommitted changes included) whose content decides the held-out result",
+  "files": {
+   "app/copilot.py": "06850c7a9d2786d546ae71251d8ab7cd4f18afd9dd9ada1e3f71c3a755c53df5",
+   "app/fastpath.py": "1d996a01c5018c1a6721f8aba55278fee74800fd627657ce2ed22ceec697f910",
+   "app/metric_engine.py": "4df6203d172611931631cf4d93a477b26b5b3193b573f702808cca1662ffae06",
+   "app/profiling.py": "15721f9d9587991acb74872f151f6ff56cb2b9e0592ec86f544b6002f10ca57a",
+   "app/evals/spider.py": "de368c5253b32217218a74f609ae1dd6110a0e58378a3d12c34cb41fe39282b7",
+   "app/evals/runner.py": "3506819782b96edf6e3ed12edfd4d7d75e7206046cfc8eb38637b84a48ad025a",
+   "evals/cases/spider_numeric.json": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce"
+  }
+ },
+ "case_file_sha256": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce",
+ "baseline": "spider_numeric_copilot_baseline_v1.json",
+ "held_out_definition": "numeric reference and no leakage marker (question_also_in_train / database_family_in_train)",
+ "held_out_138": {
+  "before_v1": {
+   "questions": 138,
+   "exact": 3,
+   "exact_rate": 0.0217,
+   "within_tolerance": 3,
+   "tolerance_rate": 0.0217,
+   "declined": 135,
+   "declined_rate": 0.9783,
+   "incorrect": 0,
+   "incorrect_rate": 0.0,
+   "errors": 0,
+   "answered": 3,
+   "precision_when_answering": 1.0,
+   "outcomes": {
+    "not_understood": 88,
+    "no_metric": 35,
+    "clarification": 12,
+    "correct_exact": 3
+   }
+  },
+  "after": {
+   "questions": 138,
+   "exact": 8,
+   "exact_rate": 0.058,
+   "within_tolerance": 8,
+   "tolerance_rate": 0.058,
+   "declined": 130,
+   "declined_rate": 0.942,
+   "incorrect": 0,
+   "incorrect_rate": 0.0,
+   "errors": 0,
+   "answered": 8,
+   "precision_when_answering": 1.0,
+   "outcomes": {
+    "not_understood": 82,
+    "no_metric": 39,
+    "clarification": 9,
+    "correct_exact": 8
+   }
+  }
+ },
+ "numeric_reference_160": {
+  "before_v1": {
+   "questions": 160,
+   "exact": 4,
+   "exact_rate": 0.025,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.025,
+   "declined": 155,
+   "declined_rate": 0.9688,
+   "incorrect": 1,
+   "incorrect_rate": 0.0063,
+   "errors": 0,
+   "answered": 5,
+   "precision_when_answering": 0.8,
+   "outcomes": {
+    "not_understood": 102,
+    "no_metric": 37,
+    "clarification": 16,
+    "correct_exact": 4,
+    "wrong_value": 1
+   }
+  },
+  "after": {
+   "questions": 160,
+   "exact": 13,
+   "exact_rate": 0.0813,
+   "within_tolerance": 13,
+   "tolerance_rate": 0.0813,
+   "declined": 146,
+   "declined_rate": 0.9125,
+   "incorrect": 1,
+   "incorrect_rate": 0.0063,
+   "errors": 0,
+   "answered": 14,
+   "precision_when_answering": 0.9286,
+   "outcomes": {
+    "not_understood": 93,
+    "no_metric": 40,
+    "correct_exact": 13,
+    "clarification": 13,
+    "wrong_value": 1
+   }
+  }
+ },
+ "all_165": {
+  "before_v1": {
+   "questions": 165,
+   "exact": 4,
+   "exact_rate": 0.0242,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.0242,
+   "declined": 160,
+   "declined_rate": 0.9697,
+   "incorrect": 1,
+   "incorrect_rate": 0.0061,
+   "errors": 0,
+   "answered": 5,
+   "precision_when_answering": 0.8,
+   "outcomes": {
+    "not_understood": 102,
+    "no_metric": 40,
+    "clarification": 18,
+    "correct_exact": 4,
+    "wrong_value": 1
+   }
+  },
+  "after": {
+   "questions": 165,
+   "exact": 13,
+   "exact_rate": 0.0788,
+   "within_tolerance": 13,
+   "tolerance_rate": 0.0788,
+   "declined": 151,
+   "declined_rate": 0.9152,
+   "incorrect": 1,
+   "incorrect_rate": 0.0061,
+   "errors": 0,
+   "answered": 14,
+   "precision_when_answering": 0.9286,
+   "outcomes": {
+    "not_understood": 93,
+    "no_metric": 43,
+    "clarification": 15,
+    "correct_exact": 13,
+    "wrong_value": 1
+   }
+  }
+ },
+ "held_out_transitions": {
+  "declined -> declined": 130,
+  "declined -> correct": 5,
+  "correct -> correct": 3
+ },
+ "held_out_declined_by_outcome": {
+  "before_v1": {
+   "not_understood": 88,
+   "no_metric": 35,
+   "clarification": 12
+  },
+  "after": {
+   "not_understood": 82,
+   "no_metric": 39,
+   "clarification": 9
+  }
+ },
+ "held_out_still_declined_by_cause": {
+  "question_understanding": 127,
+  "data_representation": 2,
+  "deterministic_limitation": 1
+ },
+ "held_out_still_declined_by_detail": [
+  [
+   "the aggregation or the column is worded in a way the rules do not recognise",
+   68
+  ],
+  [
+   "a count of entities ('how many singers') was not read as a row count",
+   50
+  ],
+  [
+   "the metric wording matched several columns, and the rules asked which one",
+   9
+  ],
+  [
+   "the engine, reading the CSV as the application does, gets a different number for the same spec",
+   2
+  ],
+  [
+   "OR across different columns or operators (engine filters are AND-ed)",
+   1
+  ]
+ ],
+ "held_out_clarifications": [
+  [
+   "the metric wording matched several columns, and the rules asked which one",
+   9
+  ]
+ ],
+ "held_out_spec_matches_oracle_among_correct": 3,
+ "timing_ms": {
+  "total": 1317,
+  "median": 2,
+  "max": 184
+ },
+ "held_out_incorrect": [],
+ "held_out_newly_correct": [
+  {
+   "case_id": "spider-dev-0685",
+   "question": "How many distinct nationalities are there?",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM people",
+   "reference": [
+    2
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"Nationality\")",
+   "copilot_filters": [],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count_distinct(\"Nationality\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0722",
+   "question": "What is the total population and maximum GNP in Asia?",
+   "reference_sql": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+   "reference": [
+    3705025700,
+    3787042.0
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "sum(\"Population\")",
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "copilot_value": 3705025700.0,
+   "oracle_formulas": [
+    "sum(\"Population\")",
+    "max(\"GNP\")"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0726",
+   "question": "What is the total surface area of the continents Asia and Europe?",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Continent  =  \"Asia\" OR Continent  =  \"Europe\"",
+   "reference": [
+    54930138.9
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "sum(\"SurfaceArea\")",
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "in",
+     "value": [
+      "Europe",
+      "Asia"
+     ]
+    }
+   ],
+   "copilot_value": 54930138.9,
+   "oracle_formulas": [
+    "sum(\"SurfaceArea\")"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Continent",
+     "op": "in",
+     "value": [
+      "Asia",
+      "Europe"
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0858",
+   "question": "Find the number of orchestras whose record format is \"CD\" or \"DVD\".",
+   "reference_sql": "SELECT COUNT(*) FROM orchestra WHERE Major_Record_Format  =  \"CD\" OR Major_Record_Format  =  \"DVD\"",
+   "reference": [
+    11
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"Orchestra\")",
+   "copilot_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "DVD",
+      "CD"
+     ]
+    }
+   ],
+   "copilot_value": 11.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "CD",
+      "DVD"
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0859",
+   "question": "Count the number of orchestras that have CD or DVD as their record format.",
+   "reference_sql": "SELECT COUNT(*) FROM orchestra WHERE Major_Record_Format  =  \"CD\" OR Major_Record_Format  =  \"DVD\"",
+   "reference": [
+    11
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"Orchestra\")",
+   "copilot_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "DVD",
+      "CD"
+     ]
+    }
+   ],
+   "copilot_value": 11.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "CD",
+      "DVD"
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  }
+ ],
+ "held_out_lost": []
+}

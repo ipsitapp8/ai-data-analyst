@@ -1,0 +1,905 @@
+{
+ "base_seed": 20261013,
+ "confirmation_seed_offset": 50000000,
+ "alpha": 0.05,
+ "level": 0.95,
+ "simulations_per_design_and_condition": 400,
+ "confirmation_null_simulations_per_design": 4000,
+ "original_gates": {
+  "false_positive_rate": [
+   0.03,
+   0.07
+  ],
+  "coverage": [
+   0.93,
+   0.97
+  ]
+ },
+ "designs_simulated_more_than_once": {
+  "paired, few pairs": 2,
+  "two groups, small": 2,
+  "three groups, moderate": 2
+ },
+ "exact_sizes": {
+  "fisher_exact": {
+   "design": "two proportions, small",
+   "size": 0.015225363564110533,
+   "share_of_datasets_tested_this_way": 0.8480102666324779,
+   "how": "enumeration of all 169 pairs of counts with their binomial probabilities"
+  },
+  "sign_flip_permutation": {
+   "design": "paired, few pairs",
+   "size": 0.046875,
+   "how": "256 sign patterns: the p-value is below 0.05 for the 12 most extreme"
+  }
+ },
+ "designs": [
+  {
+   "index": 0,
+   "name": "two groups, normal",
+   "sample": "80 + 80",
+   "planted_effect": 4.0
+  },
+  {
+   "index": 1,
+   "name": "two groups, skewed, small",
+   "sample": "12 + 12",
+   "planted_effect": 15.0
+  },
+  {
+   "index": 2,
+   "name": "two groups, typical values",
+   "sample": "15 + 15",
+   "planted_effect": 15.0
+  },
+  {
+   "index": 3,
+   "name": "paired, normal differences",
+   "sample": "80 pairs",
+   "planted_effect": 1.2
+  },
+  {
+   "index": 4,
+   "name": "paired, few pairs",
+   "sample": "8 pairs",
+   "planted_effect": 4.0
+  },
+  {
+   "index": 5,
+   "name": "three groups, normal",
+   "sample": "90 x 3",
+   "planted_effect": 4.0
+  },
+  {
+   "index": 6,
+   "name": "three groups, small",
+   "sample": "6 x 3",
+   "planted_effect": 15.0
+  },
+  {
+   "index": 7,
+   "name": "two numeric, linear",
+   "sample": "50 rows",
+   "planted_effect": 0.4
+  },
+  {
+   "index": 8,
+   "name": "two numeric, heavy tails",
+   "sample": "60 rows",
+   "planted_effect": null
+  },
+  {
+   "index": 9,
+   "name": "two proportions, large",
+   "sample": "150 + 150",
+   "planted_effect": 0.15
+  },
+  {
+   "index": 10,
+   "name": "two proportions, small",
+   "sample": "12 + 12",
+   "planted_effect": 0.4
+  },
+  {
+   "index": 11,
+   "name": "3 x 3 table",
+   "sample": "100 x 3",
+   "planted_effect": 0.15
+  },
+  {
+   "index": 12,
+   "name": "two groups, small",
+   "sample": "12 + 12",
+   "planted_effect": 15.0
+  },
+  {
+   "index": 13,
+   "name": "three groups, moderate",
+   "sample": "20 x 3",
+   "planted_effect": 8.0
+  }
+ ],
+ "confirmation_by_design": {
+  "two groups, normal": {
+   "welch_t": {
+    "null_n": 4000,
+    "null_rejected": 174
+   }
+  },
+  "two groups, skewed, small": {
+   "none": {
+    "null_n": 0,
+    "null_rejected": 0
+   },
+   "permutation_means": {
+    "null_n": 110,
+    "null_rejected": 15
+   }
+  },
+  "two groups, typical values": {
+   "brunner_munzel": {
+    "null_n": 4000,
+    "null_rejected": 193
+   }
+  },
+  "paired, normal differences": {
+   "paired_t": {
+    "null_n": 4000,
+    "null_rejected": 206
+   }
+  },
+  "paired, few pairs": {
+   "sign_flip_permutation": {
+    "null_n": 4481,
+    "null_rejected": 202
+   },
+   "none": {
+    "null_n": 0,
+    "null_rejected": 0
+   }
+  },
+  "three groups, normal": {
+   "welch_anova": {
+    "null_n": 4000,
+    "null_rejected": 174
+   }
+  },
+  "three groups, small": {
+   "permutation_anova": {
+    "null_n": 326,
+    "null_rejected": 14
+   },
+   "none": {
+    "null_n": 0,
+    "null_rejected": 0
+   }
+  },
+  "two numeric, linear": {
+   "pearson": {
+    "null_n": 3945,
+    "null_rejected": 170
+   },
+   "spearman": {
+    "null_n": 55,
+    "null_rejected": 2
+   }
+  },
+  "two numeric, heavy tails": {
+   "spearman": {
+    "null_n": 3892,
+    "null_rejected": 205
+   },
+   "pearson": {
+    "null_n": 108,
+    "null_rejected": 6
+   }
+  },
+  "two proportions, large": {
+   "chi_square": {
+    "null_n": 4000,
+    "null_rejected": 214
+   }
+  },
+  "two proportions, small": {
+   "fisher_exact": {
+    "null_n": 3421,
+    "null_rejected": 41
+   },
+   "chi_square": {
+    "null_n": 578,
+    "null_rejected": 31
+   }
+  },
+  "3 x 3 table": {
+   "chi_square": {
+    "null_n": 4000,
+    "null_rejected": 203
+   }
+  },
+  "two groups, small": {
+   "none": {
+    "null_n": 0,
+    "null_rejected": 0
+   },
+   "permutation_means": {
+    "null_n": 4380,
+    "null_rejected": 217
+   }
+  },
+  "three groups, moderate": {
+   "permutation_anova": {
+    "null_n": 6266,
+    "null_rejected": 308
+   },
+   "none": {
+    "null_n": 0,
+    "null_rejected": 0
+   }
+  }
+ },
+ "plans_refused_by_the_workflow": {
+  "primary": {},
+  "confirmation": {
+   "two proportions, small": {
+    "level_not_found": 1
+   }
+  }
+ },
+ "methods": [
+  {
+   "method": "brunner_munzel",
+   "designs": {
+    "two groups, typical values": "15 + 15"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.04,
+    "interval": [
+     0.024769063069711758,
+     0.06398224771784103
+    ],
+    "count": 16,
+    "simulations": 400
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.04825,
+    "interval": [
+     0.04203155996755503,
+     0.05533529704469027
+    ],
+    "count": 193,
+    "simulations": 4000
+   },
+   "coverage": {
+    "rate": 0.94875,
+    "interval": [
+     0.9312118326415617,
+     0.9619991259638441
+    ],
+    "count": 759,
+    "simulations": 800
+   },
+   "power": {
+    "rate": 0.605,
+    "interval": [
+     0.5563126557323714,
+     0.6516897624574263
+    ],
+    "count": 242,
+    "simulations": 400
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 800
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "consistent_with_alpha": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "chi_square",
+   "designs": {
+    "two proportions, large": "150 + 150",
+    "two proportions, small": "12 + 12",
+    "3 x 3 table": "100 x 3"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.05503512880562061,
+    "interval": [
+     0.0416375416170736,
+     0.0724178678232679
+    ],
+    "count": 47,
+    "simulations": 854
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.05222662625320588,
+    "interval": [
+     0.04771566714834339,
+     0.0571384557270924
+    ],
+    "count": 448,
+    "simulations": 8578
+   },
+   "coverage": {
+    "rate": 0.9469565217391305,
+    "interval": [
+     0.9324514344385405,
+     0.958485524136936
+    ],
+    "count": 1089,
+    "simulations": 1150
+   },
+   "power": {
+    "rate": 0.6998175182481752,
+    "interval": [
+     0.6720231683847886,
+     0.7262160473560382
+    ],
+    "count": 767,
+    "simulations": 1096
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 1150
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "consistent_with_alpha": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "fisher_exact",
+   "designs": {
+    "two proportions, small": "12 + 12"
+   },
+   "unavailable": 0,
+   "claim": "exact: at most alpha",
+   "false_positive_rate": {
+    "rate": 0.008670520231213872,
+    "interval": [
+     0.00295305445901947,
+     0.02517814203744327
+    ],
+    "count": 3,
+    "simulations": 346
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.011984799766150248,
+    "interval": [
+     0.00884690972119238,
+     0.01621745014854964
+    ],
+    "count": 41,
+    "simulations": 3421
+   },
+   "coverage": {
+    "rate": 0.9622222222222222,
+    "interval": [
+     0.9403379017278938,
+     0.9762817501676712
+    ],
+    "count": 433,
+    "simulations": 450
+   },
+   "power": {
+    "rate": 0.3076923076923077,
+    "interval": [
+     0.22716461394163762,
+     0.40192052235545933
+    ],
+    "count": 32,
+    "simulations": 104
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 450
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": false,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "no_excess_false_positives": true,
+    "agrees_with_exact_size": true,
+    "no_undercoverage": true
+   },
+   "exact_size": 0.015225363564110533,
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "none",
+   "designs": {
+    "two groups, skewed, small": "12 + 12",
+    "paired, few pairs": "8 pairs",
+    "three groups, small": "6 x 3",
+    "two groups, small": "12 + 12",
+    "three groups, moderate": "20 x 3"
+   },
+   "unavailable": 3294,
+   "claim": "approximate: alpha",
+   "false_positive_rate": null,
+   "false_positive_rate_confirmation": null,
+   "coverage": null,
+   "power": null,
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 0
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": null,
+    "coverage_93_to_97_percent": null
+   },
+   "criteria": {},
+   "meets_criteria": true
+  },
+  {
+   "method": "paired_t",
+   "designs": {
+    "paired, normal differences": "80 pairs"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.0725,
+    "interval": [
+     0.05095051840227673,
+     0.10218249325354675
+    ],
+    "count": 29,
+    "simulations": 400
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.0515,
+    "interval": [
+     0.04507087791018925,
+     0.058789742720672986
+    ],
+    "count": 206,
+    "simulations": 4000
+   },
+   "coverage": {
+    "rate": 0.94125,
+    "interval": [
+     0.9227489166931864,
+     0.9555337250553047
+    ],
+    "count": 753,
+    "simulations": 800
+   },
+   "power": {
+    "rate": 0.755,
+    "interval": [
+     0.710557459419624,
+     0.7945912704698848
+    ],
+    "count": 302,
+    "simulations": 400
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 800
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": false,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "consistent_with_alpha": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "pearson",
+   "designs": {
+    "two numeric, linear": "50 rows",
+    "two numeric, heavy tails": "60 rows"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.038929440389294405,
+    "interval": [
+     0.0241022692323457,
+     0.06229569813230428
+    ],
+    "count": 16,
+    "simulations": 411
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.04342462373550456,
+    "interval": [
+     0.037570426735454514,
+     0.05014349120605056
+    ],
+    "count": 176,
+    "simulations": 4053
+   },
+   "coverage": {
+    "rate": 0.9628712871287128,
+    "interval": [
+     0.9474917238416641,
+     0.9738704360639999
+    ],
+    "count": 778,
+    "simulations": 808
+   },
+   "power": {
+    "rate": 0.8488664987405542,
+    "interval": [
+     0.8103000761439242,
+     0.8807462063812291
+    ],
+    "count": 337,
+    "simulations": 397
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 808
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "consistent_with_alpha": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "permutation_anova",
+   "designs": {
+    "three groups, normal": "90 x 3",
+    "three groups, small": "6 x 3",
+    "three groups, moderate": "20 x 3"
+   },
+   "unavailable": 0,
+   "claim": "exact: at most alpha",
+   "false_positive_rate": {
+    "rate": 0.0409711684370258,
+    "interval": [
+     0.02830843342550505,
+     0.05895445282123601
+    ],
+    "count": 27,
+    "simulations": 659
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.048847087378640776,
+    "interval": [
+     0.0439013637200616,
+     0.054318319525103166
+    ],
+    "count": 322,
+    "simulations": 6592
+   },
+   "coverage": null,
+   "power": {
+    "rate": 0.6875,
+    "interval": [
+     0.6514728487356888,
+     0.7213956645983793
+    ],
+    "count": 462,
+    "simulations": 672
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 0
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": null
+   },
+   "criteria": {
+    "no_excess_false_positives": true
+   },
+   "meets_criteria": true
+  },
+  {
+   "method": "permutation_means",
+   "designs": {
+    "two groups, skewed, small": "12 + 12",
+    "two groups, small": "12 + 12"
+   },
+   "unavailable": 0,
+   "claim": "exact: at most alpha",
+   "false_positive_rate": {
+    "rate": 0.05251141552511415,
+    "interval": [
+     0.035242872949544375,
+     0.07756107024248762
+    ],
+    "count": 23,
+    "simulations": 438
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.051670378619153676,
+    "interval": [
+     0.045570268247986045,
+     0.05853697788158001
+    ],
+    "count": 232,
+    "simulations": 4490
+   },
+   "coverage": {
+    "rate": 0.9511918274687855,
+    "interval": [
+     0.9349015534320401,
+     0.9635644848338051
+    ],
+    "count": 838,
+    "simulations": 881
+   },
+   "power": {
+    "rate": 0.8532731376975169,
+    "interval": [
+     0.8172885243144814,
+     0.8831836315729129
+    ],
+    "count": 378,
+    "simulations": 443
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 881
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "no_excess_false_positives": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "sign_flip_permutation",
+   "designs": {
+    "paired, few pairs": "8 pairs"
+   },
+   "unavailable": 0,
+   "claim": "exact: at most alpha",
+   "false_positive_rate": {
+    "rate": 0.05133928571428571,
+    "interval": [
+     0.034450635405426824,
+     0.0758567696538174
+    ],
+    "count": 23,
+    "simulations": 448
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.04507922338763669,
+    "interval": [
+     0.039384187933126154,
+     0.051553577106161895
+    ],
+    "count": 202,
+    "simulations": 4481
+   },
+   "coverage": {
+    "rate": 0.9541899441340782,
+    "interval": [
+     0.9384437017242057,
+     0.9660539624875447
+    ],
+    "count": 854,
+    "simulations": 895
+   },
+   "power": {
+    "rate": 0.6263982102908278,
+    "interval": [
+     0.5806536622059212,
+     0.6699887704922253
+    ],
+    "count": 280,
+    "simulations": 447
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 895
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "no_excess_false_positives": true,
+    "agrees_with_exact_size": true,
+    "no_undercoverage": true
+   },
+   "exact_size": 0.046875,
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "spearman",
+   "designs": {
+    "two numeric, linear": "50 rows",
+    "two numeric, heavy tails": "60 rows"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.05141388174807198,
+    "interval": [
+     0.03352598909083647,
+     0.07807490698644041
+    ],
+    "count": 20,
+    "simulations": 389
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.05244489485685331,
+    "interval": [
+     0.04591529336314888,
+     0.059844824620785025
+    ],
+    "count": 207,
+    "simulations": 3947
+   },
+   "coverage": {
+    "rate": 0.9540816326530612,
+    "interval": [
+     0.928590075629734,
+     0.9707598839743173
+    ],
+    "count": 374,
+    "simulations": 392
+   },
+   "power": {
+    "rate": 1.0,
+    "interval": [
+     0.4385029682449546,
+     1.0
+    ],
+    "count": 3,
+    "simulations": 3
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 392
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "consistent_with_alpha": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  },
+  {
+   "method": "welch_anova",
+   "designs": {
+    "three groups, normal": "90 x 3"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.05764411027568922,
+    "interval": [
+     0.03871510038561238,
+     0.0850096497098804
+    ],
+    "count": 23,
+    "simulations": 399
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.0435,
+    "interval": [
+     0.03760457381513683,
+     0.05027139790836064
+    ],
+    "count": 174,
+    "simulations": 4000
+   },
+   "coverage": null,
+   "power": {
+    "rate": 0.84,
+    "interval": [
+     0.8008643954521164,
+     0.8726672444005619
+    ],
+    "count": 336,
+    "simulations": 400
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 0
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": null
+   },
+   "criteria": {
+    "consistent_with_alpha": true
+   },
+   "meets_criteria": true
+  },
+  {
+   "method": "welch_t",
+   "designs": {
+    "two groups, normal": "80 + 80"
+   },
+   "unavailable": 0,
+   "claim": "approximate: alpha",
+   "false_positive_rate": {
+    "rate": 0.06,
+    "interval": [
+     0.040647970113724695,
+     0.0877228489004562
+    ],
+    "count": 24,
+    "simulations": 400
+   },
+   "false_positive_rate_confirmation": {
+    "rate": 0.0435,
+    "interval": [
+     0.03760457381513683,
+     0.05027139790836064
+    ],
+    "count": 174,
+    "simulations": 4000
+   },
+   "coverage": {
+    "rate": 0.9525,
+    "interval": [
+     0.9354751753467181,
+     0.9651999416871453
+    ],
+    "count": 762,
+    "simulations": 800
+   },
+   "power": {
+    "rate": 0.775,
+    "interval": [
+     0.7315729789411186,
+     0.8131952591750183
+    ],
+    "count": 310,
+    "simulations": 400
+   },
+   "intervals_not_reported": {
+    "count": 0,
+    "of": 800
+   },
+   "original_gates": {
+    "false_positive_rate_3_to_7_percent": true,
+    "coverage_93_to_97_percent": true
+   },
+   "criteria": {
+    "consistent_with_alpha": true,
+    "no_undercoverage": true
+   },
+   "conservative_interval": false,
+   "meets_criteria": true
+  }
+ ]
+}

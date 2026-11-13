@@ -1,0 +1,14 @@
+{
+ "frozen_at": "2026-11-10T07:40:51+00:00",
+ "git_head": "7ac5972",
+ "note": "working-tree files (uncommitted changes included) whose content decides the held-out result",
+ "files": {
+  "app/copilot.py": "06850c7a9d2786d546ae71251d8ab7cd4f18afd9dd9ada1e3f71c3a755c53df5",
+  "app/fastpath.py": "1d996a01c5018c1a6721f8aba55278fee74800fd627657ce2ed22ceec697f910",
+  "app/metric_engine.py": "4df6203d172611931631cf4d93a477b26b5b3193b573f702808cca1662ffae06",
+  "app/profiling.py": "15721f9d9587991acb74872f151f6ff56cb2b9e0592ec86f544b6002f10ca57a",
+  "app/evals/spider.py": "de368c5253b32217218a74f609ae1dd6110a0e58378a3d12c34cb41fe39282b7",
+  "app/evals/runner.py": "3506819782b96edf6e3ed12edfd4d7d75e7206046cfc8eb38637b84a48ad025a",
+  "evals/cases/spider_numeric.json": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce"
+ }
+}

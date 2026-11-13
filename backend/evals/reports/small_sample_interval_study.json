@@ -1,0 +1,956 @@
+{
+ "base_seed": 20261101,
+ "simulations_per_design": 2000,
+ "level": 0.95,
+ "bootstrap_resamples": 1999,
+ "permutations": 4999,
+ "designs": [
+  {
+   "design": "two groups 12 + 12, skewed, shift (calibration design)",
+   "assumption": "shift holds",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20261101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8595,
+     "coverage_interval": [
+      0.8435800264665468,
+      0.8740416165382324
+     ],
+     "median_width": 41.832216033216596
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.904,
+     "coverage_interval": [
+      0.8903038697549172,
+      0.9161471560418305
+     ],
+     "median_width": 40.27312498254854
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.916,
+     "coverage_interval": [
+      0.9030311781255179,
+      0.9273738385364797
+     ],
+     "median_width": 48.037319828172805
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9635,
+     "coverage_interval": [
+      0.9543526494507533,
+      0.9708702477195252
+     ],
+     "median_width": 45.44548993569766
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9485,
+     "coverage_interval": [
+      0.9379251286390549,
+      0.9573552799496612
+     ],
+     "median_width": 43.83713616231443
+    },
+    "welch_guarded": {
+     "intervals_given": 175,
+     "share_given": 0.0875,
+     "coverage": 0.8685714285714285,
+     "coverage_interval": [
+      0.81050792689613,
+      0.9108013313186275
+     ],
+     "median_width": 32.91394946869452
+    }
+   }
+  },
+  {
+   "design": "two groups 8 + 20, skewed, shift",
+   "assumption": "shift holds",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20361101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8535,
+     "coverage_interval": [
+      0.8373251458577445,
+      0.8683195017144097
+     ],
+     "median_width": 41.122431586329824
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8875,
+     "coverage_interval": [
+      0.8729022885582233,
+      0.9006119997988055
+     ],
+     "median_width": 39.333896087512144
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8985,
+     "coverage_interval": [
+      0.8844916613108394,
+      0.9109804520060018
+     ],
+     "median_width": 48.16282518841925
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9425,
+     "coverage_interval": [
+      0.9314237261895166,
+      0.9518796869665744
+     ],
+     "median_width": 45.6432823168523
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9495,
+     "coverage_interval": [
+      0.9390120477558316,
+      0.958264526738322
+     ],
+     "median_width": 45.91419119034347
+    },
+    "welch_guarded": {
+     "intervals_given": 138,
+     "share_given": 0.069,
+     "coverage": 0.8768115942028986,
+     "coverage_interval": [
+      0.8115661883561323,
+      0.9216468007422765
+     ],
+     "median_width": 31.924670823057312
+    }
+   }
+  },
+  {
+   "design": "two groups 6 + 6, normal, shift",
+   "assumption": "shift holds",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20461101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.892,
+     "coverage_interval": [
+      0.8776380291245442,
+      0.9048590058069534
+     ],
+     "median_width": 19.98104650420066
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8915,
+     "coverage_interval": [
+      0.8771114791991816,
+      0.9043874727795971
+     ],
+     "median_width": 19.718676545980152
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.951,
+     "coverage_interval": [
+      0.9406443633026171,
+      0.9596264600496927
+     ],
+     "median_width": 26.716986157183946
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9545,
+     "coverage_interval": [
+      0.9444626753715425,
+      0.9627947286497985
+     ],
+     "median_width": 25.417590350570844
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.951,
+     "coverage_interval": [
+      0.9406443633026171,
+      0.9596264600496927
+     ],
+     "median_width": 24.872243292578574
+    },
+    "welch_guarded": {
+     "intervals_given": 1182,
+     "share_given": 0.591,
+     "coverage": 0.9500846023688664,
+     "coverage_interval": [
+      0.936146501234824,
+      0.9611066619815607
+     ],
+     "median_width": 25.403724936013443
+    }
+   }
+  },
+  {
+   "design": "two groups 12 + 12, skewed, rescaled",
+   "assumption": "shift VIOLATED",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20561101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8435,
+     "coverage_interval": [
+      0.8269198508747131,
+      0.8587631376430662
+     ],
+     "median_width": 52.91813411964219
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.883,
+     "coverage_interval": [
+      0.86817353316771,
+      0.8963580086148503
+     ],
+     "median_width": 51.098618217854636
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8965,
+     "coverage_interval": [
+      0.8823811381937627,
+      0.9090986433122035
+     ],
+     "median_width": 61.20656599111974
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9375,
+     "coverage_interval": [
+      0.9260297152353917,
+      0.9472928683935119
+     ],
+     "median_width": 57.809989840167546
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9205,
+     "coverage_interval": [
+      0.9078221139475915,
+      0.9315656492888746
+     ],
+     "median_width": 55.53764444615054
+    },
+    "welch_guarded": {
+     "intervals_given": 178,
+     "share_given": 0.089,
+     "coverage": 0.8426966292134831,
+     "coverage_interval": [
+      0.7820457903543131,
+      0.8888683168642108
+     ],
+     "median_width": 39.407843613315904
+    }
+   }
+  },
+  {
+   "design": "two groups 16 + 8, normal, unequal spread",
+   "assumption": "shift VIOLATED",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20661101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8795,
+     "coverage_interval": [
+      0.8645002180821022,
+      0.8930447430314266
+     ],
+     "median_width": 25.14969154921353
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8815,
+     "coverage_interval": [
+      0.8665987726575222,
+      0.8949385202668816
+     ],
+     "median_width": 24.702482793495562
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9395,
+     "coverage_interval": [
+      0.9281849047504186,
+      0.94913001068936
+     ],
+     "median_width": 33.81812854484788
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.943,
+     "coverage_interval": [
+      0.9319642649870394,
+      0.9523372311217704
+     ],
+     "median_width": 31.62027533940489
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8205,
+     "coverage_interval": [
+      0.8030713141807578,
+      0.836699858511959
+     ],
+     "median_width": 20.123020189936753
+    },
+    "welch_guarded": {
+     "intervals_given": 1503,
+     "share_given": 0.7515,
+     "coverage": 0.9401197604790419,
+     "coverage_interval": [
+      0.9269655667557463,
+      0.9510299199329629
+     ],
+     "median_width": 31.63024691964192
+    }
+   }
+  },
+  {
+   "design": "two groups 10 + 10, very skewed, shift",
+   "assumption": "shift holds",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20761101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.817,
+     "coverage_interval": [
+      0.7994515474981367,
+      0.8333330445255487
+     ],
+     "median_width": 139.11105632506613
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8975,
+     "coverage_interval": [
+      0.883436204935987,
+      0.9100397424754167
+     ],
+     "median_width": 127.12149534769893
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.925,
+     "coverage_interval": [
+      0.9126241578681623,
+      0.9357463519427728
+     ],
+     "median_width": 183.42287427317953
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.985,
+     "coverage_interval": [
+      0.9786675621742913,
+      0.9894729019628932
+     ],
+     "median_width": 151.33361746370798
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.958,
+     "coverage_interval": [
+      0.9482955994324269,
+      0.9659483852579451
+     ],
+     "median_width": 137.99579187860382
+    },
+    "welch_guarded": {
+     "intervals_given": 44,
+     "share_given": 0.022,
+     "coverage": 0.9318181818181818,
+     "coverage_interval": [
+      0.8177495562977846,
+      0.9765406040926183
+     ],
+     "median_width": 66.13648150832695
+    }
+   }
+  },
+  {
+   "design": "two groups 5 + 5, very skewed, shift",
+   "assumption": "shift holds",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20861101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8365,
+     "coverage_interval": [
+      0.8196497792251847,
+      0.8520600479545322
+     ],
+     "median_width": 86.60760542762486
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.877,
+     "coverage_interval": [
+      0.8618787961256524,
+      0.8906757502242828
+     ],
+     "median_width": 82.57951892417805
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.976,
+     "coverage_interval": [
+      0.9683245276915415,
+      0.9818504432967055
+     ],
+     "median_width": 143.49440330311353
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.986,
+     "coverage_interval": [
+      0.9798404131888422,
+      0.9902962168537798
+     ],
+     "median_width": 120.58574728355187
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.958,
+     "coverage_interval": [
+      0.9482955994324269,
+      0.9659483852579451
+     ],
+     "median_width": 105.29644157204868
+    },
+    "welch_guarded": {
+     "intervals_given": 360,
+     "share_given": 0.18,
+     "coverage": 0.975,
+     "coverage_interval": [
+      0.953177078553323,
+      0.9867927674024181
+     ],
+     "median_width": 80.82613749200729
+    }
+   }
+  },
+  {
+   "design": "two groups 8 + 8, exponential, rescaled",
+   "assumption": "shift VIOLATED",
+   "kind": "two groups",
+   "simulations": 2000,
+   "seed_first": 20961101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.864,
+     "coverage_interval": [
+      0.8482772935970045,
+      0.8783270959822432
+     ],
+     "median_width": 24.238967106408104
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8745,
+     "coverage_interval": [
+      0.8592592943847576,
+      0.8883048372015839
+     ],
+     "median_width": 23.401579738771474
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9175,
+     "coverage_interval": [
+      0.9046269741728359,
+      0.9287722913473178
+     ],
+     "median_width": 30.3822216796301
+    },
+    "welch": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9405,
+     "coverage_interval": [
+      0.9292636881836284,
+      0.9500473931615877
+     ],
+     "median_width": 28.577172360713035
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.923,
+     "coverage_interval": [
+      0.9104884888455166,
+      0.9338896891545435
+     ],
+     "median_width": 27.14758468550078
+    },
+    "welch_guarded": {
+     "intervals_given": 468,
+     "share_given": 0.234,
+     "coverage": 0.8803418803418803,
+     "coverage_interval": [
+      0.8477969975812565,
+      0.9066937181980972
+     ],
+     "median_width": 23.129236864574224
+    }
+   }
+  },
+  {
+   "design": "8 pairs, normal differences (calibration design)",
+   "assumption": "symmetry holds",
+   "kind": "paired",
+   "simulations": 2000,
+   "seed_first": 21061101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8915,
+     "coverage_interval": [
+      0.8771114791991816,
+      0.9043874727795971
+     ],
+     "median_width": 5.026114960628221
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8935,
+     "coverage_interval": [
+      0.8792182266916742,
+      0.9062730570979796
+     ],
+     "median_width": 4.928200608018057
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.946,
+     "coverage_interval": [
+      0.9352121487009426,
+      0.9550778451241797
+     ],
+     "median_width": 6.995532942761424
+    },
+    "paired_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.948,
+     "coverage_interval": [
+      0.9373820458455553,
+      0.956900279790442
+     ],
+     "median_width": 6.40507786708597
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.95,
+     "coverage_interval": [
+      0.9395558910656041,
+      0.9587187663812682
+     ],
+     "median_width": 6.60089971193004
+    },
+    "inversion_guarded": {
+     "intervals_given": 1621,
+     "share_given": 0.8105,
+     "coverage": 0.9518815545959285,
+     "coverage_interval": [
+      0.9403523729566905,
+      0.9612740546846212
+     ],
+     "median_width": 6.712959720688371
+    },
+    "paired_t_guarded": {
+     "intervals_given": 1621,
+     "share_given": 0.8105,
+     "coverage": 0.946329426280074,
+     "coverage_interval": [
+      0.9342655076903943,
+      0.9562829160618092
+     ],
+     "median_width": 6.427492018622861
+    }
+   }
+  },
+  {
+   "design": "12 pairs, heavy-tailed symmetric differences",
+   "assumption": "symmetry holds",
+   "kind": "paired",
+   "simulations": 2000,
+   "seed_first": 21161101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8765,
+     "coverage_interval": [
+      0.8613547437598278,
+      0.8902017196373885
+     ],
+     "median_width": 6.012263863213624
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.903,
+     "coverage_interval": [
+      0.8892461760423876,
+      0.9152086838489225
+     ],
+     "median_width": 5.851556765113813
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9295,
+     "coverage_interval": [
+      0.9174382310555769,
+      0.9399150253298267
+     ],
+     "median_width": 7.318657637857162
+    },
+    "paired_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.958,
+     "coverage_interval": [
+      0.9482955994324269,
+      0.9659483852579451
+     ],
+     "median_width": 6.937623328386605
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9525,
+     "coverage_interval": [
+      0.9422790928066445,
+      0.9609859794038216
+     ],
+     "median_width": 6.858192255149257
+    },
+    "inversion_guarded": {
+     "intervals_given": 1324,
+     "share_given": 0.662,
+     "coverage": 0.9539274924471299,
+     "coverage_interval": [
+      0.941262101913475,
+      0.9639664492928877
+     ],
+     "median_width": 6.401008141720119
+    },
+    "paired_t_guarded": {
+     "intervals_given": 1324,
+     "share_given": 0.662,
+     "coverage": 0.9539274924471299,
+     "coverage_interval": [
+      0.941262101913475,
+      0.9639664492928877
+     ],
+     "median_width": 6.366751634147461
+    }
+   }
+  },
+  {
+   "design": "10 pairs, skewed differences",
+   "assumption": "symmetry VIOLATED",
+   "kind": "paired",
+   "simulations": 2000,
+   "seed_first": 21261101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8485,
+     "coverage_interval": [
+      0.832119542548813,
+      0.8635442754961538
+     ],
+     "median_width": 4.025163198736994
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.826,
+     "coverage_interval": [
+      0.8087643148713761,
+      0.8419857703012468
+     ],
+     "median_width": 3.716620579212828
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.911,
+     "coverage_interval": [
+      0.897719973128375,
+      0.9227042140064351
+     ],
+     "median_width": 5.93111908205696
+    },
+    "paired_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.868,
+     "coverage_interval": [
+      0.852457232304899,
+      0.8821318208960988
+     ],
+     "median_width": 4.579084860373807
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8755,
+     "coverage_interval": [
+      0.8603068678385486,
+      0.8892534296532302
+     ],
+     "median_width": 4.457499820746942
+    },
+    "inversion_guarded": {
+     "intervals_given": 687,
+     "share_given": 0.3435,
+     "coverage": 0.7671033478893741,
+     "coverage_interval": [
+      0.734064492340352,
+      0.7971717201279761
+     ],
+     "median_width": 3.4679330899234095
+    },
+    "paired_t_guarded": {
+     "intervals_given": 687,
+     "share_given": 0.3435,
+     "coverage": 0.7612809315866085,
+     "coverage_interval": [
+      0.7280060244964424,
+      0.7916501070461457
+     ],
+     "median_width": 3.364655900873613
+    }
+   }
+  },
+  {
+   "design": "8 pairs, very skewed differences",
+   "assumption": "symmetry VIOLATED",
+   "kind": "paired",
+   "simulations": 2000,
+   "seed_first": 21361101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.754,
+     "coverage_interval": [
+      0.7346499128118176,
+      0.772376227169306
+     ],
+     "median_width": 7.892763259872632
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.711,
+     "coverage_interval": [
+      0.6907441409517865,
+      0.7304468650955247
+     ],
+     "median_width": 7.045217473039125
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8815,
+     "coverage_interval": [
+      0.8665987726575222,
+      0.8949385202668816
+     ],
+     "median_width": 15.042094177651736
+    },
+    "paired_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.7635,
+     "coverage_interval": [
+      0.7443827092504036,
+      0.7816070068323759
+     ],
+     "median_width": 9.363221327813424
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.778,
+     "coverage_interval": [
+      0.7592629744365406,
+      0.7956711472750827
+     ],
+     "median_width": 8.954062142376689
+    },
+    "inversion_guarded": {
+     "intervals_given": 533,
+     "share_given": 0.2665,
+     "coverage": 0.624765478424015,
+     "coverage_interval": [
+      0.5829053245346524,
+      0.6648400718290478
+     ],
+     "median_width": 5.957565183691486
+    },
+    "paired_t_guarded": {
+     "intervals_given": 533,
+     "share_given": 0.2665,
+     "coverage": 0.5984990619136961,
+     "coverage_interval": [
+      0.5563214873462713,
+      0.6392669834671764
+     ],
+     "median_width": 5.649327719254599
+    }
+   }
+  },
+  {
+   "design": "5 pairs, normal differences",
+   "assumption": "symmetry holds",
+   "kind": "paired",
+   "simulations": 2000,
+   "seed_first": 21461101,
+   "methods": {
+    "bca": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8415,
+     "coverage_interval": [
+      0.8248415772937184,
+      0.8568490794131859
+     ],
+     "median_width": 5.966290432497617
+    },
+    "percentile": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.8465,
+     "coverage_interval": [
+      0.8300389697890471,
+      0.8616325164450447
+     ],
+     "median_width": 5.745373790843322
+    },
+    "boot_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.951,
+     "coverage_interval": [
+      0.9406443633026171,
+      0.9596264600496927
+     ],
+     "median_width": 11.979538041952786
+    },
+    "paired_t": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 0.9575,
+     "coverage_interval": [
+      0.9477470814477515,
+      0.965498820289902
+     ],
+     "median_width": 9.278906318095821
+    },
+    "inversion": {
+     "intervals_given": 2000,
+     "share_given": 1.0,
+     "coverage": 1.0,
+     "coverage_interval": [
+      0.9980829527187469,
+      0.9999999999999998
+     ],
+     "median_width": 7835967.287026836
+    },
+    "inversion_guarded": {
+     "intervals_given": 1443,
+     "share_given": 0.7215,
+     "coverage": 1.0,
+     "coverage_interval": [
+      0.9973449345142313,
+      1.0
+     ],
+     "median_width": 7822821.594368202
+    },
+    "paired_t_guarded": {
+     "intervals_given": 1443,
+     "share_given": 0.7215,
+     "coverage": 0.9542619542619543,
+     "coverage_interval": [
+      0.9422235989608628,
+      0.9638881190905281
+     ],
+     "median_width": 9.263339937303511
+    }
+   }
+  }
+ ]
+}
