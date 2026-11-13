@@ -34,7 +34,8 @@ RESERVED = set(sf.FUNCTIONS) | {"true", "false", "none", "null"}
 _INPUT_KEYS = {"label", "unit", "min", "max", "good", "source"}
 _ASSUMPTION_KEYS = {"label", "unit", "default", "min", "max", "help"}
 _OUTPUT_KEYS = {"label", "unit", "formula", "additive", "ratio_of", "reconcile"}
-_TOP_KEYS = {"description", "strict_units", "inputs", "assumptions", "outputs", "primary_output", "constraints"}
+_TOP_KEYS = {"description", "strict_units", "inputs", "assumptions", "outputs", "primary_output", "constraints", "order"}
+SECTIONS = ("inputs", "assumptions", "outputs")
 
 
 class ModelDefinitionError(ScenarioError):
@@ -71,20 +72,35 @@ def _text(v: Any, what: str, errors: list[str], limit: int, default: str = "") -
     return v.strip()
 
 
+def _ordered(defn: dict, section: str) -> dict:
+    """A section's entries in the order the author gave them. The order is stored explicitly (`order`) because a JSON
+    column does not promise to keep object keys in order (PostgreSQL's JSONB sorts them), and the order matters: it is the
+    order inputs and outputs are shown in, and the order a simulation draws its random inputs in."""
+    items = defn.get(section) or {}
+    if not isinstance(items, dict):
+        return {}
+    saved = defn.get("order")
+    names = saved.get(section) if isinstance(saved, dict) else None
+    if isinstance(names, list) and len(names) == len(items) and set(names) == set(items):
+        return {n: items[n] for n in names}
+    return items
+
+
 def canonical(defn: dict) -> dict:
     """The definition with defaults filled in, in a fixed shape (what is stored and hashed)."""
+    ordered = {s: _ordered(defn, s) for s in SECTIONS}
     out = {"description": defn.get("description") or "", "strict_units": bool(defn.get("strict_units", False)),
            "inputs": {}, "assumptions": {}, "outputs": {}, "primary_output": defn.get("primary_output"),
            "constraints": []}
-    for name, r in (defn.get("inputs") or {}).items():
+    for name, r in ordered["inputs"].items():
         r = r if isinstance(r, dict) else {}
         out["inputs"][name] = {"label": r.get("label") or name, "unit": r.get("unit") or "", "min": r.get("min", 0.0),
                                "max": r.get("max"), "good": r.get("good", "up"), "source": r.get("source")}
-    for name, r in (defn.get("assumptions") or {}).items():
+    for name, r in ordered["assumptions"].items():
         r = r if isinstance(r, dict) else {}
         out["assumptions"][name] = {"label": r.get("label") or name, "unit": r.get("unit") or "", "default": r.get("default", 0.0),
                                     "min": r.get("min", 0.0), "max": r.get("max", 1.0), "help": r.get("help") or ""}
-    for name, r in (defn.get("outputs") or {}).items():
+    for name, r in ordered["outputs"].items():
         r = r if isinstance(r, dict) else {}
         out["outputs"][name] = {"label": r.get("label") or name, "unit": r.get("unit") or "", "formula": r.get("formula"),
                                 "additive": bool(r.get("additive", False)), "ratio_of": r.get("ratio_of"),
@@ -93,6 +109,7 @@ def canonical(defn: dict) -> dict:
         c = c if isinstance(c, dict) else {}
         out["constraints"].append({"expr": c.get("expr"), "message": c.get("message") or c.get("expr") or "",
                                    "severity": c.get("severity", "error")})
+    out["order"] = {s: list(out[s]) for s in SECTIONS}
     return out
 
 

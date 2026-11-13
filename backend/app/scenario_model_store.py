@@ -20,8 +20,8 @@ from sqlalchemy.orm import Session
 from app import metric_engine as me
 from app import semantic
 from app.models import ScenarioModel, ScenarioModelVersion
-from app.scenario_models import (AmbiguousMetric, ModelDefinitionError, analyze, compile_spec, definition_sha256,
-                                 describe)
+from app.scenario_models import (AmbiguousMetric, ModelDefinitionError, analyze, canonical, compile_spec,
+                                 definition_sha256, describe)
 from app.scenarios import ScenarioError
 
 _REF = re.compile(r"^custom:(\d+)(?:@(\d+))?$")
@@ -150,13 +150,13 @@ def model_out(db: Session, model: ScenarioModel, *, full: bool = False) -> dict:
            "versions": [{"version": v.version, "note": v.note, "created_at": v.created_at,
                          "definition_sha256": v.definition_sha256} for v in versions]}
     if full:
-        out["definition"] = current.definition_json
+        out["definition"] = canonical(current.definition_json)      # restores the author's order (JSONB does not keep it)
     return out
 
 
 def version_definition(db: Session, model: ScenarioModel, number: int) -> dict:
     v = _version(db, model, number)
-    return {"version": v.version, "note": v.note, "definition": v.definition_json, "definition_sha256": v.definition_sha256,
+    return {"version": v.version, "note": v.note, "definition": canonical(v.definition_json), "definition_sha256": v.definition_sha256,
             "created_at": v.created_at}
 
 

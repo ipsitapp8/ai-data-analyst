@@ -636,3 +636,49 @@ def test_the_scenario_models_migration_upgrades_downgrades_and_matches_the_orm(t
         with Operations.context(MigrationContext.configure(conn)):
             rev.downgrade()
         assert not {"scenario_models", "scenario_model_versions"} & set(inspect(conn).get_table_names())
+
+
+# ============================================ order survives a store that sorts keys ==
+
+def jsonb_like(value):
+    """What PostgreSQL's JSONB does to an object: keys come back sorted by length, then alphabetically."""
+    if isinstance(value, dict):
+        return {k: jsonb_like(value[k]) for k in sorted(value, key=lambda k: (len(k), k))}
+    if isinstance(value, list):
+        return [jsonb_like(v) for v in value]
+    return value
+
+
+def test_the_authors_order_survives_a_store_that_reorders_keys():
+    stored = jsonb_like(sm.analyze(SAAS)["definition"])
+    assert list(stored["outputs"]) != list(SAAS["outputs"]), "the simulated store really did reorder the outputs"
+    again = sm.analyze(stored)
+    assert again["valid"]
+    for section in ("inputs", "assumptions", "outputs"):
+        assert list(again["definition"][section]) == list(SAAS[section]), section
+    assert sm.definition_sha256(stored) == sm.definition_sha256(SAAS), "a reordering by the store is not a different model"
+    spec = sm.compile_spec(stored, key="custom:1@1", title="SaaS")
+    assert list(spec["inputs"]) == ["customers", "price", "unit_cost"] and list(spec["outputs"]) == list(SAAS["outputs"])
+    # the order of inputs decides the order a simulation draws them in, so it must be the same whichever database held it
+    kw = dict(baseline=SAAS_BASE, assumptions={"churn_rate": 0.05}, uncertainty={"price": {"type": "normal", "sd_pct": 5}, "customers": {"type": "normal", "sd_pct": 5}},
+              iterations=2000, seed=11)
+    a = scenario_sim.simulate(saas_spec(), **kw)
+    b = scenario_sim.simulate(spec, **kw)
+    assert a["outputs"] == b["outputs"]
+
+
+def test_a_different_order_is_a_different_definition_and_an_incomplete_order_is_ignored():
+    swapped = copy.deepcopy(SAAS)
+    swapped["inputs"] = {k: swapped["inputs"][k] for k in ("price", "customers", "unit_cost")}
+    assert sm.definition_sha256(swapped) != sm.definition_sha256(SAAS)
+    stale = {**sm.analyze(SAAS)["definition"], "order": {"inputs": ["price"], "outputs": ["ghost"]}}
+    assert list(sm.analyze(stale)["definition"]["inputs"]) == list(SAAS["inputs"]), "an order that does not match the entries is not trusted"
+
+
+def test_the_api_returns_the_definition_in_the_authors_order(client, ws):
+    m = create(client, ws)
+    assert list(m["definition"]["outputs"]) == list(SAAS["outputs"]) and list(m["definition"]["inputs"]) == list(SAAS["inputs"])
+    got = client.get(f"/api/scenario-models/{m['id']}", headers=ws["h"]).json()
+    assert list(got["definition"]["outputs"]) == list(SAAS["outputs"])
+    ver = client.get(f"/api/scenario-models/{m['id']}/versions/1", headers=ws["h"]).json()
+    assert list(ver["definition"]["outputs"]) == list(SAAS["outputs"]) and list(ver["definition"]["inputs"]) == list(SAAS["inputs"])
