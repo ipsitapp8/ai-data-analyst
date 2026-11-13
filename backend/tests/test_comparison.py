@@ -545,7 +545,11 @@ def test_measured_but_not_tested_is_a_state_of_its_own_everywhere(client):
     dash = client.get(f"/api/questions/{qid}/dashboard", headers=ws["h"]).json()
     said = dash["narrative"]
     assert "No test or interval is reported for it" in said and "not a finding of no difference and not a non-significant result" in said
-    assert "p =" not in said and "% interval" not in said and "does not distinguish" not in said
+    # no p-value or interval answers the question asked; a p-value may appear only for the different question,
+    # named as one and said not to test the difference in means
+    asked, _, different = said.partition("A different question the data can answer")
+    assert "p =" not in asked and "% interval" not in said and "does not distinguish" not in asked
+    assert not different or "it is not a test of the difference in means" in different
     assert "Brunner-Munzel" in said, "the question the data does support is named"
     assert len(dash["kpis"]) >= 2, "the group means are still published"
     records = client.get(f"/api/questions/{qid}/evidence", headers=ws["h"]).json()["records"]

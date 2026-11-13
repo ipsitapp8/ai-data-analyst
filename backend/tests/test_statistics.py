@@ -169,7 +169,9 @@ def test_k_group_test_reduces_to_welch_and_pairwise_is_holm_adjusted():
     assert r["method"] == "welch_anova" and len(raw) == 3 and [c["p_adjusted"] for c in r["comparisons"]] == pytest.approx(m.holm(raw))
     assert all(c["p_adjusted"] >= c["p_value"] for c in r["comparisons"]) and r["details"]["pairwise_correction"] == "Holm"
     assert "all pairwise comparisons of region" in r["details"]["pairwise_family"]
-    many = sel.k_groups({str(i): RNG(i).normal(0, 1, 20) for i in range(8)}, what="units", group_name="store")
+    # large enough that no group is too skewed for a test of means, so the result reaches the pairwise cap
+    many = sel.k_groups({str(i): RNG(i).normal(0, 1, 60) for i in range(8)}, what="units", group_name="store")
+    assert many["status"] == "ok"
     assert many["comparisons"] == [] and any("pairwise comparisons were not run" in x for x in many["warnings"])
     skewed = sel.k_groups({"a": RNG(1).lognormal(0, 1.5, 12), "b": RNG(2).lognormal(0, 1.5, 12), "c": RNG(3).lognormal(0, 1.5, 12)},
                           what="units", group_name="region")
