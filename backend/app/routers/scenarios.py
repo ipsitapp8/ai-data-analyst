@@ -1,6 +1,7 @@
 """What-if scenarios (see app/scenarios.py)."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,10 +9,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app import metric_engine as me
-from app import scenarios
+from app import (provenance, scenario_elasticity, scenario_model_store, scenario_models, scenario_segments, scenario_sensitivity,
+                 scenario_sim, scenario_solve, scenario_time, scenario_verify, scenarios)
 from app.database import get_db
 from app.dataset_versions import latest_version
-from app.models import Scenario, Team, User
+from app.models import DatasetVersion, Scenario, Team, User
 from app.routers._common import team_dataset
 from app.security import get_current_team, get_current_user
 
@@ -23,6 +25,10 @@ class BaselineRequest(BaseModel):
     model: str
     mapping: dict[str, str | None] = {}
     filters: list[dict] = Field(default_factory=list, max_length=20)
+    overrides: dict[str, float] = Field(default_factory=dict, max_length=20)   # values you enter yourself for inputs the data lacks
+    dataset_version: int | None = Field(default=None, ge=1)
+    date_column: str | None = Field(default=None, max_length=200)
+    period: dict[str, Any] | None = None
 
 
 class EvaluateRequest(BaseModel):
@@ -30,21 +36,116 @@ class EvaluateRequest(BaseModel):
     baseline: dict[str, float]
     scenarios: dict[str, dict[str, dict[str, Any]]] = {}
     assumptions: dict[str, float] = {}
+    # Where an assumption came from when it was not simply typed (for example a chosen elasticity estimate). Kept with
+    # the scenario so its provenance survives; it never changes a calculation.
+    assumption_sources: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=5)
     sensitivity_pct: float = 10.0
     spread_pct: float | None = None  # when set, adds standard optimistic / pessimistic scenarios
+
+
+class SimulationOptions(BaseModel):
+    """Monte Carlo settings (app/scenario_sim.py). `uncertainty` maps an input to a distribution; inputs left out are
+    held fixed. A missing seed is drawn by the server and returned, so every run can be repeated."""
+    adjustments: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=20)
+    uncertainty: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=20)
+    correlation: dict[str, Any] | None = None
+    iterations: int = Field(default=scenario_sim.DEFAULT_ITERATIONS, ge=scenario_sim.MIN_ITERATIONS,
+                            le=scenario_sim.MAX_ITERATIONS)
+    seed: int | None = Field(default=None, ge=0, lt=2 ** 32)
+    target_output: str | None = Field(default=None, max_length=60)
+    target_value: float | None = None
+    target_direction: str = Field(default="at_least", max_length=10)
+
+
+class SimulateRequest(SimulationOptions):
+    model: str
+    baseline: dict[str, float]
+    assumptions: dict[str, float] = {}
+
+
+class ConstraintIn(BaseModel):
+    metric: str = Field(max_length=60)
+    op: str = Field(max_length=2)
+    value: float
+
+
+class GoalSeekRequest(BaseModel):
+    model: str
+    baseline: dict[str, float]
+    assumptions: dict[str, float] = {}
+    adjustments: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=20)
+    target_output: str = Field(max_length=60)
+    target_value: float
+    solve_for: str = Field(max_length=60)
+    lower: float | None = None
+    upper: float | None = None
+    constraints: list[ConstraintIn] = Field(default_factory=list, max_length=scenario_solve.MAX_CONSTRAINTS)
 
 
 class ScenarioSave(EvaluateRequest):
     name: str = Field(min_length=1, max_length=120)
     dataset_id: int | None = None
+    simulation: SimulationOptions | None = None
+    # Where the baseline came from (dataset version, period, filters, mapping), kept with the scenario.
+    baseline_source: dict[str, Any] | None = None
 
 
-def _evaluate(req: EvaluateRequest) -> dict:
+def resolve_model(db: Session, team: Team, ref: str):
+    """A built-in model name, or the compiled spec of this team's custom model (pinned to a version)."""
+    if not scenario_model_store.is_custom(ref):
+        return ref
+    try:
+        return scenario_model_store.load_spec(db, team.id, ref)
+    except scenario_model_store.ModelNotFound as e:
+        raise HTTPException(404, str(e)) from e
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+def _evaluate(req: EvaluateRequest, model) -> dict:
     try:
         named = dict(req.scenarios)
         if req.spread_pct is not None:
-            named = {**scenarios.standard_scenarios(req.model, req.spread_pct), **named}
-        return scenarios.evaluate(req.model, req.baseline, named, req.assumptions, req.sensitivity_pct)
+            named = {**scenarios.standard_scenarios(model, req.spread_pct), **named}
+        out = scenarios.evaluate(model, req.baseline, named, req.assumptions, req.sensitivity_pct)
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+    out["verification"] = scenario_verify.safe(scenario_verify.verify_evaluation, out, scenarios._model(model))
+    sources = {k: v for k, v in req.assumption_sources.items() if k in out["assumptions"]}
+    out["assumption_sources"] = {k: {"source": "manual", **v} if "source" not in v else v for k, v in sources.items()}
+    return out
+
+
+def _versioned_frame(db: Session, team: Team, dataset_id: int, version_number: int | None):
+    """The dataset's rows at a chosen version (latest by default), with the provenance to record beside any result."""
+    dataset = team_dataset(db, team, dataset_id)
+    if version_number is None:
+        version = latest_version(db, dataset)
+    else:
+        version = (db.query(DatasetVersion).filter(DatasetVersion.dataset_id == dataset.id,
+                                                   DatasetVersion.version_number == version_number).first())
+        if version is None:
+            raise HTTPException(404, "Dataset version not found")
+    try:
+        df = me.load_frame(version.filepath if version else dataset.filepath)
+    except me.FormulaError as e:
+        raise HTTPException(400, str(e)) from e
+    except OSError as e:
+        raise HTTPException(410, "The dataset file is no longer available") from e
+    latest = latest_version(db, dataset)
+    return dataset, version, df, {
+        "dataset_id": dataset.id, "dataset_filename": version.filename if version else dataset.filename,
+        "dataset_version": version.version_number if version else None, "dataset_version_id": version.id if version else None,
+        "latest_version": latest.version_number if latest else None,
+        "content_sha256": provenance.fingerprint(db, version) if version else None,
+        "rows_in_dataset": int(len(df))}
+
+
+def _simulate(model, baseline: dict, assumptions: dict, opts: SimulationOptions) -> dict:
+    try:
+        return scenario_sim.simulate(model, baseline, opts.adjustments, assumptions, opts.uncertainty,
+                                     opts.correlation, opts.iterations, opts.seed, opts.target_output,
+                                     opts.target_value, opts.target_direction)
     except scenarios.ScenarioError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -67,6 +168,36 @@ def list_models(user: User = Depends(get_current_user)):
     return {"models": scenarios.describe_models(), "disclaimer": scenarios.DISCLAIMER}
 
 
+def _baseline_for(db: Session, team: Team, payload, model, dataset, df, version) -> dict:
+    """A baseline for one period of the data (all of it by default), with its provenance and an independent check."""
+    try:
+        period = scenario_time.parse_period(payload.period)
+        if period["start"] is not None:
+            if not payload.date_column:
+                raise scenario_time.TimeError("Choose the date column that the period applies to")
+            scenario_time.date_column_of(df, payload.date_column)
+        filters = [*scenario_time.period_filters(payload.date_column, period), *payload.filters]
+        if isinstance(model, dict):
+            out = scenario_model_store.derive_baseline(db, team.id, model, dataset.id, dataset.profile_json or {}, df, filters,
+                                                       payload.overrides)
+        else:
+            out = scenarios.baseline_from_dataset(df, dataset.profile_json or {}, model, payload.mapping, filters)
+            for name in list(out["missing"]):
+                if name in payload.overrides:
+                    out["inputs"][name] = float(payload.overrides[name])
+                    out["sources"][name] = {"source": "override", "formula": None, "note": "entered by you"}
+                    out["missing"].remove(name)
+        scenario_time.require_rows(period, out["rows_used"], df, payload.date_column)
+    except scenario_models.AmbiguousMetric as e:
+        raise HTTPException(409, {"message": str(e), "candidates": e.candidates}) from e
+    except (scenarios.ScenarioError, me.FormulaError) as e:
+        raise HTTPException(400, str(e)) from e
+    out["verification"] = scenario_verify.safe(scenario_verify.verify_baseline, version.filepath if version else dataset.filepath,
+                                               out, filters)
+    return {**out, "data_kind": "historical_actual", "data_kinds": scenario_time.DATA_KINDS,
+            "period": scenario_time.describe_period(period, payload.date_column, out["rows_used"], df)}
+
+
 @router.post("/baseline")
 def derive_baseline(
     payload: BaselineRequest,
@@ -74,24 +205,207 @@ def derive_baseline(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    """Baseline inputs computed from dataset columns, each with its formula."""
-    dataset = team_dataset(db, team, payload.dataset_id)
-    version = latest_version(db, dataset)
+    """Baseline inputs computed from dataset columns (built-in models) or from a custom model's bindings, for all of
+    the data or one period of it, each with its formula, where it came from, the dataset version and an independent
+    recomputation. This is recorded data (historical actuals), not a scenario or a forecast."""
+    dataset, version, df, prov = _versioned_frame(db, team, payload.dataset_id, payload.dataset_version)
+    model = resolve_model(db, team, payload.model)
+    out = _baseline_for(db, team, payload, model, dataset, df, version)
+    return {**out, "dataset_id": dataset.id, "dataset_version": prov["dataset_version"], "provenance": prov}
+
+
+@router.get("/periods")
+def periods(dataset_id: int = Query(...), date_column: str = Query(..., max_length=200),
+            dataset_version: int | None = Query(default=None, ge=1), db: Session = Depends(get_db),
+            user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
+    """The periods of a dataset that have rows, from the dataset's own calendar."""
+    _, _, df, prov = _versioned_frame(db, team, dataset_id, dataset_version)
     try:
-        df = me.load_frame(version.filepath if version else dataset.filepath)
-        out = scenarios.baseline_from_dataset(df, dataset.profile_json or {}, payload.model, payload.mapping,
-                                              payload.filters)
+        return {**scenario_time.available_periods(df, date_column), "provenance": prov}
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+class SegmentsRequest(BaseModel):
+    dataset_id: int
+    dataset_version: int | None = Field(default=None, ge=1)
+    model: str
+    mapping: dict[str, str | None] = {}
+    segment_column: str = Field(max_length=200)
+    date_column: str | None = Field(default=None, max_length=200)
+    period: dict[str, Any] | None = None
+    filters: list[dict] = Field(default_factory=list, max_length=20)
+    assumptions: dict[str, float] = {}
+    shared_adjustments: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=20)
+    segment_adjustments: dict[str, dict[str, dict[str, Any]]] = Field(default_factory=dict, max_length=scenario_segments.MAX_SEGMENTS)
+    shared_inputs: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=20)     # totals to allocate across segments
+    constant_inputs: dict[str, float] = Field(default_factory=dict, max_length=20)             # the same value in every segment
+
+
+@router.get("/segment-values")
+def segment_values(dataset_id: int = Query(...), segment_column: str = Query(..., max_length=200),
+                   dataset_version: int | None = Query(default=None, ge=1), db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
+    """The segments of a column (value and row count) so they can be chosen."""
+    _, _, df, prov = _versioned_frame(db, team, dataset_id, dataset_version)
+    try:
+        return {**scenario_segments.segment_counts(df, segment_column), "provenance": prov}
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/segments")
+def segments(payload: SegmentsRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+             team: Team = Depends(get_current_team)):
+    """Change inputs for chosen segments (a region, product, campaign) and see each segment and the total. Segments
+    partition the rows, so nothing is counted twice; the total is the sum of the segments."""
+    dataset, version, df, prov = _versioned_frame(db, team, payload.dataset_id, payload.dataset_version)
+    model = resolve_model(db, team, payload.model)
+    try:
+        period = scenario_time.parse_period(payload.period)
+        if period["start"] is not None:
+            if not payload.date_column:
+                raise scenario_time.TimeError("Choose the date column that the period applies to")
+            scenario_time.date_column_of(df, payload.date_column)
+        filters = [*scenario_time.period_filters(payload.date_column, period), *payload.filters]
+        scope = me.apply_filters(df, filters)
+        scenario_time.require_rows(period, int(len(scope)), df, payload.date_column)
+        profile = dataset.profile_json or {}
+        if isinstance(model, dict):
+            fn = lambda frame: scenario_model_store.derive_baseline(db, team.id, model, dataset.id, profile, frame)  # noqa: E731
+        else:
+            fn = lambda frame: scenarios.baseline_from_dataset(frame, profile, model, payload.mapping)  # noqa: E731
+        out = scenario_segments.run(model, scope, fn, segment_column=payload.segment_column, assumptions=payload.assumptions,
+                                    shared_adjustments=payload.shared_adjustments, segment_adjustments=payload.segment_adjustments,
+                                    shared_inputs=payload.shared_inputs, constant_inputs=payload.constant_inputs,
+                                    reference={"csv_path": version.filepath if version else dataset.filepath, "filters": filters})
+    except scenario_models.AmbiguousMetric as e:
+        raise HTTPException(409, {"message": str(e), "candidates": e.candidates}) from e
     except (scenarios.ScenarioError, me.FormulaError) as e:
         raise HTTPException(400, str(e)) from e
-    except OSError as e:
-        raise HTTPException(410, "The dataset file is no longer available") from e
-    return {**out, "dataset_id": dataset.id, "dataset_version": version.version_number if version else None}
+    return {**out, "period": scenario_time.describe_period(period, payload.date_column, int(len(scope)), df), "provenance": prov,
+            "data_kinds": scenario_time.DATA_KINDS}
+
+
+class ComparePeriodsRequest(BaseModel):
+    dataset_id: int
+    dataset_version: int | None = Field(default=None, ge=1)
+    model: str
+    mapping: dict[str, str | None] = {}
+    date_column: str = Field(max_length=200)
+    period_a: dict[str, Any]
+    period_b: dict[str, Any]
+    filters: list[dict] = Field(default_factory=list, max_length=20)
+    assumptions: dict[str, float] = {}
+    overrides: dict[str, float] = Field(default_factory=dict, max_length=20)
+
+
+@router.post("/compare-periods")
+def compare_periods(payload: ComparePeriodsRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+                    team: Team = Depends(get_current_team)):
+    """What a model's inputs and outputs were in two recorded periods, the change, and what drove it. Historical
+    actuals only: it neither adjusts anything nor looks forward."""
+    dataset, version, df, prov = _versioned_frame(db, team, payload.dataset_id, payload.dataset_version)
+    model = resolve_model(db, team, payload.model)
+    sides = {}
+    for key, spec in (("a", payload.period_a), ("b", payload.period_b)):
+        req = BaselineRequest(dataset_id=payload.dataset_id, model=payload.model, mapping=payload.mapping, filters=payload.filters,
+                              overrides=payload.overrides, dataset_version=payload.dataset_version, date_column=payload.date_column,
+                              period=spec)
+        sides[key] = _baseline_for(db, team, req, model, dataset, df, version)
+    try:
+        out = scenario_time.compare_periods(model, sides["a"]["inputs"], sides["b"]["inputs"], payload.assumptions)
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+    out["verification"] = scenario_verify.safe(scenario_verify.verify_period_comparison, out, scenarios._model(model))
+    out["periods"] = {k: {"period": v["period"], "sources": v["sources"], "rows_used": v["rows_used"],
+                          "baseline_verification": v["verification"]} for k, v in sides.items()}
+    return {**out, "provenance": prov}
 
 
 @router.post("/evaluate")
-def evaluate(payload: EvaluateRequest, user: User = Depends(get_current_user),
+def evaluate(payload: EvaluateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
              team: Team = Depends(get_current_team)):
-    return _evaluate(payload)
+    return _evaluate(payload, resolve_model(db, team, payload.model))
+
+
+class ElasticityRequest(BaseModel):
+    dataset_id: int
+    dataset_version: int | None = Field(default=None, ge=1)
+    price_column: str = Field(max_length=200)
+    quantity_column: str = Field(max_length=200)
+    date_column: str | None = Field(default=None, max_length=200)
+    segment_column: str | None = Field(default=None, max_length=200)
+    granularity: str = Field(default="auto", max_length=10)
+    filters: list[dict] = Field(default_factory=list, max_length=20)
+    level: float = Field(default=0.95, ge=0.5, lt=1)
+    exclude_outliers: bool = False
+
+
+@router.post("/elasticity")
+def estimate_elasticity(payload: ElasticityRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+                        team: Team = Depends(get_current_team)):
+    """A suggested price elasticity from the dataset's own history. A suggestion only: it changes nothing until the
+    user chooses to use it."""
+    _, _, df, prov = _versioned_frame(db, team, payload.dataset_id, payload.dataset_version)
+    try:
+        out = scenario_elasticity.estimate(df, payload.price_column, payload.quantity_column,
+                                           date_column=payload.date_column, segment_column=payload.segment_column,
+                                           granularity=payload.granularity, filters=payload.filters,
+                                           exclude_outliers=payload.exclude_outliers, level=payload.level)
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+    return {**out, "provenance": prov}
+
+
+class GridRequest(BaseModel):
+    model: str
+    baseline: dict[str, float]
+    assumptions: dict[str, float] = {}
+    adjustments: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=20)
+    x_input: str = Field(max_length=60)
+    y_input: str = Field(max_length=60)
+    output: str | None = Field(default=None, max_length=60)
+    x_range: dict[str, Any] | None = None
+    y_range: dict[str, Any] | None = None
+    resolution: int = Field(default=scenario_sensitivity.DEFAULT_RESOLUTION, ge=scenario_sensitivity.MIN_RESOLUTION,
+                            le=scenario_sensitivity.MAX_RESOLUTION)
+    threshold: float | None = 0.0
+
+
+@router.post("/sensitivity-grid")
+def sensitivity_grid(payload: GridRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+                     team: Team = Depends(get_current_team)):
+    """One output over a grid of two inputs, with the best and worst cell, the current position and where the output
+    crosses a threshold (break-even for profit at 0), independently verified."""
+    model = resolve_model(db, team, payload.model)
+    try:
+        return scenario_sensitivity.two_way(model, payload.baseline, payload.x_input, payload.y_input, payload.output,
+                                            adjustments=payload.adjustments, assumptions=payload.assumptions,
+                                            x_range=payload.x_range, y_range=payload.y_range, resolution=payload.resolution,
+                                            threshold=payload.threshold)
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/simulate")
+def simulate(payload: SimulateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+             team: Team = Depends(get_current_team)):
+    """Monte Carlo over one scenario: percentiles, probabilities, histogram, and an independent verification."""
+    return _simulate(resolve_model(db, team, payload.model), payload.baseline, payload.assumptions, payload)
+
+
+@router.post("/goal-seek")
+def goal_seek(payload: GoalSeekRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+              team: Team = Depends(get_current_team)):
+    """The value of one input that reaches a target output, found on the deterministic engine and verified."""
+    model = resolve_model(db, team, payload.model)
+    try:
+        return scenario_solve.goal_seek(model, payload.baseline, payload.target_output, payload.target_value,
+                                        payload.solve_for, payload.adjustments, payload.assumptions, payload.lower,
+                                        payload.upper, [c.model_dump() for c in payload.constraints])
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 @router.post("", status_code=201)
@@ -101,16 +415,30 @@ def save_scenario(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    results = _evaluate(payload)
+    model = resolve_model(db, team, payload.model)
+    results = _evaluate(payload, model)
+    sim_config = None
+    if payload.simulation is not None:
+        # Run it now and keep the seed the server used: the saved scenario can then be reproduced exactly.
+        sim = _simulate(model, payload.baseline, results["assumptions"], payload.simulation)
+        results["simulation"] = sim
+        sim_config = {**payload.simulation.model_dump(), "seed": sim["config"]["seed"]}
     version_id = None
+    source = None
     if payload.dataset_id is not None:
-        dataset = team_dataset(db, team, payload.dataset_id)
-        version = latest_version(db, dataset)
+        dataset, version, _, prov = _versioned_frame(db, team, payload.dataset_id,
+                                                     (payload.baseline_source or {}).get("dataset_version"))
         version_id = version.id if version else None
+        source = {**(payload.baseline_source or {}), "provenance": prov}
+    if payload.baseline_source is not None and len(json.dumps(payload.baseline_source, default=str)) > 20_000:
+        raise HTTPException(413, "The baseline source is too large")
     row = Scenario(team_id=team.id, dataset_id=payload.dataset_id, dataset_version_id=version_id,
-                   name=payload.name.strip(), model=payload.model, baseline_json=results["baseline"]["inputs"],
+                   name=payload.name.strip(), model=scenarios.model_key(model), baseline_json=results["baseline"]["inputs"],
                    adjustments_json={"scenarios": payload.scenarios, "assumptions": results["assumptions"],
-                                     "sensitivity_pct": payload.sensitivity_pct, "spread_pct": payload.spread_pct},
+                                     "sensitivity_pct": payload.sensitivity_pct, "spread_pct": payload.spread_pct,
+                                     "assumption_sources": results["assumption_sources"],
+                                     **({"baseline_source": source} if source else {}),
+                                     **({"simulation": sim_config} if sim_config else {})},
                    results_json=results, created_by=user.id)
     db.add(row)
     db.commit()

@@ -673,12 +673,80 @@ def scenario_models() -> dict:
     return _get("/api/scenarios/models")
 
 
-def scenario_baseline(dataset_id: int, model: str, mapping: dict) -> dict:
-    return _post("/api/scenarios/baseline", {"dataset_id": dataset_id, "model": model, "mapping": mapping})
+def scenario_baseline(dataset_id: int, model: str, mapping: dict, *, date_column: str | None = None, period: dict | None = None,
+                      dataset_version: int | None = None, overrides: dict | None = None) -> dict:
+    body = {"dataset_id": dataset_id, "model": model, "mapping": mapping}
+    if date_column:
+        body.update(date_column=date_column, period=period or {"type": "all"})
+    if dataset_version:
+        body["dataset_version"] = dataset_version
+    if overrides:
+        body["overrides"] = overrides
+    return _post("/api/scenarios/baseline", body)
+
+
+def scenario_periods(dataset_id: int, date_column: str, dataset_version: int | None = None) -> dict:
+    return _get("/api/scenarios/periods", dataset_id=dataset_id, date_column=date_column, dataset_version=dataset_version)
+
+
+def segment_values(dataset_id: int, segment_column: str, dataset_version: int | None = None) -> dict:
+    return _get("/api/scenarios/segment-values", dataset_id=dataset_id, segment_column=segment_column, dataset_version=dataset_version)
+
+
+def run_segments(payload: dict) -> dict:
+    return _post("/api/scenarios/segments", payload, timeout=120)
+
+
+def compare_periods(payload: dict) -> dict:
+    return _post("/api/scenarios/compare-periods", payload, timeout=60)
 
 
 def evaluate_scenarios(payload: dict) -> dict:
     return _post("/api/scenarios/evaluate", payload)
+
+
+def list_custom_models(include_archived: bool = False) -> dict:
+    return _get("/api/scenario-models", include_archived=include_archived or None)
+
+
+def get_custom_model(model_id: int) -> dict:
+    return _get(f"/api/scenario-models/{model_id}")
+
+
+def validate_custom_model(payload: dict) -> dict:
+    return _post("/api/scenario-models/validate", payload)
+
+
+def create_custom_model(payload: dict) -> dict:
+    return _post("/api/scenario-models", payload)
+
+
+def add_custom_model_version(model_id: int, payload: dict) -> dict:
+    return _post(f"/api/scenario-models/{model_id}/versions", payload)
+
+
+def archive_custom_model(model_id: int) -> dict:
+    return _post(f"/api/scenario-models/{model_id}/archive")
+
+
+def restore_custom_model(model_id: int) -> dict:
+    return _post(f"/api/scenario-models/{model_id}/restore")
+
+
+def estimate_elasticity(payload: dict) -> dict:
+    return _post("/api/scenarios/elasticity", payload, timeout=120)
+
+
+def sensitivity_grid(payload: dict) -> dict:
+    return _post("/api/scenarios/sensitivity-grid", payload, timeout=60)
+
+
+def simulate_scenario(payload: dict) -> dict:
+    return _post("/api/scenarios/simulate", payload, timeout=120)
+
+
+def goal_seek_scenario(payload: dict) -> dict:
+    return _post("/api/scenarios/goal-seek", payload, timeout=60)
 
 
 def save_scenario(payload: dict) -> dict:

@@ -716,6 +716,40 @@ class Scenario(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class ScenarioModel(Base):
+    """A team's custom what-if model. The definition itself lives in immutable versions (app/scenario_models.py)."""
+
+    __tablename__ = "scenario_models"
+    __table_args__ = (UniqueConstraint("team_id", "slug", name="uq_scenario_model_slug"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    slug = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, default="")
+    status = Column(String, nullable=False, default="active")  # active|archived
+    current_version = Column(Integer, nullable=False, default=1)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ScenarioModelVersion(Base):
+    """One immutable definition of a custom model. Editing a model adds a version; saved scenarios pin theirs."""
+
+    __tablename__ = "scenario_model_versions"
+    __table_args__ = (UniqueConstraint("model_id", "version", name="uq_scenario_model_version"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    model_id = Column(Integer, ForeignKey("scenario_models.id"), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    definition_json = Column(JSONVariant, default=dict)
+    definition_sha256 = Column(String, nullable=False)
+    note = Column(Text, default="")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
 class SemanticMetric(Base):
     """A team-owned business metric. The definition itself lives in versions."""
 
