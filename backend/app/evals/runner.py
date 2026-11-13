@@ -35,11 +35,32 @@ from app import config, runtime
 SUITE_PATH = Path(__file__).resolve().parents[2] / "evals" / "cases" / "suite.json"
 FIXTURES = Path(__file__).resolve().parents[2] / "evals" / "fixtures"
 COMPONENTS = ("routing", "fastpath", "engine", "verification", "verification_narrative", "investigator",
-              "statistics", "drift", "scenario", "pipeline")
+              "statistics", "drift", "scenario", "comparison", "pipeline")
 
 
-def load_suite(path: Path | None = None) -> dict:
+# Case files kept beside suite.json, each written by its own fixture builder.
+EXTRA_CASE_FILES = ("comparison.json",)
+
+# Suites run on their own, never as part of the default one: they measure a
+# baseline rather than guard against regressions, so most cases may fail.
+SEPARATE_SUITES = {"spider-numeric": "spider_numeric.json"}
+
+
+def load_suite(path: Path | None = None, suite_name: str = "default") -> dict:
+    if suite_name != "default":
+        if suite_name not in SEPARATE_SUITES:
+            raise ValueError(f"Unknown suite {suite_name!r}; choose default or {', '.join(SEPARATE_SUITES)}")
+        path = SUITE_PATH.with_name(SEPARATE_SUITES[suite_name])
+        if not path.exists():
+            raise FileNotFoundError(f"{path.name} has not been built; run `python evals/build_spider_cases.py` from backend/")
     suite = json.loads((path or SUITE_PATH).read_text(encoding="utf-8"))
+    if path is None:
+        for name in EXTRA_CASE_FILES:
+            extra = SUITE_PATH.with_name(name)
+            if extra.exists():
+                more = json.loads(extra.read_text(encoding="utf-8"))
+                suite["cases"] = suite["cases"] + more["cases"]
+                suite["suite_version"] += f"+{extra.stem}.{more['version']}"
     ids = [c["id"] for c in suite["cases"]]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate case ids in the evaluation suite")
@@ -247,6 +268,76 @@ def _run_statistics(case: dict, chk: _Check) -> dict:
     return {"status": verdict["status"], "method": stat["method"], "reason": verdict["reasons"][0][:300]}
 
 
+def _run_comparison(case: dict, chk: _Check) -> dict:
+    """One comparison plan on a fixture, against values computed without any
+    application code: is the plan accepted, is the expected method chosen, do
+    the estimate, interval and p-value agree, and does the report say what it
+    must about cause and limitations?"""
+    from app import comparison
+    from app import metric_engine as me
+
+    profile, path = _profile(case["fixture"])
+    expect, rel = case["expect"], case.get("rel_tolerance", 1e-6)
+    close = lambda got, want: got is not None and math.isclose(float(got), float(want), rel_tol=rel, abs_tol=1e-9)
+    if case.get("question"):
+        parsed = comparison.parse(case["question"], profile)
+        got = (parsed or {}).get("plan") or {}
+        chk.add("question_read_as_plan", parsed is not None and parsed["kind"] == "plan"
+                and (got.get("outcome"), got.get("explanatory")) == (case["plan"]["outcome"], case["plan"]["explanatory"]),
+                f"{got.get('outcome')} ~ {got.get('explanatory')}")
+    plan = comparison.validate(case["plan"], profile)
+    report = comparison.run(me.load_frame(path), plan)
+    stat = report["statistic"]
+    test, interval = stat.get("test") or {}, stat.get("interval") or {}
+    chk.add("status", stat["status"] == expect.get("status", "ok"), f"{stat['status']}: {stat.get('reason')}")
+    chk.add("method", stat["method"] == expect["method"], stat["method"])
+    for key, got in (("estimate", stat.get("estimate")), ("statistic", test.get("statistic")), ("p_value", test.get("p_value")),
+                     ("interval_low", interval.get("low")), ("interval_high", interval.get("high"))):
+        if key in expect:
+            chk.add(key, close(got, expect[key]), f"engine {got!r}, reference {expect[key]!r}")
+    if "df" in expect:
+        want = expect["df"] if isinstance(expect["df"], list) else [expect["df"]]
+        have = test.get("df") if isinstance(test.get("df"), list) else [test.get("df")]
+        chk.add("df", len(have) == len(want) and all(close(h, w) for h, w in zip(have, want)), f"engine {have}, reference {want}")
+    if "significant" in expect:
+        chk.add("significant", stat["significant"] is expect["significant"], str(stat["significant"]))
+    if "probability_of_superiority" in expect:
+        got = next((e["value"] for e in stat["effects"] if e["name"].startswith("probability")), None)
+        chk.add("probability_of_superiority", close(got, expect["probability_of_superiority"]), f"engine {got!r}")
+    if "inference_unavailable" in expect:
+        # Measured but not tested: the estimate and the sample sizes are kept, nothing inferential is
+        # reported, and the summary does not read as "no difference" or "not significant".
+        withheld = stat.get("inference_unavailable") or {}
+        said = comparison.narrative(report)
+        chk.add("inference_unavailable", withheld.get("code") == expect["inference_unavailable"], str(withheld.get("code")))
+        chk.add("nothing_inferential_reported", not test and not interval and stat["significant"] is None, str(test or interval))
+        chk.add("keeps_sample_sizes", bool(stat["sample"].get("n")) and all(g["n"] for g in report["groups"]), str(stat["sample"]))
+        chk.add("says_not_tested", "No test or interval is reported" in said and "not a finding of no difference" in said
+                and "significant difference" not in said.lower(), said[:200])
+    if "interval_method" in expect:
+        chk.add("interval_method", str(interval.get("method", "")).startswith(expect["interval_method"]), str(interval.get("method")))
+    if "interval_available" in expect:
+        chk.add("interval_available", bool(interval) is expect["interval_available"], str(interval or stat.get("warnings")))
+        if not expect["interval_available"]:
+            chk.add("says_why_no_interval", any("No interval is reported" in w for w in stat.get("warnings") or []),
+                    str(stat.get("warnings"))[:200])
+    if "exact" in expect:
+        chk.add("exact", bool(test.get("exact")) is expect["exact"], f"exact={test.get('exact')}, resamples={test.get('resamples')}")
+    if "rejects_method" in expect:
+        chk.add("rejects_method", expect["rejects_method"] in [r["method"] for r in stat["rejected_methods"]], str(stat["rejected_methods"])[:160])
+    # The independent runtime reference (csv + plain Python) agrees on the headline figures.
+    reference = comparison.reference(path, plan)
+    if report["family"] == "correlation" and stat["method"] == "pearson":
+        chk.add("runtime_reference", close(stat["estimate"], reference["pearson_r"]), str(reference))
+    elif report["family"] == "groups" and plan["design"] != "paired":
+        chk.add("runtime_reference", all(close(g["mean"], reference["groups"][g["level"]]["mean"]) and g["n"] == reference["groups"][g["level"]]["n"]
+                                         for g in report["groups"]), str(reference)[:160])
+    chk.add("association_not_cause", report["causal"]["status"] == "not_established"
+            and any("observational" in l.lower() for l in report["limitations"]), report["causal"]["status"])
+    chk.add("states_sample_and_selection", bool(stat["sample"]) and bool(stat["selection"]) and stat["alpha"] > 0, "")
+    return {"method": stat["method"], "family": report["family"], "status": stat["status"]}
+
+
 def _run_drift(case: dict, chk: _Check) -> dict:
     from app import data_quality
     from app.profiling import load_and_profile_csv
@@ -433,10 +524,17 @@ def _run_pipeline(case: dict, chk: _Check, live: bool) -> dict:
         db.close()
 
 
+def _run_spider_copilot(case: dict, chk: _Check) -> dict:
+    from app.evals import spider
+
+    return spider.run_case(case, chk)
+
+
 _RUNNERS = {
     "routing": _run_routing, "fastpath": _run_fastpath, "engine": _run_engine,
     "verification": _run_verification, "verification_narrative": _run_verification_narrative,
     "investigator": _run_investigator, "statistics": _run_statistics, "drift": _run_drift, "scenario": _run_scenario,
+    "comparison": _run_comparison, "spider_copilot": _run_spider_copilot,
 }
 
 
@@ -460,12 +558,13 @@ def run_case(case: dict, live: bool = False) -> dict:
 
 
 def run_suite(mode: str = "offline", components: list[str] | None = None, case_ids: list[str] | None = None,
-              provider_label: str | None = None) -> dict:
+              provider_label: str | None = None, suite_name: str = "default") -> dict:
     """Run the suite. `mode` is "offline" (scripted model; deterministic) or
-    "live" (real providers; only cases marked live)."""
+    "live" (real providers; only cases marked live). `suite_name` picks one of
+    SEPARATE_SUITES instead of the default suite."""
     if mode not in ("offline", "live"):
         raise ValueError("mode must be offline or live")
-    suite = load_suite()
+    suite = load_suite(suite_name=suite_name)
     live = mode == "live"
     cases = [c for c in suite["cases"] if bool(c.get("live")) == live]
     if components:

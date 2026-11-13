@@ -70,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run", help="run the suite")
     run_p.add_argument("--live", action="store_true", help="call real providers (costs money; never in CI)")
     run_p.add_argument("--provider", choices=["gemini", "llama"], default="gemini", help="primary provider for --live")
+    run_p.add_argument("--suite", choices=["default", "spider-numeric"], default="default",
+                       help="spider-numeric: Spider number-answer questions through the copilot's no-model path")
     run_p.add_argument("--component", action="append", help="only this component (repeatable)")
     run_p.add_argument("--case", action="append", help="only this case id (repeatable)")
     run_p.add_argument("--unsafe-subprocess", action="store_true",
@@ -110,7 +112,11 @@ def main(argv: list[str] | None = None) -> int:
         label = None
         if args.live:
             label = f"llama:{config.LLAMA_MODEL}" if args.provider == "llama" else f"gemini:{config.GEMINI_MODEL}"
-        report = runner.run_suite("live" if args.live else "offline", args.component, args.case, label)
+        if args.suite != "default":
+            if args.live:
+                sys.exit("--suite spider-numeric measures the no-model path; it has no live mode")
+            label = "none:rules-only"  # no provider, scripted or real, is called on this path
+        report = runner.run_suite("live" if args.live else "offline", args.component, args.case, label, suite_name=args.suite)
         s = report["summary"]
         for r in report["results"]:
             mark = "PASS" if r["passed"] else "FAIL"

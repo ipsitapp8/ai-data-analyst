@@ -744,6 +744,7 @@ _NAV_ICONS = {
     "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
     "copilot": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
+    "analyst": '<path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2 8 12.7 4 8.8l5.5-.8z"/>',
     "investigations": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M8 10.5h5M10.5 8v5"/>',
     "what_if": '<path d="M4 18c4 0 4-12 8-12s4 12 8 12"/><path d="M4 21h16"/>',
     "data_quality": '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16v.5"/>',
@@ -763,6 +764,30 @@ def _nav_icon_css() -> str:
     return " ".join(rules)
 
 
+# Silt's pages are light, but Streamlit takes its text colour from the browser's
+# preference: in a dark-mode browser widget values, chat messages and expander
+# text were near-white on white. These rules name only those Streamlit
+# elements, so nothing else on a page changes.
+_READABLE_TEXT_CSS = (
+    "<style>"
+    "[data-testid='stChatMessage']{background:#ffffff;border:1px solid #e4e4ee;border-radius:10px;}"
+    "[data-testid='stChatMessage'] *,[data-testid='stExpander'] *{color:#1f2330;}"
+    "[data-testid='stChatMessage'] th,[data-testid='stChatMessage'] td{border:1px solid #e4e4ee;padding:2px 8px;}"
+    # The text colour above is dark, so code chips and code blocks need a light
+    # background too; a dark-mode browser otherwise gives them a dark one.
+    "[data-testid='stChatMessage'] code,[data-testid='stChatMessage'] pre,"
+    "[data-testid='stExpander'] code,[data-testid='stExpander'] pre{background:#eef0f5 !important;}"
+    "[data-testid='stExpander'] summary,[data-testid='stExpander'] [data-testid='stJson']"
+    "{background:#f6f7fb !important;}"
+    "[data-testid='stTabs'] [role='tab'][aria-selected='false'] p{color:#5b6070 !important;}"
+    "[data-testid='stSelectbox'] input,[data-testid='stSelectbox'] p,[data-testid='stMultiSelect'] input,"
+    "[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,[data-testid='stNumberInput'] input,"
+    "[data-testid='stWidgetLabel'] p"
+    "{color:#1f2330 !important;-webkit-text-fill-color:#1f2330 !important;}"
+    "</style>"
+)
+
+
 def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
@@ -773,6 +798,7 @@ def inject_base_css() -> None:
     st.markdown(BASE_CSS, unsafe_allow_html=True)
     st.markdown(_FONTS_LINK, unsafe_allow_html=True)
     st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
+    st.markdown(_READABLE_TEXT_CSS, unsafe_allow_html=True)
 
 
 def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
@@ -984,9 +1010,10 @@ NAV_PAGES = [
     ("overview", "Overview", "pages/1_Overview.py"),
     ("datasets", "Datasets", "pages/2_Datasets.py"),
     ("analyses", "Analyses", "pages/3_Analyses.py"),
-    ("copilot", "Copilot", "pages/12_Copilot.py"),
+    ("analyst", "Silt Copilot", "pages/12_Copilot.py"),
     ("investigations", "Root cause", "pages/13_Investigations.py"),
     ("what_if", "What-if", "pages/14_What_If.py"),
+    ("copilot", "Drill-down sessions", "pages/19_Drilldown_Sessions.py"),
     ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),

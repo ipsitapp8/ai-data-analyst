@@ -7,7 +7,7 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,7 @@ from app.routers.jobs import router as jobs_router
 from app.routers.quality import router as quality_router
 from app.routers.scenarios import router as scenarios_router
 from app.routers.semantic import router as semantic_router
+from app.routers.analyst import router as analyst_router
 from app.routers.inspect import router as inspect_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.sharing import router as sharing_router
@@ -105,6 +106,7 @@ app.include_router(copilot_router)
 app.include_router(scenarios_router)
 app.include_router(semantic_router)
 app.include_router(evals_router)
+app.include_router(analyst_router)
 
 
 @app.on_event("startup")
@@ -161,10 +163,13 @@ def health(db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- datasets --
 
-def _save_and_profile_upload(file: UploadFile) -> tuple[Path, dict]:
-    """Stream an uploaded CSV to disk (size-capped) and profile it."""
-    if not file.filename.lower().endswith(".csv"):
-        raise HTTPException(400, "Only .csv files are supported right now.")
+def _save_and_profile_upload(file: UploadFile, sheet: str | None = None) -> tuple[Path, dict]:
+    """Stream an uploaded CSV to disk (size-capped) and profile it. For Excel,
+    `sheet` names the worksheet to use (default: the first)."""
+    excel = file.filename.lower().endswith((".xlsx", ".xls"))
+    if not file.filename.lower().endswith(".csv") and not excel:
+        hint = " PDF documents go to the Copilot's document upload." if file.filename.lower().endswith(".pdf") else ""
+        raise HTTPException(400, "Only .csv, .xlsx and .xls files are supported as datasets." + hint)
 
     dest_name = f"{uuid.uuid4().hex}_{Path(file.filename).name}"
     dest_path = config.UPLOADS_DIR / dest_name
@@ -180,6 +185,29 @@ def _save_and_profile_upload(file: UploadFile) -> tuple[Path, dict]:
                     413, f"File exceeds the {config.MAX_UPLOAD_BYTES // (1024 * 1024)}MB upload limit."
                 )
             f.write(chunk)
+
+    if excel:
+        # An Excel workbook's first sheet is stored as CSV, so every CSV-based feature can read it.
+        try:
+            import pandas as pd
+            if sheet:
+                names = pd.ExcelFile(dest_path).sheet_names
+                if sheet not in names:
+                    raise HTTPException(400, f"The workbook has no sheet named '{sheet}' (sheets: {', '.join(names)}).")
+            frame = pd.read_excel(dest_path, sheet_name=sheet or 0)
+        except HTTPException:
+            dest_path.unlink(missing_ok=True)
+            raise
+        except Exception as e:  # noqa: BLE001
+            dest_path.unlink(missing_ok=True)
+            raise HTTPException(400, f"Could not read the Excel file: {type(e).__name__}") from e
+        if frame.empty:
+            dest_path.unlink(missing_ok=True)
+            raise HTTPException(400, "The selected sheet has no data rows.")
+        csv_path = dest_path.with_suffix(".csv")
+        frame.to_csv(csv_path, index=False)
+        dest_path.unlink(missing_ok=True)
+        dest_path = csv_path
 
     try:
         _, profile = load_and_profile_csv(str(dest_path))
@@ -216,15 +244,17 @@ def _dataset_out(db: Session, d: Dataset) -> DatasetProfile:
 @app.post("/api/datasets/upload", response_model=DatasetProfile)
 def upload_dataset(
     file: UploadFile,
+    sheet: str | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    dest_path, profile = _save_and_profile_upload(file)
+    dest_path, profile = _save_and_profile_upload(file, sheet)
+    name = file.filename if not sheet else f"{file.filename} [{sheet}]"
 
     dataset = Dataset(
         team_id=team.id,
-        filename=file.filename,
+        filename=name,
         filepath=str(dest_path),
         row_count=profile["row_count"],
         col_count=profile["col_count"],
@@ -233,7 +263,7 @@ def upload_dataset(
     db.add(dataset)
     db.commit()
     db.refresh(dataset)
-    version = add_version(db, dataset, filename=file.filename, filepath=str(dest_path), profile=profile)
+    version = add_version(db, dataset, filename=name, filepath=str(dest_path), profile=profile)
     _after_new_version(db, dataset, version)
     return _dataset_out(db, dataset)
 

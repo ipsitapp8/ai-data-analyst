@@ -634,7 +634,7 @@ def test_results_from_another_context_are_set_aside_never_reused(sales, monkeypa
         replies["submit_understanding"] = [{**stat_fixtures.engine_fixtures.UNDERSTANDING,
                                             "period_a": ["2025-01-01", "2025-02-01"], "period_b": ["2025-02-01", "2025-04-29"]}]
     else:                                         # the statistical methods changed
-        monkeypatch.setattr(stat_result, "METHODS_VERSION", "2")
+        monkeypatch.setattr(stat_result, "METHODS_VERSION", stat_result.METHODS_VERSION + "-next")
 
     executed = []
     real = ops.execute

@@ -1,0 +1,2740 @@
+{
+ "report": "spider-numeric held-out evaluation: frozen deterministic copilot rules vs the v1 baseline",
+ "version": 3,
+ "suite_version": "spider-numeric.1",
+ "stored_run_id": 7,
+ "started_at": "2026-11-10T08:22:19.895166",
+ "provider": "none:rules-only",
+ "model_calls": 0,
+ "code_runs": 0,
+ "freeze": {
+  "frozen_at": "2026-11-10T08:22:19+00:00",
+  "git_head": "7ac5972",
+  "note": "working-tree files (uncommitted changes included) whose content decides the held-out result",
+  "files": {
+   "app/copilot.py": "06850c7a9d2786d546ae71251d8ab7cd4f18afd9dd9ada1e3f71c3a755c53df5",
+   "app/fastpath.py": "1d996a01c5018c1a6721f8aba55278fee74800fd627657ce2ed22ceec697f910",
+   "app/metric_engine.py": "4df6203d172611931631cf4d93a477b26b5b3193b573f702808cca1662ffae06",
+   "app/profiling.py": "15721f9d9587991acb74872f151f6ff56cb2b9e0592ec86f544b6002f10ca57a",
+   "app/evals/spider.py": "7e8a8b3258fe56f88e118f442a8aecfcb5c670da3049a3f5f90b2c3831a662c6",
+   "app/evals/runner.py": "3506819782b96edf6e3ed12edfd4d7d75e7206046cfc8eb38637b84a48ad025a",
+   "evals/cases/spider_numeric.json": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce"
+  },
+  "reason": "Harness correction only. run_case in app/evals/spider.py did not pass the dataset file name to the copilot, which the application (copilot.handle_message passes dataset.filename) and the development scorer both do; it now passes '<table>.csv'. Every rule file (copilot.py, fastpath.py, metric_engine.py, profiling.py, runner.py) and the case file have the same SHA-256 as in the v2 freeze; only app/evals/spider.py differs, so the v2 freeze no longer matches the files that produce the run."
+ },
+ "case_file_sha256": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce",
+ "baseline": "spider_numeric_copilot_baseline_v1.json",
+ "held_out_definition": "numeric reference and no leakage marker (question_also_in_train / database_family_in_train)",
+ "previous_held_out_run": {
+  "run_json": "spider_heldout_run_v2.json",
+  "held_out_138": {
+   "questions": 138,
+   "exact": 8,
+   "exact_rate": 0.058,
+   "within_tolerance": 8,
+   "tolerance_rate": 0.058,
+   "declined": 130,
+   "declined_rate": 0.942,
+   "incorrect": 0,
+   "incorrect_rate": 0.0,
+   "errors": 0,
+   "answered": 8,
+   "precision_when_answering": 1.0,
+   "outcomes": {
+    "not_understood": 82,
+    "no_metric": 39,
+    "clarification": 9,
+    "correct_exact": 8
+   }
+  },
+  "held_out_transitions": {
+   "declined -> declined": 79,
+   "declined -> correct": 51,
+   "correct -> correct": 8
+  },
+  "held_out_newly_correct_vs_previous": [
+   {
+    "case_id": "spider-dev-0000",
+    "question": "How many singers do we have?",
+    "reference_sql": "SELECT count(*) FROM singer",
+    "reference": [
+     6
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 6.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0001",
+    "question": "What is the total number of singers?",
+    "reference_sql": "SELECT count(*) FROM singer",
+    "reference": [
+     6
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 6.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0004",
+    "question": "What is the average, minimum, and maximum age of all singers from France?",
+    "reference_sql": "SELECT avg(age) ,  min(age) ,  max(age) FROM singer WHERE country  =  'France'",
+    "reference": [
+     34.5,
+     25,
+     43
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"Age\")",
+    "copilot_filters": [
+     {
+      "column": "Country",
+      "op": "==",
+      "value": "France"
+     }
+    ],
+    "copilot_value": 34.5,
+    "oracle_formulas": [
+     "avg(\"Age\")",
+     "min(\"Age\")",
+     "max(\"Age\")"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Country",
+      "op": "==",
+      "value": "France"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0020",
+    "question": "How many concerts are there in year 2014 or 2015?",
+    "reference_sql": "SELECT count(*) FROM concert WHERE YEAR  =  2014 OR YEAR  =  2015",
+    "reference": [
+     6
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Year",
+      "op": "in",
+      "value": [
+       2014.0,
+       2015.0
+      ]
+     }
+    ],
+    "copilot_value": 6.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Year",
+      "op": "in",
+      "value": [
+       2014.0,
+       2015.0
+      ]
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0045",
+    "question": "Find the number of pets whose weight is heavier than 10.",
+    "reference_sql": "SELECT count(*) FROM pets WHERE weight  >  10",
+    "reference": [
+     2
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "weight",
+      "op": ">",
+      "value": 10.0
+     }
+    ],
+    "copilot_value": 2.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "weight",
+      "op": ">",
+      "value": 10.0
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0046",
+    "question": "How many pets have a greater weight than 10?",
+    "reference_sql": "SELECT count(*) FROM pets WHERE weight  >  10",
+    "reference": [
+     2
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "weight",
+      "op": ">",
+      "value": 10.0
+     }
+    ],
+    "copilot_value": 2.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "weight",
+      "op": ">",
+      "value": 10.0
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0091",
+    "question": "How many countries are listed?",
+    "reference_sql": "SELECT count(*) FROM COUNTRIES;",
+    "reference": [
+     15
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0092",
+    "question": "How many countries exist?",
+    "reference_sql": "SELECT count(*) FROM COUNTRIES;",
+    "reference": [
+     15
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0143",
+    "question": "How many cars have more than 4 cylinders?",
+    "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE Cylinders  >  4;",
+    "reference": [
+     195
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 4.0
+     }
+    ],
+    "copilot_value": 195.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 4.0
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0144",
+    "question": "What is the number of cars with more than 4 cylinders?",
+    "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE Cylinders  >  4;",
+    "reference": [
+     195
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 4.0
+     }
+    ],
+    "copilot_value": 195.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 4.0
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0163",
+    "question": "How many cars has over 6 cylinders?",
+    "reference_sql": "SELECT COUNT(*) FROM CARS_DATA WHERE Cylinders  >  6;",
+    "reference": [
+     108
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 6.0
+     }
+    ],
+    "copilot_value": 108.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Cylinders",
+      "op": ">",
+      "value": 6.0
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0260",
+    "question": "Count the number of employees",
+    "reference_sql": "SELECT count(*) FROM employee",
+    "reference": [
+     10
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 10.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0272",
+    "question": "What are the minimum and maximum number of products across all the shops?",
+    "reference_sql": "SELECT min(Number_products) ,  max(Number_products) FROM shop",
+    "reference": [
+     1600,
+     15000
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "min(\"Number_products\")",
+    "copilot_filters": [],
+    "copilot_value": 1600.0,
+    "oracle_formulas": [
+     "min(\"Number_products\")",
+     "max(\"Number_products\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0297",
+    "question": "How many documents do we have?",
+    "reference_sql": "SELECT count(*) FROM Documents",
+    "reference": [
+     15
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0317",
+    "question": "How many templates do we have?",
+    "reference_sql": "SELECT count(*) FROM Templates",
+    "reference": [
+     20
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 20.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0318",
+    "question": "Count the number of templates.",
+    "reference_sql": "SELECT count(*) FROM Templates",
+    "reference": [
+     20
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 20.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0325",
+    "question": "How many templates have template type code CV?",
+    "reference_sql": "SELECT count(*) FROM Templates WHERE template_type_code  =  \"CV\"",
+    "reference": [
+     2
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Template_Type_Code",
+      "op": "==",
+      "value": "CV"
+     }
+    ],
+    "copilot_value": 2.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Template_Type_Code",
+      "op": "==",
+      "value": "CV"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0326",
+    "question": "Count the number of templates of the type CV.",
+    "reference_sql": "SELECT count(*) FROM Templates WHERE template_type_code  =  \"CV\"",
+    "reference": [
+     2
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Template_Type_Code",
+      "op": "==",
+      "value": "CV"
+     }
+    ],
+    "copilot_value": 2.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Template_Type_Code",
+      "op": "==",
+      "value": "CV"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0357",
+    "question": "How many paragraphs in total?",
+    "reference_sql": "SELECT count(*) FROM Paragraphs",
+    "reference": [
+     15
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0358",
+    "question": "Count the number of paragraphs.",
+    "reference_sql": "SELECT count(*) FROM Paragraphs",
+    "reference": [
+     15
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0381",
+    "question": "How many teachers are there?",
+    "reference_sql": "SELECT count(*) FROM teacher",
+    "reference": [
+     7
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 7.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0382",
+    "question": "What is the total count of teachers?",
+    "reference_sql": "SELECT count(*) FROM teacher",
+    "reference": [
+     7
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 7.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0429",
+    "question": "Find the total number of players.",
+    "reference_sql": "SELECT count(*) FROM players",
+    "reference": [
+     20662
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 20662.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0431",
+    "question": "Find the total number of matches.",
+    "reference_sql": "SELECT count(*) FROM matches",
+    "reference": [
+     278
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 278.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0432",
+    "question": "Count the number of matches.",
+    "reference_sql": "SELECT count(*) FROM matches",
+    "reference": [
+     278
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 278.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0441",
+    "question": "find the number of distinct country codes of all players.",
+    "reference_sql": "SELECT count(DISTINCT country_code) FROM players",
+    "reference": [
+     153
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count_distinct(\"country_code\")",
+    "copilot_filters": [],
+    "copilot_value": 153.0,
+    "oracle_formulas": [
+     "count_distinct(\"country_code\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0502",
+    "question": "How many different results are there for the battles?",
+    "reference_sql": "SELECT count(DISTINCT RESULT) FROM battle",
+    "reference": [
+     3
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count_distinct(\"result\")",
+    "copilot_filters": [],
+    "copilot_value": 3.0,
+    "oracle_formulas": [
+     "count_distinct(\"result\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0509",
+    "question": "How many courses in total are listed?",
+    "reference_sql": "SELECT count(*) FROM Courses",
+    "reference": [
+     15
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0510",
+    "question": "How many courses are there?",
+    "reference_sql": "SELECT count(*) FROM Courses",
+    "reference": [
+     15
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0568",
+    "question": "How many transcripts are listed?",
+    "reference_sql": "SELECT count(*) FROM Transcripts",
+    "reference": [
+     15
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 15.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0589",
+    "question": "How many cartoons were written by \"Joseph Kuhr\"?",
+    "reference_sql": "SELECT count(*) FROM Cartoon WHERE Written_by = \"Joseph Kuhr\";",
+    "reference": [
+     2
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Written_by",
+      "op": "==",
+      "value": "Joseph Kuhr"
+     }
+    ],
+    "copilot_value": 2.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Written_by",
+      "op": "==",
+      "value": "Joseph Kuhr"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0590",
+    "question": "What is the number of cartoones written by Joseph Kuhr?",
+    "reference_sql": "SELECT count(*) FROM Cartoon WHERE Written_by = \"Joseph Kuhr\";",
+    "reference": [
+     2
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Written_by",
+      "op": "==",
+      "value": "Joseph Kuhr"
+     }
+    ],
+    "copilot_value": 2.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Written_by",
+      "op": "==",
+      "value": "Joseph Kuhr"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0617",
+    "question": "What is minimum and maximum share of TV series?",
+    "reference_sql": "SELECT max(SHARE) , min(SHARE) FROM TV_series;",
+    "reference": [
+     9.0,
+     5.0
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "min(\"Share\")",
+    "copilot_filters": [],
+    "copilot_value": 5.0,
+    "oracle_formulas": [
+     "max(\"Share\")",
+     "min(\"Share\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0618",
+    "question": "What is the maximum and minimum share for the TV series?",
+    "reference_sql": "SELECT max(SHARE) , min(SHARE) FROM TV_series;",
+    "reference": [
+     9.0,
+     5.0
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "max(\"Share\")",
+    "copilot_filters": [],
+    "copilot_value": 9.0,
+    "oracle_formulas": [
+     "max(\"Share\")",
+     "min(\"Share\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0647",
+    "question": "How many poker players are there?",
+    "reference_sql": "SELECT count(*) FROM poker_player",
+    "reference": [
+     5
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 5.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0648",
+    "question": "Count the number of poker players.",
+    "reference_sql": "SELECT count(*) FROM poker_player",
+    "reference": [
+     5
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 5.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0653",
+    "question": "What is the average earnings of poker players?",
+    "reference_sql": "SELECT avg(Earnings) FROM poker_player",
+    "reference": [
+     301891.2
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"Earnings\")",
+    "copilot_filters": [],
+    "copilot_value": 301891.2,
+    "oracle_formulas": [
+     "avg(\"Earnings\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0654",
+    "question": "Return the average earnings across all poker players.",
+    "reference_sql": "SELECT avg(Earnings) FROM poker_player",
+    "reference": [
+     301891.2
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"Earnings\")",
+    "copilot_filters": [],
+    "copilot_value": 301891.2,
+    "oracle_formulas": [
+     "avg(\"Earnings\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0704",
+    "question": "How many countries have a republic as their form of government?",
+    "reference_sql": "SELECT count(*) FROM country WHERE GovernmentForm  =  \"Republic\"",
+    "reference": [
+     122
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "Republic"
+     }
+    ],
+    "copilot_value": 122.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "GovernmentForm",
+      "op": "==",
+      "value": "Republic"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0706",
+    "question": "What is the total surface area of the countries in the Caribbean region?",
+    "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Region  =  \"Caribbean\"",
+    "reference": [
+     234423.0
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "sum(\"SurfaceArea\")",
+    "copilot_filters": [
+     {
+      "column": "Region",
+      "op": "==",
+      "value": "Caribbean"
+     }
+    ],
+    "copilot_value": 234423.0,
+    "oracle_formulas": [
+     "sum(\"SurfaceArea\")"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Region",
+      "op": "==",
+      "value": "Caribbean"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0806",
+    "question": "how many countries are in Asia?",
+    "reference_sql": "SELECT count(*) FROM country WHERE continent  =  \"Asia\"",
+    "reference": [
+     51
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "copilot_value": 51.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0807",
+    "question": "Count the number of countries in Asia.",
+    "reference_sql": "SELECT count(*) FROM country WHERE continent  =  \"Asia\"",
+    "reference": [
+     51
+    ],
+    "before": "no_metric",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "copilot_value": 51.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [
+     {
+      "column": "Continent",
+      "op": "==",
+      "value": "Asia"
+     }
+    ],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0822",
+    "question": "How many conductors are there?",
+    "reference_sql": "SELECT count(*) FROM conductor",
+    "reference": [
+     12
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 12.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0823",
+    "question": "Count the number of conductors.",
+    "reference_sql": "SELECT count(*) FROM conductor",
+    "reference": [
+     12
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 12.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0830",
+    "question": "What is the average attendance of shows?",
+    "reference_sql": "SELECT avg(Attendance) FROM SHOW",
+    "reference": [
+     1326.4
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"Attendance\")",
+    "copilot_filters": [],
+    "copilot_value": 1326.4,
+    "oracle_formulas": [
+     "avg(\"Attendance\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0831",
+    "question": "Return the average attendance across all shows.",
+    "reference_sql": "SELECT avg(Attendance) FROM SHOW",
+    "reference": [
+     1326.4
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"Attendance\")",
+    "copilot_filters": [],
+    "copilot_value": 1326.4,
+    "oracle_formulas": [
+     "avg(\"Attendance\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0834",
+    "question": "How many different nationalities do conductors have?",
+    "reference_sql": "SELECT count(DISTINCT Nationality) FROM conductor",
+    "reference": [
+     3
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count_distinct(\"Nationality\")",
+    "copilot_filters": [],
+    "copilot_value": 3.0,
+    "oracle_formulas": [
+     "count_distinct(\"Nationality\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0986",
+    "question": "What is the average age of all the dogs?",
+    "reference_sql": "SELECT avg(age) FROM Dogs",
+    "reference": [
+     5.066667
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"age\")",
+    "copilot_filters": [],
+    "copilot_value": 5.066666666666666,
+    "oracle_formulas": [
+     "avg(\"age\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-0987",
+    "question": "Compute the average age of all the dogs.",
+    "reference_sql": "SELECT avg(age) FROM Dogs",
+    "reference": [
+     5.066667
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "avg(\"age\")",
+    "copilot_filters": [],
+    "copilot_value": 5.066666666666666,
+    "oracle_formulas": [
+     "avg(\"age\")"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-1000",
+    "question": "How many singers are there?",
+    "reference_sql": "SELECT count(*) FROM singer",
+    "reference": [
+     8
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 8.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   },
+   {
+    "case_id": "spider-dev-1001",
+    "question": "What is the count of singers?",
+    "reference_sql": "SELECT count(*) FROM singer",
+    "reference": [
+     8
+    ],
+    "before": "not_understood",
+    "after": "correct_exact",
+    "copilot_formulas": "count()",
+    "copilot_filters": [],
+    "copilot_value": 8.0,
+    "oracle_formulas": [
+     "count()"
+    ],
+    "oracle_filters": [],
+    "cause": null,
+    "cause_detail": null
+   }
+  ]
+ },
+ "held_out_138": {
+  "before_v1": {
+   "questions": 138,
+   "exact": 3,
+   "exact_rate": 0.0217,
+   "within_tolerance": 3,
+   "tolerance_rate": 0.0217,
+   "declined": 135,
+   "declined_rate": 0.9783,
+   "incorrect": 0,
+   "incorrect_rate": 0.0,
+   "errors": 0,
+   "answered": 3,
+   "precision_when_answering": 1.0,
+   "outcomes": {
+    "not_understood": 88,
+    "no_metric": 35,
+    "clarification": 12,
+    "correct_exact": 3
+   }
+  },
+  "after": {
+   "questions": 138,
+   "exact": 59,
+   "exact_rate": 0.4275,
+   "within_tolerance": 59,
+   "tolerance_rate": 0.4275,
+   "declined": 79,
+   "declined_rate": 0.5725,
+   "incorrect": 0,
+   "incorrect_rate": 0.0,
+   "errors": 0,
+   "answered": 59,
+   "precision_when_answering": 1.0,
+   "outcomes": {
+    "correct_exact": 59,
+    "not_understood": 49,
+    "no_metric": 24,
+    "clarification": 6
+   }
+  }
+ },
+ "numeric_reference_160": {
+  "before_v1": {
+   "questions": 160,
+   "exact": 4,
+   "exact_rate": 0.025,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.025,
+   "declined": 155,
+   "declined_rate": 0.9688,
+   "incorrect": 1,
+   "incorrect_rate": 0.0063,
+   "errors": 0,
+   "answered": 5,
+   "precision_when_answering": 0.8,
+   "outcomes": {
+    "not_understood": 102,
+    "no_metric": 37,
+    "clarification": 16,
+    "correct_exact": 4,
+    "wrong_value": 1
+   }
+  },
+  "after": {
+   "questions": 160,
+   "exact": 73,
+   "exact_rate": 0.4562,
+   "within_tolerance": 73,
+   "tolerance_rate": 0.4562,
+   "declined": 87,
+   "declined_rate": 0.5437,
+   "incorrect": 0,
+   "incorrect_rate": 0.0,
+   "errors": 0,
+   "answered": 73,
+   "precision_when_answering": 1.0,
+   "outcomes": {
+    "correct_exact": 73,
+    "not_understood": 53,
+    "no_metric": 24,
+    "clarification": 10
+   }
+  }
+ },
+ "all_165": {
+  "before_v1": {
+   "questions": 165,
+   "exact": 4,
+   "exact_rate": 0.0242,
+   "within_tolerance": 4,
+   "tolerance_rate": 0.0242,
+   "declined": 160,
+   "declined_rate": 0.9697,
+   "incorrect": 1,
+   "incorrect_rate": 0.0061,
+   "errors": 0,
+   "answered": 5,
+   "precision_when_answering": 0.8,
+   "outcomes": {
+    "not_understood": 102,
+    "no_metric": 40,
+    "clarification": 18,
+    "correct_exact": 4,
+    "wrong_value": 1
+   }
+  },
+  "after": {
+   "questions": 165,
+   "exact": 73,
+   "exact_rate": 0.4424,
+   "within_tolerance": 73,
+   "tolerance_rate": 0.4424,
+   "declined": 90,
+   "declined_rate": 0.5455,
+   "incorrect": 2,
+   "incorrect_rate": 0.0121,
+   "errors": 0,
+   "answered": 75,
+   "precision_when_answering": 0.9733,
+   "outcomes": {
+    "correct_exact": 73,
+    "not_understood": 53,
+    "no_metric": 25,
+    "clarification": 12,
+    "wrong_value": 2
+   }
+  }
+ },
+ "held_out_transitions": {
+  "declined -> declined": 79,
+  "declined -> correct": 56,
+  "correct -> correct": 3
+ },
+ "held_out_declined_by_outcome": {
+  "before_v1": {
+   "not_understood": 88,
+   "no_metric": 35,
+   "clarification": 12
+  },
+  "after": {
+   "not_understood": 49,
+   "no_metric": 24,
+   "clarification": 6
+  }
+ },
+ "held_out_still_declined_by_cause": {
+  "question_understanding": 76,
+  "data_representation": 2,
+  "deterministic_limitation": 1
+ },
+ "held_out_still_declined_by_detail": [
+  [
+   "the aggregation or the column is worded in a way the rules do not recognise",
+   57
+  ],
+  [
+   "a count of entities ('how many singers') was not read as a row count",
+   13
+  ],
+  [
+   "the metric wording matched several columns, and the rules asked which one",
+   6
+  ],
+  [
+   "the engine, reading the CSV as the application does, gets a different number for the same spec",
+   2
+  ],
+  [
+   "OR across different columns or operators (engine filters are AND-ed)",
+   1
+  ]
+ ],
+ "held_out_clarifications": [
+  [
+   "the metric wording matched several columns, and the rules asked which one",
+   6
+  ]
+ ],
+ "held_out_spec_matches_oracle_among_correct": 56,
+ "timing_ms": {
+  "total": 1480,
+  "median": 3,
+  "max": 186
+ },
+ "held_out_incorrect": [],
+ "held_out_newly_correct": [
+  {
+   "case_id": "spider-dev-0000",
+   "question": "How many singers do we have?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    6
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 6.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0001",
+   "question": "What is the total number of singers?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    6
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 6.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0004",
+   "question": "What is the average, minimum, and maximum age of all singers from France?",
+   "reference_sql": "SELECT avg(age) ,  min(age) ,  max(age) FROM singer WHERE country  =  'France'",
+   "reference": [
+    34.5,
+    25,
+    43
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"Age\")",
+   "copilot_filters": [
+    {
+     "column": "Country",
+     "op": "==",
+     "value": "France"
+    }
+   ],
+   "copilot_value": 34.5,
+   "oracle_formulas": [
+    "avg(\"Age\")",
+    "min(\"Age\")",
+    "max(\"Age\")"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Country",
+     "op": "==",
+     "value": "France"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0020",
+   "question": "How many concerts are there in year 2014 or 2015?",
+   "reference_sql": "SELECT count(*) FROM concert WHERE YEAR  =  2014 OR YEAR  =  2015",
+   "reference": [
+    6
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Year",
+     "op": "in",
+     "value": [
+      2014.0,
+      2015.0
+     ]
+    }
+   ],
+   "copilot_value": 6.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Year",
+     "op": "in",
+     "value": [
+      2014.0,
+      2015.0
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0045",
+   "question": "Find the number of pets whose weight is heavier than 10.",
+   "reference_sql": "SELECT count(*) FROM pets WHERE weight  >  10",
+   "reference": [
+    2
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "weight",
+     "op": ">",
+     "value": 10.0
+    }
+   ],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "weight",
+     "op": ">",
+     "value": 10.0
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0046",
+   "question": "How many pets have a greater weight than 10?",
+   "reference_sql": "SELECT count(*) FROM pets WHERE weight  >  10",
+   "reference": [
+    2
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "weight",
+     "op": ">",
+     "value": 10.0
+    }
+   ],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "weight",
+     "op": ">",
+     "value": 10.0
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0091",
+   "question": "How many countries are listed?",
+   "reference_sql": "SELECT count(*) FROM COUNTRIES;",
+   "reference": [
+    15
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0092",
+   "question": "How many countries exist?",
+   "reference_sql": "SELECT count(*) FROM COUNTRIES;",
+   "reference": [
+    15
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0143",
+   "question": "How many cars have more than 4 cylinders?",
+   "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE Cylinders  >  4;",
+   "reference": [
+    195
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Cylinders",
+     "op": ">",
+     "value": 4.0
+    }
+   ],
+   "copilot_value": 195.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Cylinders",
+     "op": ">",
+     "value": 4.0
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0144",
+   "question": "What is the number of cars with more than 4 cylinders?",
+   "reference_sql": "SELECT count(*) FROM CARS_DATA WHERE Cylinders  >  4;",
+   "reference": [
+    195
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Cylinders",
+     "op": ">",
+     "value": 4.0
+    }
+   ],
+   "copilot_value": 195.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Cylinders",
+     "op": ">",
+     "value": 4.0
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0163",
+   "question": "How many cars has over 6 cylinders?",
+   "reference_sql": "SELECT COUNT(*) FROM CARS_DATA WHERE Cylinders  >  6;",
+   "reference": [
+    108
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Cylinders",
+     "op": ">",
+     "value": 6.0
+    }
+   ],
+   "copilot_value": 108.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Cylinders",
+     "op": ">",
+     "value": 6.0
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0260",
+   "question": "Count the number of employees",
+   "reference_sql": "SELECT count(*) FROM employee",
+   "reference": [
+    10
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 10.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0272",
+   "question": "What are the minimum and maximum number of products across all the shops?",
+   "reference_sql": "SELECT min(Number_products) ,  max(Number_products) FROM shop",
+   "reference": [
+    1600,
+    15000
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "min(\"Number_products\")",
+   "copilot_filters": [],
+   "copilot_value": 1600.0,
+   "oracle_formulas": [
+    "min(\"Number_products\")",
+    "max(\"Number_products\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0297",
+   "question": "How many documents do we have?",
+   "reference_sql": "SELECT count(*) FROM Documents",
+   "reference": [
+    15
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0317",
+   "question": "How many templates do we have?",
+   "reference_sql": "SELECT count(*) FROM Templates",
+   "reference": [
+    20
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 20.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0318",
+   "question": "Count the number of templates.",
+   "reference_sql": "SELECT count(*) FROM Templates",
+   "reference": [
+    20
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 20.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0325",
+   "question": "How many templates have template type code CV?",
+   "reference_sql": "SELECT count(*) FROM Templates WHERE template_type_code  =  \"CV\"",
+   "reference": [
+    2
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Template_Type_Code",
+     "op": "==",
+     "value": "CV"
+    }
+   ],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Template_Type_Code",
+     "op": "==",
+     "value": "CV"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0326",
+   "question": "Count the number of templates of the type CV.",
+   "reference_sql": "SELECT count(*) FROM Templates WHERE template_type_code  =  \"CV\"",
+   "reference": [
+    2
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Template_Type_Code",
+     "op": "==",
+     "value": "CV"
+    }
+   ],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Template_Type_Code",
+     "op": "==",
+     "value": "CV"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0357",
+   "question": "How many paragraphs in total?",
+   "reference_sql": "SELECT count(*) FROM Paragraphs",
+   "reference": [
+    15
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0358",
+   "question": "Count the number of paragraphs.",
+   "reference_sql": "SELECT count(*) FROM Paragraphs",
+   "reference": [
+    15
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0381",
+   "question": "How many teachers are there?",
+   "reference_sql": "SELECT count(*) FROM teacher",
+   "reference": [
+    7
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 7.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0382",
+   "question": "What is the total count of teachers?",
+   "reference_sql": "SELECT count(*) FROM teacher",
+   "reference": [
+    7
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 7.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0429",
+   "question": "Find the total number of players.",
+   "reference_sql": "SELECT count(*) FROM players",
+   "reference": [
+    20662
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 20662.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0431",
+   "question": "Find the total number of matches.",
+   "reference_sql": "SELECT count(*) FROM matches",
+   "reference": [
+    278
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 278.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0432",
+   "question": "Count the number of matches.",
+   "reference_sql": "SELECT count(*) FROM matches",
+   "reference": [
+    278
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 278.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0441",
+   "question": "find the number of distinct country codes of all players.",
+   "reference_sql": "SELECT count(DISTINCT country_code) FROM players",
+   "reference": [
+    153
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"country_code\")",
+   "copilot_filters": [],
+   "copilot_value": 153.0,
+   "oracle_formulas": [
+    "count_distinct(\"country_code\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0502",
+   "question": "How many different results are there for the battles?",
+   "reference_sql": "SELECT count(DISTINCT RESULT) FROM battle",
+   "reference": [
+    3
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"result\")",
+   "copilot_filters": [],
+   "copilot_value": 3.0,
+   "oracle_formulas": [
+    "count_distinct(\"result\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0509",
+   "question": "How many courses in total are listed?",
+   "reference_sql": "SELECT count(*) FROM Courses",
+   "reference": [
+    15
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0510",
+   "question": "How many courses are there?",
+   "reference_sql": "SELECT count(*) FROM Courses",
+   "reference": [
+    15
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0568",
+   "question": "How many transcripts are listed?",
+   "reference_sql": "SELECT count(*) FROM Transcripts",
+   "reference": [
+    15
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 15.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0589",
+   "question": "How many cartoons were written by \"Joseph Kuhr\"?",
+   "reference_sql": "SELECT count(*) FROM Cartoon WHERE Written_by = \"Joseph Kuhr\";",
+   "reference": [
+    2
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Written_by",
+     "op": "==",
+     "value": "Joseph Kuhr"
+    }
+   ],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Written_by",
+     "op": "==",
+     "value": "Joseph Kuhr"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0590",
+   "question": "What is the number of cartoones written by Joseph Kuhr?",
+   "reference_sql": "SELECT count(*) FROM Cartoon WHERE Written_by = \"Joseph Kuhr\";",
+   "reference": [
+    2
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Written_by",
+     "op": "==",
+     "value": "Joseph Kuhr"
+    }
+   ],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Written_by",
+     "op": "==",
+     "value": "Joseph Kuhr"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0617",
+   "question": "What is minimum and maximum share of TV series?",
+   "reference_sql": "SELECT max(SHARE) , min(SHARE) FROM TV_series;",
+   "reference": [
+    9.0,
+    5.0
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "min(\"Share\")",
+   "copilot_filters": [],
+   "copilot_value": 5.0,
+   "oracle_formulas": [
+    "max(\"Share\")",
+    "min(\"Share\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0618",
+   "question": "What is the maximum and minimum share for the TV series?",
+   "reference_sql": "SELECT max(SHARE) , min(SHARE) FROM TV_series;",
+   "reference": [
+    9.0,
+    5.0
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "max(\"Share\")",
+   "copilot_filters": [],
+   "copilot_value": 9.0,
+   "oracle_formulas": [
+    "max(\"Share\")",
+    "min(\"Share\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0647",
+   "question": "How many poker players are there?",
+   "reference_sql": "SELECT count(*) FROM poker_player",
+   "reference": [
+    5
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 5.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0648",
+   "question": "Count the number of poker players.",
+   "reference_sql": "SELECT count(*) FROM poker_player",
+   "reference": [
+    5
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 5.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0653",
+   "question": "What is the average earnings of poker players?",
+   "reference_sql": "SELECT avg(Earnings) FROM poker_player",
+   "reference": [
+    301891.2
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"Earnings\")",
+   "copilot_filters": [],
+   "copilot_value": 301891.2,
+   "oracle_formulas": [
+    "avg(\"Earnings\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0654",
+   "question": "Return the average earnings across all poker players.",
+   "reference_sql": "SELECT avg(Earnings) FROM poker_player",
+   "reference": [
+    301891.2
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"Earnings\")",
+   "copilot_filters": [],
+   "copilot_value": 301891.2,
+   "oracle_formulas": [
+    "avg(\"Earnings\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0685",
+   "question": "How many distinct nationalities are there?",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM people",
+   "reference": [
+    2
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"Nationality\")",
+   "copilot_filters": [],
+   "copilot_value": 2.0,
+   "oracle_formulas": [
+    "count_distinct(\"Nationality\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0704",
+   "question": "How many countries have a republic as their form of government?",
+   "reference_sql": "SELECT count(*) FROM country WHERE GovernmentForm  =  \"Republic\"",
+   "reference": [
+    122
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "GovernmentForm",
+     "op": "==",
+     "value": "Republic"
+    }
+   ],
+   "copilot_value": 122.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "GovernmentForm",
+     "op": "==",
+     "value": "Republic"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0706",
+   "question": "What is the total surface area of the countries in the Caribbean region?",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Region  =  \"Caribbean\"",
+   "reference": [
+    234423.0
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "sum(\"SurfaceArea\")",
+   "copilot_filters": [
+    {
+     "column": "Region",
+     "op": "==",
+     "value": "Caribbean"
+    }
+   ],
+   "copilot_value": 234423.0,
+   "oracle_formulas": [
+    "sum(\"SurfaceArea\")"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Region",
+     "op": "==",
+     "value": "Caribbean"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0722",
+   "question": "What is the total population and maximum GNP in Asia?",
+   "reference_sql": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+   "reference": [
+    3705025700,
+    3787042.0
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "sum(\"Population\")",
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "copilot_value": 3705025700.0,
+   "oracle_formulas": [
+    "sum(\"Population\")",
+    "max(\"GNP\")"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0726",
+   "question": "What is the total surface area of the continents Asia and Europe?",
+   "reference_sql": "SELECT sum(SurfaceArea) FROM country WHERE Continent  =  \"Asia\" OR Continent  =  \"Europe\"",
+   "reference": [
+    54930138.9
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "sum(\"SurfaceArea\")",
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "in",
+     "value": [
+      "Europe",
+      "Asia"
+     ]
+    }
+   ],
+   "copilot_value": 54930138.9,
+   "oracle_formulas": [
+    "sum(\"SurfaceArea\")"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Continent",
+     "op": "in",
+     "value": [
+      "Asia",
+      "Europe"
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0806",
+   "question": "how many countries are in Asia?",
+   "reference_sql": "SELECT count(*) FROM country WHERE continent  =  \"Asia\"",
+   "reference": [
+    51
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "copilot_value": 51.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0807",
+   "question": "Count the number of countries in Asia.",
+   "reference_sql": "SELECT count(*) FROM country WHERE continent  =  \"Asia\"",
+   "reference": [
+    51
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "copilot_value": 51.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Continent",
+     "op": "==",
+     "value": "Asia"
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0822",
+   "question": "How many conductors are there?",
+   "reference_sql": "SELECT count(*) FROM conductor",
+   "reference": [
+    12
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 12.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0823",
+   "question": "Count the number of conductors.",
+   "reference_sql": "SELECT count(*) FROM conductor",
+   "reference": [
+    12
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 12.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0830",
+   "question": "What is the average attendance of shows?",
+   "reference_sql": "SELECT avg(Attendance) FROM SHOW",
+   "reference": [
+    1326.4
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"Attendance\")",
+   "copilot_filters": [],
+   "copilot_value": 1326.4,
+   "oracle_formulas": [
+    "avg(\"Attendance\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0831",
+   "question": "Return the average attendance across all shows.",
+   "reference_sql": "SELECT avg(Attendance) FROM SHOW",
+   "reference": [
+    1326.4
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"Attendance\")",
+   "copilot_filters": [],
+   "copilot_value": 1326.4,
+   "oracle_formulas": [
+    "avg(\"Attendance\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0834",
+   "question": "How many different nationalities do conductors have?",
+   "reference_sql": "SELECT count(DISTINCT Nationality) FROM conductor",
+   "reference": [
+    3
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count_distinct(\"Nationality\")",
+   "copilot_filters": [],
+   "copilot_value": 3.0,
+   "oracle_formulas": [
+    "count_distinct(\"Nationality\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0858",
+   "question": "Find the number of orchestras whose record format is \"CD\" or \"DVD\".",
+   "reference_sql": "SELECT COUNT(*) FROM orchestra WHERE Major_Record_Format  =  \"CD\" OR Major_Record_Format  =  \"DVD\"",
+   "reference": [
+    11
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "DVD",
+      "CD"
+     ]
+    }
+   ],
+   "copilot_value": 11.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "CD",
+      "DVD"
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0859",
+   "question": "Count the number of orchestras that have CD or DVD as their record format.",
+   "reference_sql": "SELECT COUNT(*) FROM orchestra WHERE Major_Record_Format  =  \"CD\" OR Major_Record_Format  =  \"DVD\"",
+   "reference": [
+    11
+   ],
+   "before": "no_metric",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "DVD",
+      "CD"
+     ]
+    }
+   ],
+   "copilot_value": 11.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [
+    {
+     "column": "Major_Record_Format",
+     "op": "in",
+     "value": [
+      "CD",
+      "DVD"
+     ]
+    }
+   ],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0986",
+   "question": "What is the average age of all the dogs?",
+   "reference_sql": "SELECT avg(age) FROM Dogs",
+   "reference": [
+    5.066667
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"age\")",
+   "copilot_filters": [],
+   "copilot_value": 5.066666666666666,
+   "oracle_formulas": [
+    "avg(\"age\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-0987",
+   "question": "Compute the average age of all the dogs.",
+   "reference_sql": "SELECT avg(age) FROM Dogs",
+   "reference": [
+    5.066667
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "avg(\"age\")",
+   "copilot_filters": [],
+   "copilot_value": 5.066666666666666,
+   "oracle_formulas": [
+    "avg(\"age\")"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-1000",
+   "question": "How many singers are there?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    8
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 8.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  },
+  {
+   "case_id": "spider-dev-1001",
+   "question": "What is the count of singers?",
+   "reference_sql": "SELECT count(*) FROM singer",
+   "reference": [
+    8
+   ],
+   "before": "not_understood",
+   "after": "correct_exact",
+   "copilot_formulas": "count()",
+   "copilot_filters": [],
+   "copilot_value": 8.0,
+   "oracle_formulas": [
+    "count()"
+   ],
+   "oracle_filters": [],
+   "cause": null,
+   "cause_detail": null
+  }
+ ],
+ "held_out_lost": []
+}

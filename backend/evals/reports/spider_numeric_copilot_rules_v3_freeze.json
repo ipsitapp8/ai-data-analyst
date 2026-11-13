@@ -1,0 +1,15 @@
+{
+ "frozen_at": "2026-11-10T08:22:19+00:00",
+ "git_head": "7ac5972",
+ "note": "working-tree files (uncommitted changes included) whose content decides the held-out result",
+ "files": {
+  "app/copilot.py": "06850c7a9d2786d546ae71251d8ab7cd4f18afd9dd9ada1e3f71c3a755c53df5",
+  "app/fastpath.py": "1d996a01c5018c1a6721f8aba55278fee74800fd627657ce2ed22ceec697f910",
+  "app/metric_engine.py": "4df6203d172611931631cf4d93a477b26b5b3193b573f702808cca1662ffae06",
+  "app/profiling.py": "15721f9d9587991acb74872f151f6ff56cb2b9e0592ec86f544b6002f10ca57a",
+  "app/evals/spider.py": "7e8a8b3258fe56f88e118f442a8aecfcb5c670da3049a3f5f90b2c3831a662c6",
+  "app/evals/runner.py": "3506819782b96edf6e3ed12edfd4d7d75e7206046cfc8eb38637b84a48ad025a",
+  "evals/cases/spider_numeric.json": "dd147f7b5d159e559fb9cc95291136a6108b13be9db6cabaa8faf677c79b81ce"
+ },
+ "reason": "Harness correction only. run_case in app/evals/spider.py did not pass the dataset file name to the copilot, which the application (copilot.handle_message passes dataset.filename) and the development scorer both do; it now passes '<table>.csv'. Every rule file (copilot.py, fastpath.py, metric_engine.py, profiling.py, runner.py) and the case file have the same SHA-256 as in the v2 freeze; only app/evals/spider.py differs, so the v2 freeze no longer matches the files that produce the run."
+}

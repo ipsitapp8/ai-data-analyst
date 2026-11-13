@@ -6,9 +6,10 @@ checked, and what the result does not show.
 The rules are documented in docs/STATISTICAL_REASONING.md. In short:
 
   two independent groups, means   Welch's t-test when Cochran's rule (n >= 25 * skewness^2) holds in both
-                                  groups; otherwise a permutation test of the same difference in means
-                                  with a bootstrap interval. Mann-Whitney only when the question is about
-                                  typical values rather than the mean.
+                                  groups; otherwise a permutation test of the same difference in means,
+                                  with the interval that test implies. Brunner-Munzel only when the question is about
+                                  typical values rather than the mean (it asks whether one group tends to be
+                                  higher, without assuming the groups have the same shape, as Mann-Whitney does).
   paired units                    paired t-test under the same rule on the differences; otherwise the
                                   sign-flip permutation test. Wilcoxon only for "typical".
   two proportions                 chi-square when every expected count is at least 5, otherwise Fisher's
@@ -41,6 +42,7 @@ ALIASES = {
     "welch": "welch_t", "welch_t": "welch_t", "t_test": "welch_t", "t-test": "welch_t", "ttest": "welch_t",
     "student_t": "welch_t", "permutation": "permutation_means", "permutation_means": "permutation_means",
     "mann_whitney": "mann_whitney", "mann-whitney": "mann_whitney", "wilcoxon_rank_sum": "mann_whitney",
+    "brunner_munzel": "brunner_munzel", "brunner-munzel": "brunner_munzel",
     "paired_t": "paired_t", "paired_t_test": "paired_t", "sign_flip": "sign_flip_permutation",
     "wilcoxon": "wilcoxon_signed_rank", "wilcoxon_signed_rank": "wilcoxon_signed_rank",
     "chi_square": "chi_square", "chi-square": "chi_square", "chi2": "chi_square", "fisher": "fisher_exact",
@@ -99,13 +101,114 @@ INDEPENDENCE = {"name": "independent observations", "status": "not_checked",
 
 
 def _power_warning(pieces: dict, alpha: float) -> list[str]:
+    """What a resampling test could not deliver, said outright: a test with
+    too few arrangements to reject anything, and an interval that was not
+    reported and why. No other interval is put in its place."""
+    out = []
     floor = pieces.get("smallest_attainable_p")
     if floor is not None and floor > alpha:
-        # Resampling so few values cannot describe their uncertainty either.
+        if pieces.get("interval") is not None or not pieces.get("interval_unavailable"):
+            pieces["interval_unavailable"] = "there are too few possible arrangements to bound the estimate at this level"
         pieces["interval"] = None
-        return ["No interval is reported: there are too few observations to resample.", f"With this few observations the smallest p-value any data could produce is {floor:.3f}, above "
-                f"{alpha:g}: the test cannot detect an effect of any size."][::-1]
-    return []
+        out.append(f"With this few observations the smallest p-value any data could produce is {floor:.3f}, above "
+                   f"{alpha:g}: the test cannot detect an effect of any size.")
+    if pieces.get("interval") is None and pieces.get("interval_unavailable"):
+        out.append(f"No interval is reported: {pieces['interval_unavailable']}.")
+    return out
+
+
+# The interval beside a permutation test is the set of values that test does not reject, so it
+# rests on the same assumption as the p-value. Neither can be checked from a small sample. Every
+# figure below is measured on this engine, 3,000 null simulations per design
+# (backend/evals/reports/permutation_audit.json), and applies to those designs only.
+SHIFT_ASSUMPTION = {"name": "the groups have the same shape", "status": "not_checked",
+                    "detail": "the permutation test and its interval are exact when the two groups have the same shape and "
+                              "spread and differ only in level; a sample this small cannot show whether they do"}
+SHIFT_LIMIT = ("The test permutes Welch's t and the interval is the range of differences it does not reject. In simulation "
+               "both kept their stated level when the groups had the same shape (5% to 6% false positives, 94% to 95% "
+               "coverage) and stayed close when normal groups differed two- to fourfold in spread (4% to 8%, 92% to 96%). "
+               "They did not when a small group was strongly skewed and the other was not: 13% to 19% false positives, and "
+               "the interval held the true difference in 81% to 88% of samples.")
+SMALL_SKEWED_GROUP = ("The groups are of unequal size ({a} and {b}). If the smaller one is strongly skewed, the test and its "
+                      "interval are both too optimistic, and nothing in a sample this small can rule that out.")
+SEVERAL_GROUPS_LIMIT = ("The test permutes Welch's F. In simulation it rejected a true null in 4% to 5% of samples when the "
+                        "groups had the same spread or the largest was the most variable, and in 7% when the smallest "
+                        "group was four times as variable as the others.")
+SYMMETRY_ASSUMPTION = {"name": "differences symmetric about their centre", "status": "not_checked",
+                       "detail": "the sign-flip test and its interval are exact when each unit's change is as likely to "
+                                 "fall above the centre as below it by the same amount; few pairs cannot show whether it is"}
+SYMMETRY_LIMIT = ("The interval is the range of mean changes the sign-flip test does not reject. In simulation the test and "
+                  "the interval kept their stated level when the changes were symmetric (4% to 5% false positives, 95% to "
+                  "96% coverage). With skewed changes whose true mean was zero the test rejected in 10% to 14% of samples "
+                  "and the interval held the true mean in 86% to 90%. No method tested did better in that case.")
+# Rank tests. Measured in backend/evals/reports/permutation_audit.json; stated with every such result.
+# Measured in backend/evals/reports/method_decisions_v3.json.
+RANK_SUM_LIMIT = ("The Brunner-Munzel test asks whether values in one group tend to be higher than in the other. It does not "
+                  "test whether the medians differ, and the median difference is reported as a description. In simulation "
+                  "it rejected a true null in 3% to 8% of samples, including when the groups differed in spread or shape; "
+                  "the highest rates were with 5 values in the more variable group.")
+RANK_SUM_INTERVAL_LIMIT = ("The interval for the difference in medians comes from resampling. In simulation it held the true "
+                           "difference in 93% to 99% of samples, lowest (93%) when a smaller group was the more variable one.")
+SIGNED_RANK_LIMIT = ("The signed-rank test asks whether the changes are symmetric about zero, not only whether the typical "
+                     "change is zero. With skewed changes whose median was zero it rejected in 7% of simulations at 12 pairs "
+                     "and 14% at 30.")
+
+
+# ---------------------------------------------------- inference not supported --
+# Measured in backend/evals/reports/method_decisions_v3.json (workflow.before, workflow.after).
+SKEW_UNSUPPORTED = ("{who} too skewed for a test of means at this size: skewness {skew:.2f} with {n} values, where a "
+                    "mean-based test needs at least {need}. {fallback} When that did not hold in simulation, a true null "
+                    "was rejected in {rate} of samples, and the sample cannot show whether it holds.")
+SKEW_NOT_PROOF = ("A sample that does not look skewed is not proof that the data is not. When a small group was in fact "
+                  "strongly skewed and its sample did not show it, this test rejected a true null in {rate} of such samples.")
+
+
+def _shows_skew(d: dict) -> bool:
+    """Does the sample itself fail Cochran's rule, with no allowance for how
+    uncertain its skewness is? This is evidence against a mean-based test. Its
+    absence is not evidence for one, and is never used as such."""
+    return d.get("skewness") is not None and d["n"] < m.cochran_n(d["skewness"])
+
+
+NOT_THE_QUESTION_ASKED = "This answers a different question from the one asked; it is not a test of the mean."
+
+
+def _tendency_analysis(a: np.ndarray, b: np.ndarray, labels: tuple[str, str], what: str, alpha: float, level: float, seed: int) -> dict | None:
+    """Which group tends to be higher: valid whatever the groups' shapes, so it can be reported
+    beside a mean comparison that could not be tested. Never in place of it."""
+    pieces = m.brunner_munzel(a, b, level, seed)
+    if pieces["test"] is None:
+        return None
+    p = pieces["test"]["p_value"]
+    return {"estimand": f"the probability that a value of {what} from {labels[1]} exceeds one from {labels[0]} (one half if neither tends "
+                        "to be higher)",
+            "estimate": pieces["probability_of_superiority"], "interval": None, "method": "brunner_munzel",
+            "method_label": pieces["test"]["name"], "null": "values in the two groups are equally likely to be higher",
+            "p_value": p, "exact": bool(pieces["test"].get("exact")), "significant": bool(p < alpha), "alpha": alpha,
+            "note": NOT_THE_QUESTION_ASKED}
+
+
+def _direction_analysis(d: np.ndarray, what: str, unit_name: str, alpha: float, level: float) -> dict | None:
+    """Whether a change is as likely to be up as down: exact for any shape of the changes."""
+    pieces = m.sign_test(d, level)
+    if pieces["p_value"] is None:
+        return None
+    return {"estimand": f"the median change in {what} per {unit_name} (zero if a change is as likely to be up as down)",
+            "estimate": pieces["estimate"], "interval": pieces["interval"], "method": "sign_test", "method_label": "sign test",
+            "null": "a change is as likely to be an increase as a decrease", "p_value": pieces["p_value"], "exact": True,
+            "significant": bool(pieces["p_value"] < alpha), "alpha": alpha,
+            "counts": {"increases": pieces["increases"], "decreases": pieces["decreases"], "unchanged": pieces["unchanged"]},
+            "note": NOT_THE_QUESTION_ASKED}
+
+
+def _inference_withheld(*, code: str, reason: str, summary: str, supported_instead: str, estimate: float | None, common: dict,
+                        supported_analysis: dict | None = None, **fields: Any) -> dict:
+    """The quantity was measured; no test or interval for it is supported.
+    `summary` is the reason without figures, for a published sentence."""
+    return unavailable(method="none", method_label="no test", reason=reason, estimate=estimate,
+                       inference_unavailable={"code": code, "summary": summary, "reason": reason,
+                                              "supported_instead": supported_instead, "supported_analysis": supported_analysis},
+                       **fields, **common)
 
 
 # ----------------------------------------------------- two independent groups --
@@ -130,34 +233,85 @@ def two_groups(a: Any, b: Any, *, what: str, units: str | None = None, labels: t
                            f"its variation ({da['n']} and {db['n']} available)", **common)
     if not da["sd"] and not db["sd"]:
         return unavailable(method="none", method_label="no test", reason="there is no variation within either group, so the "
-                           "difference is exact and there is nothing to test", **common)
+                           "difference is exact and there is nothing to test", estimate=float(db["mean"] - da["mean"]), **common)
 
     ok_a, as_a = _cochran(labels[0], da)
     ok_b, as_b = _cochran(labels[1], db)
     assumptions, rejected, extra = [as_a, as_b, INDEPENDENCE], [], {}
     if typical:
-        method, label = "mann_whitney", "Mann-Whitney U test"
-        reasons = ["the question is about typical values rather than the mean, so groups are compared by rank"]
-        pieces = m.rank_sum(a, b, level, seed)
+        method, label = "brunner_munzel", "Brunner-Munzel test"
+        reasons = ["the question is about typical values rather than the mean, so groups are compared by rank",
+                   "the Brunner-Munzel test asks whether one group tends to have higher values without assuming the "
+                   "groups have the same shape"]
+        pieces = m.brunner_munzel(a, b, level, seed)
+        if pieces["test"] is not None and pieces["test"].get("resamples"):
+            label = pieces["test"]["name"]
+            reasons.append(f"the smaller group has fewer than {m.BM_PERMUTATION_BELOW} values (or the statistic's standard "
+                           "error is zero), so the p-value comes from permuting group labels rather than a t distribution")
         extra["effects"] = [{"name": "probability a later value exceeds an earlier one", "value": pieces["probability_of_superiority"]}]
-        why_not = "the question asks about typical values, which a test of means does not address"
+        why_not = ("the Brunner-Munzel test answers the same question without assuming the groups have the same shape"
+                   if ALIASES.get(str(suggested or "").strip().lower().replace(" ", "_")) == "mann_whitney"
+                   else "the question asks about typical values, which a test of means does not address")
+        rejected.append({"method": "mann_whitney", "reason": "it assumes the two groups have the same shape; in simulation it "
+                         "rejected a true null in 14% of samples when the smaller group was the more variable one"})
+        common["limitations"] = common["limitations"] + [RANK_SUM_LIMIT, RANK_SUM_INTERVAL_LIMIT]
+        if pieces["test"] is None:
+            reason = ("every value in one group is on the same side of every value in the other, so the test statistic "
+                      "has no standard error, and there are too many values to permute.")
+            return _inference_withheld(code="no_overlap_large_sample", reason=reason, summary=reason.rstrip("."),
+                                       estimate=pieces["estimate"], common=common,
+                                       supported_instead="the groups do not overlap at all; the measured difference stands "
+                                       "as a description", effects=extra["effects"], assumptions=assumptions,
+                                       selection=reasons, rejected_methods=rejected)
     elif ok_a and ok_b:
         method, label = "welch_t", "Welch's t-test"
         reasons = ["the estimand is a difference in means between two independent groups",
                    "Welch's test is used because it does not assume the groups have equal variances",
                    "both groups satisfy Cochran's rule, so the t-based interval is appropriate"]
-        rejected.append({"method": "mann_whitney", "reason": "it tests a different quantity (rank ordering), not the mean"})
+        rejected.append({"method": "brunner_munzel", "reason": "it tests a different quantity (rank ordering), not the mean"})
         pieces = m.welch(a, b, level)
         why_not = "the data supports Welch's t-test for a difference in means"
+    elif _shows_skew(da) or _shows_skew(db):
+        shown = [(lab, d) for lab, d in ((labels[0], da), (labels[1], db)) if _shows_skew(d)]
+        lab, d = max(shown, key=lambda x: abs(x[1]["skewness"]))
+        reason = SKEW_UNSUPPORTED.format(who=f"'{lab}' is", skew=d["skewness"], n=d["n"], need=math.ceil(m.cochran_n(d["skewness"])),
+                                         fallback="The only test of means left for a sample this small assumes the two groups "
+                                         "have the same shape.", rate="6% to 24%")
+        estimate = float(db["mean"] - da["mean"])
+        return _inference_withheld(
+            code="too_skewed_for_sample_size", reason=reason, estimate=estimate, common=common,
+            supported_analysis=_tendency_analysis(a, b, labels, what, alpha, level, seed),
+            summary=f"'{lab}' is too skewed for its size for a test of means, and the only test left assumes the two groups "
+                    "have the same shape, which a sample this small cannot show",
+            supported_instead="whether values in one group tend to be higher than in the other (a question about typical "
+                              "values), which the Brunner-Munzel test answers without assuming the groups have the same shape",
+            effects=[{"name": "mean difference", "value": estimate, "units": units},
+                     {"name": "relative difference, percent", "value": estimate / abs(da["mean"]) * 100 if da["mean"] else None,
+                      "note": None if da["mean"] else "not defined: the earlier mean is zero"}],
+            assumptions=assumptions + [{**SHIFT_ASSUMPTION, "status": "not_checked"}],
+            selection=["the estimand is a difference in means between two independent groups",
+                       "the sample itself is too skewed for its size, so no test of means is supported"],
+            rejected_methods=[{"method": "welch_t", "reason": "Cochran's rule is not met, so a t-based interval may be inaccurate"},
+                              {"method": "permutation_means", "reason": "it is reliable only if the two groups have the same "
+                               "shape, which a sample this small and this skewed cannot show"}],
+            suggested_method=_suggestion(suggested, "none", "no test of means is supported by a sample this small and this skewed"),
+            warnings=_outlier_warnings({labels[0]: da, labels[1]: db}))
     else:
         method, label = "permutation_means", "permutation test of the difference in means"
         reasons = ["the estimand is a difference in means between two independent groups",
                    "the distribution is too skewed for the sample size (or the sample too small to check), so the "
-                   "p-value comes from permuting group labels and the interval from the bootstrap"]
+                   "p-value comes from permuting group labels and the interval is the range of differences that test "
+                   "does not reject"]
         rejected.append({"method": "welch_t", "reason": "Cochran's rule is not met, so a t-based interval may be inaccurate"})
-        rejected.append({"method": "mann_whitney", "reason": "it tests a different quantity (rank ordering), not the mean"})
+        rejected.append({"method": "brunner_munzel", "reason": "it tests a different quantity (rank ordering), not the mean"})
+        rejected.append({"method": "bootstrap_interval", "reason": "in simulation it held the true difference in 84% to 89% "
+                         "of samples this small, not 95%"})
         pieces = m.permutation_means(a, b, level, seed)
         why_not = "Cochran's rule is not met, so a t-based method may be inaccurate here"
+        assumptions.append(SHIFT_ASSUMPTION)
+        common["limitations"] = common["limitations"] + [SHIFT_LIMIT, SKEW_NOT_PROOF.format(rate="up to 44%")]
+        if da["n"] != db["n"]:
+            extra["warnings"] = [SMALL_SKEWED_GROUP.format(a=da["n"], b=db["n"])]
 
     p = pieces["test"]["p_value"]
     power = _power_warning(pieces, alpha)
@@ -171,9 +325,10 @@ def two_groups(a: Any, b: Any, *, what: str, units: str | None = None, labels: t
     return build(status="ok", method=method, method_label=label, selection=reasons, rejected_methods=rejected,
                  suggested_method=_suggestion(suggested, method, why_not), assumptions=assumptions,
                  estimate=pieces["estimate"], interval=pieces["interval"],
+                 interval_unavailable=None if pieces["interval"] else pieces.get("interval_unavailable"),
                  test={**pieces["test"], "null": null, "alternative": "they differ (two-sided)"},
                  effects=effects, significant=p < alpha,
-                 warnings=_outlier_warnings({labels[0]: da, labels[1]: db}) + power, **common)
+                 warnings=_outlier_warnings({labels[0]: da, labels[1]: db}) + extra.get("warnings", []) + power, **common)
 
 
 # ------------------------------------------------------------------- paired --
@@ -199,38 +354,70 @@ def paired(first: Any, second: Any, *, what: str, unit_name: str, units: str | N
                            f"both periods ({desc['n']} do)", **common)
     if not desc["sd"]:
         return unavailable(method="none", method_label="no test", reason="every unit changed by exactly the same amount, "
-                           "so the change is exact and there is nothing to test", **common)
+                           "so the change is exact and there is nothing to test", estimate=float(d.mean()), **common)
     ok, assumption = _cochran("differences", desc)
     pairing = {"name": "valid pairing", "status": "met", "detail": f"each {unit_name} is compared with itself, which removes "
                f"stable differences between {unit_name} values"}
     rejected = [{"method": "welch_t", "reason": "the two periods contain the same units, so they are not independent groups"}]
+    extra_assumptions: list[dict] = []
     if typical:
         if np.all(d == 0):
             return unavailable(method="none", method_label="no test", reason="no unit changed", **common)
         method, label, pieces = "wilcoxon_signed_rank", "Wilcoxon signed-rank test", m.signed_rank(d, level, seed)
         reasons = ["the same units are observed in both periods, so they are compared as pairs",
-                   "the question is about the typical change, so signed ranks are used"]
+                   "the question is about the typical change, so signed ranks are used",
+                   "the interval is for the median change and is read off the ordered changes; it assumes nothing about their shape"]
         why_not = "the question asks about the typical change"
+        rejected.append({"method": "bootstrap_interval", "reason": "in simulation it held the true median change in 92% to "
+                         "94% of samples of 8 to 30 pairs, not 95%"})
+        common["limitations"] = common["limitations"] + [SIGNED_RANK_LIMIT]
     elif ok:
         method, label, pieces = "paired_t", "paired t-test", m.paired_t(d, level)
         reasons = ["the same units are observed in both periods, so they are compared as pairs",
                    "the differences satisfy Cochran's rule, so the t-based interval is appropriate"]
         why_not = "the paired differences support a paired t-test"
+    elif _shows_skew(desc):
+        reason = SKEW_UNSUPPORTED.format(who="The changes are", skew=desc["skewness"], n=desc["n"],
+                                         need=math.ceil(m.cochran_n(desc["skewness"])),
+                                         fallback="The only test of the mean change left for this few pairs assumes the "
+                                         "changes are symmetric, which this skewness contradicts.", rate="6% to 17%")
+        return _inference_withheld(
+            code="too_skewed_for_sample_size", reason=reason, estimate=float(d.mean()), common=common,
+            supported_analysis=_direction_analysis(d, what, unit_name, alpha, level),
+            summary="the changes are too skewed for their number for a test of the mean change, and the only test left "
+                    "assumes they are symmetric",
+            supported_instead="whether a change is as likely to be up as down (the sign test, on the median change), "
+                              "which assumes nothing about the shape of the changes",
+            effects=[{"name": "mean change per unit", "value": float(d.mean()), "units": units}],
+            assumptions=[pairing, assumption, {**SYMMETRY_ASSUMPTION, "status": "violated"}],
+            selection=["the same units are observed in both periods, so they are compared as pairs",
+                       "the changes themselves are too skewed for their number, so no test of the mean change is supported"],
+            rejected_methods=rejected + [{"method": "paired_t", "reason": "Cochran's rule is not met for the differences"},
+                                         {"method": "sign_flip_permutation", "reason": "it assumes the changes are symmetric "
+                                          "about their mean, which their measured skewness contradicts"}],
+            suggested_method=_suggestion(suggested, "none", "no test of the mean change is supported by changes this skewed"),
+            warnings=_outlier_warnings({"differences": desc}))
     else:
         method, label, pieces = "sign_flip_permutation", "paired sign-flip permutation test", m.sign_flip(d, level, seed)
         reasons = ["the same units are observed in both periods, so they are compared as pairs",
                    "there are too few pairs, or the differences are too skewed, for a t-based interval; the p-value "
                    "comes from flipping the sign of each unit's change"]
         rejected.append({"method": "paired_t", "reason": "Cochran's rule is not met for the differences"})
+        rejected.append({"method": "bootstrap_interval", "reason": "in simulation it held the true mean change in 84% to 89% "
+                         "of samples this small, not 95%"})
         why_not = "Cochran's rule is not met for the paired differences"
+        extra_assumptions = [SYMMETRY_ASSUMPTION]
+        common["limitations"] = common["limitations"] + [SYMMETRY_LIMIT, SKEW_NOT_PROOF.format(rate="up to 66%")]
     p = pieces["test"]["p_value"]
     power = _power_warning(pieces, alpha)
     effects = [{"name": "mean change per unit", "value": float(d.mean()), "units": units},
                {"name": "standardised mean change (d_z)", "value": float(d.mean() / desc["sd"])}]
-    null = "units are as likely to go up as down" if typical else f"the mean change per {unit_name} is zero"
+    null = "the changes are symmetric about zero" if typical else f"the mean change per {unit_name} is zero"
     return build(status="ok", method=method, method_label=label, selection=reasons, rejected_methods=rejected,
-                 suggested_method=_suggestion(suggested, method, why_not), assumptions=[pairing, assumption],
+                 suggested_method=_suggestion(suggested, method, why_not),
+                 assumptions=[pairing, assumption] + (extra_assumptions if method == "sign_flip_permutation" else []),
                  estimate=pieces["estimate"], interval=pieces["interval"],
+                 interval_unavailable=None if pieces["interval"] else pieces.get("interval_unavailable"),
                  test={**pieces["test"], "null": null, "alternative": "it is not (two-sided)"}, effects=effects,
                  significant=p < alpha, warnings=_outlier_warnings({"differences": desc}) + power, **common)
 
@@ -362,18 +549,49 @@ def k_groups(groups: dict[str, Any], *, what: str, group_name: str, units: str |
                    "every group satisfies Cochran's rule"]
         rejected = [{"method": "kruskal_wallis", "reason": "it tests rank ordering, not the mean"}]
         why_not = "the data supports Welch's one-way test of means"
+    elif any(_shows_skew(d) for d in desc.values()):
+        # The same rule as for two groups. Without it the permuted Welch's F rejected a true null in 10% to
+        # 21% of samples when one group was skewed and the others were not (inference_policy_v4.json).
+        lab, d = max(((k, d) for k, d in desc.items() if _shows_skew(d)), key=lambda x: abs(x[1]["skewness"]))
+        reason = SKEW_UNSUPPORTED.format(who=f"'{lab}' is", skew=d["skewness"], n=d["n"], need=math.ceil(m.cochran_n(d["skewness"])),
+                                         fallback="The only test of means left assumes every group has the same shape.",
+                                         rate="10% to 21%")
+        names = list(usable)
+        comparisons = []
+        if 2 < len(names) <= config.STAT_MAX_PAIRWISE_GROUPS:
+            for i in range(len(names)):
+                for j in range(i + 1, len(names)):
+                    comparisons.append({"groups": [names[i], names[j]], "estimate": float(desc[names[j]]["mean"] - desc[names[i]]["mean"]),
+                                        "interval": None, "method": "none", "p_value": None, "p_adjusted": None})
+        return _inference_withheld(
+            code="too_skewed_for_sample_size", reason=reason, estimate=None, common=common, comparisons=comparisons,
+            summary=f"'{lab}' is too skewed for its size for a test of means, and the only test left assumes every group has "
+                    "the same shape, which the sample cannot show",
+            supported_instead="for any two of the groups, whether values in one tend to be higher than in the other (a "
+                              "question about typical values), which does not assume the groups have the same shape",
+            effects=[{"name": "eta squared (share of variance between groups)", "value": m.eta_squared(arrays)}],
+            assumptions=assumptions, selection=[f"the estimand is a difference in means across {len(usable)} independent groups",
+                                                "a group is itself too skewed for its size, so no test of means is supported"],
+            rejected_methods=[{"method": "welch_anova", "reason": "Cochran's rule is not met in every group"},
+                              {"method": "permutation_anova", "reason": "it is reliable only if every group has the same shape, "
+                               "which a sample this skewed cannot show"}],
+            suggested_method=_suggestion(suggested, "none", "no test of means is supported by a sample this skewed for its size"),
+            warnings=_outlier_warnings(desc))
     else:
-        res = st.permutation_test(arrays, lambda *g, axis=-1: st.f_oneway(*g, axis=axis).statistic, vectorized=True,
+        # Welch's F is permuted, not the classic F: with a small, variable group the classic F
+        # rejected a true null in 31% of simulations (backend/evals/reports/permutation_audit_before.json).
+        res = st.permutation_test(arrays, m.welch_f_statistic, vectorized=True,
                                   n_resamples=m._resamples(sum(len(v) for v in arrays)), alternative="greater",
                                   rng=np.random.default_rng(seed))
-        method, label = "permutation_anova", "permutation one-way test of equal means"
-        test = {"name": label, "statistic_name": "F", "statistic": float(res.statistic), "p_value": float(res.pvalue),
+        method, label = "permutation_anova", "permutation one-way test of equal means (Welch's F permuted)"
+        test = {"name": label, "statistic_name": "Welch's F", "statistic": float(res.statistic), "p_value": float(res.pvalue),
                 "resamples": int(len(res.null_distribution))}
         reasons = [f"the estimand is a difference in means across {len(usable)} independent groups",
                    "at least one group is too skewed or too small for an F-based p-value, so group labels are permuted instead"]
         rejected = [{"method": "welch_anova", "reason": "Cochran's rule is not met in every group"},
                     {"method": "kruskal_wallis", "reason": "it tests rank ordering, not the mean"}]
         why_not = "Cochran's rule is not met in every group"
+        common["limitations"] = common["limitations"] + [SEVERAL_GROUPS_LIMIT]
 
     comparisons, warnings = [], _outlier_warnings(desc)
     names = list(usable)
@@ -390,6 +608,8 @@ def k_groups(groups: dict[str, Any], *, what: str, group_name: str, units: str |
                         "groups would mean too many tests to interpret)")
     return build(status="ok", method=method, method_label=label, selection=reasons, rejected_methods=rejected,
                  suggested_method=_suggestion(suggested, method, why_not), assumptions=assumptions,
+                 interval_unavailable="a test across several groups has no single difference to bound; the pairwise "
+                                      "comparisons carry their own intervals",
                  test={**test, "null": f"every {group_name} group has the same mean {what}", "alternative": "at least one differs"},
                  effects=[{"name": "eta squared (share of variance between groups)", "value": m.eta_squared(arrays)}],
                  significant=test["p_value"] < alpha, comparisons=comparisons, warnings=warnings,

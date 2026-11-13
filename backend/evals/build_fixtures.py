@@ -19,7 +19,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-SUITE_VERSION = "2026.10.2"
+SUITE_VERSION = "2026.10.4"
 HERE = Path(__file__).resolve().parent
 REGIONS = ["East", "North", "South", "West"]
 PRODUCTS = {"Gadget": (20.0, 12.0), "Widget": (10.0, 6.0), "Gizmo": (35.0, 21.0)}  # price, unit cost
@@ -81,8 +81,9 @@ def statistics_cases(rows: list[dict]) -> list[dict]:
              {"filters": [{"column": "region", "op": "==", "value": "West"}], "method": "t-test"},
              {"predict": "decrease", "status": "inconclusive", "method": "chi_square", "suggestion": "overridden", "estimate": 0.0}),
         case("stat-paired-units-abstains-with-four-pairs", "paired_change", {"unit": "region"},
-             {"predict": "decrease", "status": "inconclusive", "method": "sign_flip_permutation", "interval_available": False,
-              "significant": False, "says": ["1 of 4 region values went down"], "warns": ["cannot detect an effect of any size"]}),
+             # four changes, visibly skewed: the mean change is measured and no test is run
+             {"predict": "decrease", "status": "inconclusive", "method": "none", "unavailable": True, "interval_available": False,
+              "says": ["1 of 4 region values went down", "but it was not tested", "not a finding of no difference"]}),
         case("stat-series-test-is-autocorrelation-aware", "level_shift", {},
              {"predict": "decrease", "status": "supported", "method": "ols_newey_west", "estimate": level, "significant": True,
               "rejects_method": "welch_t", "limits": ["not independent"]}),
@@ -206,7 +207,9 @@ def main() -> None:
         {"id": "route-root-cause", "component": "routing", "fixture": "sales.csv",
          "question": "Why did revenue drop?", "expect": {"route": "root_cause"}},
         {"id": "route-statistical", "component": "routing", "fixture": "sales.csv",
-         "question": "Is there a correlation between units and unit price?", "expect": {"route": "statistical"}},
+         "question": "Are there outliers in unit price?", "expect": {"route": "statistical"}},
+        {"id": "route-comparison", "component": "routing", "fixture": "sales.csv",
+         "question": "Is there a correlation between units and unit price?", "expect": {"route": "comparison"}},
         {"id": "route-standard", "component": "routing", "fixture": "sales.csv",
          "question": "Summarise what this dataset tells us about the business", "expect": {"route": "standard"}},
         {"id": "route-filter-not-fast", "component": "routing", "fixture": "sales.csv",

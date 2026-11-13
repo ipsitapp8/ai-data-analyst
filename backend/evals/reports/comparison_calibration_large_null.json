@@ -1,0 +1,87 @@
+{
+ "seed_offset": 200000000,
+ "simulations_per_design": 40000,
+ "base_seed": 20261013,
+ "designs": {
+  "two groups, normal": {
+   "welch_t": {
+    "null_n": 39997,
+    "null_rejected": 1979,
+    "rate": 0.04947871090331775,
+    "interval": [
+     0.04739631735561581,
+     0.0516476355797057
+    ]
+   },
+   "permutation_means": {
+    "null_n": 3,
+    "null_rejected": 0,
+    "rate": 0.0,
+    "interval": [
+     5.551115123125783e-17,
+     0.5614970317550454
+    ]
+   }
+  },
+  "paired, normal differences": {
+   "paired_t": {
+    "null_n": 39998,
+    "null_rejected": 2022,
+    "rate": 0.05055252762638132,
+    "interval": [
+     0.048448339397915846,
+     0.05274303857871267
+    ]
+   },
+   "sign_flip_permutation": {
+    "null_n": 2,
+    "null_rejected": 0,
+    "rate": 0.0,
+    "interval": [
+     0.0,
+     0.6576197724933469
+    ]
+   }
+  },
+  "three groups, normal": {
+   "welch_anova": {
+    "null_n": 39998,
+    "null_rejected": 1912,
+    "rate": 0.047802390119505975,
+    "interval": [
+     0.045754641879933576,
+     0.049936989285626864
+    ]
+   },
+   "permutation_anova": {
+    "null_n": 2,
+    "null_rejected": 0,
+    "rate": 0.0,
+    "interval": [
+     0.0,
+     0.6576197724933469
+    ]
+   }
+  },
+  "two numeric, linear": {
+   "pearson": {
+    "null_n": 39547,
+    "null_rejected": 2018,
+    "rate": 0.0510278908640352,
+    "interval": [
+     0.04890235345559301,
+     0.053240642996881256
+    ]
+   },
+   "spearman": {
+    "null_n": 453,
+    "null_rejected": 21,
+    "rate": 0.046357615894039736,
+    "interval": [
+     0.030517934317432042,
+     0.0698264147682022
+    ]
+   }
+  }
+ }
+}

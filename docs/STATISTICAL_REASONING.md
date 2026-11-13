@@ -19,16 +19,17 @@ through the selector.
 | Design | Method | Selected when | Interval | Effect sizes |
 | --- | --- | --- | --- | --- |
 | Two independent groups, mean | Welch's t-test | Cochran's rule holds in both groups | t, Welch–Satterthwaite df | mean difference, relative difference, Hedges' g |
-| | Permutation test of the mean difference | rule fails, or too few values to check | bootstrap (BCa) | same |
-| | Mann–Whitney U | only when `estimand: typical` is asked | bootstrap, median difference | probability of superiority |
+| | Permutation test of the mean difference (Welch's t permuted) | too few values to check, and neither sample is itself too skewed for its size | the differences that test does not reject (assumes groups of the same shape), or none | same |
+| | No test: the mean difference is measured and reported (`inference_unavailable`) | a sample is itself too skewed for its size (n < 25 × skewness²) | none | mean difference, relative difference |
+| | Brunner–Munzel (permutation form below 30 in the smaller group) | only when `estimand: typical` is asked | bootstrap, median difference (a description; the test is about which group tends to be higher) | probability of superiority |
 | Paired units | Paired t-test | rule holds for the differences | paired t | mean change, d_z |
-| | Sign-flip permutation (exact for few pairs) | rule fails | bootstrap | same |
-| | Wilcoxon signed-rank | only for `estimand: typical` | bootstrap, median | |
+| | Sign-flip permutation (exact for few pairs) | too few pairs to check, and the changes are not themselves too skewed for their number | the values that test does not reject (assumes symmetric differences), or none | same |
+| | Wilcoxon signed-rank | only for `estimand: typical` | order statistics for the median (distribution-free), or none below 6 pairs | |
 | Two proportions | Chi-square | every expected count ≥ 5 | Newcombe hybrid score | risk difference, risk ratio, odds ratio |
 | | Fisher's exact | an expected count < 5 | Newcombe | same |
 | r × c table | Chi-square / Fisher (2×2) / permutation chi-square | Cochran's condition; sparse 2×2; sparse larger | — | Cramér's V |
 | Several groups, mean | Welch's one-way test | rule holds in every group | per pair | eta squared; Holm-adjusted pairwise |
-| | Permutation one-way test | otherwise | per pair | same |
+| | Permutation one-way test (Welch's F permuted) | otherwise | per pair | same |
 | Two numeric columns | Pearson | no extreme values | Fisher z | r² |
 | | Spearman | extreme values present | Fisher z (approximate) | |
 | Series over time | Period difference, least squares + Newey–West | always for a series | t with HAC error | difference per bucket, relative |
@@ -49,7 +50,8 @@ data justifies them yet, and none can be validated on the fixtures.
   measured on a handful of values cannot vouch for the sample. This replaces any fixed sample-size cut-off:
   400 mildly skewed values pass, 25 heavily skewed ones do not, and 5 values never do.
 - **The fallback keeps the estimand.** When the rule fails, the difference in means is still what is
-  tested (permutation) and estimated (bootstrap). A rank test answers a different question and is used
+  tested (permutation) and estimated (the interval that test implies; see docs/COMPARISON_WORKFLOW.md for why
+  it replaced a bootstrap interval). A rank test answers a different question and is used
   only when that question is asked.
 - **Too few observations.** When the smallest p-value any data could produce exceeds the criterion
   (4 pairs: 2/2⁴ = 0.125), the result says the test cannot detect an effect of any size and reports no

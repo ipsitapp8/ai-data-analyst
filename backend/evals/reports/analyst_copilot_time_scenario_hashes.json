@@ -1,0 +1,9 @@
+{
+ "note": "Silt Copilot clock-time and scenario fix (2026-11-11).",
+ "sha256": {
+  "backend/app/analyst/calc.py": "179cd7db7507bb64d9b6ed8934f79e2656beb11bb52c85363e11ed38b8ff40ff",
+  "backend/app/analyst/present.py": "016024088c93df0cd55d410880c500b8d966448d7a17a3f7fed37477ad63194f",
+  "backend/app/analyst/orchestrator.py": "db72d35f9ad7d3bf9540e70539d6d3cbeab05958e6a1bcc5a16312e519c98f2a",
+  "backend/tests/test_analyst_calc.py": "74f60070ac9d9f89bdb3d23f95e56512060f048ecf687cd8789b2a64df82b385"
+ }
+}

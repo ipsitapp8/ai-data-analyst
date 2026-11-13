@@ -269,20 +269,32 @@ def _statistics_section(report: dict, evidence: dict | None = None) -> None:
     with st.expander(f"Technical details of the statistical methods ({len(stats)})"):
         st.dataframe(pd.DataFrame([{
             "Analysis": s["analysis_id"], "For": ", ".join(s.get("hypothesis_ids") or []) or ("headline" if s.get("requested_by") == "baseline" else ""),
-            "Method": s["method_label"] if s["status"] == "ok" else "not available", "Estimand": s["estimand"],
+            "Method": (s["method_label"] if s["status"] == "ok" else "none: measured, not tested"
+                       if s.get("inference_unavailable") else "not available"), "Estimand": s["estimand"],
             "n": (s.get("sample") or {}).get("n"), "Estimate": _num(s.get("estimate")),
-            "Interval": "—" if not s.get("interval") else f"{_num(s['interval']['low'])} to {_num(s['interval']['high'])}",
+            "Interval": ("none: no test or interval is supported" if s.get("inference_unavailable")
+                         else f"none: {s.get('interval_unavailable') or 'not reported'}" if not s.get("interval")
+                         else f"{_num(s['interval']['low'])} to {_num(s['interval']['high'])}"),
             "Statistic": "—" if not s.get("test") or s["test"].get("statistic") is None
             else f"{s['test'].get('statistic_name') or ''} = {_num(s['test']['statistic'])}",
             "df": _num((s.get("test") or {}).get("df")), "p": _p((s.get("test") or {}).get("p_value")),
             "Adjusted p": _p((s.get("adjusted") or {}).get("p_value")),
         } for s in stats]), use_container_width=True, hide_index=True)
         for s in stats:
-            head = f"{s['analysis_id']} · {s['method_label']}" if s["status"] == "ok" else f"{s['analysis_id']} · no statistical conclusion"
+            head = (f"{s['analysis_id']} · {s['method_label']}" if s["status"] == "ok"
+                    else f"{s['analysis_id']} · measured, but no test or interval is supported" if s.get("inference_unavailable")
+                    else f"{s['analysis_id']} · no statistical conclusion")
             html(f'<div class="ds-row-title" style="margin-top:10px;">{esc(head)}</div>')
             lines = []
             if s["status"] != "ok":
                 lines.append(f"Why not: {s.get('reason')}")
+            if s.get("inference_unavailable"):
+                lines.append("This is not a finding of no difference, and not a non-significant result.")
+                lines.append(f"What the data does support: {s['inference_unavailable'].get('supported_instead')}")
+                other = s["inference_unavailable"].get("supported_analysis")
+                if other:
+                    lines.append(f"A different question, answered — {other['estimand']}: {_num(other['estimate'])} "
+                                 f"({other['method_label']}, p {_p(other['p_value'])}). {other['note']}")
             if s.get("test"):
                 lines.append(f"Null hypothesis: {s['test']['null']}. Alternative: {s['test']['alternative']}.")
             lines += [f"Why this method: {r}" for r in s.get("selection") or []]
@@ -325,11 +337,16 @@ def _stat_text(stat: dict | None) -> str:
         return "—"
     if stat.get("status") == "note":
         return str(stat.get("text") or "—")
+    if stat.get("inference_unavailable"):
+        return f"Measured {_n(stat.get('estimate'))}; not tested (this is not 'no difference'): " + str(stat.get("reason"))
     if stat.get("status") != "ok":
         return "No test: " + str(stat.get("reason") or "not run")
     p = stat.get("p_adjusted", stat.get("p_value"))
-    return (f"{_n(stat.get('estimate'), True)} per {stat.get('bucket') or 'bucket'} "
-            f"({(stat.get('level') or 0) * 100:.0f}% interval {_n(stat.get('low'))} to {_n(stat.get('high'))}); "
+    # A result without an interval says so, with the reason; it is never shown as an empty one.
+    interval = (f"{(stat.get('level') or 0) * 100:.0f}% interval {_n(stat.get('low'))} to {_n(stat.get('high'))}"
+                if stat.get("low") is not None and stat.get("high") is not None
+                else f"no interval: {stat.get('interval_unavailable') or 'not reported'}")
+    return (f"{_n(stat.get('estimate'), True)} per {stat.get('bucket') or 'bucket'} ({interval}); "
             f"p {_p(p) if p is not None and p < 0.001 else '= ' + _p(p)}{' after adjustment' if 'p_adjusted' in stat else ''}")
 
 

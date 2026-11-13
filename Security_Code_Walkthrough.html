@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Code Walkthrough</title>
+<style>
+:root { --bg:#f6f7f9; --paper:#fff; --ink:#1b1f24; --muted:#5b636e; --rule:#dde1e6; --tint:#f1f4f8;
+        --accent:#2f5fb3; --soft:#e8eef9; --codebg:#0f1720; --codeink:#dbe4ee; --ln:#5c6b7a; --warn:#9a5b00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#111418; --paper:#181c21; --ink:#e8ebef; --muted:#9aa3ad; --rule:#2b3139; --tint:#1f242b;
+  --accent:#7aa2ec; --soft:#1d2a40; --warn:#e0a95a; } }
+:root[data-theme="dark"] { --bg:#111418; --paper:#181c21; --ink:#e8ebef; --muted:#9aa3ad; --rule:#2b3139;
+  --tint:#1f242b; --accent:#7aa2ec; --soft:#1d2a40; --warn:#e0a95a; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif; }
+code { font:.86em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; background:var(--tint);
+        padding:1px 5px; border-radius:4px; word-break:break-word; }
+.wrap { max-width:1000px; margin:0 auto; padding:0 16px; }
+.toolbar { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--rule); }
+.toolbar .wrap { display:flex; justify-content:space-between; align-items:center; height:52px; gap:12px; }
+.btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:7px 14px; font:inherit; font-size:13.5px; cursor:pointer; }
+.hero { padding:50px 0 10px; }
+.kicker { color:var(--accent); font-weight:700; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+h1 { font-size:clamp(28px,5.5vw,42px); line-height:1.1; margin:8px 0 10px; letter-spacing:-.02em; }
+h1 code { font-size:.8em; background:none; padding:0; }
+.lede { color:var(--muted); font-size:17px; margin:0; max-width:760px; }
+h2 { font-size:23px; margin:42px 0 8px; }
+h2 small { color:var(--muted); font-weight:500; font-size:14px; margin-left:6px; }
+.panel { background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:16px 18px; }
+.facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin-top:22px; }
+.fact { background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:12px 14px; }
+.fact span { display:block; color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; }
+.pipe { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 4px; }
+.node { background:var(--paper); border:1px solid var(--rule); border-radius:10px; padding:8px 12px; font-weight:600; font-size:14px; }
+.node.hot { background:var(--soft); border-color:var(--accent); color:var(--accent); }
+.node small { display:block; font-weight:500; font-size:11px; color:var(--muted); }
+.arr { color:var(--muted); }
+.flow { list-style:none; counter-reset:s; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px; }
+.flow li { counter-increment:s; position:relative; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:12px 14px 10px 50px; }
+.flow li::before { content:counter(s); position:absolute; left:13px; top:12px; width:26px; height:26px; border-radius:50%;
+  background:var(--soft); color:var(--accent); font-weight:700; display:grid; place-items:center; font-size:13px; }
+.flow p { margin:3px 0 0; color:var(--muted); font-size:14px; }
+.tw { overflow-x:auto; border:1px solid var(--rule); border-radius:12px; background:var(--paper); }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th,td { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--rule); }
+th { background:var(--tint); }
+tr:last-child td { border-bottom:none; }
+figure.code { margin:12px 0; border-radius:10px; overflow:hidden; border:1px solid var(--rule); }
+figure.code figcaption { background:var(--tint); color:var(--muted); font:12px ui-monospace,Menlo,monospace; padding:6px 12px; }
+pre { margin:0; background:var(--codebg); color:var(--codeink); padding:12px 14px; overflow-x:auto;
+       font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space:pre; }
+.ln { color:var(--ln); display:inline-block; margin-right:14px; user-select:none; }
+.fn { background:var(--paper); border:1px solid var(--rule); border-top:3px solid var(--accent); border-radius:12px; padding:0 18px 14px; margin:16px 0; }
+.fn > header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;
+                margin:0 -18px; padding:12px 18px; background:var(--tint); }
+.fn h3 { margin:0; font-size:17px; }
+.fn h3 code { background:none; padding:0; font-size:1em; }
+.fn > header span { color:var(--muted); font-size:13px; }
+pre.sig { margin:12px 0 0; border-radius:8px; white-space:pre-wrap; }
+.purpose { font-size:15px; margin:12px 0 4px; }
+.fn h4 { color:var(--accent); font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; margin:14px 0 6px; }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.two table td { padding:5px 8px; font-size:13.5px; }
+.two table td:first-child { white-space:nowrap; width:1%; }
+.two table td:first-child code { word-break:normal; }
+.two table { border:1px solid var(--rule); border-radius:8px; }
+.two p { margin:0; font-size:14px; }
+.steps { margin:0; padding-left:20px; }
+.steps li { margin:4px 0; font-size:14px; }
+.note { border-left:3px solid var(--warn); padding:6px 10px; background:var(--tint); font-size:13.5px; border-radius:0 8px 8px 0; }
+.ex { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.ex h4 { margin:0 0 6px; font-size:13px; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; }
+.ex pre { border-radius:10px; white-space:pre-wrap; font-size:12px; }
+.qa { background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:12px 16px; margin:10px 0; }
+.qa p { margin:0; font-size:14px; }
+.qa .q { font-weight:700; margin-bottom:4px; font-size:15px; }
+.muted { color:var(--muted); font-size:13.5px; }
+footer { color:var(--muted); font-size:13px; padding:36px 0 46px; }
+@media (max-width:640px) { .two, .ex { grid-template-columns:1fr; } }
+@page { size:A4; margin:13mm 12mm 15mm; }
+@media print {
+  :root, :root[data-theme] { --bg:#fff; --paper:#fff; --ink:#1b1f24; --muted:#5b636e; --rule:#d5d9df; --tint:#f2f4f7;
+    --accent:#2f5fb3; --soft:#e8eef9; --warn:#9a5b00; }
+  body { font-size:10.3pt; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .toolbar { display:none; } .wrap { max-width:none; padding:0; }
+  .hero { padding-top:8mm; }
+  h2 { break-after:avoid; } .page { break-before:page; }
+  .flow li, .qa, tr, .fact, .two { break-inside:avoid; }
+  figure.code figcaption { break-after:avoid; }
+  .fn > header, .fn pre.sig, .purpose { break-after:avoid; }
+  pre { white-space:pre-wrap; word-break:break-all; font-size:8.4pt; }
+  .tw { overflow:visible; }
+}
+
+.spec { width:100%; border-collapse:collapse; margin-top:12px; }
+.spec th { width:120px; background:var(--soft); color:var(--accent); font-size:11.5px; letter-spacing:.06em;
+           text-transform:uppercase; vertical-align:top; }
+.spec td, .spec th { border:1px solid var(--rule); padding:7px 10px; font-size:14px; }
+.spec ol { margin:0; padding-left:18px; } .spec li { margin:2px 0; }
+.err td:first-child { font-weight:700; white-space:nowrap; }
+.seq { list-style:none; padding:0; margin:0; }
+.seq li { display:grid; grid-template-columns:34px 1fr; gap:10px; padding:9px 0; border-bottom:1px dashed var(--rule); }
+.seq li:last-child { border-bottom:none; }
+.seq b.n { width:26px; height:26px; border-radius:50%; background:var(--soft); color:var(--accent);
+           display:grid; place-items:center; font-size:13px; }
+.seq p { margin:0; font-size:14px; }
+.tag { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:20px; margin-left:4px;
+       background:var(--soft); color:var(--accent); }
+.tw td code { word-break:normal; overflow-wrap:normal; white-space:nowrap; }
+@media print { .spec tr, .seq li { break-inside:avoid; } }
+</style></head><body>
+<div class="toolbar"><div class="wrap"><b>security.py &middot; walkthrough</b>
+<button class="btn" onclick="window.print()">Save as PDF</button></div></div>
+<main class="wrap">
+
+<section class="hero">
+  <div class="kicker">Code walkthrough &middot; Silt AI Data Analyst</div>
+  <h1>Login and team security: <code>backend/app/security.py</code></h1>
+  <p class="lede">79 lines that decide <b>who</b> is calling the API and <b>which team's data</b> they may see.
+  Every protected endpoint in the backend goes through this file.</p>
+  <div class="facts">
+    <div class="fact"><span>Size</span><b>79 lines</b>, 6 functions</div>
+    <div class="fact"><span>Libraries</span><b>bcrypt</b>, <b>PyJWT</b>, FastAPI, SQLAlchemy</div>
+    <div class="fact"><span>Used by</span><b>103</b> user checks, <b>85</b> team checks</div>
+    <div class="fact"><span>Token</span><b>JWT HS256</b>, valid 7 days</div>
+  </div>
+</section>
+
+<h2>1. At a glance</h2>
+<div class="tw"><table><thead><tr><th>#</th><th>Function</th><th>Lines</th><th>Type</th><th>One-line job</th></tr></thead><tbody>
+<tr><td>1</td><td><code>hash_password</code></td><td>18-19</td><td>helper</td><td>Plain password &rarr; bcrypt hash (sign-up)</td></tr>
+<tr><td>2</td><td><code>verify_password</code></td><td>22-23</td><td>helper</td><td>Does the typed password match the hash? (login)</td></tr>
+<tr><td>3</td><td><code>create_access_token</code></td><td>26-34</td><td>helper</td><td>Issue a signed JWT after sign-up / login</td></tr>
+<tr><td>4</td><td><code>decode_access_token</code></td><td>37-41</td><td>helper</td><td>Verify a JWT's signature and expiry</td></tr>
+<tr><td>5</td><td><code>get_current_user</code></td><td>44-55</td><td>dependency</td><td>Who is calling? (authentication)</td></tr>
+<tr><td>6</td><td><code>get_current_team</code></td><td>58-79</td><td>dependency</td><td>Which team, and are they a member? (authorization)</td></tr>
+</tbody></table></div>
+<p class="muted">Functions 1-3 are used by the sign-up and login endpoints. Functions 5-6 protect everything else.</p>
+
+<h3 style="margin:22px 0 4px">Imports <span class="muted">(lines 4-15)</span></h3>
+<div class="tw"><table><thead><tr><th>Import</th><th>Used for</th></tr></thead><tbody>
+<tr><td><code>bcrypt</code></td><td>Password hashing and checking</td></tr>
+<tr><td><code>jwt</code> (PyJWT)</td><td>Creating and verifying login tokens</td></tr>
+<tr><td><code>Depends, Header, HTTPException</code></td><td>FastAPI: chain the checks, read request headers, return error codes</td></tr>
+<tr><td><code>Session</code>, <code>get_db</code></td><td>Database session for loading users, teams and memberships</td></tr>
+<tr><td><code>config</code></td><td>Secret key, algorithm and expiry (section 4)</td></tr>
+<tr><td><code>Team, TeamMember, User</code></td><td>The database tables that are checked</td></tr>
+</tbody></table></div>
+<figure class="code"><figcaption>backend/app/security.py : lines 1-15 (docstring and imports)</figcaption><pre><span class="ln"> 1</span>&quot;&quot;&quot;Password hashing, JWT session tokens, and the FastAPI auth dependencies
+<span class="ln"> 2</span>that every team-scoped endpoint depends on.
+<span class="ln"> 3</span>&quot;&quot;&quot;
+<span class="ln"> 4</span>from __future__ import annotations
+<span class="ln"> 5</span>
+<span class="ln"> 6</span>import datetime as dt
+<span class="ln"> 7</span>
+<span class="ln"> 8</span>import bcrypt
+<span class="ln"> 9</span>import jwt
+<span class="ln">10</span>from fastapi import Depends, Header, HTTPException
+<span class="ln">11</span>from sqlalchemy.orm import Session
+<span class="ln">12</span>
+<span class="ln">13</span>from app import config
+<span class="ln">14</span>from app.database import get_db
+<span class="ln">15</span>from app.models import Team, TeamMember, User</pre></figure>
+
+<h2 class="page">2. Functions, one by one</h2>
+<p class="muted">Each function uses the same format: Purpose, Signature, Inputs, Returns, Errors, How it works, Used by, and the real code.</p>
+
+<section class="fn">
+  <header><h3>1. <code>hash_password</code><span class="tag">helper</span></h3><span>lines 18-19</span></header>
+  <table class="spec"><tr><th>Purpose</th><td>Turns a plain password into a one-way bcrypt hash so the real password is never stored.</td></tr><tr><th>Signature</th><td><code>hash_password(password: str) -&gt; str</code></td></tr><tr><th>Inputs</th><td><code>password</code>: the plain text the user typed at sign-up.</td></tr><tr><th>Returns</th><td>A 60-character string such as <code>$2b$12$...</code> containing the algorithm, cost, random salt and hash.</td></tr><tr><th>Errors</th><td>None of its own. bcrypt raises <code>ValueError</code> if the password is longer than 72 bytes (see section 6).</td></tr><tr><th>How it works</th><td><ol><li>Encode the password to UTF-8 bytes (bcrypt works on bytes).</li><li><code>bcrypt.gensalt()</code> creates a new random salt, so two users with the same password get different hashes.</li><li><code>bcrypt.hashpw()</code> computes the hash (deliberately slow, to resist guessing).</li><li>Decode the bytes back to a string so it can be saved in <code>users.password_hash</code>.</li></ol></td></tr><tr><th>Used by</th><td><code>routers/auth.py</code> &rarr; <code>signup()</code></td></tr><tr><th>Why</th><td>Hashing is one-way: even someone who reads the database cannot get the passwords back.</td></tr></table>
+  <figure class="code"><figcaption>backend/app/security.py : lines 18-19</figcaption><pre><span class="ln">18</span>def hash_password(password: str) -&gt; str:
+<span class="ln">19</span>    return bcrypt.hashpw(password.encode(&quot;utf-8&quot;), bcrypt.gensalt()).decode(&quot;utf-8&quot;)</pre></figure>
+</section>
+<section class="fn">
+  <header><h3>2. <code>verify_password</code><span class="tag">helper</span></h3><span>lines 22-23</span></header>
+  <table class="spec"><tr><th>Purpose</th><td>Checks whether a typed password matches the stored hash.</td></tr><tr><th>Signature</th><td><code>verify_password(password: str, password_hash: str) -&gt; bool</code></td></tr><tr><th>Inputs</th><td><code>password</code>: what the user typed at login. <code>password_hash</code>: the value stored at sign-up.</td></tr><tr><th>Returns</th><td><code>True</code> if they match, otherwise <code>False</code>.</td></tr><tr><th>Errors</th><td>None of its own. bcrypt raises <code>ValueError</code> for a password over 72 bytes.</td></tr><tr><th>How it works</th><td><ol><li>Encode both values to bytes.</li><li><code>bcrypt.checkpw()</code> reads the salt from inside the stored hash, re-hashes the typed password with it, and compares the two in constant time.</li></ol></td></tr><tr><th>Used by</th><td><code>routers/auth.py</code> &rarr; <code>login()</code></td></tr><tr><th>Why</th><td>There is no way to "decrypt" a hash, so checking means re-hashing and comparing.</td></tr></table>
+  <figure class="code"><figcaption>backend/app/security.py : lines 22-23</figcaption><pre><span class="ln">22</span>def verify_password(password: str, password_hash: str) -&gt; bool:
+<span class="ln">23</span>    return bcrypt.checkpw(password.encode(&quot;utf-8&quot;), password_hash.encode(&quot;utf-8&quot;))</pre></figure>
+</section>
+<section class="fn">
+  <header><h3>3. <code>create_access_token</code><span class="tag">helper</span></h3><span>lines 26-34</span></header>
+  <table class="spec"><tr><th>Purpose</th><td>Creates the signed JWT login token returned after a successful sign-up or login.</td></tr><tr><th>Signature</th><td><code>create_access_token(user_id: int, email: str) -&gt; str</code></td></tr><tr><th>Inputs</th><td><code>user_id</code> and <code>email</code> of the user who just logged in.</td></tr><tr><th>Returns</th><td>A JWT string with three parts, <code>header.payload.signature</code>.</td></tr><tr><th>Errors</th><td>None.</td></tr><tr><th>How it works</th><td><ol><li>Take the current UTC time.</li><li>Build the payload: <code>sub</code> (the user id, as a string), <code>email</code>, <code>iat</code> (issued at) and <code>exp</code> (expires at = now + <code>JWT_EXPIRE_MINUTES</code>, 7 days by default).</li><li>Sign it with <code>JWT_SECRET_KEY</code> using HS256 and return it.</li></ol></td></tr><tr><th>Used by</th><td><code>routers/auth.py</code> &rarr; <code>signup()</code> and <code>login()</code></td></tr><tr><th>Why</th><td>The server stores no session: the signature proves the token was issued by this server and not changed.</td></tr></table>
+  <figure class="code"><figcaption>backend/app/security.py : lines 26-34</figcaption><pre><span class="ln">26</span>def create_access_token(user_id: int, email: str) -&gt; str:
+<span class="ln">27</span>    now = dt.datetime.utcnow()
+<span class="ln">28</span>    payload = {
+<span class="ln">29</span>        &quot;sub&quot;: str(user_id),
+<span class="ln">30</span>        &quot;email&quot;: email,
+<span class="ln">31</span>        &quot;iat&quot;: now,
+<span class="ln">32</span>        &quot;exp&quot;: now + dt.timedelta(minutes=config.JWT_EXPIRE_MINUTES),
+<span class="ln">33</span>    }
+<span class="ln">34</span>    return jwt.encode(payload, config.JWT_SECRET_KEY, algorithm=config.JWT_ALGORITHM)</pre></figure>
+</section>
+<section class="fn">
+  <header><h3>4. <code>decode_access_token</code><span class="tag">helper</span></h3><span>lines 37-41</span></header>
+  <table class="spec"><tr><th>Purpose</th><td>Checks a token's signature and expiry and returns its payload.</td></tr><tr><th>Signature</th><td><code>decode_access_token(token: str) -&gt; dict</code></td></tr><tr><th>Inputs</th><td><code>token</code>: the JWT sent by the client.</td></tr><tr><th>Returns</th><td>The payload dict, e.g. <code>{"sub": "7", "email": ..., "iat": ..., "exp": ...}</code>.</td></tr><tr><th>Errors</th><td><code>401 Invalid or expired token</code> if the signature is wrong, the token was edited, it has expired, or it is not a JWT.</td></tr><tr><th>How it works</th><td><ol><li><code>jwt.decode()</code> verifies the signature with the secret key and checks <code>exp</code>.</li><li>Only HS256 is accepted (<code>algorithms=[...]</code>), so a forged token using another algorithm is rejected.</li><li>Any <code>PyJWTError</code> becomes an HTTP 401.</li></ol></td></tr><tr><th>Used by</th><td><code>get_current_user()</code></td></tr></table>
+  <figure class="code"><figcaption>backend/app/security.py : lines 37-41</figcaption><pre><span class="ln">37</span>def decode_access_token(token: str) -&gt; dict:
+<span class="ln">38</span>    try:
+<span class="ln">39</span>        return jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+<span class="ln">40</span>    except jwt.PyJWTError as e:
+<span class="ln">41</span>        raise HTTPException(401, &quot;Invalid or expired token&quot;) from e</pre></figure>
+</section>
+<section class="fn">
+  <header><h3>5. <code>get_current_user</code><span class="tag">FastAPI dependency</span></h3><span>lines 44-55</span></header>
+  <table class="spec"><tr><th>Purpose</th><td>Works out <b>who</b> is making the request. Any endpoint that needs a logged-in user declares it with <code>Depends(get_current_user)</code>.</td></tr><tr><th>Signature</th><td><code>get_current_user(authorization: str | None = Header(...), db: Session = Depends(get_db)) -&gt; User</code></td></tr><tr><th>Inputs</th><td><code>authorization</code>: the <code>Authorization: Bearer &lt;token&gt;</code> header, read by FastAPI. <code>db</code>: a database session from <code>get_db</code>.</td></tr><tr><th>Returns</th><td>The <code>User</code> row from the database.</td></tr><tr><th>Errors</th><td><code>401 Missing bearer token</code> (no header, or it does not start with "Bearer "); <code>401 Invalid or expired token</code> (from <code>decode_access_token</code>); <code>401 User no longer exists</code> (account deleted after the token was issued).</td></tr><tr><th>How it works</th><td><ol><li>Check the header exists and starts with <code>bearer </code> (case-insensitive).</li><li>Split once on the space to get the token.</li><li>Decode and verify it.</li><li>Load the user by the id in <code>sub</code>.</li><li>Return the user, or 401 if they no longer exist.</li></ol></td></tr><tr><th>Used by</th><td>103 endpoint parameters across the backend, e.g. <code>/api/auth/me</code>, <code>/api/me/workspaces</code>, and every team endpoint through <code>get_current_team</code>.</td></tr><tr><th>Why</th><td>Checking that the user still exists means a deleted account cannot keep using an old token.</td></tr></table>
+  <figure class="code"><figcaption>backend/app/security.py : lines 44-55</figcaption><pre><span class="ln">44</span>def get_current_user(
+<span class="ln">45</span>    authorization: str | None = Header(default=None),
+<span class="ln">46</span>    db: Session = Depends(get_db),
+<span class="ln">47</span>) -&gt; User:
+<span class="ln">48</span>    if not authorization or not authorization.lower().startswith(&quot;bearer &quot;):
+<span class="ln">49</span>        raise HTTPException(401, &quot;Missing bearer token&quot;)
+<span class="ln">50</span>    token = authorization.split(&quot; &quot;, 1)[1].strip()
+<span class="ln">51</span>    payload = decode_access_token(token)
+<span class="ln">52</span>    user = db.get(User, int(payload[&quot;sub&quot;]))
+<span class="ln">53</span>    if user is None:
+<span class="ln">54</span>        raise HTTPException(401, &quot;User no longer exists&quot;)
+<span class="ln">55</span>    return user</pre></figure>
+</section>
+<section class="fn">
+  <header><h3>6. <code>get_current_team</code><span class="tag">FastAPI dependency</span></h3><span>lines 58-79</span></header>
+  <table class="spec"><tr><th>Purpose</th><td>Works out <b>which team</b> the request is for and proves the user belongs to it. This is the core of multi-tenant isolation: one team can never read another team's data.</td></tr><tr><th>Signature</th><td><code>get_current_team(x_team_id: int | None = Header(..., alias=&quot;X-Team-Id&quot;), user: User = Depends(get_current_user), db: Session = Depends(get_db)) -&gt; Team</code></td></tr><tr><th>Inputs</th><td><code>x_team_id</code>: the <code>X-Team-Id</code> header (FastAPI converts it to an int). <code>user</code>: from <code>get_current_user</code>, so authentication always runs first.</td></tr><tr><th>Returns</th><td>The <code>Team</code> row. Endpoints then filter every query by <code>team.id</code>.</td></tr><tr><th>Errors</th><td><code>400 X-Team-Id header is required</code>; <code>404 Team not found</code>; <code>403 Not a member of this team</code> (including invited-but-not-accepted, since status must be <code>active</code>). Plus all the 401s from <code>get_current_user</code>.</td></tr><tr><th>How it works</th><td><ol><li>If the header is missing, return 400.</li><li>Load the team; 404 if it does not exist.</li><li>Look for a <code>team_members</code> row with this team, this user and <code>status == "active"</code>.</li><li>If there is none, 403. Otherwise return the team.</li></ol></td></tr><tr><th>Used by</th><td>85 endpoint parameters, e.g. dataset upload and listing, asking a question, dashboards, audit trail.</td></tr><tr><th>Why</th><td>The client chooses the team id, so it cannot be trusted; this membership query is what stops a user from simply typing another team's id.</td></tr></table>
+  <figure class="code"><figcaption>backend/app/security.py : lines 58-79</figcaption><pre><span class="ln">58</span>def get_current_team(
+<span class="ln">59</span>    x_team_id: int | None = Header(default=None, alias=&quot;X-Team-Id&quot;),
+<span class="ln">60</span>    user: User = Depends(get_current_user),
+<span class="ln">61</span>    db: Session = Depends(get_db),
+<span class="ln">62</span>) -&gt; Team:
+<span class="ln">63</span>    if x_team_id is None:
+<span class="ln">64</span>        raise HTTPException(400, &quot;X-Team-Id header is required&quot;)
+<span class="ln">65</span>    team = db.get(Team, x_team_id)
+<span class="ln">66</span>    if team is None:
+<span class="ln">67</span>        raise HTTPException(404, &quot;Team not found&quot;)
+<span class="ln">68</span>    member = (
+<span class="ln">69</span>        db.query(TeamMember)
+<span class="ln">70</span>        .filter(
+<span class="ln">71</span>            TeamMember.team_id == team.id,
+<span class="ln">72</span>            TeamMember.user_id == user.id,
+<span class="ln">73</span>            TeamMember.status == &quot;active&quot;,
+<span class="ln">74</span>        )
+<span class="ln">75</span>        .first()
+<span class="ln">76</span>    )
+<span class="ln">77</span>    if member is None:
+<span class="ln">78</span>        raise HTTPException(403, &quot;Not a member of this team&quot;)
+<span class="ln">79</span>    return team</pre></figure>
+</section>
+
+<h2 class="page">3. One request, end to end</h2>
+<div class="panel"><ol class="seq"><li><b class="n">1</b><div><b>Client sends</b><p><code>GET /api/datasets</code> with <code>Authorization: Bearer eyJ...</code> and <code>X-Team-Id: 3</code>.</p></div></li><li><b class="n">2</b><div><b>FastAPI resolves dependencies</b><p>The endpoint asks for <code>team = Depends(get_current_team)</code>, which itself needs <code>get_current_user</code>, which needs <code>get_db</code>.</p></div></li><li><b class="n">3</b><div><b>get_current_user</b><p>Reads the token &rarr; <code>decode_access_token</code> checks the signature and expiry &rarr; loads user 7.</p></div></li><li><b class="n">4</b><div><b>get_current_team</b><p>Reads <code>X-Team-Id: 3</code> &rarr; loads team 3 &rarr; checks user 7 is an <b>active</b> member.</p></div></li><li><b class="n">5</b><div><b>Endpoint runs</b><p>Receives <code>user</code> and <code>team</code> already checked, and filters with <code>Dataset.team_id == team.id</code>.</p></div></li><li><b class="n">6</b><div><b>Any check fails</b><p>An <code>HTTPException</code> is raised and the endpoint body never runs. The client gets 400 / 401 / 403 / 404 with a JSON <code>detail</code>.</p></div></li></ol></div>
+<p class="muted">How an endpoint uses it (simplified from <code>list_datasets</code> in <code>main.py</code>):</p>
+<pre style="border-radius:10px">@app.get("/api/datasets")
+def list_datasets(db = Depends(get_db),
+                  user: User = Depends(get_current_user),
+                  team: Team = Depends(get_current_team)):
+    ... .filter(Dataset.team_id == team.id) ...</pre>
+
+<h2>4. Error codes this file produces</h2>
+<div class="tw"><table class="err"><thead><tr><th>Code</th><th>Message</th><th>Raised in</th><th>When</th></tr></thead><tbody><tr><td>400</td><td><code>X-Team-Id header is required</code></td><td><code>get_current_team</code></td><td>User has no active team selected (the bug we fixed on the Datasets page).</td></tr><tr><td>401</td><td><code>Missing bearer token</code></td><td><code>get_current_user</code></td><td>Not logged in, or header not in <code>Bearer &lt;token&gt;</code> form.</td></tr><tr><td>401</td><td><code>Invalid or expired token</code></td><td><code>decode_access_token</code></td><td>Token tampered with, signed with another key, or older than 7 days.</td></tr><tr><td>401</td><td><code>User no longer exists</code></td><td><code>get_current_user</code></td><td>Account deleted after the token was issued.</td></tr><tr><td>403</td><td><code>Not a member of this team</code></td><td><code>get_current_team</code></td><td>Real team, but the user is not an active member.</td></tr><tr><td>404</td><td><code>Team not found</code></td><td><code>get_current_team</code></td><td>No team with that id.</td></tr></tbody></table></div>
+
+<h2>5. Configuration and tests</h2>
+<div class="tw"><table><thead><tr><th>Setting (config.py)</th><th>Value</th><th>Meaning</th></tr></thead><tbody><tr><td><code>JWT_SECRET_KEY</code></td><td>env var; random per process if unset (with a warning)</td><td>Signs and verifies tokens. Must be set in production, otherwise every restart logs everyone out.</td></tr><tr><td><code>JWT_ALGORITHM</code></td><td>"HS256"</td><td>HMAC with SHA-256: one shared secret both signs and verifies.</td></tr><tr><td><code>JWT_EXPIRE_MINUTES</code></td><td>10080 (7 days)</td><td>How long a token stays valid.</td></tr></tbody></table></div>
+<figure class="code"><figcaption>backend/app/config.py : lines 81-94 (JWT settings)</figcaption><pre><span class="ln">81</span>JWT_SECRET_KEY = os.getenv(&quot;JWT_SECRET_KEY&quot;, &quot;&quot;)
+<span class="ln">82</span>if not JWT_SECRET_KEY:
+<span class="ln">83</span>    # Ephemeral per-process secret: fine for local dev (tokens just don&#x27;t
+<span class="ln">84</span>    # survive a restart), but every deployment should set a real one --
+<span class="ln">85</span>    # otherwise a restart invalidates every session, and multiple workers
+<span class="ln">86</span>    # wouldn&#x27;t agree on tokens at all.
+<span class="ln">87</span>    JWT_SECRET_KEY = secrets.token_hex(32)
+<span class="ln">88</span>    warnings.warn(
+<span class="ln">89</span>        &quot;JWT_SECRET_KEY is not set -- using a random one for this process only. &quot;
+<span class="ln">90</span>        &quot;Set JWT_SECRET_KEY in the environment for any real deployment.&quot;,
+<span class="ln">91</span>        stacklevel=2,
+<span class="ln">92</span>    )
+<span class="ln">93</span>JWT_ALGORITHM = &quot;HS256&quot;
+<span class="ln">94</span>JWT_EXPIRE_MINUTES = int(os.getenv(&quot;JWT_EXPIRE_MINUTES&quot;, str(60 * 24 * 7)))  # 7 days</pre></figure>
+<div class="tw" style="margin-top:12px"><table><thead><tr><th>Test file</th><th>What it proves</th></tr></thead><tbody><tr><td><code>tests/test_auth.py</code></td><td>sign-up then login then <code>/me</code>; duplicate email; short password; wrong password; unknown email; <code>/me</code> needs a token</td></tr><tr><td><code>tests/test_team_isolation.py</code></td><td>datasets scoped to own team; another team's dataset is 404; foreign team header is 403; no token is 401 even with a team header; invite rules</td></tr></tbody></table></div>
+
+<h2>6. Known limitations</h2>
+<div class='qa'><p class='q'>Passwords over 72 bytes</p><p>bcrypt 5.0 (the pinned version) raises <code>ValueError</code> for passwords longer than 72 bytes. I confirmed this for both <code>hashpw</code> and <code>checkpw</code>. Sign-up only checks the minimum length (8), and there is no global error handler, so such a password would cause an HTTP 500 instead of a clear 400 message. Fix: reject passwords over 72 bytes in <code>signup()</code>.</p></div><div class='qa'><p class='q'>No token revocation</p><p>Tokens cannot be cancelled before they expire (see the logout question).</p></div><div class='qa'><p class='q'><code>datetime.utcnow()</code></p><p>Deprecated in Python 3.12 in favour of <code>datetime.now(timezone.utc)</code>. It still works today.</p></div>
+
+<h2>7. Likely viva questions</h2>
+<div class='qa'><p class='q'>Why bcrypt and not SHA-256 for passwords?</p><p>SHA-256 is designed to be fast, so an attacker can try billions of guesses a second. bcrypt is deliberately slow and adds a random salt to every hash, which makes guessing and pre-computed tables impractical.</p></div><div class='qa'><p class='q'>What is inside our JWT, and is it encrypted?</p><p><code>sub</code> (user id), <code>email</code>, <code>iat</code> and <code>exp</code>. It is <b>signed, not encrypted</b>: anyone can read the payload, but nobody can change it without the secret key. That is why no password or secret is put in it.</p></div><div class='qa'><p class='q'>Why is <code>sub</code> stored as a string?</p><p>The JWT standard says <code>sub</code> is a string, and PyJWT validates that. The code converts it back with <code>int(payload["sub"])</code>.</p></div><div class='qa'><p class='q'>What is <code>Depends()</code>?</p><p>FastAPI's dependency injection. An endpoint lists what it needs; FastAPI runs those functions first and passes in the results. If one raises an exception, the endpoint never runs. Because <code>get_current_team</code> depends on <code>get_current_user</code>, you cannot get a team without logging in first.</p></div><div class='qa'><p class='q'>A user changes X-Team-Id to another team's id. What happens?</p><p><code>get_current_team</code> finds no active membership row for that user and team and returns 403. On top of that, endpoints check that each row they load belongs to <code>team.id</code> and return 404 otherwise.</p></div><div class='qa'><p class='q'>How does logout work if the server keeps no sessions?</p><p>The client deletes its token. The token itself stays valid until it expires (7 days). Revoking tokens early would need a deny-list, which this project does not have yet.</p></div><div class='qa'><p class='q'>Why 401 vs 403?</p><p>401 means "we don't know who you are" (no or bad token). 403 means "we know who you are, but you are not allowed" (not a member of this team).</p></div>
+
+<footer>Generated from the repository source on 16 October 2026. Every code block is copied from the file and line range in its caption.</footer>
+</main></body></html>

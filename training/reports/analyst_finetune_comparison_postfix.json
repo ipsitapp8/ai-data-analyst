@@ -1,0 +1,418 @@
+{
+ "test_split_sha256": "d0ba13f02e734d0955ac5f033713c10f15c5fb51dc895f260d3ec935dee9fd2c",
+ "examples": 320,
+ "base_replies_identical_across_runs": true,
+ "checker": "post-fix (precision-aware grounding; validation receives the question)",
+ "adapters": {
+  "v1": "training/adapters/analyst_qwen3_4b_lora",
+  "v2": "training/adapters/analyst_qwen3_4b_lora_v2"
+ },
+ "inference": {
+  "v1_run": {
+   "base": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": null,
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "sampler": "greedy (mlx_lm.generate default: temperature 0, argmax)",
+     "max_tokens": 320,
+     "prompt": "tokenizer.apply_chat_template(messages[:-1], add_generation_prompt=True)"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   },
+   "fine_tuned": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": {
+     "path": "training/adapters/analyst_qwen3_4b_lora",
+     "files_sha256": {
+      "0000100_adapters.safetensors": "35fd84b345c861f8148e6439342708a8e70e7756a070c20d06f47d6b3939e6b6",
+      "0000200_adapters.safetensors": "4b6d5ab396aaaae5b89226e1830f3c29aed14c02482bf6807145acb58e280901",
+      "0000300_adapters.safetensors": "90fffde3b6c20ecff62b950bf8fb0c3b512374c6517907ffce3c98e42017a660",
+      "0000400_adapters.safetensors": "4197b0f9cae2661f673da511487cf7cd91917161ecb5cc9d48d0c69a1ee13531",
+      "0000500_adapters.safetensors": "eb48a263a291cc28dd3ef56b7297303a7974e0e83002d9620d0318131e58d2de",
+      "0000600_adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+      "adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+      "adapter_config.json": "d14997937eb86ca784f4761d863dec6cc4d5af62b7c1318e0656c0ceabfe4e59"
+     }
+    },
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "sampler": "greedy (mlx_lm.generate default: temperature 0, argmax)",
+     "max_tokens": 320,
+     "prompt": "tokenizer.apply_chat_template(messages[:-1], add_generation_prompt=True)"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   }
+  },
+  "v2_run": {
+   "base": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": null,
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "sampler": "greedy (mlx_lm.generate default: temperature 0, argmax)",
+     "max_tokens": 320,
+     "prompt": "tokenizer.apply_chat_template(messages[:-1], add_generation_prompt=True)"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   },
+   "fine_tuned": {
+    "base_model": {
+     "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+     "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+     "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+     "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+    },
+    "adapter": {
+     "path": "training/adapters/analyst_qwen3_4b_lora_v2",
+     "files_sha256": {
+      "0000100_adapters.safetensors": "2973b5632c7e42428acc919abbaaa26ec16d29c9f1ba828b7d7be76955580ed1",
+      "0000200_adapters.safetensors": "7047dc19063a57ae9a9417efb9cb30c8304d71c1bd2c241ef38da81388a5cad4",
+      "0000300_adapters.safetensors": "54f91cbd6c27a87048d3a849e81910c707c7260f0bb4727a534187a60cf8ba80",
+      "0000400_adapters.safetensors": "82eebc98f7401a855c0f5a69c8e5a5a28f09a8ba3cd6e7710f8bfd3ea92b087a",
+      "0000500_adapters.safetensors": "889c7ebee9a737cea7006e03a6f680bde984a97acec55d7ca225bb9919d6abb3",
+      "0000600_adapters.safetensors": "60fb6b8858b15c30e7fc50b82f8f7b1f71407ba37b36d94e46cff741ddb3ab82",
+      "adapters.safetensors": "60fb6b8858b15c30e7fc50b82f8f7b1f71407ba37b36d94e46cff741ddb3ab82",
+      "adapter_config.json": "c3584a578f4d6e3bd0f57eaf39b3901be5a0ed77aaaadd2df4c10ebdcb3fd066"
+     }
+    },
+    "prompt": {
+     "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+     "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+     "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+     "builder": "app.analyst.planner.build_prompt"
+    },
+    "decoding": {
+     "sampler": "greedy (mlx_lm.generate default: temperature 0, argmax)",
+     "max_tokens": 320,
+     "prompt": "tokenizer.apply_chat_template(messages[:-1], add_generation_prompt=True)"
+    },
+    "environment": {
+     "mlx": "0.32.4",
+     "mlx_lm": "0.32.2",
+     "python": "3.13.15",
+     "machine": "arm64",
+     "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+    }
+   }
+  }
+ },
+ "models": {
+  "base": {
+   "measures": {
+    "1 intent recognition (plan type)": 0.6731,
+    "2 tool selection": 0.5306,
+    "3 structured plan validity (parses and passes backend validation)": 0.6192,
+    "4 column selection (exact arguments)": 0.4235,
+    "5 clarification behaviour": 0.0,
+    "6 unsupported-request handling": 0.0,
+    "7 business recommendation planning": 0.0,
+    "8 statistical method selection": 0.8,
+    "9 Random Forest planning (target and task)": 0.025,
+    "10 general conversation": 0.25,
+    "narration grounded in tool results": 0.9667
+   },
+   "n": {
+    "1 intent recognition (plan type)": 260,
+    "2 tool selection": 196,
+    "3 structured plan validity (parses and passes backend validation)": 260,
+    "4 column selection (exact arguments)": 196,
+    "5 clarification behaviour": 20,
+    "6 unsupported-request handling": 20,
+    "7 business recommendation planning": 36,
+    "8 statistical method selection": 100,
+    "9 Random Forest planning (target and task)": 40,
+    "10 general conversation": 20,
+    "narration grounded in tool results": 60
+   },
+   "unseen": {
+    "education": {
+     "1 intent recognition (plan type)": 0.6957,
+     "2 tool selection": 0.6531,
+     "3 structured plan validity (parses and passes backend validation)": 0.7681,
+     "4 column selection (exact arguments)": 0.5714,
+     "5 clarification behaviour": 0.0,
+     "6 unsupported-request handling": 0.0,
+     "7 business recommendation planning": null,
+     "8 statistical method selection": 0.8438,
+     "9 Random Forest planning (target and task)": 0.0714,
+     "10 general conversation": null,
+     "narration grounded in tool results": 1.0
+    },
+    "real_estate": {
+     "1 intent recognition (plan type)": 0.7424,
+     "2 tool selection": 0.6,
+     "3 structured plan validity (parses and passes backend validation)": 0.697,
+     "4 column selection (exact arguments)": 0.52,
+     "5 clarification behaviour": 0.0,
+     "6 unsupported-request handling": 0.0,
+     "7 business recommendation planning": null,
+     "8 statistical method selection": 0.8182,
+     "9 Random Forest planning (target and task)": 0.0,
+     "10 general conversation": null,
+     "narration grounded in tool results": 0.9355
+    }
+   },
+   "focused": {
+    "regression_direction": {
+     "rate": 0.85,
+     "n": 20,
+     "correct": 17
+    },
+    "decline_when_ad_columns_absent": {
+     "rate": 0.0,
+     "n": 20,
+     "correct": 0
+    },
+    "recommend_when_ad_columns_present": {
+     "rate": 0.0,
+     "n": 40,
+     "correct": 0
+    },
+    "prediction_target_and_task": {
+     "rate": 0.0,
+     "n": 20,
+     "correct": 0
+    },
+    "explain_prediction": {
+     "rate": 0.05,
+     "n": 20,
+     "correct": 1
+    },
+    "clarification": {
+     "rate": 0.0,
+     "n": 20,
+     "correct": 0
+    }
+   }
+  },
+  "v1": {
+   "measures": {
+    "1 intent recognition (plan type)": 0.9923,
+    "2 tool selection": 0.85,
+    "3 structured plan validity (parses and passes backend validation)": 0.9038,
+    "4 column selection (exact arguments)": 0.8119,
+    "5 clarification behaviour": 0.9,
+    "6 unsupported-request handling": 1.0,
+    "7 business recommendation planning": 0.5,
+    "8 statistical method selection": 0.9,
+    "9 Random Forest planning (target and task)": 1.0,
+    "10 general conversation": 1.0,
+    "narration grounded in tool results": 0.95
+   },
+   "n": {
+    "1 intent recognition (plan type)": 260,
+    "2 tool selection": 200,
+    "3 structured plan validity (parses and passes backend validation)": 260,
+    "4 column selection (exact arguments)": 218,
+    "5 clarification behaviour": 20,
+    "6 unsupported-request handling": 20,
+    "7 business recommendation planning": 40,
+    "8 statistical method selection": 100,
+    "9 Random Forest planning (target and task)": 40,
+    "10 general conversation": 20,
+    "narration grounded in tool results": 60
+   },
+   "unseen": {
+    "education": {
+     "1 intent recognition (plan type)": 0.9855,
+     "2 tool selection": 0.9796,
+     "3 structured plan validity (parses and passes backend validation)": 0.971,
+     "4 column selection (exact arguments)": 0.9818,
+     "5 clarification behaviour": 0.8571,
+     "6 unsupported-request handling": 1.0,
+     "7 business recommendation planning": null,
+     "8 statistical method selection": 0.9688,
+     "9 Random Forest planning (target and task)": 1.0,
+     "10 general conversation": null,
+     "narration grounded in tool results": 0.931
+    },
+    "real_estate": {
+     "1 intent recognition (plan type)": 1.0,
+     "2 tool selection": 0.96,
+     "3 structured plan validity (parses and passes backend validation)": 0.9848,
+     "4 column selection (exact arguments)": 0.7966,
+     "5 clarification behaviour": 1.0,
+     "6 unsupported-request handling": 1.0,
+     "7 business recommendation planning": null,
+     "8 statistical method selection": 0.9394,
+     "9 Random Forest planning (target and task)": 1.0,
+     "10 general conversation": null,
+     "narration grounded in tool results": 0.9677
+    }
+   },
+   "focused": {
+    "regression_direction": {
+     "rate": 0.9,
+     "n": 20,
+     "correct": 18
+    },
+    "decline_when_ad_columns_absent": {
+     "rate": 1.0,
+     "n": 20,
+     "correct": 20
+    },
+    "recommend_when_ad_columns_present": {
+     "rate": 0.5,
+     "n": 40,
+     "correct": 20
+    },
+    "prediction_target_and_task": {
+     "rate": 1.0,
+     "n": 20,
+     "correct": 20
+    },
+    "explain_prediction": {
+     "rate": 1.0,
+     "n": 20,
+     "correct": 20
+    },
+    "clarification": {
+     "rate": 0.9,
+     "n": 20,
+     "correct": 18
+    }
+   }
+  },
+  "v2": {
+   "measures": {
+    "1 intent recognition (plan type)": 0.9769,
+    "2 tool selection": 1.0,
+    "3 structured plan validity (parses and passes backend validation)": 0.9769,
+    "4 column selection (exact arguments)": 0.9078,
+    "5 clarification behaviour": 0.85,
+    "6 unsupported-request handling": 0.85,
+    "7 business recommendation planning": 1.0,
+    "8 statistical method selection": 1.0,
+    "9 Random Forest planning (target and task)": 1.0,
+    "10 general conversation": 1.0,
+    "narration grounded in tool results": 0.95
+   },
+   "n": {
+    "1 intent recognition (plan type)": 260,
+    "2 tool selection": 200,
+    "3 structured plan validity (parses and passes backend validation)": 260,
+    "4 column selection (exact arguments)": 217,
+    "5 clarification behaviour": 20,
+    "6 unsupported-request handling": 20,
+    "7 business recommendation planning": 40,
+    "8 statistical method selection": 100,
+    "9 Random Forest planning (target and task)": 40,
+    "10 general conversation": 20,
+    "narration grounded in tool results": 60
+   },
+   "unseen": {
+    "education": {
+     "1 intent recognition (plan type)": 0.942,
+     "2 tool selection": 1.0,
+     "3 structured plan validity (parses and passes backend validation)": 0.942,
+     "4 column selection (exact arguments)": 0.9455,
+     "5 clarification behaviour": 0.8571,
+     "6 unsupported-request handling": 0.7692,
+     "7 business recommendation planning": null,
+     "8 statistical method selection": 1.0,
+     "9 Random Forest planning (target and task)": 1.0,
+     "10 general conversation": null,
+     "narration grounded in tool results": 0.931
+    },
+    "real_estate": {
+     "1 intent recognition (plan type)": 1.0,
+     "2 tool selection": 1.0,
+     "3 structured plan validity (parses and passes backend validation)": 1.0,
+     "4 column selection (exact arguments)": 0.8305,
+     "5 clarification behaviour": 1.0,
+     "6 unsupported-request handling": 1.0,
+     "7 business recommendation planning": null,
+     "8 statistical method selection": 1.0,
+     "9 Random Forest planning (target and task)": 1.0,
+     "10 general conversation": null,
+     "narration grounded in tool results": 0.9677
+    }
+   },
+   "focused": {
+    "regression_direction": {
+     "rate": 0.5,
+     "n": 20,
+     "correct": 10
+    },
+    "decline_when_ad_columns_absent": {
+     "rate": 0.85,
+     "n": 20,
+     "correct": 17
+    },
+    "recommend_when_ad_columns_present": {
+     "rate": 1.0,
+     "n": 40,
+     "correct": 40
+    },
+    "prediction_target_and_task": {
+     "rate": 1.0,
+     "n": 20,
+     "correct": 20
+    },
+    "explain_prediction": {
+     "rate": 1.0,
+     "n": 20,
+     "correct": 20
+    },
+    "clarification": {
+     "rate": 0.85,
+     "n": 20,
+     "correct": 17
+    }
+   }
+  }
+ }
+}

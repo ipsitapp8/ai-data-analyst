@@ -155,6 +155,7 @@ def _render_live_run(qid: int) -> None:
     # Job line: where the run is in the queue, how it was routed, and a way to stop it.
     route_names = {"fast": "Fast path · deterministic, no model", "root_cause": "Root-cause investigator · deterministic",
                    "hypothesis": "Hypothesis investigation · model proposes, code tests",
+                   "comparison": "Comparison · statistics engine, no generated code",
                    "statistical": "Statistical analysis · full pipeline", "standard": "Full pipeline",
                    "clarify": "Clarification"}
     bits = []

@@ -1,0 +1,1822 @@
+{
+ "model_label": "v1_postfix",
+ "model_url": "http://127.0.0.1:8080/v1",
+ "inference": {
+  "base_model": {
+   "repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+   "revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+   "weights_sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+   "tokenizer_sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+   "chat_template_sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+  },
+  "adapter": {
+   "path": "training/adapters/analyst_qwen3_4b_lora",
+   "files_sha256": {
+    "0000100_adapters.safetensors": "35fd84b345c861f8148e6439342708a8e70e7756a070c20d06f47d6b3939e6b6",
+    "0000200_adapters.safetensors": "4b6d5ab396aaaae5b89226e1830f3c29aed14c02482bf6807145acb58e280901",
+    "0000300_adapters.safetensors": "90fffde3b6c20ecff62b950bf8fb0c3b512374c6517907ffce3c98e42017a660",
+    "0000400_adapters.safetensors": "4197b0f9cae2661f673da511487cf7cd91917161ecb5cc9d48d0c69a1ee13531",
+    "0000500_adapters.safetensors": "eb48a263a291cc28dd3ef56b7297303a7974e0e83002d9620d0318131e58d2de",
+    "0000600_adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+    "adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+    "adapter_config.json": "d14997937eb86ca784f4761d863dec6cc4d5af62b7c1318e0656c0ceabfe4e59"
+   }
+  },
+  "prompt": {
+   "system_prompt_sha256": "41e71e6963181c9e33f42150affd22e93484947b2c32332a4300695f57088f26",
+   "narration_prompt_sha256": "174fa7262400fd7c194f6e09721021bf7de9545462d8076b57b85c91067be095",
+   "tool_schema_sha256": "cdfedde1f8326b17c75d737e9b0ebddbb39237a61c7511fa6d34a0e475732eb1",
+   "builder": "app.analyst.planner.build_prompt"
+  },
+  "decoding": {
+   "server": "mlx_lm.server (OpenAI-compatible), request model 'default_model'",
+   "plan": {
+    "temperature": 0.0,
+    "max_tokens": 700
+   },
+   "narration": {
+    "temperature": 0.0,
+    "max_tokens": 350
+   },
+   "client": "app.analyst.planner.model_chat"
+  },
+  "environment": {
+   "mlx": "0.32.4",
+   "mlx_lm": "0.32.2",
+   "python": "3.13.15",
+   "machine": "arm64",
+   "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "passed_after_retry": 24,
+ "passed": 21,
+ "total": 25,
+ "rows": [
+  {
+   "n": 1,
+   "group": "unseen_education",
+   "question": "What is the average grade points?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"grade_points\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "metric",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "avg",
+       "column": "grade_points"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compute_metric",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compute_metric",
+     "args": {
+      "aggregation": "avg",
+      "column": "grade_points"
+     },
+     "status": "ok",
+     "key_result": {
+      "value": 66.1175,
+      "top": null,
+      "rows": 120
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compute_metric"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"grade_points\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "metric",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "avg",
+        "column": "grade_points"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The average grade points is 66.12, computed over 120 rows.\n\n---\n\nThe average grade_points is **66.12** (computed over 120 rows)."
+  },
+  {
+   "n": 2,
+   "group": "unseen_education",
+   "question": "Which campus has the highest average grade points?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"group_comparison\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"grade_points\", \"group_by\": \"campus\", \"order\": \"desc\"}}, {\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"grade_points\", \"group\": \"campus\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "group_comparison",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "avg",
+       "column": "grade_points",
+       "group_by": "campus",
+       "order": "desc"
+      }
+     },
+     {
+      "tool": "compare_groups",
+      "args": {
+       "outcome": "grade_points",
+       "group": "campus"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compute_metric",
+     "valid": true
+    },
+    {
+     "tool": "compare_groups",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [
+    "The model's summary cited numbers not in the results (69.79); it was not shown."
+   ],
+   "executed": [
+    {
+     "tool": "compute_metric",
+     "args": {
+      "aggregation": "avg",
+      "column": "grade_points",
+      "group_by": "campus",
+      "order": "desc"
+     },
+     "status": "ok",
+     "key_result": {
+      "value": null,
+      "top": {
+       "group": "Hillcrest",
+       "value": 69.79736842105264,
+       "rows": 38
+      },
+      "rows": null
+     }
+    },
+    {
+     "tool": "compare_groups",
+     "args": {
+      "outcome": "grade_points",
+      "group": "campus"
+     },
+     "status": "ok",
+     "key_result": {
+      "name": "Welch's one-way test",
+      "statistic": 1.069947380657974,
+      "df": [
+       2.0,
+       76.41050011800213
+      ],
+      "p_value": 0.34810912087352514,
+      "eta_squared": 0.017534530307513438,
+      "robustness": {
+       "name": "Kruskal-Wallis test",
+       "p_value": 0.3232559300303772
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compute_metric",
+     "compare_groups"
+    ],
+    [
+     "compute_metric"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"group_comparison\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"grade_points\", \"group_by\": \"campus\", \"order\": \"desc\"}}, {\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"grade_points\", \"group\": \"campus\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "group_comparison",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "avg",
+        "column": "grade_points",
+        "group_by": "campus",
+        "order": "desc"
+       }
+      },
+      {
+       "tool": "compare_groups",
+       "args": {
+        "outcome": "grade_points",
+        "group": "campus"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "**Average grade_points by campus**:\n\n| campus | average grade_points | rows |\n|---|---:|---:|\n| Hillcrest | 69.80 | 38 |\n| Northside | 65.64 | 37 |\n| Riverside | 63.41 | 45 |\n\nHighest: **Hillcrest** (69.80).\n\n**grade_points by campus**\n\n| group | n | mean | median | sd |\n|---|---:|---:|---:|---:|\n| Hillcrest | 38 | 69.80 | 68.90 | 19.80 |\n| Northside | 37 | 65.64 | 64.70 | 20.91 |\n| Riverside | 45 | 63.41 | 60.70 | 20.00 |\n\n**Welch's one-way test**: p = 0.348; effect size eta squared = 0.02. Rank-based check (Kruskal-Wallis test): p = 0.323.\nStatistically not significant at the 5% level: the data do not show a reliable difference.\n- Welch's tests do not assume equal variances."
+  },
+  {
+   "n": 3,
+   "group": "unseen_education",
+   "question": "Is there a significant difference in grade points between campus groups?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"comparison\", \"calls\": [{\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"grade_points\", \"group\": \"campus\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "comparison",
+    "calls": [
+     {
+      "tool": "compare_groups",
+      "args": {
+       "outcome": "grade_points",
+       "group": "campus"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compare_groups",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compare_groups",
+     "args": {
+      "outcome": "grade_points",
+      "group": "campus"
+     },
+     "status": "ok",
+     "key_result": {
+      "name": "Welch's one-way test",
+      "statistic": 1.069947380657974,
+      "df": [
+       2.0,
+       76.41050011800213
+      ],
+      "p_value": 0.34810912087352514,
+      "eta_squared": 0.017534530307513438,
+      "robustness": {
+       "name": "Kruskal-Wallis test",
+       "p_value": 0.3232559300303772
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compare_groups"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"comparison\", \"calls\": [{\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"grade_points\", \"group\": \"campus\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "comparison",
+     "calls": [
+      {
+       "tool": "compare_groups",
+       "args": {
+        "outcome": "grade_points",
+        "group": "campus"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The Welch's one-way test gives p = 0.348. The data do not show a reliable difference in grade points between campus groups.\n\n---\n\n**grade_points by campus**\n\n| group | n | mean | median | sd |\n|---|---:|---:|---:|---:|\n| Hillcrest | 38 | 69.80 | 68.90 | 19.80 |\n| Northside | 37 | 65.64 | 64.70 | 20.91 |\n| Riverside | 45 | 63.41 | 60.70 | 20.00 |\n\n**Welch's one-way test**: p = 0.348; effect size eta squared = 0.02. Rank-based check (Kruskal-Wallis test): p = 0.323.\nStatistically not significant at the 5% level: the data do not show a reliable difference.\n- Welch's tests do not assume equal variances."
+  },
+  {
+   "n": 4,
+   "group": "unseen_education",
+   "question": "Predict passed",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"passed\", \"task\": \"classification\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "passed",
+       "task": "classification"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "random_forest",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "random_forest",
+     "args": {
+      "target": "passed",
+      "task": "classification"
+     },
+     "status": "ok",
+     "key_result": {
+      "task": "classification",
+      "target": "passed",
+      "metrics": {
+       "accuracy": 0.4,
+       "balanced_accuracy": 0.4,
+       "macro_f1": 0.3973214285714286,
+       "baseline_accuracy": 0.5,
+       "baseline": "always predicting the most common class 'Yes'",
+       "roc_auc": 0.42666666666666664
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "random_forest"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"passed\", \"task\": \"classification\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "prediction",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "passed",
+        "task": "classification"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The model achieved an accuracy of 0.40. The F1 score was 0.397, and the ROC AUC was 0.427. The evidence is weak, so the prediction adds little beyond the naive baseline.\n\n---\n\n**Random Forest classification for 'passed'**\n\nHeld-out performance (30 test rows, trained on 90): balanced accuracy 0.40, accuracy 0.40 vs baseline 0.50 (always predicting the most common class 'Yes'), macro F1 0.40, ROC AUC 0.43.\nThe model does **not** clearly beat the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| attendance_rate | -0.0533 | 0.0400 |\n| gender | -0.0767 | 0.0423 |\n| grade_points | -0.0800 | 0.0562 |\n| study_hours | -0.0900 | 0.0423 |\n| campus | -0.1267 | 0.0663 |\n\nLeft out: student_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- The model does not clearly beat the naive baseline, so its predictions add little.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 30 held-out rows (25% of the data); results on new data may differ.\n- Small dataset (120 rows): metrics and importances are uncertain."
+  },
+  {
+   "n": 5,
+   "group": "unseen_education",
+   "question": "Which factors influenced your prediction?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"explain_prediction\", \"calls\": [{\"tool\": \"feature_importance\", \"args\": {}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "explain_prediction",
+    "calls": [
+     {
+      "tool": "feature_importance",
+      "args": {}
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "feature_importance",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "feature_importance",
+     "args": {},
+     "status": "ok",
+     "key_result": null
+    }
+   ],
+   "expected_tools": [
+    [
+     "feature_importance"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"explain_prediction\", \"calls\": [{\"tool\": \"feature_importance\", \"args\": {}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "explain_prediction",
+     "calls": [
+      {
+       "tool": "feature_importance",
+       "args": {}
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The model relied on the following factors to predict the outcome: attendance_rate, gender, grade_points, study_hours, and campus. The importance values show the model considered these factors, not what causes the outcome.\n\n---\n\n**What the 'passed' model relied on** (permutation importance: how much held-out performance drops when the input is shuffled)\n\n| feature | importance | sd |\n|---|---:|---:|\n| attendance_rate | -0.0533 | 0.0400 |\n| gender | -0.0767 | 0.0423 |\n| grade_points | -0.0800 | 0.0562 |\n| study_hours | -0.0900 | 0.0423 |\n| campus | -0.1267 | 0.0663 |\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- The model does not clearly beat the naive baseline, so its predictions add little.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 30 held-out rows (25% of the data); results on new data may differ.\n- Small dataset (120 rows): metrics and importances are uncertain."
+  },
+  {
+   "n": 6,
+   "group": "unseen_real_estate",
+   "question": "What is the median price in each city?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"median\", \"column\": \"price\", \"group_by\": \"city\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "metric",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "median",
+       "column": "price",
+       "group_by": "city"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compute_metric",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compute_metric",
+     "args": {
+      "aggregation": "median",
+      "column": "price",
+      "group_by": "city"
+     },
+     "status": "ok",
+     "key_result": {
+      "value": null,
+      "top": {
+       "group": "Oakwood",
+       "value": 530251.5,
+       "rows": 26
+      },
+      "rows": null
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compute_metric"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"median\", \"column\": \"price\", \"group_by\": \"city\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "metric",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "median",
+        "column": "price",
+        "group_by": "city"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The median price in each city is: Oakwood: 530,251.50, Bayview: 483,276.00, Elm Park: 428,478.00. This compares averages only; see the statistical test before treating the gap as real.\n\n---\n\n**Median price by city**:\n\n| city | median price | rows |\n|---|---:|---:|\n| Oakwood | 530,251.50 | 26 |\n| Bayview | 483,276 | 50 |\n| Elm Park | 428,478 | 44 |\n\nHighest: **Oakwood** (530,251.50)."
+  },
+  {
+   "n": 7,
+   "group": "unseen_real_estate",
+   "question": "Predict price",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"price\", \"task\": \"regression\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "price",
+       "task": "regression"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "random_forest",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "random_forest",
+     "args": {
+      "target": "price",
+      "task": "regression"
+     },
+     "status": "ok",
+     "key_result": {
+      "task": "regression",
+      "target": "price",
+      "metrics": {
+       "r2": -0.1703845634918515,
+       "mae": 221368.06154735852,
+       "rmse": 253097.79464625413,
+       "baseline_mae": 208372.1992592593,
+       "baseline": "always predicting the training mean"
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "random_forest"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"price\", \"task\": \"regression\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "prediction",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "price",
+        "task": "regression"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The model predicted the price with an R\u00b2 of -0.17, so the predictions were worse than the baseline of always predicting the training mean.\n\n---\n\n**Random Forest regression for 'price'**\n\nHeld-out performance (30 test rows, trained on 90): R\u00b2 -0.17, MAE 221,368.06 vs baseline MAE 208,372.20 (always predicting the training mean), RMSE 253,097.79.\nThe model does **not** clearly beat the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| sold_quickly | 12,745.2996 | 5,564.9777 |\n| property_type | 1,938.8962 | 3,922.4602 |\n| city | 1,192.3865 | 4,758.3473 |\n| floor_area_sqm | -9,414.3502 | 10,082.6429 |\n| bedrooms | -10,021.3736 | 14,182.8914 |\n\nLeft out: listing_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest regressor, 300 trees, 75/25 split, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- The model does not clearly beat the naive baseline, so its predictions add little.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 30 held-out rows (25% of the data); results on new data may differ.\n- Small dataset (120 rows): metrics and importances are uncertain."
+  },
+  {
+   "n": 8,
+   "group": "unseen_real_estate",
+   "question": "Can you predict which properties will sell within 90 days?",
+   "raw_reply": "\n\n{\"type\": \"clarify\", \"question\": \"Which column should I predict?\", \"options\": [\"city\", \"bedrooms\", \"floor_area_sqm\", \"price\", \"sold_quickly\"]}",
+   "parsed_plan": {
+    "type": "clarify",
+    "question": "Which column should I predict?",
+    "options": [
+     "city",
+     "bedrooms",
+     "floor_area_sqm",
+     "price",
+     "sold_quickly"
+    ]
+   },
+   "validation": [],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [],
+   "expected_tools": [
+    [
+     "random_forest"
+    ]
+   ],
+   "tool_ok": false,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": false,
+   "passed_after_retry": false,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"clarify\", \"question\": \"Which column should I predict?\", \"options\": [\"city\", \"bedrooms\", \"floor_area_sqm\", \"price\", \"sold_quickly\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "Which column should I predict?",
+     "options": [
+      "city",
+      "bedrooms",
+      "floor_area_sqm",
+      "price",
+      "sold_quickly"
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "Which column should I predict?\n\nOptions: `city`, `bedrooms`, `floor_area_sqm`, `price`, `sold_quickly`"
+  },
+  {
+   "n": 9,
+   "group": "unseen_real_estate",
+   "question": "Which area should receive our next advertising campaign?",
+   "raw_reply": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it.\"}",
+   "parsed_plan": {
+    "type": "decline",
+    "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+   },
+   "validation": [],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [],
+   "expected_tools": [
+    []
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it.\"}",
+    "plan": {
+     "type": "decline",
+     "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "**The available data is not sufficient for this.** This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+  },
+  {
+   "n": 10,
+   "group": "aggregation_filter",
+   "question": "What is the average salary in Engineering?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"salary\", \"filters\": [{\"column\": \"department\", \"op\": \"==\", \"value\": \"Engineering\"}]}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "metric",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "avg",
+       "column": "salary",
+       "filters": [
+        {
+         "column": "department",
+         "op": "==",
+         "value": "Engineering"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compute_metric",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compute_metric",
+     "args": {
+      "aggregation": "avg",
+      "column": "salary",
+      "filters": [
+       {
+        "column": "department",
+        "op": "==",
+        "value": "Engineering"
+       }
+      ]
+     },
+     "status": "ok",
+     "key_result": {
+      "value": 115055.77464788733,
+      "top": null,
+      "rows": 71
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compute_metric"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"avg\", \"column\": \"salary\", \"filters\": [{\"column\": \"department\", \"op\": \"==\", \"value\": \"Engineering\"}]}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "metric",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "avg",
+        "column": "salary",
+        "filters": [
+         {
+          "column": "department",
+          "op": "==",
+          "value": "Engineering"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The average salary in Engineering is 115,055.77, computed over 71 rows.\n\n---\n\nThe average salary where department == Engineering is **115,055.77** (computed over 71 rows)."
+  },
+  {
+   "n": 11,
+   "group": "aggregation_filter",
+   "question": "How many employees have a salary above 100000?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"count\", \"filters\": [{\"column\": \"salary\", \"op\": \">\", \"value\": 100000}]}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "metric",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "count",
+       "filters": [
+        {
+         "column": "salary",
+         "op": ">",
+         "value": 100000
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compute_metric",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compute_metric",
+     "args": {
+      "aggregation": "count",
+      "filters": [
+       {
+        "column": "salary",
+        "op": ">",
+        "value": 100000
+       }
+      ]
+     },
+     "status": "ok",
+     "key_result": {
+      "value": 112.0,
+      "top": null,
+      "rows": 112
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compute_metric"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"count\", \"filters\": [{\"column\": \"salary\", \"op\": \">\", \"value\": 100000}]}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "metric",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "count",
+        "filters": [
+         {
+          "column": "salary",
+          "op": ">",
+          "value": 100000
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The data shows that 112 employees have a salary above 100,000.\n\n---\n\nThe number of rows where salary > 100000 is **112** (computed over 112 rows)."
+  },
+  {
+   "n": 12,
+   "group": "aggregation_filter",
+   "question": "Show the total salary by department",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"sum\", \"column\": \"salary\", \"group_by\": \"department\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "metric",
+    "calls": [
+     {
+      "tool": "compute_metric",
+      "args": {
+       "aggregation": "sum",
+       "column": "salary",
+       "group_by": "department"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compute_metric",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compute_metric",
+     "args": {
+      "aggregation": "sum",
+      "column": "salary",
+      "group_by": "department"
+     },
+     "status": "ok",
+     "key_result": {
+      "value": null,
+      "top": {
+       "group": "Engineering",
+       "value": 8168960.0,
+       "rows": 71
+      },
+      "rows": null
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compute_metric"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"metric\", \"calls\": [{\"tool\": \"compute_metric\", \"args\": {\"aggregation\": \"sum\", \"column\": \"salary\", \"group_by\": \"department\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "metric",
+     "calls": [
+      {
+       "tool": "compute_metric",
+       "args": {
+        "aggregation": "sum",
+        "column": "salary",
+        "group_by": "department"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "Engineering has the highest total salary at 8,168,960.00, and Support the lowest at 2,220,086.00. This compares averages only; see the statistical test before treating the gap as real.\n\n---\n\n**Sum salary by department**:\n\n| department | sum salary | rows |\n|---|---:|---:|\n| Engineering | 8,168,960 | 71 |\n| Sales | 5,819,357 | 63 |\n| Finance | 4,266,447 | 43 |\n| Marketing | 3,066,149 | 32 |\n| Support | 2,220,086 | 31 |\n\nHighest: **Engineering** (8,168,960)."
+  },
+  {
+   "n": 13,
+   "group": "statistics",
+   "question": "Is years of experience correlated with salary?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"correlation\", \"calls\": [{\"tool\": \"correlation\", \"args\": {\"x\": \"years_experience\", \"y\": \"salary\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "correlation",
+    "calls": [
+     {
+      "tool": "correlation",
+      "args": {
+       "x": "years_experience",
+       "y": "salary"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "correlation",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "correlation",
+     "args": {
+      "x": "years_experience",
+      "y": "salary"
+     },
+     "status": "ok",
+     "key_result": {
+      "pearson_r": 0.5385831908740764,
+      "pearson_p": 1.8712571300581867e-19
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "correlation"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"correlation\", \"calls\": [{\"tool\": \"correlation\", \"args\": {\"x\": \"years_experience\", \"y\": \"salary\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "correlation",
+     "calls": [
+      {
+       "tool": "correlation",
+       "args": {
+        "x": "years_experience",
+        "y": "salary"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The data shows a positive correlation between years experience and salary: r = 0.539. The 95% confidence interval is [0.442, 0.623], so the data does not show the correlation is zero.\n\n---\n\nBetween **years_experience** and **salary** (n = 240): Pearson r = 0.54 (95% CI 0.44 to 0.62, p < 0.001); Spearman rho = 0.53 (p < 0.001). Correlation measures association, not causation."
+  },
+  {
+   "n": 14,
+   "group": "statistics",
+   "question": "What is the standard deviation of salary?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"statistics\", \"calls\": [{\"tool\": \"describe_column\", \"args\": {\"column\": \"salary\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "statistics",
+    "calls": [
+     {
+      "tool": "describe_column",
+      "args": {
+       "column": "salary"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "describe_column",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "describe_column",
+     "args": {
+      "column": "salary"
+     },
+     "status": "ok",
+     "key_result": null
+    }
+   ],
+   "expected_tools": [
+    [
+     "describe_column"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"statistics\", \"calls\": [{\"tool\": \"describe_column\", \"args\": {\"column\": \"salary\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "statistics",
+     "calls": [
+      {
+       "tool": "describe_column",
+       "args": {
+        "column": "salary"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The standard deviation of salary is 19,505.16, computed over 240 rows.\n\n---\n\n**salary** (n = 240): mean 98,087.50 (95% CI 95,607.24 to 100,567.75), median 98,451.50, standard deviation 19,505.16, variance 380,451,134.49, range 49,852 to 147,635.\n\nMethod: t interval for the mean."
+  },
+  {
+   "n": 15,
+   "group": "prediction",
+   "question": "Predict customer churn.",
+   "raw_reply": "\n\n{\"type\": \"clarify\", \"question\": \"There is no churn column. Which column should I predict?\", \"options\": [\"contract\", \"monthly_charges\", \"region\", \"tenure_months\"]}",
+   "parsed_plan": {
+    "type": "clarify",
+    "question": "There is no churn column. Which column should I predict?",
+    "options": [
+     "contract",
+     "monthly_charges",
+     "region",
+     "tenure_months"
+    ]
+   },
+   "validation": [],
+   "used_plan_source": "model_retry",
+   "fallback_notes": [
+    "The model's first plan contradicted the dataset (it says there is no 'churn' column, but the dataset has 'churn'); it reconsidered once."
+   ],
+   "executed": [
+    {
+     "tool": "random_forest",
+     "args": {
+      "target": "churn",
+      "task": "classification"
+     },
+     "status": "ok",
+     "key_result": {
+      "task": "classification",
+      "target": "churn",
+      "metrics": {
+       "accuracy": 0.72,
+       "balanced_accuracy": 0.7279425308528273,
+       "macro_f1": 0.7175394548063128,
+       "baseline_accuracy": 0.5933333333333334,
+       "baseline": "always predicting the most common class 'No'",
+       "roc_auc": 0.8119358997973846
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "random_forest"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": false,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"clarify\", \"question\": \"There is no churn column. Which column should I predict?\", \"options\": [\"contract\", \"monthly_charges\", \"region\", \"tenure_months\"]}",
+    "plan": {
+     "type": "clarify",
+     "question": "There is no churn column. Which column should I predict?",
+     "options": [
+      "contract",
+      "monthly_charges",
+      "region",
+      "tenure_months"
+     ]
+    },
+    "valid": false,
+    "error": "contradicts the dataset: it says there is no 'churn' column, but the dataset has 'churn'",
+    "retry": {
+     "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"churn\", \"task\": \"classification\"}}]}",
+     "plan": {
+      "type": "tools",
+      "intent": "prediction",
+      "calls": [
+       {
+        "tool": "random_forest",
+        "args": {
+         "target": "churn",
+         "task": "classification"
+        }
+       }
+      ]
+     },
+     "valid": true,
+     "error": null
+    }
+   },
+   "answer": "The model achieved an accuracy of 72.0% and an ROC-AUC of 81.2% to predict churn. The features ranked by importance were: contract (17.4%), tenure_months (7.2%), support_tickets (1.8%), monthly_charges (0.55%), and region (-0.30%). The evidence is weak, so the model's predictions should be treated as probabilities, not facts.\n\n---\n\n**Random Forest classification for 'churn'**\n\nHeld-out performance (150 test rows, trained on 450): balanced accuracy 0.73, accuracy 0.72 vs baseline 0.59 (always predicting the most common class 'No'), macro F1 0.72, ROC AUC 0.81.\nThe model beats the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| contract | 0.1735 | 0.0394 |\n| tenure_months | 0.0717 | 0.0264 |\n| support_tickets | 0.0182 | 0.0177 |\n| monthly_charges | 0.0055 | 0.0223 |\n| region | -0.0030 | 0.0210 |\n\nLeft out: customer_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 150 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 16,
+   "group": "prediction",
+   "question": "Which factors influenced your prediction?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"explain_prediction\", \"calls\": [{\"tool\": \"feature_importance\", \"args\": {}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "explain_prediction",
+    "calls": [
+     {
+      "tool": "feature_importance",
+      "args": {}
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "feature_importance",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "feature_importance",
+     "args": {},
+     "status": "ok",
+     "key_result": null
+    }
+   ],
+   "expected_tools": [
+    [
+     "feature_importance"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"explain_prediction\", \"calls\": [{\"tool\": \"feature_importance\", \"args\": {}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "explain_prediction",
+     "calls": [
+      {
+       "tool": "feature_importance",
+       "args": {}
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The model relied on contract (0.174) and tenure_months (0.072) the most, and region the least (-0.003). This is based on the Random Forest classifier, which averaged the trees and considered the class distribution when evaluating.\n\n---\n\n**What the 'churn' model relied on** (permutation importance: how much held-out performance drops when the input is shuffled)\n\n| feature | importance | sd |\n|---|---:|---:|\n| contract | 0.1735 | 0.0394 |\n| tenure_months | 0.0717 | 0.0264 |\n| support_tickets | 0.0182 | 0.0177 |\n| monthly_charges | 0.0055 | 0.0223 |\n| region | -0.0030 | 0.0210 |\n\nMethod: Random Forest classifier, 300 trees, 75/25 split stratified by class, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 150 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 17,
+   "group": "prediction",
+   "question": "Predict salary.",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"salary\", \"task\": \"regression\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "prediction",
+    "calls": [
+     {
+      "tool": "random_forest",
+      "args": {
+       "target": "salary",
+       "task": "regression"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "random_forest",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "random_forest",
+     "args": {
+      "target": "salary",
+      "task": "regression"
+     },
+     "status": "ok",
+     "key_result": {
+      "task": "regression",
+      "target": "salary",
+      "metrics": {
+       "r2": 0.8184138420119504,
+       "mae": 6752.3387824194315,
+       "rmse": 8733.840786766837,
+       "baseline_mae": 16668.02333333333,
+       "baseline": "always predicting the training mean"
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "random_forest"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"prediction\", \"calls\": [{\"tool\": \"random_forest\", \"args\": {\"target\": \"salary\", \"task\": \"regression\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "prediction",
+     "calls": [
+      {
+       "tool": "random_forest",
+       "args": {
+        "target": "salary",
+        "task": "regression"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The model predicted salary with an R\u00b2 of 0.818, so the model explained 81.8% of the variance. The average error (MAE) was 6,752.34, and the baseline error was 16,668.02, so the model performed better than guessing the training mean.\n\n---\n\n**Random Forest regression for 'salary'**\n\nHeld-out performance (60 test rows, trained on 180): R\u00b2 0.82, MAE 6,752.34 vs baseline MAE 16,668.02 (always predicting the training mean), RMSE 8,733.84.\nThe model beats the naive baseline.\n\nMost important inputs (permutation importance on held-out rows):\n\n| feature | importance | sd |\n|---|---:|---:|\n| department | 9,151.9992 | 1,020.9884 |\n| years_experience | 4,817.6700 | 767.6444 |\n| level | 3,449.5705 | 561.7706 |\n| remote | 19.2081 | 74.5210 |\n| age | -204.5601 | 136.1644 |\n\nLeft out: employee_id (identifier: unique per row, it cannot generalise)\n\nMethod: Random Forest regressor, 300 trees, 75/25 split, median/most-frequent imputation, one-hot encoding of categories; importance by permutation on held-out rows.\n- Feature importance shows what the model relied on to predict, not what causes the outcome.\n- Evaluated on 60 held-out rows (25% of the data); results on new data may differ."
+  },
+  {
+   "n": 18,
+   "group": "business",
+   "question": "Should we advertise in Area A?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"where\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "recommendation",
+    "calls": [
+     {
+      "tool": "recommend",
+      "args": {
+       "kind": "where"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "recommend",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "recommend",
+     "args": {
+      "kind": "where"
+     },
+     "status": "ok",
+     "key_result": "Prioritise Area A for the next campaign."
+    }
+   ],
+   "expected_tools": [
+    [
+     "recommend"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"where\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "recommendation",
+     "calls": [
+      {
+       "tool": "recommend",
+       "args": {
+        "kind": "where"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Prioritise Area A for the next campaign. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### Recommendation\nPrioritise Area A for the next campaign.\nEvidence level: **strong** (strong = 95% interval of the difference excludes zero and >= 10 campaign rows; negative ROI = do not expand; otherwise a limited controlled test).\n\n### Evidence\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n\n### Methodology\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n\n### Limitations\n- Observational data: it shows results where money was spent, not what spending caused (areas that received more budget may differ in other ways).\n- Not compared (fewer than 3 ro"
+  },
+  {
+   "n": 19,
+   "group": "business",
+   "question": "Which area should receive the next campaign?",
+   "raw_reply": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it.\"}",
+   "parsed_plan": {
+    "type": "decline",
+    "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+   },
+   "validation": [],
+   "used_plan_source": "model_retry",
+   "fallback_notes": [
+    "The model's first plan contradicted the dataset (the dataset does contain advertising history: spend column 'ad_spend', outcome column 'revenue', grouped by 'area'); it reconsidered once."
+   ],
+   "executed": [
+    {
+     "tool": "recommend",
+     "args": {
+      "kind": "where"
+     },
+     "status": "ok",
+     "key_result": "Prioritise Area A for the next campaign."
+    }
+   ],
+   "expected_tools": [
+    [
+     "recommend"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": false,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it.\"}",
+    "plan": {
+     "type": "decline",
+     "reason": "This dataset has no advertising history (spend with revenue or customers acquired per area or campaign), so I cannot make an evidence-based advertising recommendation from it."
+    },
+    "valid": false,
+    "error": "contradicts the dataset: the dataset does contain advertising history: spend column 'ad_spend', outcome column 'revenue', grouped by 'area'",
+    "retry": {
+     "output": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"where\"}}]}",
+     "plan": {
+      "type": "tools",
+      "intent": "recommendation",
+      "calls": [
+       {
+        "tool": "recommend",
+        "args": {
+         "kind": "where"
+        }
+       }
+      ]
+     },
+     "valid": true,
+     "error": null
+    }
+   },
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Prioritise Area A for the next campaign. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### Recommendation\nPrioritise Area A for the next campaign.\nEvidence level: **strong** (strong = 95% interval of the difference excludes zero and >= 10 campaign rows; negative ROI = do not expand; otherwise a limited controlled test).\n\n### Evidence\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n\n### Methodology\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n\n### Limitations\n- Observational data: it shows results where money was spent, not what spending caused (areas that received more budget may differ in other ways).\n- Not compared (fewer than 3 ro"
+  },
+  {
+   "n": 20,
+   "group": "business",
+   "question": "Why do you recommend Area A?",
+   "raw_reply": "\n\n{\"type\": \"explain_previous\"}",
+   "parsed_plan": {
+    "type": "explain_previous"
+   },
+   "validation": [],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [],
+   "expected_tools": [
+    []
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"explain_previous\"}",
+    "plan": {
+     "type": "explain_previous"
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Prioritise Area A for the next campaign. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### 1. The business question\nWhere advertising money has worked best, and what to do about Area A.\n### 2. The data used\n58 historical campaign rows, grouped by 'area'.\n### 3. The analytical method\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n### 4. The computed results\nArea A: spend 81,053.04, revenue 169,616.36, ROI 109.3%, CAC 80.01, conversion rate 6.7% over 14 campaign rows.\n\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n### 5. The statistical evidence\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n### 6. The uncertainty\nThe 95% intervals above are the plausible range of each difference; a"
+  },
+  {
+   "n": 21,
+   "group": "business",
+   "question": "Should we increase the budget?",
+   "raw_reply": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no budget column.\"}",
+   "parsed_plan": {
+    "type": "decline",
+    "reason": "This dataset has no budget column."
+   },
+   "validation": [],
+   "used_plan_source": "model_retry",
+   "fallback_notes": [
+    "The model's first plan contradicted the dataset (the dataset does contain advertising history: spend column 'ad_spend', outcome column 'revenue', grouped by 'area'); it reconsidered once."
+   ],
+   "executed": [
+    {
+     "tool": "recommend",
+     "args": {
+      "kind": "increase"
+     },
+     "status": "ok",
+     "key_result": "Increase the budget in Area A gradually, monitoring ROI as spend grows."
+    }
+   ],
+   "expected_tools": [
+    [
+     "recommend"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": false,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"decline\", \"reason\": \"This dataset has no budget column.\"}",
+    "plan": {
+     "type": "decline",
+     "reason": "This dataset has no budget column."
+    },
+    "valid": false,
+    "error": "contradicts the dataset: the dataset does contain advertising history: spend column 'ad_spend', outcome column 'revenue', grouped by 'area'",
+    "retry": {
+     "output": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"increase\"}}]}",
+     "plan": {
+      "type": "tools",
+      "intent": "recommendation",
+      "calls": [
+       {
+        "tool": "recommend",
+        "args": {
+         "kind": "increase"
+        }
+       }
+      ]
+     },
+     "valid": true,
+     "error": null
+    }
+   },
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the recommendation is: Increase the budget in Area A gradually, monitoring ROI as spend grows. This is based on historical, observational data, which does not prove that spending caused the results.\n\n---\n\n### Recommendation\nIncrease the budget in Area A gradually, monitoring ROI as spend grows.\nEvidence level: **strong** (strong = 95% interval of the difference excludes zero and >= 10 campaign rows; negative ROI = do not expand; otherwise a limited controlled test).\n\n### Evidence\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01.\n\n### Methodology\n- Grouped 58 campaign rows by 'area'; columns used: spend = 'ad_spend', revenue = 'revenue', leads = 'leads', conversions = 'conversions', date = 'month' (chosen by name: column name 'ad_spend' matches 'ad_?spend'; column name 'revenue' matches 'revenue'; column name 'leads' matches 'leads?'; column name 'conversions' matches 'conversions?'; column name 'area' matches 'area'; 'month' is the only date column).\n- ROI = (revenue - spend) / spend; CAC = spend / conversions; conversion rate = conversions / leads with a Wilson 95% interval.\n- Ranked groups by ROI ((revenue - spend) / spend); compared the focus group with all others combined (Welch's t-test on per-campaign ROI; chi-square or Fisher's exact test on conversion counts).\n- No Random Forest or other predictive model was used: this is an analysis of historical results.\n\n### Limitations\n- Observational data: it shows results where money was spent, not what spending caused (areas that received more bud"
+  },
+  {
+   "n": 22,
+   "group": "business",
+   "question": "What happens if the budget increases by 20%?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"scenario\", \"calls\": [{\"tool\": \"budget_scenario\", \"args\": {\"change_pct\": 20.0}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "scenario",
+    "calls": [
+     {
+      "tool": "budget_scenario",
+      "args": {
+       "change_pct": 20.0
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "budget_scenario",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "budget_scenario",
+     "args": {
+      "change_pct": 20.0
+     },
+     "status": "ok",
+     "key_result": null
+    }
+   ],
+   "expected_tools": [
+    [
+     "budget_scenario"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"scenario\", \"calls\": [{\"tool\": \"budget_scenario\", \"args\": {\"change_pct\": 20.0}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "scenario",
+     "calls": [
+      {
+       "tool": "budget_scenario",
+       "args": {
+        "change_pct": 20.0
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The budget increases by 20.0% to 397,206.05, and the extra spend is 66,201.01. The revenue grows in proportion to the spend, so the revenue becomes 506,945.28. The profit is 109,739.23 if the ROI stays constant.\n\n---\n\n**Scenario: change the budget by +20% (all rows)**\n\nBaseline: spend 331,005.04, revenue 422,454.40, ROI 27.6%.\nNew spend: 397,206.05 (extra 66,201.01).\n\n| assumption | revenue | profit | ROI |\n|---|---:|---:|---:|\n| revenue grows in proportion to spend (constant ROI) | 506,945.28 | 109,739.23 | 27.6% |\n| the extra spend brings no extra revenue | 422,454.40 | 25,248.35 | 6.4% |\n\nTo break even on the extra spend, it must bring at least 66,201.01 of extra revenue.\n\n_Scenario arithmetic under stated assumptions, not a prediction: the data does not show how revenue responds to more spend._"
+  },
+  {
+   "n": 23,
+   "group": "business",
+   "question": "Is the difference between these areas statistically significant?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"comparison\", \"calls\": [{\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"conversions\", \"group\": \"area\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "comparison",
+    "calls": [
+     {
+      "tool": "compare_groups",
+      "args": {
+       "outcome": "conversions",
+       "group": "area"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "compare_groups",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "compare_groups",
+     "args": {
+      "outcome": "conversions",
+      "group": "area"
+     },
+     "status": "ok",
+     "key_result": {
+      "name": "Welch's one-way test",
+      "statistic": 10.390987685087785,
+      "df": [
+       4.0,
+       9.072010932500774
+      ],
+      "p_value": 0.0019362485762162251,
+      "eta_squared": 0.44781167349009104,
+      "robustness": {
+       "name": "Kruskal-Wallis test",
+       "p_value": 4.272080785567516e-05
+      }
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "compare_groups"
+    ],
+    [
+     "business_performance"
+    ],
+    [
+     "recommend"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"comparison\", \"calls\": [{\"tool\": \"compare_groups\", \"args\": {\"outcome\": \"conversions\", \"group\": \"area\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "comparison",
+     "calls": [
+      {
+       "tool": "compare_groups",
+       "args": {
+        "outcome": "conversions",
+        "group": "area"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "The Welch's one-way test gives p = 0.002. The data do not show a reliable difference between the groups.\n\n---\n\n**conversions by area**\n\n| group | n | mean | median | sd |\n|---|---:|---:|---:|---:|\n| Area A | 14 | 72.36 | 72.00 | 25.79 |\n| Area E | 2 | 60.50 | 60.50 | 6.36 |\n| Area B | 14 | 48.00 | 46.50 | 15.81 |\n| Area C | 14 | 47.64 | 47.00 | 14.01 |\n| Area D | 14 | 29.21 | 27.00 | 12.48 |\n\n**Welch's one-way test**: p = 0.002; effect size eta squared = 0.45. Rank-based check (Kruskal-Wallis test): p < 0.001.\nStatistically significant at the 5% level.\n- Welch's tests do not assume equal variances.\n- Some groups have fewer than 15 values: normality of the means is not assured; compare with the rank-based result where given."
+  },
+  {
+   "n": 24,
+   "group": "business",
+   "question": "Show ROI and CAC by area",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"performance\", \"calls\": [{\"tool\": \"business_performance\", \"args\": {\"group\": \"area\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "performance",
+    "calls": [
+     {
+      "tool": "business_performance",
+      "args": {
+       "group": "area"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "business_performance",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "business_performance",
+     "args": {
+      "group": "area"
+     },
+     "status": "ok",
+     "key_result": {
+      "ranking": [
+       "Area A",
+       "Area B",
+       "Area C",
+       "Area D"
+      ],
+      "focus": "Area A"
+     }
+    }
+   ],
+   "expected_tools": [
+    [
+     "business_performance"
+    ]
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"performance\", \"calls\": [{\"tool\": \"business_performance\", \"args\": {\"group\": \"area\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "performance",
+     "calls": [
+      {
+       "tool": "business_performance",
+       "args": {
+        "group": "area"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "Area A had the highest return: ROI 109.27% on spend of 81,053.04. The evidence is strong, so the ranking reflects the ROI ((revenue - spend) / spend).\n\n---\n\n**Campaign performance by area** (ranked by ROI ((revenue - spend) / spend): Area A, Area B, Area C, Area D)\n\n| area | rows | spend | revenue | ROI | CAC | conversion rate (95% CI) |\n|---|---:|---:|---:|---:|---:|---:|\n| Area A | 14 | 81,053.04 | 169,616.36 | 109.3% | 80.01 | 6.7% (6.3% to 7.1%) |\n| Area B | 14 | 77,170.89 | 102,864.30 | 33.3% | 114.84 | 4.7% (4.4% to 5.0%) |\n| Area C | 14 | 87,464.47 | 94,326.82 | 7.8% | 131.13 | 4.0% (3.7% to 4.3%) |\n| Area D | 14 | 73,380.50 | 37,091.71 | -49.5% | 179.41 | 3.0% (2.7% to 3.3%) |\n| Area E | 2 | 11,936.14 | 18,555.21 | 55.5% | 98.65 | 5.6% (4.7% to 6.7%) |\n\n- Per-campaign ROI in Area A averaged 107.5% vs -0.1% elsewhere: difference 107.6% (95% CI 79.8% to 135.4%, Welch's t-test p < 0.001, Hedges' g = 2.46).\n- Conversion rate in Area A 6.7% vs 4.0% elsewhere: difference 2.7% (95% CI 2.2% to 3.1%, chi-square test of independence p < 0.001; expected counts adequate for chi-square).\n- Over time in Area A: ROI 100.6% in 2025-01-01 to 2025-07-01, then 116.7% in 2025-08-01 to 2026-02-01."
+  },
+  {
+   "n": 25,
+   "group": "business",
+   "question": "Should we advertise in the Tools category?",
+   "raw_reply": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"where\"}}]}",
+   "parsed_plan": {
+    "type": "tools",
+    "intent": "recommendation",
+    "calls": [
+     {
+      "tool": "recommend",
+      "args": {
+       "kind": "where"
+      }
+     }
+    ]
+   },
+   "validation": [
+    {
+     "tool": "recommend",
+     "valid": true
+    }
+   ],
+   "used_plan_source": "model",
+   "fallback_notes": [],
+   "executed": [
+    {
+     "tool": "recommend",
+     "args": {
+      "kind": "where"
+     },
+     "status": "refused",
+     "key_result": null
+    }
+   ],
+   "expected_tools": [
+    []
+   ],
+   "tool_ok": true,
+   "calls_ok": true,
+   "ungrounded": [],
+   "passed": true,
+   "passed_after_retry": true,
+   "first_pass": {
+    "output": "\n\n{\"type\": \"tools\", \"intent\": \"recommendation\", \"calls\": [{\"tool\": \"recommend\", \"args\": {\"kind\": \"where\"}}]}",
+    "plan": {
+     "type": "tools",
+     "intent": "recommendation",
+     "calls": [
+      {
+       "tool": "recommend",
+       "args": {
+        "kind": "where"
+       }
+      }
+     ]
+    },
+    "valid": true,
+    "error": null
+   },
+   "answer": "**I can't responsibly do that with this data.** This dataset does not contain the advertising history needed: no spend, no revenue or conversions/customers acquired, no an area, region or campaign column to compare column was found."
+  }
+ ]
+}

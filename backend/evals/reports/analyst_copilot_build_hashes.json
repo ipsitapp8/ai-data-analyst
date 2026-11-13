@@ -1,0 +1,48 @@
+{
+ "written_at": "2026-11-11T18:41:16",
+ "what": "Silt Copilot build: files changed or created, synthetic demo files, and protected files (unchanged).",
+ "changed": {
+  "backend/app/analyst/ml.py": "821d8a0d69de4c27c4536ba3432fd524abd203c60423046d9ea435eea1410515",
+  "backend/app/analyst/tools.py": "7bf2d1572a35ca9e02cad36e6ea6b9c4b00df4fcb11fd7cac790ac26a5fedf61",
+  "backend/app/analyst/explain.py": "d769d6fc1eb6327ea863c13d497e376915ac07f203a5228d96da98cbc0ee63a8",
+  "backend/app/analyst/orchestrator.py": "b7de49b07753a545639d0321ebe06e7c25677dd45070a2f24d2184fd628e5227",
+  "backend/app/routers/analyst.py": "f4978db334739ca16b775af8f7473562bbff2d66fc193a2e7b9d1af8014d55f9",
+  "backend/app/main.py": "16d7b55a267cce5745f8323778f6872ebc0b347ebbcee9fc0109dce356066ee9",
+  "frontend/api_client.py": "c1a3876f89b8c8169db28e9df7473c0758138214fb9774712fb1cbe5a461c29d",
+  "frontend/pages/18_AI_Analyst.py": "cbeb9dbe26ddd82c5abc17f9ab14b634c586538dbe3bac88f604518050233cc4",
+  "frontend/pages/2_Datasets.py": "2ce4bb962633c0d0892a5e22c1dc690599c18359621fbceda7ebf69743d41e05",
+  "frontend/style/theme.py": "3fa6be88db48c7b12928bac3d231504f3b6d04a9efafd0030aa377794bd57fc5"
+ },
+ "created": {
+  "backend/app/analyst/overview.py": "e80992889ddab664183b2435a4803291d5a940e9c2e2d1e29b715ccdc5f2f471",
+  "backend/app/analyst/scenario.py": "4bec955363a5ec97f7530995ca273f481e3d05797213ba7d4e393bd4692f9931",
+  "backend/app/analyst/documents.py": "ca164e2eded97947c6f924dd72ba3ede5654b7b0a2252e2453fb850830167ea6",
+  "backend/app/analyst/router.py": "6f0ab94e9caacce9783a8e93593c2926e147c7d1603c10a2f4d9e8ee79f3da37",
+  "backend/app/analyst/present.py": "cf79dddac61d8bc453e9f03e603e3de8646ae28f9d1c97d2209481efb8913505",
+  "backend/tests/test_analyst_copilot.py": "ecd3fc94ea97c0e9f352e4d7ba2fa79686ec5dfc3dbb9d310a6525b44aa67b30",
+  "backend/evals/build_copilot_demo_files.py": "b72497286d07cd499c07c94ac495aec0204e7620cec3304dda90465d2a962dfb"
+ },
+ "demo_files_in_~/silt-demo/upload": {
+  "sales.csv": "9f67efeda0744ec941d61d86f441733b6c5cd0b6473c92667b303c8fea97ede8",
+  "hr_attrition.xlsx": "bb718c3810b55ec5240b4f3d4880105ee57d1d40f3a6b97ed2a061f35d24a7f8",
+  "sales_report.pdf": "4cc6307f984542b8056792acfe29d0755e08c44c28336921718c2cb3f12612f5",
+  "broken.csv": "786eace8994dd31c70113d551ac7c688704da712aa942ae013afe006946449fa",
+  "not_really.pdf": "fba21ed2f37a7b452e5bf2cad5c805b07e439555c3134a3c7f722ee3e290617f",
+  "campaigns.csv": "ad607a423805152b2ee116d5c63c9b52e0e148811f1a18f870232b78f811d699",
+  "customers.csv": "a02e978b31a1ce025c7cfc28464c3234d1636cc1874feff5de5a3a61e22b5142",
+  "employees.csv": "e3cd324e39aa89d3546455eb7d67e33207e2d5130c420602ab0d01e858dcb069",
+  "employees.xlsx": "2cedee752464e9ac91cbc46f985edf256cc0be6681f09880acbf198481baae19",
+  "inventory.csv": "48a4f90a25541b1750a6ac1358bc20cca4b47b8145f698c1f662621f59217bb5",
+  "stores_small.csv": "7b8022555869554d86b62989886dfcfe952d0a24a4a555b1289680c1308b7afe"
+ },
+ "protected_unchanged": {
+  "backend/app/copilot.py": "167388126430e61d91831bd009d0f25a67e181314d4b023d65e7ebff0a54c309",
+  "backend/app/fastpath.py": "a7500d75fce6d0dea975f9327d95c2877270b6fdb4f1eaf641d75c17eb478069",
+  "backend/app/interpretation.py": "c8b3b69dda7808a1698904d5f76ffd7075bee1bfa906e3c8267895c7de0129c7",
+  "backend/evals/reports/analyst_execution_baseline_rules_freeze.json": "2581772c4bc78929f1c6ec223a15a0d430d4eb52996a2c143d6f71bdbf4becb5",
+  "training/reports/analyst_finetune_eval_v1.json": "3a7168fc51118993999eedf5bcc774dc48dc3a97535d6f2704e1f761a2ffd6ab",
+  "training/adapters/analyst_qwen3_4b_lora/adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17"
+ },
+ "production_app_db": "b950960e5d9ee0a3f32c337da53d123caf67898c399bcfd3f02130152d210eea",
+ "package_installed": "pypdf 6.21.4 (approved)"
+}

@@ -183,7 +183,7 @@ def test_copilot_page_renders_history_and_sends_a_message(api, ws):
     sid = api.post("/api/copilot/sessions", json={"dataset_id": ws["ds"]}, headers=ws["h"]).json()["id"]
     for message in ("total revenue by region", "only West"):
         api.post(f"/api/copilot/sessions/{sid}/messages", json={"message": message}, headers=ws["h"])
-    at = healthy(page("12_Copilot.py", ws, copilot_session_id=sid))
+    at = healthy(page("19_Drilldown_Sessions.py", ws, copilot_session_id=sid))
     text = text_of(at)
     assert "region == West" in text and "an independent recomputation agrees" in text
     assert len(at.chat_message) == 4 and len(at.dataframe) == 2
@@ -195,11 +195,11 @@ def test_copilot_page_renders_history_and_sends_a_message(api, ws):
 
 
 def test_copilot_page_empty_and_stale_states(api, ws):
-    at = healthy(page("12_Copilot.py", ws))
+    at = healthy(page("19_Drilldown_Sessions.py", ws))
     assert "No sessions yet" in text_of(at) and "Pick or start a session" in text_of(at)
     sid = api.post("/api/copilot/sessions", json={"dataset_id": ws["ds"]}, headers=ws["h"]).json()["id"]
     api.post(f"/api/datasets/{ws['ds']}/versions", files={"file": ("v2.csv", DRIFTED_CSV, "text/csv")}, headers=ws["h"])
-    at = healthy(page("12_Copilot.py", ws, copilot_session_id=sid))
+    at = healthy(page("19_Drilldown_Sessions.py", ws, copilot_session_id=sid))
     assert "newer version of this dataset exists" in text_of(at)
 
 

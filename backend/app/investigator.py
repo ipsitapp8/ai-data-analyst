@@ -680,9 +680,10 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
         # contains the extra days; it stays in the evidence table, labelled, and out of the summary.
         summary += f" Price effect {_fmt(pvm['price_effect'])}, volume effect {_fmt(pvm['volume_effect'])}."
     if overall["status"] == "ok":
+        bounds = (f"{overall['level'] * 100:.0f}% interval {_fmt(overall['low'])} to {_fmt(overall['high'])}"
+                  if overall.get("low") is not None and overall.get("high") is not None else "no interval is available")
         summary += (f" Per {overall['bucket']}, the level differs by {_fmt(overall['estimate'])} "
-                    f"({overall['level'] * 100:.0f}% interval {_fmt(overall['low'])} to {_fmt(overall['high'])}, "
-                    f"{_p_text(overall['p_value'])})"
+                    f"({bounds}, {_p_text(overall['p_value'])})"
                     + ("." if overall["significant"] else ", which is within its ordinary variation."))
     if comparability["issues"]:
         summary += " The two periods are not fully comparable, so this is not a like-for-like result."
@@ -725,11 +726,16 @@ def _compact_stat(result: dict | None, bucket: str = "") -> dict:
     if result is None:
         return {"status": "not_run", "reason": "outside this investigation's computation budget"}
     if result.get("status") != "ok":
-        return {"status": "unavailable", "reason": result.get("reason") or "the test could not be run"}
+        out = {"status": "unavailable", "reason": result.get("reason") or "the test could not be run"}
+        if result.get("inference_unavailable"):
+            out.update(estimate=result.get("estimate"), inference_unavailable=result["inference_unavailable"],
+                       buckets=(result.get("sample") or {}).get("groups"))
+        return out
     interval, test = result.get("interval") or {}, result.get("test") or {}
     return {"status": "ok", "method": result.get("method_label"), "bucket": bucket, "estimate": result.get("estimate"),
             "low": interval.get("low"), "high": interval.get("high"), "level": interval.get("level"),
             "p_value": test.get("p_value"), "alpha": result.get("alpha"), "significant": bool(result.get("significant")),
+            "interval_unavailable": result.get("interval_unavailable"),
             "buckets": (result.get("sample") or {}).get("groups"), "limitations": result.get("limitations") or []}
 
 

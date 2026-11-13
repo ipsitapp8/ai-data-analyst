@@ -801,7 +801,7 @@ def _directional(expect: str, change: float | None, pct: float | None, rows_a: i
     """
     min_rows = config.HYP_MIN_ROWS
     if result is not None and result["status"] != "ok":
-        return INCONCLUSIVE, [f"no statistical conclusion for {what}: {result['reason']}"], {}
+        return _stat_gate(result, what)
     if result is None and min(rows_a, rows_b) < min_rows:
         return INCONCLUSIVE, [f"insufficient sample: {rows_a} and {rows_b} rows (at least {min_rows} needed in each period)"], {}
     if change is None:
@@ -863,6 +863,10 @@ def _p_both(result: dict) -> str:
 
 def _stat_gate(result: dict, what: str) -> tuple[str, list[str], dict] | None:
     """A statistical operation whose method could not run is inconclusive, never weakened."""
+    if result.get("inference_unavailable") and result.get("estimate") is not None:
+        # Measured but not tested. Inconclusive, and said so in words that cannot be read as "no change".
+        return INCONCLUSIVE, [f"{what}: the measured {result['estimand']} is {stat.fmt(result['estimate'], result.get('units'))}, "
+                              f"but it was not tested: {result['reason']}"], {"estimate": result["estimate"], "tested": False}
     if result["status"] != "ok":
         return INCONCLUSIVE, [f"no statistical conclusion for {what}: {result['reason']}"], {}
     return None
@@ -1077,6 +1081,8 @@ def evaluate(op: dict, result: dict, prediction: dict) -> dict:
     elif name in STAT_RULES:
         r = f["stat"]
         status, reasons, effect = _stat_gate(r, name.replace("_", " ")) or STAT_RULES[name](expect, f, r, result)
+        if name == "paired_change" and r.get("inference_unavailable"):
+            reasons[0] += f"; {f['units_down']} of {f['units_compared']} {f['unit']} values went down, {f['units_up']} up"
     else:
         raise OpError(f"analysis '{name}' has no evaluation rule", "invalid_prediction")
     return {"status": status, "reasons": reasons, "effect": effect}
@@ -1093,7 +1099,17 @@ def stat_brief(result: dict | None) -> dict | None:
     if not result:
         return None
     if result["status"] != "ok":
-        return {"status": "unavailable", "reason": result["reason"], "estimand": result["estimand"]}
+        out = {"status": "unavailable", "reason": result["reason"], "estimand": result["estimand"]}
+        if result.get("inference_unavailable"):
+            # measured but not tested: the estimate and the sample sizes are kept, and it is said which
+            out.update(estimate=result.get("estimate"), n=(result.get("sample") or {}).get("n"),
+                       inference="not available: the estimate is a measurement, not a tested difference",
+                       supported_instead=result["inference_unavailable"].get("supported_instead"))
+            other = result["inference_unavailable"].get("supported_analysis")
+            if other:
+                # a different question, kept apart from the one asked
+                out["different_question"] = {k: other[k] for k in ("estimand", "method_label", "null", "estimate", "p_value", "significant", "note")}
+        return out
     test, iv = result.get("test") or {}, result.get("interval")
 
     def p_text(p):
@@ -1102,6 +1118,7 @@ def stat_brief(result: dict | None) -> dict | None:
 
     out = {"method": result["method_label"], "estimand": result["estimand"], "estimate": result["estimate"],
            "interval": None if not iv else [iv["low"], iv["high"]], "level": None if not iv else iv["level"],
+           **({} if iv else {"interval_unavailable": result.get("interval_unavailable")}),
            "p_value": p_text(test.get("p_value")), "p_adjusted": p_text((result.get("adjusted") or {}).get("p_value")),
            "significant": result["significant"], "n": result["sample"].get("n"),
            "effects": {e["name"]: e["value"] for e in result.get("effects") or [] if e.get("value") is not None}}

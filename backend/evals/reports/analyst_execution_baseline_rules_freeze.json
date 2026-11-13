@@ -1,0 +1,149 @@
+{
+ "frozen_at": "2026-11-11T05:50:06+00:00",
+ "what": "Deterministic planner on the 25 execution questions (evals/analyst_model_execution.py), dry run before any model evaluation.",
+ "result": {
+  "passed": 20,
+  "total": 25
+ },
+ "rule": "No rules are added for the failed cases before the base-versus-fine-tuned evaluation is complete.",
+ "files_sha256": {
+  "app/analyst/__init__.py": "e39be60d44713d64dbab0a4be5c29947c25bf8d00a1736d2b90bf5e1e89d9bc0",
+  "app/analyst/business.py": "406bafad278fa316b08a953db97ec474c7f85c31cf1b9cf46d40c7110e264f62",
+  "app/analyst/data.py": "6b8d38b470f405d9f84d36bc717a8433e5836f7ff5313fa926f742ef4af855fb",
+  "app/analyst/demo_data.py": "6ccc17cc0095e020901551f5293e257c1f3ba61bba9d7562a7155f2322357ec3",
+  "app/analyst/explain.py": "f5688f8d3ed892a70f09f2e8ababa71b1a165e97585785ff60c950f177674395",
+  "app/analyst/ml.py": "dcb49389391c0b3f337943f166ae9f4867e95aec0752760951ba09e2a8517440",
+  "app/analyst/orchestrator.py": "6fca0e58b2440c08419ed560389949728d3baecd986d4b5b7cca29d18f63389b",
+  "app/analyst/planner.py": "408ef51d14fa457540c414d439553c0d7e53062b5f6c67822dbaedf918f7d86f",
+  "app/analyst/tools.py": "200c7c545474bfc3868e337d81c7d8d984736a667c3be69e793136a9a16167f5",
+  "evals/analyst_model_execution.py": "3dc22f32c52ab79f71fb9a1de60d73f890935286c6e70d89e08643042870aa2d",
+  "../training/scripts/build_analyst_sft.py": "5b6a8cc733701c00ffa22a34e281eb96446b84f11fd8e2c75de7071e4f413888"
+ },
+ "outcomes": [
+  {
+   "n": 1,
+   "question": "What is the average grade points?",
+   "outcome": "pass"
+  },
+  {
+   "n": 2,
+   "question": "Which campus has the highest average grade points?",
+   "outcome": "pass"
+  },
+  {
+   "n": 3,
+   "question": "Is there a significant difference in grade points between campus groups?",
+   "outcome": "pass"
+  },
+  {
+   "n": 4,
+   "question": "Predict passed",
+   "outcome": "pass"
+  },
+  {
+   "n": 5,
+   "question": "Which factors influenced your prediction?",
+   "outcome": "pass"
+  },
+  {
+   "n": 6,
+   "question": "What is the median price in each city?",
+   "outcome": "pass"
+  },
+  {
+   "n": 7,
+   "question": "Predict price",
+   "outcome": "pass"
+  },
+  {
+   "n": 8,
+   "question": "Can you predict which properties will sell within 90 days?",
+   "outcome": "fail: clarify instead of random_forest"
+  },
+  {
+   "n": 9,
+   "question": "Which area should receive our next advertising campaign?",
+   "outcome": "pass"
+  },
+  {
+   "n": 10,
+   "question": "What is the average salary in Engineering?",
+   "outcome": "pass"
+  },
+  {
+   "n": 11,
+   "question": "How many employees have a salary above 100000?",
+   "outcome": "fail: chat, no tool"
+  },
+  {
+   "n": 12,
+   "question": "Show the total salary by department",
+   "outcome": "pass"
+  },
+  {
+   "n": 13,
+   "question": "Is years of experience correlated with salary?",
+   "outcome": "fail: chat, no tool"
+  },
+  {
+   "n": 14,
+   "question": "What is the standard deviation of salary?",
+   "outcome": "pass"
+  },
+  {
+   "n": 15,
+   "question": "Predict customer churn.",
+   "outcome": "pass"
+  },
+  {
+   "n": 16,
+   "question": "Which factors influenced your prediction?",
+   "outcome": "pass"
+  },
+  {
+   "n": 17,
+   "question": "Predict salary.",
+   "outcome": "pass"
+  },
+  {
+   "n": 18,
+   "question": "Should we advertise in Area A?",
+   "outcome": "pass"
+  },
+  {
+   "n": 19,
+   "question": "Which area should receive the next campaign?",
+   "outcome": "pass"
+  },
+  {
+   "n": 20,
+   "question": "Why do you recommend Area A?",
+   "outcome": "pass"
+  },
+  {
+   "n": 21,
+   "question": "Should we increase the budget?",
+   "outcome": "pass"
+  },
+  {
+   "n": 22,
+   "question": "What happens if the budget increases by 20%?",
+   "outcome": "pass"
+  },
+  {
+   "n": 23,
+   "question": "Is the difference between these areas statistically significant?",
+   "outcome": "fail: chat, no tool"
+  },
+  {
+   "n": 24,
+   "question": "Show ROI and CAC by area",
+   "outcome": "fail: chat, no tool"
+  },
+  {
+   "n": 25,
+   "question": "Should we advertise in the Tools category?",
+   "outcome": "pass"
+  }
+ ]
+}

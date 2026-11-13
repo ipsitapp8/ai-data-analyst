@@ -1,6 +1,8 @@
 """Datasets — upload CSVs, browse sources, inspect the auto-generated profile."""
 from __future__ import annotations
 
+import re
+
 import streamlit as st
 
 from api_client import (ApiError, ask_question, create_note, delete_note, generate_insights, get_correlations, get_dataset,
@@ -30,7 +32,7 @@ if st.session_state.get("show_uploader"):
     with st.container(key="card_upload"):
         html('<div class="ds-section-title">Upload a CSV</div>')
         html("<div style='height:10px'></div>")
-        f = st.file_uploader("CSV", type=["csv"], label_visibility="collapsed")
+        f = st.file_uploader("CSV", type=["csv", "xlsx", "xls"], label_visibility="collapsed")
         if f is not None and st.button("Profile this dataset", type="primary", key="ds_do_upload"):
             with st.spinner("Uploading & profiling…"):
                 try:
@@ -86,6 +88,8 @@ with st.container(key="flat_table"):
             total_cells = max(d["row_count"] * max(d["col_count"], 1), 1)
             missing = sum(c.get("missing_count", 0) for c in cols)
             quality = round(max(0.0, 100.0 - (missing / total_cells * 100)), 1)
+            # the uploaded file's type: Excel workbooks are stored as CSV but were uploaded as Excel
+            source = "Excel" if re.search(r"\.xlsx?\b", d["filename"].lower()) else "CSV"
             html(
                 f"""
                 <div class="ds-row" style="padding:14px 22px;">
@@ -95,7 +99,7 @@ with st.container(key="flat_table"):
                   </div>
                   <div style="flex:0.8;" class="ds-row-meta">{d['row_count']:,}</div>
                   <div style="flex:0.8;" class="ds-row-meta">{d['col_count']}</div>
-                  <div style="flex:0.9;" class="ds-row-meta">CSV</div>
+                  <div style="flex:0.9;" class="ds-row-meta">{source}</div>
                   <div style="flex:1.1;" class="ds-row-meta">#{d['id']} · v{d.get('version', 1)}</div>
                   <div style="flex:1.3;">
                     <div class="ds-quality">
@@ -132,7 +136,7 @@ if datasets:
                      f"({chosen.get('version_count', 1)} version(s))"):
         st.caption("Uploads a new version into this dataset. Existing dashboards keep the "
                    "version they were computed from; new and scheduled runs use the latest.")
-        new_file = st.file_uploader("New CSV", type=["csv"], key=f"replace_{chosen['id']}",
+        new_file = st.file_uploader("New CSV", type=["csv", "xlsx", "xls"], key=f"replace_{chosen['id']}",
                                     label_visibility="collapsed")
         if new_file is not None and st.button("Upload as new version", type="primary",
                                               key=f"do_replace_{chosen['id']}"):

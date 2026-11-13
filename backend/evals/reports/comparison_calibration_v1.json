@@ -1,0 +1,375 @@
+{
+ "base_seed": 20261013,
+ "simulations_per_design_and_condition": 400,
+ "alpha": 0.05,
+ "gates": {
+  "false_positive_rate": [
+   0.03,
+   0.07
+  ],
+  "coverage": [
+   0.93,
+   0.97
+  ]
+ },
+ "designs": [
+  {
+   "name": "two groups, normal",
+   "sample": "80 + 80",
+   "planted_effect": 4.0
+  },
+  {
+   "name": "two groups, skewed, small",
+   "sample": "12 + 12",
+   "planted_effect": 15.0
+  },
+  {
+   "name": "two groups, typical values",
+   "sample": "15 + 15",
+   "planted_effect": 15.0
+  },
+  {
+   "name": "paired, normal differences",
+   "sample": "80 pairs",
+   "planted_effect": 1.2
+  },
+  {
+   "name": "paired, few pairs",
+   "sample": "8 pairs",
+   "planted_effect": 4.0
+  },
+  {
+   "name": "three groups, normal",
+   "sample": "90 x 3",
+   "planted_effect": 4.0
+  },
+  {
+   "name": "three groups, small",
+   "sample": "6 x 3",
+   "planted_effect": 15.0
+  },
+  {
+   "name": "two numeric, linear",
+   "sample": "50 rows",
+   "planted_effect": 0.4
+  },
+  {
+   "name": "two numeric, heavy tails",
+   "sample": "60 rows",
+   "planted_effect": null
+  },
+  {
+   "name": "two proportions, large",
+   "sample": "150 + 150",
+   "planted_effect": 0.15
+  },
+  {
+   "name": "two proportions, small",
+   "sample": "12 + 12",
+   "planted_effect": 0.4
+  },
+  {
+   "name": "3 x 3 table",
+   "sample": "100 x 3",
+   "planted_effect": 0.15
+  }
+ ],
+ "methods": [
+  {
+   "method": "chi_square",
+   "designs": {
+    "two proportions, large": "150 + 150",
+    "two proportions, small": "12 + 12",
+    "3 x 3 table": "100 x 3"
+   },
+   "unavailable": 0,
+   "null_simulations": 854,
+   "false_positive_rate": 0.05503512880562061,
+   "false_positive_interval": [
+    0.0416375416170736,
+    0.0724178678232679
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 1150,
+   "coverage": 0.9469565217391305,
+   "coverage_interval": [
+    0.9324514344385405,
+    0.958485524136936
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 1096,
+   "power": 0.6998175182481752,
+   "power_interval": [
+    0.6720231683847886,
+    0.7262160473560382
+   ]
+  },
+  {
+   "method": "fisher_exact",
+   "designs": {
+    "two proportions, small": "12 + 12"
+   },
+   "unavailable": 0,
+   "null_simulations": 346,
+   "false_positive_rate": 0.008670520231213872,
+   "false_positive_interval": [
+    0.00295305445901947,
+    0.02517814203744327
+   ],
+   "false_positive_gate": false,
+   "interval_simulations": 450,
+   "coverage": 0.9622222222222222,
+   "coverage_interval": [
+    0.9403379017278938,
+    0.9762817501676712
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 104,
+   "power": 0.3076923076923077,
+   "power_interval": [
+    0.22716461394163762,
+    0.40192052235545933
+   ]
+  },
+  {
+   "method": "mann_whitney",
+   "designs": {
+    "two groups, typical values": "15 + 15"
+   },
+   "unavailable": 0,
+   "null_simulations": 400,
+   "false_positive_rate": 0.0325,
+   "false_positive_interval": [
+    0.01908984237880045,
+    0.0548041528237668
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 800,
+   "coverage": 0.94875,
+   "coverage_interval": [
+    0.9312118326415617,
+    0.9619991259638441
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 400,
+   "power": 0.605,
+   "power_interval": [
+    0.5563126557323714,
+    0.6516897624574263
+   ]
+  },
+  {
+   "method": "paired_t",
+   "designs": {
+    "paired, normal differences": "80 pairs"
+   },
+   "unavailable": 0,
+   "null_simulations": 400,
+   "false_positive_rate": 0.0725,
+   "false_positive_interval": [
+    0.05095051840227673,
+    0.10218249325354675
+   ],
+   "false_positive_gate": false,
+   "interval_simulations": 800,
+   "coverage": 0.94125,
+   "coverage_interval": [
+    0.9227489166931864,
+    0.9555337250553047
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 400,
+   "power": 0.755,
+   "power_interval": [
+    0.710557459419624,
+    0.7945912704698848
+   ]
+  },
+  {
+   "method": "pearson",
+   "designs": {
+    "two numeric, linear": "50 rows",
+    "two numeric, heavy tails": "60 rows"
+   },
+   "unavailable": 0,
+   "null_simulations": 411,
+   "false_positive_rate": 0.038929440389294405,
+   "false_positive_interval": [
+    0.0241022692323457,
+    0.06229569813230428
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 808,
+   "coverage": 0.9628712871287128,
+   "coverage_interval": [
+    0.9474917238416641,
+    0.9738704360639999
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 397,
+   "power": 0.8488664987405542,
+   "power_interval": [
+    0.8103000761439242,
+    0.8807462063812291
+   ]
+  },
+  {
+   "method": "permutation_anova",
+   "designs": {
+    "three groups, normal": "90 x 3",
+    "three groups, small": "6 x 3"
+   },
+   "unavailable": 0,
+   "null_simulations": 401,
+   "false_positive_rate": 0.059850374064837904,
+   "false_positive_interval": [
+    0.040545773143085884,
+    0.08750795675826523
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 0,
+   "coverage": null,
+   "coverage_interval": null,
+   "coverage_gate": null,
+   "effect_simulations": 400,
+   "power": 0.65,
+   "power_interval": [
+    0.6020319607074738,
+    0.6951143509922373
+   ]
+  },
+  {
+   "method": "permutation_means",
+   "designs": {
+    "two groups, skewed, small": "12 + 12"
+   },
+   "unavailable": 0,
+   "null_simulations": 400,
+   "false_positive_rate": 0.0425,
+   "false_positive_interval": [
+    0.026701694991131116,
+    0.06700205432475019
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 800,
+   "coverage": 0.86,
+   "coverage_interval": [
+    0.8342309776693358,
+    0.8823282314625774
+   ],
+   "coverage_gate": false,
+   "effect_simulations": 400,
+   "power": 0.33,
+   "power_interval": [
+    0.28572827595866784,
+    0.377505904114993
+   ]
+  },
+  {
+   "method": "sign_flip_permutation",
+   "designs": {
+    "paired, few pairs": "8 pairs"
+   },
+   "unavailable": 0,
+   "null_simulations": 400,
+   "false_positive_rate": 0.045,
+   "false_positive_interval": [
+    0.028651458653886006,
+    0.07000472919032381
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 800,
+   "coverage": 0.8725,
+   "coverage_interval": [
+    0.847594363696546,
+    0.8938453735302256
+   ],
+   "coverage_gate": false,
+   "effect_simulations": 400,
+   "power": 0.6275,
+   "power_interval": [
+    0.5791182279031106,
+    0.6734561370416436
+   ]
+  },
+  {
+   "method": "spearman",
+   "designs": {
+    "two numeric, linear": "50 rows",
+    "two numeric, heavy tails": "60 rows"
+   },
+   "unavailable": 0,
+   "null_simulations": 389,
+   "false_positive_rate": 0.05141388174807198,
+   "false_positive_interval": [
+    0.03352598909083647,
+    0.07807490698644041
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 392,
+   "coverage": 0.9540816326530612,
+   "coverage_interval": [
+    0.928590075629734,
+    0.9707598839743173
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 3,
+   "power": 1.0,
+   "power_interval": [
+    0.4385029682449546,
+    1.0
+   ]
+  },
+  {
+   "method": "welch_anova",
+   "designs": {
+    "three groups, normal": "90 x 3"
+   },
+   "unavailable": 0,
+   "null_simulations": 399,
+   "false_positive_rate": 0.05764411027568922,
+   "false_positive_interval": [
+    0.03871510038561238,
+    0.0850096497098804
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 0,
+   "coverage": null,
+   "coverage_interval": null,
+   "coverage_gate": null,
+   "effect_simulations": 400,
+   "power": 0.84,
+   "power_interval": [
+    0.8008643954521164,
+    0.8726672444005619
+   ]
+  },
+  {
+   "method": "welch_t",
+   "designs": {
+    "two groups, normal": "80 + 80"
+   },
+   "unavailable": 0,
+   "null_simulations": 400,
+   "false_positive_rate": 0.06,
+   "false_positive_interval": [
+    0.040647970113724695,
+    0.0877228489004562
+   ],
+   "false_positive_gate": true,
+   "interval_simulations": 800,
+   "coverage": 0.9525,
+   "coverage_interval": [
+    0.9354751753467181,
+    0.9651999416871453
+   ],
+   "coverage_gate": true,
+   "effect_simulations": 400,
+   "power": 0.775,
+   "power_interval": [
+    0.7315729789411186,
+    0.8131952591750183
+   ]
+  }
+ ]
+}

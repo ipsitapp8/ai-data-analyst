@@ -1,0 +1,24 @@
+{
+ "note": "Silt Copilot free-form calculation fix (2026-11-11). Files renamed: frontend/pages/12_Copilot.py (legacy) -> frontend/pages/19_Drilldown_Sessions.py; frontend/pages/18_AI_Analyst.py -> frontend/pages/12_Copilot.py.",
+ "sha256": {
+  "backend/app/analyst/calc.py": "66e85fcb039bb8fdef95b3181fe5f63d3f85daa405521c434af2b727890e8f1e",
+  "backend/app/analyst/model_info.py": "5bc1d9dade2d6ef5cfadd3f76a5d2f86c4c9114212ecfd4706160283e1a4f281",
+  "backend/app/analyst/orchestrator.py": "fc3dc003f9e501373ef965389a00b7c9b2094497acf5cc8d3557f9c9d8bdd750",
+  "backend/app/analyst/present.py": "cbeafaa3fda2582872aa9eb951c7470a2a776c225ebcfc3113022490f70c863c",
+  "backend/app/analyst/router.py": "b00318c0a5b4921cdff2f4124ac0fed76396b554ad03a9c0ce9a41bfe991b845",
+  "backend/app/routers/analyst.py": "7f29037abc45073242e71e7f41ce7c213a6fa16aabccde937ef2b840bda179b6",
+  "backend/tests/test_analyst_calc.py": "d060ba42e69eb1efae47d9f0a6e595c496d528ea7c8b071f2e608d8a06d6d73a",
+  "frontend/pages/12_Copilot.py": "95c7d7fed4da54ad5d4221a52449b7ec1041821358b7a3165158385387a83722",
+  "frontend/pages/19_Drilldown_Sessions.py": "835ea921014e444ea0e6f5b89f822dfde9099b2de6f74ec80235a201a9ff5744",
+  "frontend/style/theme.py": "2f6bf849e31ea8888d649d13ad9e2f7721795e197ae2a8a13a6c2938cd7218a0",
+  "frontend/tests/test_pages.py": "2a1363e0e2d41c45f7551f13ba73e3810580216b6f0491f7d496e02b5b3b077e",
+  "backend/app/copilot.py": "167388126430e61d91831bd009d0f25a67e181314d4b023d65e7ebff0a54c309",
+  "backend/app/fastpath.py": "a7500d75fce6d0dea975f9327d95c2877270b6fdb4f1eaf641d75c17eb478069",
+  "backend/app/interpretation.py": "c8b3b69dda7808a1698904d5f76ffd7075bee1bfa906e3c8267895c7de0129c7",
+  "backend/app/agents/planner.py": "aec889c6d5f4a56cbab58bb5e74a3ec2121b692067ead14415c06e84746748bf",
+  "backend/app/agents/executor.py": "d89970b9b34fb9522b052143dc7a2ca14f3c59e7b21f5ccead4974a66287f380",
+  "backend/app/agents/critic.py": "3064550fcfb22cfd5cc6ea3df2f69f7eb0230d358e2e8c88fe0ac37714fc2977",
+  "training/adapters/analyst_qwen3_4b_lora/adapters.safetensors": "38b91af3327099b10d6f08f7a23fe3a9d9e9facdbea047e2e1c12f5e02a65b17",
+  "backend/data/app.db": "b950960e5d9ee0a3f32c337da53d123caf67898c399bcfd3f02130152d210eea"
+ }
+}

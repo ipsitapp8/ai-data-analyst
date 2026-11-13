@@ -39,9 +39,10 @@ def ws(client):
     ("What caused the decline in units?", "root_cause"),
     ("What are the drivers of revenue?", "root_cause"),
     ("Show the trend of revenue over time", "statistical"),
-    ("Compare revenue across channels", "statistical"),
+    ("Compare revenue across channels", "comparison"),     # two columns compared: the statistics engine, not generated code
     ("Are there outliers in unit price?", "statistical"),
-    ("Is revenue correlated with units?", "statistical"),
+    ("Is revenue correlated with units?", "comparison"),
+    ("Is revenue seasonal across the year?", "statistical"),
     ("total revenue in 2025", "standard"),                 # a filter the parser cannot account for
     ("total revenue excluding West", "standard"),
     ("top 5 products by revenue", "standard"),

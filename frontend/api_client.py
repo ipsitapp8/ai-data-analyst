@@ -307,9 +307,11 @@ def delete_comment(comment_id: int) -> dict:
 
 # ----------------------------------------------------------------- datasets --
 
-def upload_dataset(filename: str, file_bytes: bytes) -> dict:
+def upload_dataset(filename: str, file_bytes: bytes, sheet: str | None = None) -> dict:
     files = {"file": (filename, file_bytes, "text/csv")}
-    resp = requests.post(f"{BACKEND_BASE_URL}/api/datasets/upload", files=files, headers=_headers(), timeout=TIMEOUT)
+    data = {"sheet": sheet} if sheet else None
+    resp = requests.post(f"{BACKEND_BASE_URL}/api/datasets/upload", files=files, data=data, headers=_headers(),
+                         timeout=TIMEOUT)
     return _handle(resp)
 
 
@@ -757,3 +759,29 @@ def compare_eval_runs(base: int, new: int) -> dict:
 
 def eval_suite() -> dict:
     return _get("/api/evals/suite")
+
+
+# ----------------------------------------------------------------- analyst --
+
+def analyst_status() -> dict:
+    return _get("/api/analyst/status")
+
+
+def analyst_ask(dataset_id: int | None, message: str, conversation_id: str = "default", use_model: bool | None = None,
+                document_id: str | None = None) -> dict:
+    return _post("/api/analyst/ask", {"dataset_id": dataset_id, "document_id": document_id, "message": message,
+                                      "conversation_id": conversation_id, "use_model": use_model}, timeout=300)
+
+
+def analyst_preview(dataset_id: int) -> dict:
+    return _get(f"/api/analyst/datasets/{dataset_id}/preview")
+
+
+def analyst_documents() -> list[dict]:
+    return _get("/api/analyst/documents")
+
+
+def analyst_upload_document(filename: str, file_bytes: bytes) -> dict:
+    files = {"file": (filename, file_bytes, "application/pdf")}
+    resp = requests.post(f"{BACKEND_BASE_URL}/api/analyst/documents", files=files, headers=_headers(), timeout=TIMEOUT)
+    return _handle(resp)
