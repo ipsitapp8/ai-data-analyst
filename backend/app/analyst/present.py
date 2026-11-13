@@ -365,6 +365,8 @@ _RATE_NAME = re.compile(r"rate|share|percent|pct|proportion|ratio|fraction", re.
 
 def _is_rate(r: dict, name: str) -> bool:
     """A result that is a share of records (e.g. mean(attrition == 'Yes')): shown as a percentage."""
+    if name in (r.get("percent") or []):
+        return True                     # a ratio the metric catalogue defines as a percentage (margin, ROI, ...)
     vals = [r["totals"].get(name)] + [g.get(name) for g in r.get("groups") or []]
     vals = [v for v in vals if isinstance(v, (int, float))]
     expr = (r.get("aggregates") or {}).get(name, "")
@@ -381,7 +383,8 @@ def calc_headline(r: dict, question: str = "") -> str:
     aggs = list(r["aggregates"])
     if not aggs:
         return ""
-    key = next((a for a in aggs if a.replace("_", " ").lower() in question.lower()), None) or \
+    key = (r.get("primary") if r.get("primary") in aggs else None) or \
+        next((a for a in aggs if a.replace("_", " ").lower() in question.lower()), None) or \
         next((n for n, e in r["aggregates"].items() if e.startswith("sum(")), aggs[0])
     est = "estimated " if r.get("answer_type") == "scenario" and not key.lower().startswith(("estimat", "predict", "project")) else ""
     if r.get("focus"):
@@ -423,6 +426,8 @@ def calc(r: dict, question: str = "") -> str:
     if r.get("group_by") and r.get("groups") and not r.get("focus"):
         g = r["group_by"]
         share = next((k for k in r["groups"][0] if k.startswith("share_of_")), None)
+        if r.get("primary") and share != "share_of_" + r["primary"]:
+            share = None                # a share of a component (e.g. of revenue) is not the result asked for
         lines += [f"| {_label(g)} | records | " + " | ".join(_label(a) for a in aggs)
                   + (f" | share of {_label(share[9:])} |" if share else " |"),
                   "|---|---:|" + "---:|" * len(aggs) + ("---:|" if share else "")]
@@ -514,15 +519,19 @@ def calc_details(r: dict) -> str:
     return "\n".join(lines).strip()
 
 
+_SINGLE_TOTAL = re.compile(r"(?:sum|count)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)")
+
+
 def calc_charts(r: dict) -> list[dict]:
     try:
         if not (r.get("group_by") and r.get("groups") and r["aggregates"]):
             return []
         a = next(iter(r["aggregates"]))
         sums = [n for n, e in r["aggregates"].items() if e.startswith("sum(")]
-        a = sums[-1] if sums else a
+        a = r["primary"] if r.get("primary") in r["aggregates"] else (sums[-1] if sums else a)
         g = r["group_by"]
-        additive = r["aggregates"][a].startswith(("sum(", "count(")) and not _is_rate(r, a)
+        # additive (parts of a whole, so a pie is meaningful) only for ONE total or count -- not a ratio of totals
+        additive = bool(_SINGLE_TOTAL.fullmatch(r["aggregates"][a].strip())) and not _is_rate(r, a)
         return [dict(c, additive=additive) for c in _bar(
             f"{_label(a)} by {_label(g)}", g, _label(a),
             [{g: row["group"], _label(a): row[a]} for row in r["groups"][:25] if row.get(a) is not None])]
