@@ -298,6 +298,8 @@ class _Eval:
             raise CalcError(f"Text ('{a if isinstance(a, str) else b}') cannot be used in arithmetic.")
         if a is None or b is None:
             return np.nan
+        if type(n.op) is ast.Div and not isinstance(b, pd.Series) and not isinstance(a, pd.Series) and b == 0:
+            return np.nan               # x / 0 has no value (shown as "—"), never an error that loses the other groups
         with np.errstate(divide="ignore", invalid="ignore"):
             r = op(a, b)
         return r.replace([np.inf, -np.inf], np.nan) if isinstance(r, pd.Series) else r
@@ -697,6 +699,8 @@ _HYPOTHETICAL = re.compile(r"\b(what if|what would|estimate\w*|assum\w*|suppose|
 
 def _aggregate(func: str, values: pd.Series):
     v = pd.to_numeric(values, errors="coerce") if func not in ("count", "nunique") else values
+    if func == "sum" and len(v) and v.notna().sum() == 0:
+        return None                     # a total of nothing but missing values is unknown, not 0
     r = getattr(v, func)()
     return None if r is None or (isinstance(r, float) and np.isnan(r)) else (int(r) if func in ("count", "nunique") else float(r))
 

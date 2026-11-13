@@ -6,6 +6,7 @@ the rows, never by calling the code under test.
 from __future__ import annotations
 
 import json
+import re
 import random
 
 import pandas as pd
@@ -185,12 +186,14 @@ def test_orchestrator_answers_a_free_form_calculation_with_the_model_and_labels_
     monkeypatch.setattr(orchestrator.planner, "model_available", lambda: True)
     mem = {}
     out = orchestrator.ask(QUESTION, df, mem)
-    assert out["plan_source"] == "model_calc"
+    # labor cost is a standard metric: resolved and computed deterministically, every stated condition applied
+    assert out["plan_source"] == "metric"
     from app.analyst.explain import f as fmt
     assert fmt(cost) in out["answer"] and fmt(by[top]) in out["answer"]
     # technical detail lives in the optional "How this was calculated" section, not in the answer
     assert "Records left out" in out["details"] and "Steps" in out["details"]
-    assert out["answer"].startswith(f"**{top}** has the highest")                 # direct answer first
+    body = re.sub(r"^\*\*Scope:\*\*[^\n]*\n\n", "", out["answer"])             # the scope line, then the answer
+    assert body.startswith(f"**{top}** has the highest")                          # direct answer first
     assert "statistical test" not in out["answer"]                               # inapplicable boilerplate removed
     assert any("removed" in n for n in out["notes"])
     assert out["charts"] and out["charts"][0]["x"] == "department"
@@ -322,3 +325,23 @@ def test_an_earlier_questions_numbers_cannot_leak_into_a_new_formula():
     earlier = "What if she works 10 hours with a 30-minute unpaid break?"
     now = "Calculate the cost of an overnight shift from 10 PM to 6 AM."
     assert any("0.5" in p for p in calc.check(spec, df, now, earlier=earlier))
+
+
+def test_a_calculation_outside_the_metric_catalogue_is_planned_by_the_model(monkeypatch):
+    """Not a standard metric (an hours-weighted average rate): the model plans it, the calculator runs it."""
+    df = _timesheet()
+    spec = {"derive": {"working_hours": "hours_between(clock_in, clock_out)", "paid": "working_hours * hourly_rate"},
+            "exclude": [], "group_by": None, "aggregate": {"weighted_rate": "sum(paid) / sum(working_hours)"}}
+    sections = iter(['calc", "derive": {}}', json.dumps(spec["derive"])[1:] + "}", "]}", "null}",
+                     json.dumps(spec["aggregate"])[1:] + "}"])
+    monkeypatch.setattr(calc, "_complete", lambda p, m: next(sections))
+    monkeypatch.setattr(orchestrator.planner, "model_chat", lambda msgs, max_tokens=700: "See the result above.")
+    monkeypatch.setattr(orchestrator.planner, "model_available", lambda: True)
+    out = orchestrator.ask("Calculate the hours-weighted average hourly rate across all records.", df, {})
+    assert out["plan_source"] == "model_calc"
+    h = [int(b[:2]) + int(b[3:5]) / 60 - int(a[:2]) - int(a[3:5]) / 60 for a, b in zip(df["clock_in"], df["clock_out"])]
+    # impossible records (negative hours or rate) are left out by the same validity rule as every other answer
+    ok = [(x, r) for x, r in zip(h, df["hourly_rate"]) if x >= 0 and r >= 0]
+    truth = sum(x * r for x, r in ok) / sum(x for x, _ in ok)
+    res = out["calls"][0]["result"]
+    assert res["totals"]["weighted_rate"] == pytest.approx(truth)

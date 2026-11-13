@@ -217,8 +217,12 @@ def test_a_calculation_follow_up_keeps_a_scope_set_by_a_different_path(monkeypat
     out = orchestrator.ask("And what is his total labor cost?", df, mem)
     res = next(c["result"] for c in out["calls"] if c["tool"] == "calculator")
     rahul = df[df["employee_name"] == "Rahul Sharma"]
-    truth = sum(_hours(a, b) * r for a, b, r in zip(rahul["clock_in"], rahul["clock_out"], rahul["hourly_rate"]))
-    assert res["totals"]["total"] == pytest.approx(truth)
+    # labor cost is a standard metric, computed deterministically: held to Rahul's scope, with impossible records
+    # (clock-out before clock-in, a negative rate) left out and listed -- recomputed here independently
+    truth = sum(_hours(a, b) * r for a, b, r in zip(rahul["clock_in"], rahul["clock_out"], rahul["hourly_rate"])
+                if _hours(a, b) >= 0 and r >= 0)
+    assert out["plan_source"] == "metric"
+    assert res["totals"]["labor_cost"] == pytest.approx(truth)
     assert any("kept the question's scope" in n for n in out["notes"])
     assert out["verification"][0]["ok"] and "carried over" in out["verification"][0]["detail"]
 

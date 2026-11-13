@@ -341,8 +341,14 @@ def _forest(r):
                   f"| MSE | {f(m.get('mse'))} | |",
                   f"| R² | {f(m['r2'])} | |", "", f"Baseline: {m['baseline']}."]
     judged_on = "balanced accuracy" if r["task"] == "classification" else "MAE"
+    cv = m.get("cross_validation")
+    if cv:
+        lines += ["", f"**Cross-validation** ({cv['folds']} folds, every row held out once): {cv['metric']} "
+                  f"{f(cv['model_mean'])} ± {f(cv['model_sd'])} for the model vs {f(cv['baseline_mean'])} for "
+                  f"{cv['baseline']}; the model was better in **{cv['folds_better']} of {cv['folds']}** folds."]
     lines += ["", "**Verdict:** the model " + ("beats" if r["beats_baseline"] else "does **not** clearly beat")
-              + f" the simple baseline on the held-out rows, judged on {judged_on}."]
+              + " the simple baseline" + (" across the cross-validation folds" if cv else " on the held-out rows")
+              + f", judged on {judged_on}."]
     if r["task"] == "classification" and m["accuracy"] < m["baseline_accuracy"]:
         lines.append(f"Its plain accuracy ({f(m['accuracy'])}) is below the baseline's ({f(m['baseline_accuracy'])}) because "
                      "the baseline never predicts the rare class at all; the model finds some of those cases at the cost "
