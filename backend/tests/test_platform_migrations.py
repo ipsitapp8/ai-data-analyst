@@ -107,10 +107,10 @@ def test_alembic_revisions_form_one_chain_ending_at_the_platform_revision():
     heads = script.get_heads()
     assert len(heads) == 1, f"migration history has branched: {heads}"
     # Later work adds revisions after the platform one, so look along the whole chain.
-    source = "\n".join(Path(rev.path).read_text() for rev in script.walk_revisions())
+    source = "\n".join(Path(rev.path).read_text(encoding="utf-8") for rev in script.walk_revisions())
     for table in NEW_TABLES:
         assert f"'{table}'" in source or f'"{table}"' in source, f"{table} is missing from the head migration"
-    platform = Path(script.get_revision("f1a3b5c7d9e2").path).read_text()
+    platform = Path(script.get_revision("f1a3b5c7d9e2").path).read_text(encoding="utf-8")
     assert "ix_analysis_memories_embedding" not in platform.split("def upgrade")[1], "must not drop the vector index"
     assert "investigation_hypotheses" in source and "investigation_analyses" in source
     for column in ("content_sha256", "dedup_key", "last_processed_question_id", "clarification_json"):

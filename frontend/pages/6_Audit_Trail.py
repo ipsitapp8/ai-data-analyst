@@ -172,7 +172,7 @@ with tab_code:
                         f'{"✓ VERIFIED" if ok else "! NEEDS REVIEW"}</div>'
                     )
                 else:
-                    html('<div class="ds-row-meta">No critic verdict recorded.</div>')
+                    html('<div class="ds-empty">No critic verdict recorded.</div>')
 
 # ----------------------------------------------------------- Data Lineage --
 with tab_lineage:

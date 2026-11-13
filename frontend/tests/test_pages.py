@@ -450,7 +450,9 @@ def test_the_session_notice_is_shown_once_and_signing_in_again_works(api, ws):
 
 
 def test_a_wrong_password_is_a_login_error_not_an_expired_session(api, ws):
-    at = AppTest.from_file(str(FRONTEND_DIR / "pages" / "13_Investigations.py"), default_timeout=60).run()
+    at = AppTest.from_file(str(FRONTEND_DIR / "pages" / "13_Investigations.py"), default_timeout=60)
+    at.query_params["view"] = "login"  # the sign-in page; the bare address is the landing page
+    at.run()
     at.text_input(key="login_email").set_value(ws["email"])
     at.text_input(key="login_password").set_value("definitely-wrong")
     next(b for b in at.button if b.label == "Log in").click().run()
@@ -554,7 +556,7 @@ def test_the_dashboard_look_is_applied_on_the_dashboard_page_only(api, ws):
     assert declared.startswith("<style>.stMain,") and ":root" not in sheet, "tokens are set on the main area, never globally"
     assert "stSidebar" not in sheet, "the sidebar keeps the base look"
     assert all(f"{name}: {value};" in declared for name, value in theme.DASHBOARD_TOKENS.items())
-    assert theme.ACCENT == "#4f46e5" and "--accent: #4f46e5" in theme.BASE_CSS, "the base tokens are untouched"
+    assert theme.ACCENT == "#250e2c" and "--accent: #250e2c" in theme.BASE_CSS, "the base tokens are untouched"
 
 
 def test_the_dashboard_shows_whatever_the_analysis_produced(api, ws):
@@ -621,7 +623,7 @@ def test_restyling_in_chart_studio_keeps_the_user_s_palette(api, ws):
     assert (colour if isinstance(colour, str) else colour[0]) == cs.rgba(first, cs.DEFAULT_STYLE["opacity"])
     saved = api.get(f"/api/questions/{out['question_id']}/dashboard", headers=ws["h"]).json()["view_overrides"]
     assert [v["chart_type"] for v in saved.values()] == ["hbar"], "the choice is saved for the team as before"
-    assert theme.CHART_COLORWAY[0] == "#4f46e5", "other pages' chart colours are unchanged"
+    assert theme.CHART_COLORWAY[0] == "#837ab6", "other pages' chart colours are unchanged"
 
 
 def test_chart_helpers_keep_their_default_colours_unless_given_a_colorway():
@@ -709,3 +711,64 @@ def test_the_dashboard_chart_finish_changes_presentation_only():
     assert theme.dashboard_chart(wide).data[0].line.width == 4, "an explicit width is never overridden"
     plain = theme.style_chart(go.Figure([go.Bar(x=["a"], y=[1])]))
     assert plain.layout.legend.orientation is None and plain.layout.barcornerradius is None, "other pages' charts are not finished this way"
+
+
+# ------------------------------------------------- organization / discussion --
+
+def test_discussion_page_shows_a_posted_comment_and_can_post(api, ws):
+    api.post("/api/discussion", json={"body": "Revenue dipped in the west"}, headers=ws["h"])
+    at = healthy(page("18_Discussion.py", ws))
+    assert "Revenue dipped in the west" in text_of(at)
+
+
+def test_workspaces_page_renders_org_admin_controls_for_the_owner(api, ws):
+    at = healthy(page("8_Workspaces.py", ws))
+    text = text_of(at)
+    assert "Team members" in text and "Create a team" in text
+
+
+def test_a_user_with_no_team_sees_onboarding_instead_of_the_app(api, ws):
+    from platform_helpers import signup
+
+    token, email = signup(api)
+    bare = {"token": token, "email": email, "team": None}
+    at = AppTest.from_file(str(FRONTEND_DIR / "pages" / "2_Datasets.py"), default_timeout=60)
+    at.session_state["auth_user"] = {"id": 0, "email": email, "display_name": "New Person"}
+    at.session_state["auth_token"] = token
+    at = at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = text_of(at)
+    assert "Create a workspace" in text and "not in a team yet" not in text.lower()
+    assert not [b for b in at.button if b.key == "nav_datasets"], "no app navigation before a workspace exists"
+
+
+def test_session_cookie_script_sets_and_clears_the_token_safely():
+    import auth
+
+    on = auth._cookie_js('abc."</script>')
+    assert "max-age=604800" in on and "SameSite=Lax" in on and "encodeURIComponent(" in on
+    assert on.count("</script>") == 1, "a hostile token cannot close the script tag early"
+    off = auth._cookie_js(None)
+    assert "max-age=0" in off and "silt_token=" in off
+
+
+def _signed_out(view: str | None) -> AppTest:
+    at = AppTest.from_file(str(FRONTEND_DIR / "Home.py"), default_timeout=60)
+    if view:
+        at.query_params["view"] = view
+    return at.run()
+
+
+def test_signed_out_visitors_get_a_landing_page_and_a_separate_sign_in_page(api):
+    landing = _signed_out(None)
+    assert not landing.exception
+    assert not landing.text_input, "the landing page has no form on it"
+    page_html = " ".join(str(m.value) for m in landing.markdown)
+    assert 'href="?view=signup"' in page_html and 'href="?view=login"' in page_html, "Get started and Log in are links"
+
+    login = _signed_out("login")
+    assert not login.exception and {t.key for t in login.text_input} >= {"login_email", "login_password"}
+    assert [t.label for t in login.tabs][0] == "Log in"
+
+    signup = _signed_out("signup")
+    assert not signup.exception and [t.label for t in signup.tabs][0] == "Create account", "Get started opens sign-up first"

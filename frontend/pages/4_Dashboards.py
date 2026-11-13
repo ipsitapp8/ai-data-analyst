@@ -14,7 +14,6 @@ from api_client import (ApiError, ask_question, chat_dashboard, compare_question
                         rerun_question, reset_chart_view, revoke_share, save_chart_view)
 from style.theme import (
     DASHBOARD_COLORWAY,
-    badge,
     dashboard_chart,
     chart_card_css,
     require_active_team,
@@ -592,7 +591,7 @@ with st.container(key="card_chat"):
             st.markdown(turn["content"])
             if turn["role"] == "assistant":
                 if turn.get("verified") is True:
-                    html(f'<span class="ds-badge ds-badge-verified">Checked against this analysis</span>')
+                    html('<span class="ds-badge ds-badge-verified">Checked against this analysis</span>')
                 elif turn.get("verified") is False:
                     claims = "".join(f"<li>{esc(c)}</li>" for c in turn.get("unsupported_claims") or [])
                     html(f'<span class="ds-badge ds-badge-warn">Not fully supported</span>'

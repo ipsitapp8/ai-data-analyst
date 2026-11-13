@@ -14,7 +14,17 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.email_sender import send_team_invite_email
-from app.models import Community, Team, TeamMember, User
+from app import authz
+from app.authz import (
+    audit,
+    can_manage_members,
+    ensure_org_member,
+    is_org_admin,
+    org_role,
+    require_org_admin,
+    team_role,
+)
+from app.models import Community, CommunityMember, Group, Team, TeamMember, User
 from app.schemas import (
     BulkInviteRequest,
     BulkInviteResponse,
@@ -34,50 +44,60 @@ router = APIRouter(prefix="/api", tags=["workspaces"])
 
 
 def _my_role(db: Session, team_id: int, user_id: int) -> str | None:
-    m = (
-        db.query(TeamMember)
-        .filter(TeamMember.team_id == team_id, TeamMember.user_id == user_id, TeamMember.status == "active")
-        .first()
-    )
-    return m.role if m else None
+    team = db.get(Team, team_id)
+    return team_role(db, team, user_id) if team else None
+
+
+def _team_out(db: Session, t: Team, role: str) -> TeamOut:
+    group = db.get(Group, t.group_id) if t.group_id else None
+    return TeamOut(id=t.id, community_id=t.community_id, name=t.name, role=role,
+                   group_id=t.group_id, group_name=group.name if group else None)
 
 
 def _my_teams_in_community(db: Session, community_id: int, user_id: int) -> list[TeamOut]:
-    rows = (
-        db.query(Team, TeamMember)
-        .join(TeamMember, TeamMember.team_id == Team.id)
-        .filter(
-            Team.community_id == community_id,
-            TeamMember.user_id == user_id,
-            TeamMember.status == "active",
+    """Teams the caller can see: their own memberships, plus every team in the
+    organization if they are an organization owner/admin."""
+    explicit = {
+        t.id: (t, tm.role)
+        for t, tm in (
+            db.query(Team, TeamMember)
+            .join(TeamMember, TeamMember.team_id == Team.id)
+            .filter(Team.community_id == community_id, TeamMember.user_id == user_id,
+                    TeamMember.status == "active")
+            .all()
         )
-        .all()
-    )
-    return [
-        TeamOut(id=t.id, community_id=t.community_id, name=t.name, role=tm.role)
-        for t, tm in rows
-    ]
+    }
+    if is_org_admin(db, community_id, user_id):
+        for t in db.query(Team).filter(Team.community_id == community_id).all():
+            explicit.setdefault(t.id, (t, "admin"))
+    return [_team_out(db, t, role) for t, role in sorted(explicit.values(), key=lambda x: x[0].id)]
+
+
+def _my_community_ids(db: Session, user_id: int) -> set[int]:
+    ids = {
+        row[0] for row in db.query(CommunityMember.community_id)
+        .filter(CommunityMember.user_id == user_id).all()
+    }
+    ids |= {
+        row[0] for row in db.query(Team.community_id)
+        .join(TeamMember, TeamMember.team_id == Team.id)
+        .filter(TeamMember.user_id == user_id, TeamMember.status == "active").all()
+    }
+    return ids
+
+
+def _community_out(db: Session, c: Community, user_id: int) -> CommunityOut:
+    return CommunityOut(id=c.id, name=c.name, role=org_role(db, c.id, user_id),
+                        teams=_my_teams_in_community(db, c.id, user_id))
 
 
 @router.get("/communities", response_model=list[CommunityOut])
 def list_my_communities(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ids = (
-        db.query(Team.community_id)
-        .join(TeamMember, TeamMember.team_id == Team.id)
-        .filter(TeamMember.user_id == user.id, TeamMember.status == "active")
-        .distinct()
-        .all()
-    )
-    community_ids = {row[0] for row in ids}
-
+    ids = _my_community_ids(db, user.id)
     created = db.query(Community.id).filter(Community.created_by == user.id).all()
-    community_ids |= {row[0] for row in created}
-
-    communities = db.query(Community).filter(Community.id.in_(community_ids)).all() if community_ids else []
-    return [
-        CommunityOut(id=c.id, name=c.name, teams=_my_teams_in_community(db, c.id, user.id))
-        for c in communities
-    ]
+    ids |= {row[0] for row in created}
+    communities = db.query(Community).filter(Community.id.in_(ids)).all() if ids else []
+    return [_community_out(db, c, user.id) for c in communities]
 
 
 @router.post("/communities", response_model=CommunityOut)
@@ -87,61 +107,50 @@ def create_community(payload: CommunityCreate, user: User = Depends(get_current_
         raise HTTPException(400, "Community name is required")
     community = Community(name=name, created_by=user.id)
     db.add(community)
+    db.flush()
+    ensure_org_member(db, community.id, user.id, "owner")
+    audit(db, community.id, user.id, "org.created", target_type="community", target_id=community.id, name=name)
     db.commit()
     db.refresh(community)
-    return CommunityOut(id=community.id, name=community.name, teams=[])
+    return CommunityOut(id=community.id, name=community.name, role="owner", teams=[])
 
 
 @router.get("/communities/{community_id}/teams", response_model=list[TeamOut])
 def list_teams(community_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    community = db.get(Community, community_id)
-    if community is None:
-        raise HTTPException(404, "Community not found")
+    authz.get_org_or_404(db, community_id, user.id)
     return _my_teams_in_community(db, community_id, user.id)
 
 
 @router.post("/communities/{community_id}/teams", response_model=TeamOut)
 def create_team(community_id: int, payload: TeamCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    community = db.get(Community, community_id)
-    if community is None:
-        raise HTTPException(404, "Community not found")
+    authz.get_org_or_404(db, community_id, user.id)
+    require_org_admin(db, community_id, user.id, "create teams")
     name = payload.name.strip()
     if not name:
         raise HTTPException(400, "Team name is required")
+    group = None
+    if payload.group_id is not None:
+        group = db.get(Group, payload.group_id)
+        if group is None or group.community_id != community_id:
+            raise HTTPException(400, "Unknown group for this organization")
 
-    is_creator = community.created_by == user.id
-    has_membership = bool(_my_teams_in_community(db, community_id, user.id))
-    if not (is_creator or has_membership):
-        raise HTTPException(403, "Join or create a community before adding teams to it")
-
-    team = Team(community_id=community_id, name=name, created_by=user.id)
+    team = Team(community_id=community_id, name=name, created_by=user.id,
+                group_id=group.id if group else None)
     db.add(team)
+    db.flush()
+    db.add(TeamMember(team_id=team.id, user_id=user.id, role="owner", status="active"))
+    audit(db, community_id, user.id, "team.created", team_id=team.id, target_type="team",
+          target_id=team.id, name=name, group_id=group.id if group else None)
     db.commit()
     db.refresh(team)
-
-    db.add(TeamMember(team_id=team.id, user_id=user.id, role="owner", status="active"))
-    db.commit()
-
-    return TeamOut(id=team.id, community_id=team.community_id, name=team.name, role="owner")
+    return _team_out(db, team, "owner")
 
 
 @router.get("/me/workspaces")
 def my_workspaces(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ids = (
-        db.query(Team.community_id)
-        .join(TeamMember, TeamMember.team_id == Team.id)
-        .filter(TeamMember.user_id == user.id, TeamMember.status == "active")
-        .distinct()
-        .all()
-    )
-    community_ids = {row[0] for row in ids}
-    communities = db.query(Community).filter(Community.id.in_(community_ids)).all() if community_ids else []
-    return {
-        "communities": [
-            CommunityOut(id=c.id, name=c.name, teams=_my_teams_in_community(db, c.id, user.id))
-            for c in communities
-        ]
-    }
+    ids = _my_community_ids(db, user.id)
+    communities = db.query(Community).filter(Community.id.in_(ids)).all() if ids else []
+    return {"communities": [_community_out(db, c, user.id) for c in communities]}
 
 
 @router.get("/me/invites")
@@ -168,7 +177,11 @@ def accept_invite(team_id: int, user: User = Depends(get_current_user), db: Sess
     )
     if invite is None:
         raise HTTPException(404, "No pending invite for this team")
+    team = db.get(Team, team_id)
     invite.status = "active"
+    ensure_org_member(db, team.community_id, user.id, "member")
+    audit(db, team.community_id, user.id, "team.invite_accepted", team_id=team.id,
+          target_type="user", target_id=user.id, via="direct_invite")
     db.commit()
     return {"status": "joined"}
 
@@ -238,8 +251,8 @@ def _invite_or_resend(db: Session, team: Team, community: Community | None, user
 @router.post("/teams/{team_id}/invite", response_model=InviteResponse)
 def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     role = _my_role(db, team_id, user.id)
-    if role not in ("owner", "admin"):
-        raise HTTPException(403, "Only a team owner or admin can invite members")
+    if not can_manage_members(role):
+        raise HTTPException(403, "Only a team leader, owner or admin can invite members")
 
     team = db.get(Team, team_id)
     if team is None:
@@ -252,8 +265,8 @@ def invite_member(team_id: int, payload: InviteRequest, user: User = Depends(get
 @router.post("/teams/{team_id}/invite/bulk", response_model=BulkInviteResponse)
 def invite_members_bulk(team_id: int, payload: BulkInviteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     role = _my_role(db, team_id, user.id)
-    if role not in ("owner", "admin"):
-        raise HTTPException(403, "Only a team owner or admin can invite members")
+    if not can_manage_members(role):
+        raise HTTPException(403, "Only a team leader, owner or admin can invite members")
 
     team = db.get(Team, team_id)
     if team is None:
@@ -293,8 +306,8 @@ def revoke_invite(team_id: int, member_id: int, user: User = Depends(get_current
     removing an already-active member is a different, higher-stakes action
     (loses them their history/access) that wasn't asked for here."""
     role = _my_role(db, team_id, user.id)
-    if role not in ("owner", "admin"):
-        raise HTTPException(403, "Only a team owner or admin can revoke invites")
+    if not can_manage_members(role):
+        raise HTTPException(403, "Only a team leader, owner or admin can revoke invites")
 
     member = db.query(TeamMember).filter(TeamMember.id == member_id, TeamMember.team_id == team_id).first()
     if member is None:
@@ -310,7 +323,7 @@ def revoke_invite(team_id: int, member_id: int, user: User = Depends(get_current
 @router.get("/teams/{team_id}/members", response_model=list[MemberOut])
 def list_members(team_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if _my_role(db, team_id, user.id) is None:
-        raise HTTPException(403, "Not a member of this team")
+        raise HTTPException(404, "Team not found")
 
     rows = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
     out = []

@@ -11,6 +11,7 @@ development is unchanged.
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from pathlib import Path
 
@@ -18,6 +19,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 _SESSION_KEY = "_auth_ok"
+
+def _landing_css() -> str:
+    """Landing/sign-in stylesheet (style/landing.css), flattened like _gate_css."""
+    raw = (Path(__file__).parent / "style" / "landing.css").read_text(encoding="utf-8")
+    return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
+
 
 def _gate_css() -> str:
     """Login-screen stylesheet (style/gate.css), flattened to one line: markdown
@@ -29,11 +36,11 @@ def _gate_css() -> str:
 _GATE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700'
     '&display=swap" rel="stylesheet">'
 )
 _GATE_LOGO = (
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#4f46e5" '
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#837ab6" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 
@@ -113,9 +120,112 @@ def current_user() -> dict | None:
     return st.session_state.get(_USER_SESSION_KEY)
 
 
+# "Stay signed in": Streamlit forgets session_state on every browser refresh, so
+# the API token would be lost and the visitor sent back to the login form. We keep
+# the same JWT the API issued (7-day expiry, validated by the API on every use) in
+# a browser cookie and restore the session from it. The cookie is script-readable
+# because Streamlit offers no server-side cookie writing; it carries no more than
+# the session token already held in memory, and logging out clears it.
+_COOKIE = "silt_token"
+_COOKIE_MAX_AGE = 7 * 24 * 3600
+
+
+def _cookie_js(token: str | None) -> str:
+    if token:
+        value = "encodeURIComponent(" + json.dumps(token).replace("</", "<\\/") + ")"
+        attrs = "'; path=/; max-age=" + str(_COOKIE_MAX_AGE) + "; SameSite=Lax'"
+    else:
+        value = "''"
+        attrs = "'; path=/; max-age=0; SameSite=Lax'"
+    return (
+        "<script>(function(){var secure = window.parent.location.protocol === 'https:' ? '; Secure' : '';"
+        f"window.parent.document.cookie = '{_COOKIE}=' + {value} + {attrs} + secure;}})();</script>"
+    )
+
+
+def _write_cookie(token: str | None) -> None:
+    components.html(_cookie_js(token), height=0)
+
+
+def _restore_session_from_cookie() -> bool:
+    """Re-establish the login from the browser cookie. Returns True on success."""
+    if st.session_state.get("_logged_out"):
+        return False
+    try:
+        token = st.context.cookies.get(_COOKIE)
+    except Exception:  # noqa: BLE001 - no request context (e.g. headless test)
+        return False
+    if not token:
+        return False
+    import api_client
+
+    try:
+        # Raw call, not api_client.me(): a stale cookie must not trigger the
+        # "session expired" flow (which reruns the script) -- it just means "log in".
+        resp = api_client.requests.get(f"{api_client.BACKEND_BASE_URL}/api/auth/me",
+                                       headers={"Authorization": f"Bearer {token}"}, timeout=api_client.TIMEOUT)
+    except Exception:  # noqa: BLE001 - backend down: show the normal login form
+        return False
+    if not resp.ok:
+        st.session_state["_clear_cookie"] = True
+        return False
+    st.session_state[_USER_SESSION_KEY] = resp.json()
+    st.session_state["auth_token"] = token
+    return True
+
+
+def _google_enabled() -> bool:
+    """Google sign-in needs both Streamlit's [auth] OIDC settings and the secret
+    the API checks. Missing either one simply hides the button."""
+    from config import INTERNAL_AUTH_SECRET
+
+    if not INTERNAL_AUTH_SECRET:
+        return False
+    try:
+        return bool(st.secrets.get("auth"))
+    except Exception:  # noqa: BLE001 - no secrets file at all
+        return False
+
+
+def _sign_in_with_google_if_ready() -> bool:
+    """After Google redirects back, trade the verified identity for an app session."""
+    if st.session_state.get("_logged_out"):
+        return False
+    try:
+        user = st.user
+        if not user.is_logged_in:
+            return False
+        email = str(user.get("email") or "")
+        name = str(user.get("name") or "")
+        verified = bool(user.get("email_verified", False))
+    except Exception:  # noqa: BLE001
+        return False
+
+    from api_client import ApiError, google_exchange
+    from config import INTERNAL_AUTH_SECRET
+
+    try:
+        result = google_exchange(email, name, verified, INTERNAL_AUTH_SECRET)
+    except ApiError as e:
+        st.session_state["auth_notice"] = f"Google sign-in could not be completed: {e}"
+        return False
+    st.session_state[_USER_SESSION_KEY] = result["user"]
+    st.session_state["auth_token"] = result["access_token"]
+    st.session_state["_set_cookie"] = result["access_token"]
+    return True
+
+
 def logout() -> None:
+    try:
+        if st.user.is_logged_in:
+            st.logout()  # also end the Google identity, or the next load would sign straight back in
+    except Exception:  # noqa: BLE001 - no OIDC configured
+        pass
     for key in (_USER_SESSION_KEY, "auth_token", "active_community_id", "active_team_id"):
         st.session_state.pop(key, None)
+    # Don't restore from the cookie that is still on this very connection.
+    st.session_state["_logged_out"] = True
+    st.session_state["_clear_cookie"] = True
 
 
 def require_login() -> None:
@@ -126,37 +236,126 @@ def require_login() -> None:
     from api_client import ApiError, login as api_login, signup as api_signup
 
     if st.session_state.get(_USER_SESSION_KEY) and st.session_state.get("auth_token"):
+        if "view" in st.query_params:  # leftover from the sign-in page address
+            del st.query_params["view"]
+        pending = st.session_state.pop("_set_cookie", None)
+        if pending:
+            _write_cookie(pending)
         return
 
+    if _restore_session_from_cookie():
+        return
+    if _google_enabled() and _sign_in_with_google_if_ready():
+        st.rerun()
+    if st.session_state.pop("_clear_cookie", None):
+        _write_cookie(None)
+
+    # Two pages on one URL: the marketing landing page (default) and the sign-in page (?view=login or
+    # ?view=signup). "Get started" and "Log in" are plain links, so each page is its own address.
+    view = str(st.query_params.get("view", "")).lower()
     # Why the visitor is back at this form (set when the API rejects a session token). Shown once.
     notice = st.session_state.pop("auth_notice", None)
+    if notice and view not in ("login", "signup"):
+        view = "login"
+        st.query_params["view"] = "login"  # stay on the sign-in page across reruns
+
+    st.markdown(_landing_css(), unsafe_allow_html=True)
+    st.markdown(_GATE_FONTS, unsafe_allow_html=True)
+
+    if view not in ("login", "signup"):
+        st.markdown(
+            f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
+            '<div class="lp-navpill"><a href="?" target="_self">Home</a><a class="off" href="?view=login" target="_self">Log in</a></div>'
+            '<div class="lp-nav-r"><a class="lp-pill" href="?view=signup" target="_self">Get started &#8599;</a></div></div>'
+            '<div class="lp-hero"><div class="lp-glow"></div><div class="lp-grid"></div>'
+            '<div class="lp-float lp-c1"><div class="who"><span class="lp-av" style="background:#837ab6">Q</span><div>Which region grew fastest?'
+            '<small>Asked Wed 14 Oct, 2026</small></div></div><div class="wk">Step 3 of 4 &middot; Running analysis</div>'
+            '<div class="lp-bar"><i style="width:75%"></i></div></div>'
+            '<div class="lp-float lp-c2"><div class="who"><span class="lp-av" style="background:#16a34a">&#10003;</span><div>Independent check passed'
+            '<small>Critic model &middot; 0 issues</small></div></div><div class="wk">Verified &middot; 12 of 12 numbers</div>'
+            '<div class="lp-bar"><i style="width:100%"></i></div></div>'
+            '<div class="lp-float lp-c3"><small>Analysis by</small><b>Silt Agent</b><em>Sales</em><em>Growth</em>'
+            '<div class="t">Q3 &middot; 2,481 rows</div></div>'
+            '<div class="lp-dark"><span class="lp-av">&#9881;</span><div>Planner agent<small>Plans the analysis</small></div></div>'
+            '<div class="lp-purp"><span class="lp-av">&#10003;</span><div>Critic agent<small>Checks every number</small></div></div>'
+            '<h1 class="lp-title">Data Matters.<br>Ask Your Data<br><span class="fade">In Plain English</span><br>Trust Every Answer</h1>'
+            '<p class="lp-sub">An autonomous AI data analyst for teams. An agent plans, runs and explains the analysis, '
+            'and an independent model checks it before it reaches you.</p>'
+            '<div class="lp-ctas"><a class="lp-btn light" href="?view=login" target="_self">Log in</a>'
+            '<a class="lp-btn dark" href="?view=signup" target="_self">Get Started &rarr;</a></div></div>'
+            '<div class="lp-strip"><span>CSV &amp; Excel</span><span>PostgreSQL</span><span>Sandboxed Python</span>'
+            '<span>Audit trail</span><span>Scheduled reports</span></div>'
+            '<div class="lp-sec"><div class="lp-eyebrow">Why Silt</div>'
+            '<h2 class="lp-h2">An analyst that shows its work.</h2>'
+            '<div class="lp-feats">'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-chat"><span class="u">Which region grew fastest?</span>'
+            '<span class="a">West, up 18.4% quarter over quarter.<i class="caret"></i></span></div></div>'
+            '<b>Ask in plain English</b><p>No SQL, no dashboards to build. Type the question and the agent plans the analysis.</p></div>'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-checks"><span><i>&#10003;</i>Totals match source</span>'
+            '<span><i>&#10003;</i>No double counting</span><span><i>&#10003;</i>Dates align</span></div></div>'
+            '<b>A second model checks it</b><p>An independent critic re-verifies every number before the answer reaches you.</p></div>'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-log"><span><u></u>Loaded sales.csv</span>'
+            '<span><u></u>Grouped by region</span><span><u></u>Compared Q2 vs Q3</span></div></div>'
+            '<b>Every step is logged</b><p>See the plan, the code and the evidence behind each answer in the audit trail.</p></div>'
+            '</div></div>'
+            '<div class="lp-sec"><div class="lp-eyebrow">How it works</div>'
+            '<h2 class="lp-h2">From question to trusted answer.</h2>'
+            '<div class="lp-steps"><div><em>1</em><b>Upload your data</b><p>CSV, Excel or a database.</p></div>'
+            '<div><em>2</em><b>Ask a question</b><p>The planner agent writes the analysis.</p></div>'
+            '<div><em>3</em><b>Run in a sandbox</b><p>Code executes in isolation.</p></div>'
+            '<div><em>4</em><b>Verified answer</b><p>The critic signs off, then you see it.</p></div></div></div>'
+            '<div class="lp-final"><h2>Ready to trust your numbers?</h2>'
+            '<p>Create a workspace and ask your first question in minutes.</p>'
+            '<a class="lp-btn light" href="?view=signup" target="_self">Get Started &rarr;</a></div>',
+            unsafe_allow_html=True,
+        )
+        st.stop()
+
+    # ---- sign-in page ----
+    st.markdown(
+        f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
+        '<div class="lp-nav-r"><a class="lp-ghost" href="?" target="_self">&larr; Back to home</a></div></div>'
+        '<div class="lp-login-pad"></div>'
+        '<div class="lp-blobs"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><span class="g"></span></div>'
+        '<div class="lp-chip lp-chip-l"><span class="ok">&#10003;</span>Checked by an independent model</div>'
+        '<div class="lp-chip lp-chip-r"><b>12 / 12</b>numbers verified</div>'
+        '<div class="lp-chip lp-chip-b"><span class="pulse"></span>Planner agent is thinking&hellip;</div>',
+        unsafe_allow_html=True,
+    )
     if notice:
         st.warning(notice)
 
-    st.markdown(_gate_css(), unsafe_allow_html=True)
-    st.markdown(_GATE_FONTS, unsafe_allow_html=True)
-    st.markdown("<style>.block-container { max-width: 1020px !important; padding-top: 8vh !important; }</style>",
-                unsafe_allow_html=True)
+    with st.container(key="auth_card"):
+        if _google_enabled():
+            if st.button("Continue with Google", key="google_login", use_container_width=True):
+                st.login()
+            st.markdown('<div class="lp-or"><span>or use email</span></div>', unsafe_allow_html=True)
+        labels = ["Create account", "Log in"] if view == "signup" else ["Log in", "Create account"]
+        _tabs = dict(zip(labels, st.tabs(labels), strict=True))
+        tab_login, tab_signup = _tabs["Log in"], _tabs["Create account"]
 
-    with st.container(key="auth_stage"):
-        # The gold panel always covers the *inactive* side; switching modes only
-        # flips its class, and the CSS transition slides it across.
-        st.markdown(
-            '<div class="auth-overlay">'
-            f'<div class="auth-ov-brand">{_GATE_LOGO.replace("#4f46e5", "#ffffff")}<div class="gate-mark">Silt</div></div>'
-            '<div class="gate-eyebrow">Your data. Our analysis.</div>'
-            '<div class="gate-title">Ask a question in plain English.</div>'
-            '<div class="gate-sub">An agent plans, runs and explains the analysis, and an independent '
-            'model checks it before it reaches you.</div>'
-            '<ul class="auth-ov-list"><li>Runs in a secure sandbox</li><li>Every number is verified</li>'
-            '<li>Fully auditable</li></ul></div>',
-            unsafe_allow_html=True,
-        )
-        col_signup, col_login = st.columns(2)
+        with tab_login:
+            st.markdown('<div class="lp-card-title">Welcome back.</div>'
+                        '<div class="lp-card-sub">Sign in to your team&#39;s workspace.</div>',
+                        unsafe_allow_html=True)
+            with st.form("login_form", clear_on_submit=False):
+                email = st.text_input("Email", key="login_email")
+                password = st.text_input("Password", type="password", key="login_password")
+                submitted = st.form_submit_button("Log in", type="primary", use_container_width=True)
+            if submitted:
+                try:
+                    result = api_login(email.strip().lower(), password)
+                    st.session_state[_USER_SESSION_KEY] = result["user"]
+                    st.session_state["auth_token"] = result["access_token"]
+                    st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state.pop("_logged_out", None)
+                    st.rerun()
+                except ApiError as e:
+                    st.error(f"Could not log in: {e}")
 
-        with col_signup:
-            st.markdown('<div class="auth-panel-title">Create your account.</div>'
-                        '<div class="auth-panel-sub">Start asking questions of your data.</div>',
+        with tab_signup:
+            st.markdown('<div class="lp-card-title">Create your account.</div>'
+                        '<div class="lp-card-sub">Start asking questions of your data.</div>',
                         unsafe_allow_html=True)
             with st.form("signup_form", clear_on_submit=False):
                 name = st.text_input("Display name", key="signup_name")
@@ -169,31 +368,10 @@ def require_login() -> None:
                     result = api_signup(email.strip().lower(), password, name)
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
+                    st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not sign up: {e}")
-            st.markdown('<a class="auth-switch" data-to="login">Already have an account? Log in →</a>',
-                        unsafe_allow_html=True)
-
-        with col_login:
-            st.markdown('<div class="auth-panel-title">Welcome back.</div>'
-                        '<div class="auth-panel-sub">Sign in to your team&#39;s workspace.</div>',
-                        unsafe_allow_html=True)
-            with st.form("login_form", clear_on_submit=False):
-                email = st.text_input("Email", key="login_email")
-                password = st.text_input("Password", type="password", key="login_password")
-                submitted = st.form_submit_button("Log in", type="primary", use_container_width=True)
-            if submitted:
-                try:
-                    result = api_login(email.strip().lower(), password)
-                    st.session_state[_USER_SESSION_KEY] = result["user"]
-                    st.session_state["auth_token"] = result["access_token"]
-                    st.rerun()
-                except ApiError as e:
-                    st.error(f"Could not log in: {e}")
-            st.markdown('<a class="auth-switch" data-to="signup">New to Silt? Create an account →</a>',
-                        unsafe_allow_html=True)
-
-    components.html(_AUTH_SWITCH_JS, height=0)
 
     st.stop()

@@ -1,0 +1,20 @@
+/* ================= dashboard pages ================= */
+.stApp .stMain { --bg-page: transparent; --bg-card: rgba(255,255,255,.5); --bg-inset: rgba(255,255,255,.35); --bg-card-hover: rgba(255,255,255,.7);
+  --border: rgba(255,255,255,.75); --border-strong: rgba(21,21,21,.14); --dash-surface: rgba(255,255,255,.28); --accent-ink: #7c3aed; --accent-bg: #f3ecfd;
+  --dash-shadow: 0 30px 70px rgba(70,30,120,.16); --dash-card-shadow: var(--glass-sh); }
+.stApp .stMain [data-testid="stMainBlockContainer"] {
+  background: linear-gradient(145deg, rgba(255,255,255,.42), rgba(255,255,255,.16)) !important; border: 1px solid rgba(255,255,255,.8) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: 0 30px 70px rgba(70,30,120,.16), inset 0 1.5px 0 rgba(255,255,255,.95) !important;
+}
+.stApp .stMain .st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button {
+  background: var(--glass-bg) !important; border: 1px solid var(--glass-line) !important; box-shadow: var(--glass-sh) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%); transition: transform .2s ease, box-shadow .2s ease;
+}
+.stApp .stMain .st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button:hover:not(:disabled) { transform: translateY(-4px); border-color: #fff !important; background: var(--glass-bg) !important; }
+.stApp .stMain .st-key-card_narr { border-left: 4px solid #a855f7 !important; }
+.stApp .stMain button[kind="primary"], .stApp .stMain button[kind="primary"]:hover, .stApp [data-baseweb="popover"] button[kind="primary"] {
+  background: #151515 !important; color: #fff !important; border-color: #151515 !important; }
+.stApp .stMain button[kind="primary"] p, .stApp [data-baseweb="popover"] button[kind="primary"] p { color: #fff !important; }
+.stApp .stMain button[kind="secondary"]:hover { border-color: rgba(168,85,247,.6) !important; color: #151515 !important; }
+@media (max-width: 900px) { .stApp [class*="st-key-card"]:hover, .stApp [class*="st-key-chartcard_"]:hover { transform: none; } }

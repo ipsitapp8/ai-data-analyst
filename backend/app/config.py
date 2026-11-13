@@ -78,6 +78,10 @@ MAX_EXECUTOR_RETRIES = int(os.getenv("MAX_EXECUTOR_RETRIES", "3"))
 MAX_CRITIC_REVISIONS = int(os.getenv("MAX_CRITIC_REVISIONS", "1"))
 
 # --- Auth (per-user login, JWT sessions) ---
+# Shared between the Streamlit frontend and this API only. Lets the frontend, after Google has
+# verified an email, ask for a session for that email. Empty disables Google sign-in entirely.
+INTERNAL_AUTH_SECRET = os.getenv("INTERNAL_AUTH_SECRET", "")
+
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 if not JWT_SECRET_KEY:
     # Ephemeral per-process secret: fine for local dev (tokens just don't

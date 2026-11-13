@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app.database import get_db
-from app.models import Team, TeamMember, User
+from app.authz import team_role
+from app.models import Team, User
 
 
 def hash_password(password: str) -> str:
@@ -65,15 +66,8 @@ def get_current_team(
     team = db.get(Team, x_team_id)
     if team is None:
         raise HTTPException(404, "Team not found")
-    member = (
-        db.query(TeamMember)
-        .filter(
-            TeamMember.team_id == team.id,
-            TeamMember.user_id == user.id,
-            TeamMember.status == "active",
-        )
-        .first()
-    )
-    if member is None:
+    # Explicit team membership, or organization owner/admin of the team's own
+    # organization (a policy decision, derived server-side -- never client-supplied).
+    if team_role(db, team, user.id) is None:
         raise HTTPException(403, "Not a member of this team")
     return team

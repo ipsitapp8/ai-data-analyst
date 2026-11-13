@@ -51,7 +51,7 @@ from sqlalchemy.orm import Session
 
 from app import config, runtime
 from app.database import SessionLocal
-from app.models import AnalysisJob, Dashboard, Dataset, DatasetVersion, Question
+from app.models import AnalysisJob, Dashboard, Dataset, Question
 
 logger = logging.getLogger(__name__)
 

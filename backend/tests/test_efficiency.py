@@ -102,7 +102,7 @@ def _lookups(ws: dict, text: str, shared: memory.QueryEmbedding | None):
 
 @pytest.fixture(scope="module")
 def std_case():
-    cases = json.load(open(FIXTURES.parent / "cases" / "suite.json"))["cases"]
+    cases = json.loads((FIXTURES.parent / "cases" / "suite.json").read_text(encoding="utf-8"))["cases"]
     return next(c for c in cases if c["id"] == "pipeline-correct")
 
 

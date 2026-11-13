@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import threading
 import time
 
@@ -386,6 +387,7 @@ def test_abnormal_termination_is_reported_not_raised(dev_runner, qid):
     assert not r.success and r.result is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process limits/groups; the subprocess runner is dev-only")
 def test_subprocess_creation_is_refused_or_contained(dev_runner, qid, monkeypatch, tmp_path):
     """Generated code that spawns a child: on hosts where the process cap bites
     the spawn is refused outright; elsewhere the child dies with the timeout.
@@ -403,6 +405,7 @@ def test_subprocess_creation_is_refused_or_contained(dev_runner, qid, monkeypatc
     assert not marker.exists(), "a child process survived the execution"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups; the subprocess runner is dev-only")
 def test_timeout_kills_the_whole_process_group(tmp_path):
     """The supervisor itself, without resource caps in the way: a grandchild
     started by the supervised process must die with it."""
@@ -491,6 +494,7 @@ def test_cleanup_and_retention_sweep(dev_runner, qid):
     assert not ws.exists()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="creating symlinks needs a privilege Windows does not grant by default")
 def test_sweep_ignores_anything_that_is_not_a_workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "WORKSPACES_DIR", tmp_path)
     (tmp_path / "important").mkdir()

@@ -30,3 +30,4 @@ training/data/
 web/node_modules/
 web/.next/
 web/.env.local
+.run-local/

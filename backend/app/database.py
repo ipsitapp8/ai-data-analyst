@@ -82,6 +82,7 @@ _ADDITIVE_COLUMNS = (
     ("alerts", "delivery_attempts", "INTEGER"),
     ("alerts", "next_delivery_at", "DATETIME"),
     ("alerts", "delivery_payload_json", "TEXT"),
+    ("teams", "group_id", "INTEGER REFERENCES groups(id)"),
 )
 
 
@@ -170,8 +171,10 @@ def init_db() -> None:
         Base.metadata.create_all(bind=engine)
         _run_migrations()
 
+    from app.authz import backfill_org_memberships
     from app.dataset_versions import backfill_dataset_versions
 
+    backfill_org_memberships()
     backfill_dataset_versions()
 
 
