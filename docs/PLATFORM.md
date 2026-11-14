@@ -573,6 +573,7 @@ Known limits found while testing: a plain chain of more than about 20 additions 
 named outputs); sentence entry refuses a percentage change outside -100% to +1000% (the same range as the form) while the API's `evaluate`
 accepts any number and relies on the model's own constraints; `GET /api/scenarios/models` needs a login but no team because it returns only the
 built-in catalogue.
+A request body containing the NUL character (raw or as ` `) is refused with 422 on all three what-if routers, because Postgres cannot store it in text or JSONB (CI found this: SQLite stored it, Postgres answered 500). The guard also refuses text that literally spells ` `.
 
 ## 11. Monitoring and alerts
 
