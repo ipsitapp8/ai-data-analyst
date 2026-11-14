@@ -103,6 +103,10 @@ def try_answer(message: str, df: pd.DataFrame, memory: dict, filename: str | Non
             return None                              # a "why" or "which input" question with no scenario to explain is not ours
     elif not TRIGGER.search(message):
         return None
+    if fixed_now is not None:
+        # The question waiting for this value is answered now, including when the conversation layer has already folded the reply into
+        # the original sentence ("...price by 10%? fixed cost is 500"), which the branch above deliberately does not take.
+        memory.pop("pending_scenario", None)
     fit = infer_model(df)
     if fit is None:
         return None

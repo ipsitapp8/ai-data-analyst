@@ -172,7 +172,9 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
             elif problem:
                 return _reply(f"**I can't show a trend of {m.label} here:** {problem}.", "metric", model_on, started,
                               plan={"type": "clarify"})
-    elif not (followup.wants_forecast(message) or re.search(r"\bpredict\w*\b", message, re.I) or _SCENARIO_Q.search(message)):
+    # A what-if or goal sentence goes to the shared what-if service further down, which declines (None) anything it cannot read cleanly.
+    elif not (followup.wants_forecast(message) or re.search(r"\bpredict\w*\b", message, re.I) or _SCENARIO_Q.search(message)
+              or scenario_bridge.TRIGGER.search(message)):
         out = _ask_metric(message, df, memory, model_on, started, sc)
         if out is not None:
             return out
