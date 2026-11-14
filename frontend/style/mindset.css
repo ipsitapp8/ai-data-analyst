@@ -142,3 +142,15 @@ button[kind="secondary"]:hover, .stDownloadButton > button:hover {
 .stApp .ds-row { background: transparent; min-height: 52px; overflow-wrap: anywhere; }
 .stApp .ds-row:hover { background: rgba(255,255,255,.55); }
 .stApp [class*="st-key-flat"] { overflow: hidden; padding-bottom: 4px; }
+
+/* tabs: a proper pill with room around the label, in every container */
+.stApp .stTabs [data-baseweb="tab-list"] { gap: 4px !important; padding: 4px !important; border-radius: 999px !important; width: fit-content; max-width: 100%; overflow-x: auto; }
+.stApp .stTabs [data-baseweb="tab"] { padding: 8px 20px !important; margin: 0 !important; height: auto !important; border-radius: 999px !important; white-space: nowrap; background: transparent; }
+.stApp .stTabs [data-baseweb="tab"] p { margin: 0 !important; font-size: .88rem; }
+.stApp .stTabs [aria-selected="true"] { background: #151515 !important; border-radius: 999px !important; }
+.stApp .stTabs [data-baseweb="tab-border"], .stApp .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+
+/* a row of text + button(s): everything sits on one centre line, and the text column may shrink so nothing is pushed out */
+.stApp [class*="st-key-card"] [data-testid="stHorizontalBlock"], .stApp [class*="st-key-flat"] [data-testid="stHorizontalBlock"] { align-items: center; gap: 1rem; }
+.stApp [data-testid="stColumn"] { min-width: 0; }
+.stApp [data-testid="stMarkdownContainer"] { overflow-wrap: anywhere; }

@@ -17,6 +17,7 @@ import datetime as dt
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -745,6 +746,33 @@ class ScenarioModelVersion(Base):
     version = Column(Integer, nullable=False)
     definition_json = Column(JSONVariant, default=dict)
     definition_sha256 = Column(String, nullable=False)
+    note = Column(Text, default="")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class ScenarioEvidence(Base):
+    """A sealed record of one what-if calculation: what was asked, what was computed, which model version and engines,
+    which data, and whether the independent check passed. Append-only: rows are never updated."""
+
+    __tablename__ = "scenario_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=True, index=True)
+    kind = Column(String, nullable=False)  # scenario|simulation|goal_seek|sensitivity_grid
+    model_ref = Column(String, nullable=False)
+    model_sha256 = Column(String, nullable=True)
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=True)
+    dataset_version_id = Column(Integer, ForeignKey("dataset_versions.id"), nullable=True)
+    dataset_sha256 = Column(String, nullable=True)
+    request_json = Column(JSONVariant, default=dict)
+    result_json = Column(JSONVariant, default=dict)
+    verification_status = Column(String, nullable=False, default="unverified")
+    verification_json = Column(JSONVariant, default=dict)
+    engine_versions_json = Column(JSONVariant, default=dict)
+    seed = Column(BigInteger, nullable=True)
+    content_sha256 = Column(String, nullable=False)
     note = Column(Text, default="")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=utcnow)

@@ -9,7 +9,9 @@ import streamlit as st
 from api_client import (ApiError, compare_scenarios, delete_scenario, evaluate_scenarios, list_custom_models,
                         list_datasets, list_scenarios, save_scenario, scenario_baseline, scenario_models)
 from style.theme import esc, html, page_header, page_setup, plot, render_sidebar, require_active_team
+from what_if_ask import ask_box
 from what_if_data import elasticity_panel
+from what_if_evidence import evidence_list, explanation_panel, inspector
 from what_if_grid import grid_section
 from what_if_models import builder_tab, model_choices
 from what_if_segments import segments_tab
@@ -39,6 +41,7 @@ build_tab, segments_tab_, periods_tab, models_tab, saved_tab = st.tabs(["Build a
 def render_build():
     model_key = st.selectbox("Model", list(models), format_func=lambda k: models[k]["title"], key="wi_model")
     model = models[model_key]
+    ask_slot = st.container()
     with st.expander("Formulas this model uses"):
         for f in model["formulas"]:
             st.markdown(f"- `{f}`")
@@ -120,6 +123,8 @@ def render_build():
         st.error(f"These inputs are not valid: {e}")
         return
 
+    with ask_slot:
+        ask_box(model_key, model, baseline, assumptions)
     primary = out["primary_output"]
     names = {"baseline": out["baseline"]["outputs"], **{k: v["outputs"] for k, v in out["scenarios"].items()}}
     table = pd.DataFrame({k: {model["outputs"][o]: v.get(o) for o in model["outputs"]} for k, v in names.items()})
@@ -161,6 +166,8 @@ def render_build():
     if out.get("break_even"):
         break_even_section(out, model_key)
     verification_panel(out.get("verification"), "Independent check of the scenario arithmetic")
+    explanation_panel(out.get("explanation"))
+    inspector(model_key, model, payload, list(out["scenarios"]), st.session_state.get("wi_dataset_id") if seed else None)
     simulation_options = simulation_section(model_key, model, baseline, assumptions, adjustments)
     goal_seek_section(model_key, model, baseline, assumptions, adjustments)
     grid_section(model_key, model, baseline, assumptions, adjustments)
@@ -200,6 +207,8 @@ with saved_tab:
         base = s.get("baseline_primary")
         c2.markdown(f"**{s['name']}** · {models.get(s['model'], {}).get('title', s['model'])} · baseline "
                     f"{s.get('primary_output')}: {base:,.2f}" if base is not None else f"**{s['name']}**")
+        with c2.expander("Evidence"):
+            evidence_list(s["id"], f"wi_ev_{s['id']}")
         if c3.button("Delete", key=f"wi_del_{s['id']}"):
             try:
                 delete_scenario(s["id"])

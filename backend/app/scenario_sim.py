@@ -363,7 +363,7 @@ def _disclosures(ctx: dict, fixed: list[str], cut: dict[str, float], n_valid: in
     labels = lambda names: ", ".join(spec["inputs"][k]["label"] for k in names)  # noqa: E731
     notes.append("The input distributions are assumptions you supplied. They were not estimated from your data.")
     if fixed:
-        notes.append(f"Held fixed at their scenario values because no uncertainty was given: {labels(fixed)}.")
+        notes.append(f"Held fixed at their scenario values (no uncertainty was given): {labels(fixed)}.")
     names = list(ctx["dists"])
     in_corr = set(ctx["corr"][0]) if ctx["corr"] else set()
     if len(names) > 1 and len(in_corr) < len(names):
@@ -377,7 +377,7 @@ def _disclosures(ctx: dict, fixed: list[str], cut: dict[str, float], n_valid: in
         notes.append(f"Volume follows each sampled price through the stated price elasticity of "
                      f"{ctx['assumptions']['price_elasticity']:g}.")
     elif ctx["model"] == "unit_economics" and ctx["assumptions"].get("price_elasticity") and "price" in ctx["dists"]:
-        notes.append("The price elasticity is not applied to sampled prices because volume was adjusted or given its "
+        notes.append("The price elasticity is not applied to sampled prices: volume was adjusted or given its "
                      "own distribution.")
     for name, mass in cut.items():
         if mass > 1e-9:
