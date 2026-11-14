@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -684,6 +685,64 @@ def duplicate_scenario(scenario_id: int, payload: DuplicateRequest | None = None
     db.commit()
     db.refresh(row)
     return _out(row, fresh=scenario_library.freshness(db, team.id, row))
+
+
+class RebaseRequest(BaseModel):
+    dataset_version: int | None = Field(default=None, ge=1)   # default: the newest version
+    name: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/{scenario_id}/rebase", status_code=201)
+def rebase_scenario(scenario_id: int, payload: RebaseRequest | None = None, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
+    """Recalculate a saved scenario against another version of its dataset, as a NEW scenario. The original is not touched.
+
+    The baseline is derived again from the chosen version with the mapping, date column and period the original recorded. An input the
+    data cannot supply (one you typed) keeps the value you saved and is listed in `kept_from_saved`, never silently dropped or guessed. The
+    same changes and assumptions are applied, and the response compares the two results."""
+    src = _owned(db, team, scenario_id)
+    adj = src.adjustments_json or {}
+    if src.dataset_id is None:
+        raise HTTPException(400, "This scenario was built from typed inputs, so there is no data to recalculate against")
+    pinned = db.get(DatasetVersion, src.dataset_version_id) if src.dataset_version_id else None
+    if pinned is None:
+        raise HTTPException(410, "The dataset version this scenario was built from is no longer available")
+    wanted = payload.dataset_version if payload else None
+    dataset, version, df, prov = _versioned_frame(db, team, src.dataset_id, wanted)
+    if version is None or version.id == pinned.id:
+        raise HTTPException(400, f"This scenario already uses version {pinned.version_number}; choose another version")
+    old_source = dict(adj.get("baseline_source") or {})
+    old_source.pop("provenance", None)
+    model = resolve_model(db, team, src.model)
+    ask = SimpleNamespace(mapping=old_source.get("mapping") or {}, filters=[f for f in (old_source.get("filters") or []) if isinstance(f, dict)],
+                          overrides={}, date_column=old_source.get("date_column"), period=old_source.get("period"))
+    derived = _baseline_for(db, team, ask, model, dataset, df, version)
+    new_inputs, kept = {}, []
+    for k, old in (src.baseline_json or {}).items():
+        v = (derived["inputs"] or {}).get(k)
+        if v is None:
+            new_inputs[k] = old
+            kept.append(k)
+        else:
+            new_inputs[k] = float(v)
+    name = (payload.name.strip() if payload and payload.name else "") or f"{src.name} (data v{version.version_number})"[:120]
+    body = ScenarioSave(model=src.model, name=name, baseline=new_inputs, scenarios=adj.get("scenarios") or {}, assumptions=adj.get("assumptions") or {},
+                        assumption_sources=adj.get("assumption_sources") or {}, sensitivity_pct=adj.get("sensitivity_pct", 10.0),
+                        spread_pct=adj.get("spread_pct"), dataset_id=src.dataset_id,
+                        simulation=SimulationOptions(**adj["simulation"]) if adj.get("simulation") else None,
+                        baseline_source={**old_source, "dataset_version": version.version_number})
+    row = _write(db, team, user, body, None, f"recalculated from scenario {src.id} on data version {version.version_number}")
+    db.commit()
+    db.refresh(row)
+    items = []
+    for r in (src, row):
+        v = db.get(DatasetVersion, r.dataset_version_id) if r.dataset_version_id else None
+        items.append({"id": r.id, "name": r.name, "results": r.results_json or {}, "freshness": scenario_library.freshness(db, team.id, r),
+                      "dataset_id": r.dataset_id, "dataset_version": v.version_number if v else None})
+    return {"scenario": _out(row, fresh=scenario_library.freshness(db, team.id, row)), "original_id": src.id, "kept_from_saved": kept,
+            "inputs": {k: {"was": (src.baseline_json or {}).get(k), "now": new_inputs[k]} for k in new_inputs},
+            "from_version": pinned.version_number, "to_version": version.version_number, "analysis": scenario_library.compare(items),
+            "note": "The original scenario is unchanged. Inputs the data could not supply keep the values you saved."}
 
 
 @router.get("/{scenario_id}/export")

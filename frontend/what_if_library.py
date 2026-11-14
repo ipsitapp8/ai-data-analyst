@@ -9,8 +9,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from api_client import (ApiError, compare_scenarios, delete_scenario, duplicate_scenario, export_scenario, get_scenario, rename_scenario,
-                        compare_scenarios_csv)
+from api_client import (ApiError, compare_scenarios, delete_scenario, duplicate_scenario, export_scenario, get_scenario, rebase_scenario,
+                        rename_scenario, compare_scenarios_csv)
 from style.theme import badge, esc, html
 from what_if_evidence import evidence_list
 
@@ -100,6 +100,9 @@ def library_tab(models: dict, saved: list[dict]) -> None:
         return
     if st.session_state.get("wi_open_error"):
         st.error(f"It could not be opened: {st.session_state.pop('wi_open_error')}")
+    done = st.session_state.pop("wi_rebased", None)
+    if done:
+        _rebased(done)
     if st.session_state.get("wi_opened_notice"):
         st.success(f"“{st.session_state.pop('wi_opened_notice')}” is open in the “Build a scenario” tab.")
     chosen = []
@@ -140,6 +143,15 @@ def _actions(s: dict, models: dict) -> None:
             st.rerun()
         except ApiError as e:
             st.error(str(e))
+    if (s.get("freshness") or {}).get("status") == "stale":
+        if st.button("Recalculate on the newest data (saves a new scenario)", key=f"wi_rebase_{sid}",
+                     help="Takes the baseline again from the newer version with the same mapping and period, applies the same changes, and saves the "
+                          "result as a new scenario. This one is left exactly as it is."):
+            try:
+                st.session_state["wi_rebased"] = rebase_scenario(sid)
+                st.rerun()
+            except ApiError as e:
+                st.error(str(e))
     name = c3.text_input("New name", value=s["name"], key=f"wi_ren_{sid}", max_chars=120, label_visibility="collapsed")
     if c3.button("Rename", key=f"wi_rename_{sid}", disabled=not name.strip() or name.strip() == s["name"]):
         try:
@@ -185,3 +197,17 @@ def _comparison(ids: list[int]) -> None:
         st.download_button("Download comparison (CSV)", compare_scenarios_csv(ids), file_name="scenario-comparison.csv", mime="text/csv", key="wi_cmp_dl")
     except ApiError as e:
         st.error(str(e))
+
+
+def _rebased(r: dict) -> None:
+    """What a recalculation on newer data did, shown beside what it replaced (which still exists unchanged)."""
+    new = r["scenario"]
+    st.success(f"Saved “{new['name']}” on data version {r['to_version']}. “{r['analysis']['rows'][0]['name']}” (version {r['from_version']}) is unchanged.")
+    moved = [(k, v["was"], v["now"]) for k, v in r["inputs"].items() if v["was"] != v["now"]]
+    if moved:
+        st.caption("Inputs that moved: " + " · ".join(f"{k} {a:,.2f} → {b:,.2f}" for k, a, b in moved))
+    if r["kept_from_saved"]:
+        st.caption("Kept from what you saved, because the data does not supply them: " + ", ".join(r["kept_from_saved"]))
+    rows = [{"Saved as": x["name"], "Scenario": x["scenario"], "Result": x["value"], "Change": x["change"], "Change %": x["change_pct"]} for x in r["analysis"]["rows"]]
+    st.dataframe(pd.DataFrame(rows).style.format({"Result": "{:,.2f}", "Change": "{:+,.2f}", "Change %": "{:+,.1f}%"}, na_rep="—"),
+                 use_container_width=True, hide_index=True)

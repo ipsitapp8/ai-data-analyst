@@ -537,6 +537,34 @@ No schema change: revision, data status and the rest are derived or kept in the 
 Limits: segment and period-comparison results are not saved scenarios, so they have no reopen/export; reopening cannot restore a
 non-percentage change into the form; the page was not run in a real browser.
 
+### 10.16 Recalculating on newer data, and how the What-If feature is tested (Phase 5)
+
+`POST /api/scenarios/{id}/rebase` takes the baseline again from another version of the scenario's dataset (the newest by default) using the
+mapping, date column and period the scenario recorded, applies the same changes and assumptions, and saves the result as a **new** scenario
+named "X (data vN)". The original is not touched. An input the data cannot supply (for example a fixed cost you typed) keeps the saved value
+and is listed in `kept_from_saved`. The response holds `inputs` (was/now) and the comparison `analysis`. It refuses a scenario with typed
+inputs only (400), a version it already uses (400), and a missing version (404). The Saved tab offers it only while the scenario is `stale`.
+
+Test suites for the feature (all under `backend/tests/` unless noted):
+
+| Area | File | What it proves |
+|---|---|---|
+| Engines, per phase | `test_scenario_phase1.py`, `_elasticity`, `_custom_models`, `_time`, `_segments`, `_sensitivity` | Hand-worked numbers; the independent verifier agrees; bounds and refusals |
+| Natural language, explanations, evidence, Copilot bridge | `test_scenario_nl.py`, `_explain`, `_evidence`, `_bridge` | Numbers come only from the user; sealed records detect tampering; the Copilot gives the page's numbers |
+| Saved scenarios | `test_scenario_library.py` | Edit/rename/duplicate, data status, comparison, export, isolation |
+| End-to-end | `test_scenario_e2e.py` | The seven workflows (basic, Monte Carlo, goal seek, break-even, sentence, new data version, other team), each ending in a check done outside the code under test |
+| Performance and bounds | `test_scenario_performance.py` | Time budgets (several times the measured cost) and exact limits: iterations 100-200,000, grid 61, 20 uncertain inputs, formula size/depth/exponent |
+| Security | `test_scenario_security.py` | Every route of the three what-if routers (read from the routers, so a new route is covered automatically) refuses anonymous callers and callers with no or a foreign team; another team's id looks the same as a missing one; hostile names; prompt-injection sentences |
+| Pages | `frontend/tests/test_pages.py` (What-If cases) | Streamlit AppTest of every control on the page |
+
+Measured on a Windows laptop: 10,000 draws of a 14-input custom model 0.6 s; 200,000 draws 0.7 s; a 61 x 61 grid 0.06 s; attribution over 14
+changed inputs (sampled) about 4 s; a baseline from a 100,000-row file a few seconds.
+
+Known limits found while testing: a plain chain of more than about 20 additions in one formula is refused as too deep (split it across
+named outputs); sentence entry refuses a percentage change outside -100% to +1000% (the same range as the form) while the API's `evaluate`
+accepts any number and relies on the model's own constraints; `GET /api/scenarios/models` needs a login but no team because it returns only the
+built-in catalogue.
+
 ## 11. Monitoring and alerts
 
 `backend/app/scheduler.py`
@@ -673,7 +701,7 @@ List endpoints with `limit` and `offset` return `{total, limit, offset, ...}`.
 | Copilot | `POST /api/copilot/sessions`, `GET /api/copilot/sessions`, `GET /api/copilot/sessions/{id}`, `POST /api/copilot/sessions/{id}/messages`, `DELETE /api/copilot/sessions/{id}` |
 | Scenario models | `POST /api/scenario-models/validate`, `POST/GET /api/scenario-models`, `GET /api/scenario-models/{id}`, `GET /api/scenario-models/{id}/versions/{v}`, `POST /api/scenario-models/{id}/versions`, `POST /api/scenario-models/{id}/archive`, `POST /api/scenario-models/{id}/restore` |
 | Scenario evidence | `POST /api/scenario-evidence`, `GET /api/scenario-evidence?scenario_id=&kind=`, `GET /api/scenario-evidence/{id}`, `POST /api/scenario-evidence/{id}/reproduce` |
-| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/inspect`, `POST /api/scenarios/ask`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=&format=`, `GET /api/scenarios/{id}`, `PATCH /api/scenarios/{id}`, `PUT /api/scenarios/{id}`, `POST /api/scenarios/{id}/duplicate`, `GET /api/scenarios/{id}/export?format=`, `DELETE /api/scenarios/{id}` |
+| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/inspect`, `POST /api/scenarios/ask`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=&format=`, `GET /api/scenarios/{id}`, `PATCH /api/scenarios/{id}`, `PUT /api/scenarios/{id}`, `POST /api/scenarios/{id}/duplicate`, `POST /api/scenarios/{id}/rebase`, `GET /api/scenarios/{id}/export?format=`, `DELETE /api/scenarios/{id}` |
 | Semantic | `GET`, `POST /api/semantic/metrics`, `GET /api/semantic/metrics/{id}`, `POST /api/semantic/metrics/{id}/versions`, `POST /api/semantic/metrics/{id}/versions/{v}/approve`, `POST /api/semantic/metrics/{id}/deprecate`, `POST /api/semantic/validate`, `GET`, `POST /api/semantic/terms`, `DELETE /api/semantic/terms/{id}`, `POST /api/semantic/relationships`, `DELETE /api/semantic/relationships/{id}`, `GET /api/semantic/graph`, `POST /api/semantic/resolve`, `GET /api/semantic/search?q=` |
 | Evaluation | `GET /api/evals/suite`, `GET /api/evals/runs`, `GET /api/evals/runs/{id}`, `GET /api/evals/compare?base=&new=` |
 
