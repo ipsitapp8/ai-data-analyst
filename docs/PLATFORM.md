@@ -506,7 +506,9 @@ numbers are grounded and it has no causal wording; otherwise the template text s
 with their provenance (typed, dataset formula, elasticity estimate), assumptions, constraints and a `matches_engine` flag. With
 `persist`, and whenever a scenario is saved, a sealed record is stored in `scenario_evidence` (migration `d5f7b9c1e3a2`, after
 `c4e6a8b0d2f1`): request, result, verification, data version/fingerprint, seed, engine versions, and a SHA-256 over the canonical
-request and result. Records are server-recomputed, team-scoped and append-only (`POST`, `GET` list/get, `POST /{id}/reproduce`; no
+request, result and **context** (the custom model's definition hash, the dataset id/version/content hash, and the engine versions). The request
+itself already holds the model reference, baseline, changes, assumptions, their sources and the seed. Changing any sealed column afterwards is
+reported by `reproduce` as `record_intact: false`. Deleting a scenario keeps its evidence: the records are detached (`scenario_id` set to null), not deleted. Records are server-recomputed, team-scoped and append-only (`POST`, `GET` list/get, `POST /{id}/reproduce`; no
 PUT/PATCH/DELETE). `reproduce` re-runs the stored request and reports `reproduced: false` if the record was altered, the engine version
 changed, or the result differs, and says which.
 
@@ -543,7 +545,9 @@ non-percentage change into the form; the page was not run in a real browser.
 mapping, date column and period the scenario recorded, applies the same changes and assumptions, and saves the result as a **new** scenario
 named "X (data vN)". The original is not touched. An input the data cannot supply (for example a fixed cost you typed) keeps the saved value
 and is listed in `kept_from_saved`. The response holds `inputs` (was/now) and the comparison `analysis`. It refuses a scenario with typed
-inputs only (400), a version it already uses (400), and a missing version (404). The Saved tab offers it only while the scenario is `stale`.
+inputs only (400), a version it already uses (400), and a missing version (404). It also refuses (400) when none of the scenario's inputs can be taken from the data, instead of silently keeping every saved value. Rebase creates a new
+scenario and never changes the original row, its inputs, its data-version reference or its evidence (tested). The Saved tab offers it only while the
+scenario is `stale`.
 
 Test suites for the feature (all under `backend/tests/` unless noted):
 
@@ -559,6 +563,11 @@ Test suites for the feature (all under `backend/tests/` unless noted):
 
 Measured on a Windows laptop: 10,000 draws of a 14-input custom model 0.6 s; 200,000 draws 0.7 s; a 61 x 61 grid 0.06 s; attribution over 14
 changed inputs (sampled) about 4 s; a baseline from a 100,000-row file a few seconds.
+
+What this does **not** establish: nothing was run in a real browser, so Streamlit interaction and layout are verified only through `AppTest`; Postgres is
+exercised only in CI (which already caught one bug SQLite could not, the delete foreign key above), not on a production-like deployment; the time budgets
+in `test_scenario_performance.py` are several times the measured cost but have only been observed on a development laptop and on CI runs so far; attribution
+over more than 14 changed inputs takes about 4 s because it samples, a trade-off rather than a defect.
 
 Known limits found while testing: a plain chain of more than about 20 additions in one formula is refused as too deep (split it across
 named outputs); sentence entry refuses a percentage change outside -100% to +1000% (the same range as the form) while the API's `evaluate`

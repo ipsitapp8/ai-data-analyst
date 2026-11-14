@@ -33,7 +33,8 @@ def baseline_from_data(client, ws, version=None):
 
 def sealed(rec):
     """The seal, recomputed here with plain json and hashlib."""
-    doc = {"request": rec["request"], "result": rec["result"]}
+    doc = {"request": rec["request"], "result": rec["result"],
+           "context": {"model_sha256": rec["model_sha256"], "dataset": rec["dataset"], "engine_versions": rec["engine_versions"]}}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -241,3 +242,48 @@ def test_math_helpers_agree_with_the_engines_on_an_independent_grid(client):
     for j, y in enumerate(ys):
         for i, x in enumerate(xs):
             assert math.isclose(zs[j][i], (x - 12.0) * y - 3000.0, rel_tol=1e-9, abs_tol=1e-6)
+
+
+def test_rebase_refuses_when_no_input_can_be_taken_from_the_data_and_changes_nothing(client):
+    ws = workspace(client, csv=csv_bytes(), filename="sales.csv")
+    base = {"price": 20.0, "volume": 210.0, "unit_cost": 12.0, "fixed_cost": 500.0}
+    s = client.post("/api/scenarios", json={"name": "no mapping", "model": "unit_economics", "baseline": base, "scenarios": {}, "dataset_id": ws["ds"],
+                                            "baseline_source": {"dataset_version": 1}}, headers=ws["h"]).json()
+    client.post(f"/api/datasets/{ws['ds']}/versions", files={"file": ("v2.csv", csv_bytes(24.0), "text/csv")}, headers=ws["h"])
+    r = client.post(f"/api/scenarios/{s['id']}/rebase", headers=ws["h"])
+    assert r.status_code == 400 and ("quantity column" in r.json()["detail"] or "no mapping" in r.json()["detail"]), r.text
+    assert client.get("/api/scenarios", headers=ws["h"]).json()["total"] == 1, "no half-made scenario is left behind"
+
+
+def test_rebase_leaves_the_original_row_and_its_evidence_exactly_as_they_were(client):
+    ws = workspace(client, csv=csv_bytes(20.0), filename="sales.csv")
+    base = baseline_from_data(client, ws)["inputs"]
+    orig = client.post("/api/scenarios", json={"name": "O", "model": "unit_economics", "baseline": base, "assumptions": {"price_elasticity": 0.0},
+                                               "scenarios": {"your scenario": {"price": {"type": "pct", "value": 10.0}}}, "dataset_id": ws["ds"],
+                                               "baseline_source": {"dataset_version": 1, "mapping": MAP}}, headers=ws["h"]).json()
+    before_row = client.get(f"/api/scenarios/{orig['id']}", headers=ws["h"]).json()
+    before_ev = client.get("/api/scenario-evidence", params={"scenario_id": orig["id"]}, headers=ws["h"]).json()["records"]
+    client.post(f"/api/datasets/{ws['ds']}/versions", files={"file": ("v2.csv", csv_bytes(24.0), "text/csv")}, headers=ws["h"])
+    new = client.post(f"/api/scenarios/{orig['id']}/rebase", headers=ws["h"]).json()["scenario"]
+    after_row = client.get(f"/api/scenarios/{orig['id']}", headers=ws["h"]).json()
+    after_ev = client.get("/api/scenario-evidence", params={"scenario_id": orig["id"]}, headers=ws["h"]).json()["records"]
+    for k in ("name", "baseline", "request", "results", "revision", "dataset_id", "dataset_version_id", "created_at"):
+        assert after_row[k] == before_row[k], f"the original's {k} changed"
+    assert after_ev == before_ev, "the original's evidence records are untouched (same ids, same seals)"
+    new_ev = client.get("/api/scenario-evidence", params={"scenario_id": new["id"]}, headers=ws["h"]).json()["records"]
+    assert len(new_ev) == 1 and new_ev[0]["dataset"]["dataset_version_id"] == new["dataset_version_id"] != orig["dataset_version_id"]
+    assert new_ev[0]["dataset"]["content_sha256"] != before_ev[0]["dataset"]["content_sha256"], "the new record is sealed against the new data"
+
+
+def test_rebase_of_a_custom_model_with_no_data_bindings_refuses_instead_of_silently_keeping_everything(client):
+    ws = workspace(client, csv=csv_bytes(), filename="sales.csv")
+    d = {"name": "Unbound", "definition": {"inputs": {"price": {"label": "Price", "unit": "currency", "min": 0}, "cost": {"label": "Cost", "unit": "currency", "min": 0}},
+                                           "outputs": {"profit": {"label": "Profit", "unit": "currency", "formula": "price - cost"}}, "primary_output": "profit"}}
+    m = client.post("/api/scenario-models", json=d, headers=ws["h"]).json()
+    s = client.post("/api/scenarios", json={"name": "u", "model": m["ref"], "baseline": {"price": 10.0, "cost": 4.0}, "scenarios": {}, "dataset_id": ws["ds"],
+                                            "baseline_source": {"dataset_version": 1}}, headers=ws["h"])
+    assert s.status_code == 201, s.text
+    client.post(f"/api/datasets/{ws['ds']}/versions", files={"file": ("v2.csv", csv_bytes(24.0), "text/csv")}, headers=ws["h"])
+    r = client.post(f"/api/scenarios/{s.json()['id']}/rebase", headers=ws["h"])
+    assert r.status_code == 400 and "None of this scenario's inputs can be taken from the data" in r.json()["detail"], r.text
+    assert client.get("/api/scenarios", headers=ws["h"]).json()["total"] == 1
