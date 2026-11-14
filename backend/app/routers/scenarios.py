@@ -725,6 +725,9 @@ def rebase_scenario(scenario_id: int, payload: RebaseRequest | None = None, db: 
             kept.append(k)
         else:
             new_inputs[k] = float(v)
+    if len(kept) == len(new_inputs):
+        raise HTTPException(400, "None of this scenario's inputs can be taken from the data (it records no mapping from columns to inputs), so "
+                                 "there is nothing to recalculate. Take a new baseline from the data in the builder and save it as a new scenario.")
     name = (payload.name.strip() if payload and payload.name else "") or f"{src.name} (data v{version.version_number})"[:120]
     body = ScenarioSave(model=src.model, name=name, baseline=new_inputs, scenarios=adj.get("scenarios") or {}, assumptions=adj.get("assumptions") or {},
                         assumption_sources=adj.get("assumption_sources") or {}, sensitivity_pct=adj.get("sensitivity_pct", 10.0),

@@ -155,8 +155,10 @@ def test_a_sealed_record_has_everything_needed_to_audit_the_calculation(client, 
 def test_the_seal_can_be_recomputed_independently_from_the_stored_record(client, ws):
     rec = seal(client, ws)
     full = client.get(f"/api/scenario-evidence/{rec['id']}", headers=ws["h"]).json()
-    body = json.dumps({"request": full["request"], "result": full["result"]}, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    context = {"model_sha256": full["model_sha256"], "dataset": full["dataset"], "engine_versions": full["engine_versions"]}
+    body = json.dumps({"request": full["request"], "result": full["result"], "context": context}, sort_keys=True, separators=(",", ":"), allow_nan=False)
     assert hashlib.sha256(body.encode()).hexdigest() == full["content_sha256"]
+    assert context["engine_versions"]["scenarios"] == scenarios.ENGINE_VERSION, "the engine versions are inside what is sealed"
 
 
 def test_the_server_always_recomputes_a_result_and_ignores_one_a_client_supplies(client, ws):
@@ -381,3 +383,39 @@ def test_deleting_one_scenario_leaves_another_scenarios_evidence_linked(client):
     b = client.post("/api/scenarios", json={**body, "name": "b"}, headers=ws["h"]).json()["id"]
     client.delete(f"/api/scenarios/{a}", headers=ws["h"])
     assert len(client.get("/api/scenario-evidence", params={"scenario_id": b}, headers=ws["h"]).json()["records"]) == 1
+
+
+def _tamper(rec_id, **columns):
+    db = SessionLocal()
+    try:
+        row = db.get(ScenarioEvidence, rec_id)
+        for k, v in columns.items():
+            setattr(row, k, v)
+        db.commit()
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("column,value", [("dataset_sha256", "f" * 64), ("model_sha256", "e" * 64),
+                                          ("engine_versions_json", {"scenarios": "9.9"})])
+def test_changing_what_a_record_depended_on_is_detected_even_though_it_is_not_in_the_request(client, ws, column, value):
+    """The data version, the model definition hash and the engine versions are part of the seal, not just stored beside it."""
+    rec = seal(client, ws)
+    first = client.post(f"/api/scenario-evidence/{rec['id']}/reproduce", headers=ws["h"]).json()
+    assert first["reproduced"] is True
+    _tamper(rec["id"], **{column: value})
+    after = client.post(f"/api/scenario-evidence/{rec['id']}/reproduce", headers=ws["h"]).json()
+    assert after["record_intact"] is False and after["reproduced"] is False and "altered" in after["explanation"]
+
+
+def test_a_record_with_a_dataset_seals_that_datasets_fingerprint(client):
+    ws = workspace(client)
+    body = {"name": "d", "model": "unit_economics", "baseline": BASE, "scenarios": {}, "dataset_id": ws["ds"]}
+    sid = client.post("/api/scenarios", json=body, headers=ws["h"]).json()["id"]
+    rec = client.get("/api/scenario-evidence", params={"scenario_id": sid}, headers=ws["h"]).json()["records"][0]
+    full = client.get(f"/api/scenario-evidence/{rec['id']}", headers=ws["h"]).json()
+    assert full["dataset"]["content_sha256"] and full["dataset"]["dataset_version_id"]
+    doc = {"request": full["request"], "result": full["result"], "context": {"model_sha256": full["model_sha256"], "dataset": full["dataset"], "engine_versions": full["engine_versions"]}}
+    assert hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest() == full["content_sha256"]
+    _tamper(rec["id"], dataset_sha256="0" * 64)
+    assert client.post(f"/api/scenario-evidence/{rec['id']}/reproduce", headers=ws["h"]).json()["record_intact"] is False
