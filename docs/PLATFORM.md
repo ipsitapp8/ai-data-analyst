@@ -513,6 +513,30 @@ changed, or the result differs, and says which.
 Limits: the Copilot bridge covers only the two built-in models; segment results are not sealed; the model translator and the model polish have only been
 tested with scripted providers, not a live one.
 
+### 10.15 Saved scenarios you come back to (Phase 4)
+
+No schema change: revision, data status and the rest are derived or kept in the scenario's existing JSON.
+
+- **Reopen and edit.** `GET /api/scenarios/{id}` returns the stored settings, `revision` and `freshness`. In the page, *Open in the builder*
+  loads the stored baseline, assumptions and percentage changes into the form and shows what it could not load (non-percentage changes,
+  other named scenarios, simulation settings). `PUT /api/scenarios/{id}` recalculates on the server, raises `revision` and seals new
+  evidence; evidence of earlier revisions is kept untouched (its `reproduce` still works).
+- **Rename and duplicate.** `PATCH /api/scenarios/{id}` changes the name only. `POST /api/scenarios/{id}/duplicate` makes an independent,
+  recalculated and sealed copy ("Copy of X", numbered if taken) that stays pinned to the data version the original used.
+- **Data status** (`scenario_library.freshness`): `typed_inputs`, `current`, `stale` (a newer dataset version exists), `changed` (the pinned
+  version's fingerprint no longer matches what was saved), `unavailable` (dataset or version gone). A revised or archived custom model is
+  reported too. Saved numbers are never rewritten and a scenario is never moved onto newer data; re-taking the baseline is a deliberate step.
+- **Comparison.** `GET /api/scenarios/compare?ids=` keeps its earlier keys and adds `analysis`: each scenario's change and % change against
+  its own baseline, highest/lowest by value only, and warnings when starting inputs, assumptions or data versions differ or a scenario's data is
+  stale. `format=csv` downloads it.
+- **Export and sharing.** `GET /api/scenarios/{id}/export?format=json|csv|md` is the scenario exactly as saved (not recalculated) with the
+  disclaimer, data status, verification, evidence references and a SHA-256 of its own content (also in `X-Content-SHA256`). Sharing means
+  sending this file; there are no public links. CSV cells that begin with `= + - @` are defused so a scenario name cannot run as a
+  spreadsheet formula.
+
+Limits: segment and period-comparison results are not saved scenarios, so they have no reopen/export; reopening cannot restore a
+non-percentage change into the form; the page was not run in a real browser.
+
 ## 11. Monitoring and alerts
 
 `backend/app/scheduler.py`
@@ -649,7 +673,7 @@ List endpoints with `limit` and `offset` return `{total, limit, offset, ...}`.
 | Copilot | `POST /api/copilot/sessions`, `GET /api/copilot/sessions`, `GET /api/copilot/sessions/{id}`, `POST /api/copilot/sessions/{id}/messages`, `DELETE /api/copilot/sessions/{id}` |
 | Scenario models | `POST /api/scenario-models/validate`, `POST/GET /api/scenario-models`, `GET /api/scenario-models/{id}`, `GET /api/scenario-models/{id}/versions/{v}`, `POST /api/scenario-models/{id}/versions`, `POST /api/scenario-models/{id}/archive`, `POST /api/scenario-models/{id}/restore` |
 | Scenario evidence | `POST /api/scenario-evidence`, `GET /api/scenario-evidence?scenario_id=&kind=`, `GET /api/scenario-evidence/{id}`, `POST /api/scenario-evidence/{id}/reproduce` |
-| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/inspect`, `POST /api/scenarios/ask`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=`, `GET /api/scenarios/{id}`, `DELETE /api/scenarios/{id}` |
+| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/inspect`, `POST /api/scenarios/ask`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=&format=`, `GET /api/scenarios/{id}`, `PATCH /api/scenarios/{id}`, `PUT /api/scenarios/{id}`, `POST /api/scenarios/{id}/duplicate`, `GET /api/scenarios/{id}/export?format=`, `DELETE /api/scenarios/{id}` |
 | Semantic | `GET`, `POST /api/semantic/metrics`, `GET /api/semantic/metrics/{id}`, `POST /api/semantic/metrics/{id}/versions`, `POST /api/semantic/metrics/{id}/versions/{v}/approve`, `POST /api/semantic/metrics/{id}/deprecate`, `POST /api/semantic/validate`, `GET`, `POST /api/semantic/terms`, `DELETE /api/semantic/terms/{id}`, `POST /api/semantic/relationships`, `DELETE /api/semantic/relationships/{id}`, `GET /api/semantic/graph`, `POST /api/semantic/resolve`, `GET /api/semantic/search?q=` |
 | Evaluation | `GET /api/evals/suite`, `GET /api/evals/runs`, `GET /api/evals/runs/{id}`, `GET /api/evals/compare?base=&new=` |
 

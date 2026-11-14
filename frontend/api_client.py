@@ -777,6 +777,38 @@ def compare_scenarios(ids: list[int]) -> dict:
     return _get("/api/scenarios/compare", ids=",".join(str(i) for i in ids))
 
 
+def compare_scenarios_csv(ids: list[int]) -> bytes:
+    resp = requests.get(f"{BACKEND_BASE_URL}/api/scenarios/compare", params={"ids": ",".join(str(i) for i in ids), "format": "csv"},
+                        headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+    return resp.content
+
+
+def get_scenario(scenario_id: int) -> dict:
+    return _get(f"/api/scenarios/{scenario_id}")
+
+
+def rename_scenario(scenario_id: int, name: str) -> dict:
+    return _handle(requests.patch(f"{BACKEND_BASE_URL}/api/scenarios/{scenario_id}", json={"name": name}, headers=_headers(), timeout=TIMEOUT))
+
+
+def edit_scenario(scenario_id: int, payload: dict) -> dict:
+    return _put(f"/api/scenarios/{scenario_id}", payload)
+
+
+def duplicate_scenario(scenario_id: int, name: str | None = None) -> dict:
+    return _post(f"/api/scenarios/{scenario_id}/duplicate", {"name": name} if name else None)
+
+
+def export_scenario(scenario_id: int, fmt: str = "json") -> tuple[bytes, str]:
+    """The file's bytes and the fingerprint the server sent with it."""
+    resp = requests.get(f"{BACKEND_BASE_URL}/api/scenarios/{scenario_id}/export", params={"format": fmt}, headers=_headers(), timeout=TIMEOUT)
+    if not resp.ok:
+        _handle(resp)
+    return resp.content, resp.headers.get("X-Content-SHA256", "")
+
+
 def delete_scenario(scenario_id: int) -> None:
     _delete(f"/api/scenarios/{scenario_id}")
 

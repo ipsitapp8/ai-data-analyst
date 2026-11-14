@@ -37,6 +37,7 @@ class _Response:
     def __init__(self, r):
         self._r, self.status_code, self.text = r, r.status_code, r.text
         self.ok = r.status_code < 400
+        self.content, self.headers = r.content, r.headers
 
     def json(self):
         return self._r.json()
@@ -1242,3 +1243,104 @@ def test_what_if_page_shows_the_calculation_and_seals_it_as_evidence(api, ws):
     assert "Sealed" in text_of(at)
     recs = api.get("/api/scenario-evidence", headers=ws["h"]).json()["records"]
     assert len(recs) == 1 and recs[0]["kind"] == "scenario"
+
+
+# ------------------------------------------ what-if: reopen, edit, rename, copy, compare, export --
+
+def _save_from_page(at, name, price_pct=10.0):
+    at.number_input(key="wi_adj_unit_economics_price").set_value(price_pct)
+    at.run()
+    at.text_input(key="wi_name").set_value(name).run()
+    at.button(key="wi_save").click().run()
+    return healthy(at)
+
+
+def test_what_if_saved_scenario_is_reopened_edited_and_updated_in_place(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    _save_from_page(at, "Price test")
+    sid = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]["id"]
+    at = healthy(page("14_What_If.py", ws))
+    at.button(key=f"wi_open_{sid}").click().run()
+    healthy(at)
+    assert at.number_input(key="wi_adj_unit_economics_price").value == 10.0 and at.number_input(key="wi_in_unit_economics_price").value == 20.0
+    assert any("Editing saved scenario" in str(i.value) for i in at.info)
+    at.number_input(key="wi_adj_unit_economics_price").set_value(20.0).run()
+    at.button(key="wi_update").click().run()
+    healthy(at)
+    got = api.get(f"/api/scenarios/{sid}", headers=ws["h"]).json()
+    assert got["revision"] == 2 and got["results"]["scenarios"]["your scenario"]["outputs"]["profit"] == 9000.0
+    assert api.get("/api/scenarios", headers=ws["h"]).json()["total"] == 1, "updated in place, not duplicated"
+    assert len(api.get("/api/scenario-evidence", params={"scenario_id": sid}, headers=ws["h"]).json()["records"]) == 2
+
+
+def test_what_if_reopening_says_what_the_form_cannot_show(api, ws):
+    r = api.post("/api/scenarios", headers=ws["h"], json={"name": "Set price", "model": "unit_economics", "baseline": {"price": 20.0, "volume": 1000.0, "unit_cost": 12.0, "fixed_cost": 3000.0},
+                                                          "scenarios": {"your scenario": {"price": {"type": "set", "value": 25.0}}}})
+    assert r.status_code == 201, r.text
+    at = healthy(page("14_What_If.py", ws))
+    at.button(key=f"wi_open_{r.json()['id']}").click().run()
+    healthy(at)
+    assert any("could not load" in str(w.value) and "which the form cannot show" in str(w.value) for w in at.warning)
+
+
+def test_what_if_rename_and_duplicate_from_the_saved_tab(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    _save_from_page(at, "Price test")
+    sid = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]["id"]
+    at = healthy(page("14_What_If.py", ws))
+    at.text_input(key=f"wi_ren_{sid}").set_value("Better name").run()
+    at.button(key=f"wi_rename_{sid}").click().run()
+    healthy(at)
+    assert api.get(f"/api/scenarios/{sid}", headers=ws["h"]).json()["name"] == "Better name"
+    at.button(key=f"wi_dup_{sid}").click().run()
+    healthy(at)
+    names = sorted(s["name"] for s in api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"])
+    assert names == ["Better name", "Copy of Better name"]
+
+
+def test_what_if_saved_scenario_shows_its_data_status_and_stale_warning(api, ws):
+    ds = api.get("/api/datasets", headers=ws["h"]).json()
+    ds_id = (ds["datasets"] if isinstance(ds, dict) else ds)[0]["id"]
+    r = api.post("/api/scenarios", headers=ws["h"], json={"name": "From data", "model": "unit_economics", "baseline": {"price": 20.0, "volume": 1000.0, "unit_cost": 12.0, "fixed_cost": 3000.0},
+                                                          "scenarios": {}, "dataset_id": ds_id, "baseline_source": {"dataset_version": 1}})
+    assert r.status_code == 201, r.text
+    at = healthy(page("14_What_If.py", ws))
+    assert "Data is current" in " ".join(str(m.value) for m in at.markdown)
+    csv = b"region,units,revenue\nEast,1,2\nWest,2,4\n"
+    assert api.post(f"/api/datasets/{ds_id}/versions", files={"file": ("v2.csv", csv, "text/csv")}, headers=ws["h"]).status_code == 200
+    at = healthy(page("14_What_If.py", ws))
+    text = " ".join(str(m.value) for m in at.markdown)
+    assert "Newer data exists" in text and "version 2 exists now" in text and "was not changed" in text
+
+
+def test_what_if_comparison_shows_changes_warnings_and_offers_a_file(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    _save_from_page(at, "A", 10.0)
+    at.number_input(key="wi_adj_unit_economics_price").set_value(20.0).run()
+    at.text_input(key="wi_name").set_value("B").run()
+    at.button(key="wi_save").click().run()
+    ids = [s["id"] for s in api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"]]
+    at = healthy(page("14_What_If.py", ws))
+    for i in ids:
+        at.checkbox(key=f"wi_pick_{i}").check()
+    at.run()
+    healthy(at)
+    frame = [d.value for d in at.dataframe if "Change %" in d.value.columns][0]
+    mine = frame[(frame["Saved as"] == "B") & (frame["Scenario"] == "your scenario")].iloc[0]
+    assert mine["Result"] == 9000.0 and mine["Change"] == 4000.0 and mine["Change %"] == 80.0
+    assert "Highest: B" in text_of(at) and not [w for w in at.warning if "starts from" in str(w.value) or "different" in str(w.value)]
+    assert [b for b in at.get("download_button")], "the comparison can be downloaded"
+
+
+def test_what_if_export_is_prepared_on_request_and_is_what_was_saved(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    _save_from_page(at, "Price test")
+    sid = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]["id"]
+    at = healthy(page("14_What_If.py", ws))
+    assert not [b for b in at.get("download_button") if "Download JSON" in str(b.proto.label)]
+    at.selectbox(key=f"wi_fmt_{sid}").select("md").run()
+    at.button(key=f"wi_prep_{sid}").click().run()
+    healthy(at)
+    fmt, (data, sha) = at.session_state[f"wi_file_{sid}"]
+    assert fmt == "md" and b"not a validated forecast" in data and sha in data.decode()
+    assert "Exactly what was saved" in text_of(at)
