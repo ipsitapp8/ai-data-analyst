@@ -17,9 +17,10 @@ from app import scenario_models
 from app.database import get_db
 from app.models import Team, User
 from app.scenarios import ScenarioError
+from app.routers._text import refuse_nul
 from app.security import get_current_team, get_current_user
 
-router = APIRouter(prefix="/api/scenario-models", tags=["scenario-models"])
+router = APIRouter(prefix="/api/scenario-models", tags=["scenario-models"], dependencies=[Depends(refuse_nul)])
 MAX_DEFINITION_BYTES = 60_000
 
 
