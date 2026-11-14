@@ -357,3 +357,27 @@ def test_the_evidence_migration_upgrades_downgrades_and_matches_the_orm(tmp_path
         with Operations.context(MigrationContext.configure(conn)):
             rev.downgrade()
         assert "scenario_evidence" not in sa_inspect(conn).get_table_names()
+
+
+def test_deleting_a_scenario_keeps_its_evidence_and_detaches_it(client):
+    """Postgres refuses to delete a row that other rows still reference; SQLite does not check, so this asserts the outcome directly."""
+    ws = workspace(client)
+    body = {"name": "to delete", "model": "unit_economics", "baseline": BASE, "scenarios": {"s": {"price": {"type": "pct", "value": 10.0}}},
+            "assumptions": {"price_elasticity": 0.0}}
+    sid = client.post("/api/scenarios", json=body, headers=ws["h"]).json()["id"]
+    before = client.get("/api/scenario-evidence", params={"scenario_id": sid}, headers=ws["h"]).json()["records"]
+    assert len(before) == 1
+    assert client.delete(f"/api/scenarios/{sid}", headers=ws["h"]).status_code == 204
+    rec = client.get(f"/api/scenario-evidence/{before[0]['id']}", headers=ws["h"]).json()
+    assert rec["scenario_id"] is None and rec["content_sha256"] == before[0]["content_sha256"], "the record is kept, with the same seal"
+    assert client.post(f"/api/scenario-evidence/{rec['id']}/reproduce", headers=ws["h"]).json()["reproduced"] is True
+    assert client.get("/api/scenario-evidence", params={"scenario_id": sid}, headers=ws["h"]).status_code == 404, "the deleted scenario no longer lists anything"
+
+
+def test_deleting_one_scenario_leaves_another_scenarios_evidence_linked(client):
+    ws = workspace(client)
+    body = {"name": "a", "model": "unit_economics", "baseline": BASE, "scenarios": {}}
+    a = client.post("/api/scenarios", json=body, headers=ws["h"]).json()["id"]
+    b = client.post("/api/scenarios", json={**body, "name": "b"}, headers=ws["h"]).json()["id"]
+    client.delete(f"/api/scenarios/{a}", headers=ws["h"])
+    assert len(client.get("/api/scenario-evidence", params={"scenario_id": b}, headers=ws["h"]).json()["records"]) == 1

@@ -13,7 +13,7 @@ from app import (provenance, scenario_evidence, scenario_nl, scenario_service, s
                  scenario_sim, scenario_solve, scenario_time, scenario_verify, scenarios)
 from app.database import get_db
 from app.dataset_versions import latest_version
-from app.models import DatasetVersion, Scenario, Team, User
+from app.models import DatasetVersion, Scenario, ScenarioEvidence, Team, User
 from app.routers._common import team_dataset
 from app import rate_limit
 from app.security import get_current_team, get_current_user
@@ -599,5 +599,10 @@ def delete_scenario(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    db.delete(_owned(db, team, scenario_id))
+    row = _owned(db, team, scenario_id)
+    # Evidence records are append-only and outlive the scenario they were sealed for: they are detached from it, never deleted. (The link is a
+    # foreign key; Postgres refuses to delete a scenario that records still point at, SQLite does not check, so this is done explicitly.)
+    db.query(ScenarioEvidence).filter(ScenarioEvidence.team_id == team.id, ScenarioEvidence.scenario_id == row.id).update(
+        {ScenarioEvidence.scenario_id: None}, synchronize_session=False)
+    db.delete(row)
     db.commit()
