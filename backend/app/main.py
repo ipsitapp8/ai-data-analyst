@@ -44,6 +44,7 @@ from app.routers.investigations import router as investigations_router
 from app.routers.org import router as org_router
 from app.routers.jobs import router as jobs_router
 from app.routers.quality import router as quality_router
+from app.routers.scenario_evidence import router as scenario_evidence_router
 from app.routers.scenario_models import router as scenario_models_router
 from app.routers.scenarios import router as scenarios_router
 from app.routers.semantic import router as semantic_router
@@ -106,6 +107,7 @@ app.include_router(quality_router)
 app.include_router(copilot_router)
 app.include_router(scenarios_router)
 app.include_router(scenario_models_router)
+app.include_router(scenario_evidence_router)
 app.include_router(semantic_router)
 app.include_router(evals_router)
 app.include_router(analyst_router)

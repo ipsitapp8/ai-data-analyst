@@ -199,6 +199,7 @@ def run(model: "str | dict", scope: pd.DataFrame, baseline_fn: Callable[[pd.Data
         "kind": "segment_scenario", "data_kind": "scenario", "baseline_data_kind": "historical_actual",
         "engine_version": SEGMENTS_VERSION, "model": scenarios.model_key(model), "title": spec["title"],
         "segment_column": segment_column, "assumptions": assumptions, "primary_output": primary,
+        "input_labels": {k: r["label"] for k, r in spec["inputs"].items()}, "output_labels": dict(spec["outputs"]),
         "segments": segments,
         "overall": {"baseline": {"inputs": overall_inputs, "outputs": overall_base},
                     "scenario": {"outputs": overall_scn}, "delta": scenarios._delta(overall_base, overall_scn),  # noqa: SLF001

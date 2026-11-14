@@ -470,6 +470,49 @@ Saved scenarios need no schema change (their settings and results are JSON). Pha
 `results_json["simulation"]` and the settings, including the seed it used, in `adjustments_json["simulation"]`, so
 a saved simulation can be reproduced exactly.
 
+### 10.11 One service for the What-If page and the Silt Copilot (Phase 3)
+
+`scenario_service.py` is the only place that calls the engines (`evaluate`, `simulate`, `goal_seek`, `grid`, `run_intent`, `ask`). The
+What-If router and the Copilot bridge (`analyst/scenario_bridge.py`) both go through it, and a test fails if either calls an engine
+directly. For the same inputs the two doors therefore give the same numbers and the same explanation text.
+
+The bridge answers what-if and goal sentences about a Copilot dataset only when the dataset's column names map cleanly to a built-in
+model (`unit_economics` or `funnel`; two candidate columns for one input means it does not guess). It asks for a fixed cost the data
+does not hold instead of assuming one, remembers it for that conversation, and returns control to the existing Copilot for anything else
+(plain questions, "increase revenue by 10%", a "why" with no scenario). Its notes say which columns were used and that the arithmetic
+was independently checked.
+
+### 10.12 Natural-language entry (Phase 3)
+
+`POST /api/scenarios/ask` (`scenario_nl.py`). Rules first: the parser reads wording only (verbs, percent / percentage points / absolute
+amounts, ₹, lakh, crore, k, goals such as "what price gives a 25% margin", break-even, comparisons). Every number must come from the user's
+message. Optional `use_model` lets a language model translate a sentence the rules could not read (tool `submit_scenario_request`); its
+output passes the same validator plus a check that each number appears in the user's message, so a model cannot supply a number. That path
+is rate-limited (15 per 60 s). Ambiguity (two inputs match, no input named) returns `status: "clarify"` with options; unreadable input
+returns `unsupported` with examples. The response always contains `interpretation`, so the user sees how the sentence was read before
+the answer. Conversation context is held by the client, fingerprinted by model + baseline + normalised assumptions, dropped if any of
+them change, and carried over only with "also/too/and". Follow-up answers are recomputed from stored adjustments, never from numbers in the context.
+
+### 10.13 Explanations (Phase 3)
+
+`scenario_explain.py`. Template-based, grounded in the result: every number in the text is taken from it, signed levels are
+kept apart from unsigned changes, and causal wording is rejected by a test (`CAUSAL`). Sections: what changed, what accounts for it
+(exact contributions), assumptions, risks, what this cannot tell you. `polish()` accepts an optional model rewrite only if all its
+numbers are grounded and it has no causal wording; otherwise the template text stands.
+
+### 10.14 Calculation evidence (Phase 3)
+
+`POST /api/scenarios/inspect` ("How was this calculated?") returns the formula, each step with the user's numbers substituted, inputs
+with their provenance (typed, dataset formula, elasticity estimate), assumptions, constraints and a `matches_engine` flag. With
+`persist`, and whenever a scenario is saved, a sealed record is stored in `scenario_evidence` (migration `d5f7b9c1e3a2`, after
+`c4e6a8b0d2f1`): request, result, verification, data version/fingerprint, seed, engine versions, and a SHA-256 over the canonical
+request and result. Records are server-recomputed, team-scoped and append-only (`POST`, `GET` list/get, `POST /{id}/reproduce`; no
+PUT/PATCH/DELETE). `reproduce` re-runs the stored request and reports `reproduced: false` if the record was altered, the engine version
+changed, or the result differs, and says which.
+
+Limits: the Copilot bridge covers only the two built-in models; segment results are not sealed; the model translator and the model polish have only been
+tested with scripted providers, not a live one.
+
 ## 11. Monitoring and alerts
 
 `backend/app/scheduler.py`
@@ -605,7 +648,8 @@ List endpoints with `limit` and `offset` return `{total, limit, offset, ...}`.
 | Alerts | `GET /api/alerts/{id}`, `POST /api/alerts/{id}/acknowledge`, `POST /api/alerts/{id}/resolve` |
 | Copilot | `POST /api/copilot/sessions`, `GET /api/copilot/sessions`, `GET /api/copilot/sessions/{id}`, `POST /api/copilot/sessions/{id}/messages`, `DELETE /api/copilot/sessions/{id}` |
 | Scenario models | `POST /api/scenario-models/validate`, `POST/GET /api/scenario-models`, `GET /api/scenario-models/{id}`, `GET /api/scenario-models/{id}/versions/{v}`, `POST /api/scenario-models/{id}/versions`, `POST /api/scenario-models/{id}/archive`, `POST /api/scenario-models/{id}/restore` |
-| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=`, `GET /api/scenarios/{id}`, `DELETE /api/scenarios/{id}` |
+| Scenario evidence | `POST /api/scenario-evidence`, `GET /api/scenario-evidence?scenario_id=&kind=`, `GET /api/scenario-evidence/{id}`, `POST /api/scenario-evidence/{id}/reproduce` |
+| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/inspect`, `POST /api/scenarios/ask`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=`, `GET /api/scenarios/{id}`, `DELETE /api/scenarios/{id}` |
 | Semantic | `GET`, `POST /api/semantic/metrics`, `GET /api/semantic/metrics/{id}`, `POST /api/semantic/metrics/{id}/versions`, `POST /api/semantic/metrics/{id}/versions/{v}/approve`, `POST /api/semantic/metrics/{id}/deprecate`, `POST /api/semantic/validate`, `GET`, `POST /api/semantic/terms`, `DELETE /api/semantic/terms/{id}`, `POST /api/semantic/relationships`, `DELETE /api/semantic/relationships/{id}`, `GET /api/semantic/graph`, `POST /api/semantic/resolve`, `GET /api/semantic/search?q=` |
 | Evaluation | `GET /api/evals/suite`, `GET /api/evals/runs`, `GET /api/evals/runs/{id}`, `GET /api/evals/compare?base=&new=` |
 

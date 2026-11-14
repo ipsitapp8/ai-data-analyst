@@ -1189,3 +1189,56 @@ def test_signed_out_visitors_get_a_landing_page_and_a_separate_sign_in_page(api)
 
     signup = _signed_out("signup")
     assert not signup.exception and [t.label for t in signup.tabs][0] == "Create account", "Get started opens sign-up first"
+
+
+# ---------------------------------------------------- what-if: ask, explain, inspect --
+
+def test_what_if_page_answers_a_plain_sentence_and_shows_how_it_was_read(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.text_input(key="ask_text_unit_economics").set_value("What happens if I increase the price by 10%?").run()
+    at.button(key="ask_go").click().run()
+    healthy(at)
+    text = text_of(at)
+    # profit 5,000 -> price +10% adds 0.1 x 20,000 = 2,000 -> 7,000
+    assert "How I understood it" in text and "Price per unit: up 10%" in text and "profit rises from 5,000 to 7,000" in text
+    at.button(key="ask_apply").click().run()
+    assert at.number_input(key="wi_adj_unit_economics_price").value == 10.0, "the form now holds the same change"
+    assert at.session_state["ask_ctx_unit_economics"], "the conversation context is kept by the page"
+
+
+def test_what_if_page_asks_when_a_sentence_is_unclear_and_refuses_to_invent_numbers(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.text_input(key="ask_text_unit_economics").set_value("What if I change cost by 10%?").run()
+    at.button(key="ask_go").click().run()
+    healthy(at)
+    assert at.warning, "a clarifying question is shown"
+    at.text_input(key="ask_text_unit_economics").set_value("tell me a joke").run()
+    at.button(key="ask_go").click().run()
+    healthy(at)
+    assert "what-if" in text_of(at).lower()
+
+
+def test_what_if_page_explains_in_plain_english_without_claiming_a_cause(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.number_input(key="wi_adj_unit_economics_price").set_value(10.0).run()
+    healthy(at)
+    text = text_of(at)
+    labels = [e.label for e in at.expander]
+    assert "In plain English" in text and "What this cannot tell you" in labels and "What changed" in labels
+    assert any("not evidence of causation" in str(x.value) for x in list(at.markdown) + list(at.caption))
+
+
+def test_what_if_page_shows_the_calculation_and_seals_it_as_evidence(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.number_input(key="wi_adj_unit_economics_price").set_value(10.0).run()
+    at.selectbox(key="ins_scn_unit_economics").select("your scenario")
+    at.selectbox(key="ins_out_unit_economics").select("profit").run()
+    at.button(key="ins_go").click().run()
+    healthy(at)
+    assert "Matches the engine" in text_of(at) and "With your numbers" in str(at.dataframe[-2].value.columns.tolist())
+    assert api.get("/api/scenario-evidence", headers=ws["h"]).json()["records"] == [], "showing does not store anything"
+    at.button(key="ins_seal").click().run()
+    healthy(at)
+    assert "Sealed" in text_of(at)
+    recs = api.get("/api/scenario-evidence", headers=ws["h"]).json()["records"]
+    assert len(recs) == 1 and recs[0]["kind"] == "scenario"
