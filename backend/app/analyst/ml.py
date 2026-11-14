@@ -18,8 +18,14 @@ import pandas as pd
 
 from app.analyst.data import kind_of
 
-MIN_ROWS = 40
-MIN_PER_CLASS = 8
+# Not a reliability threshold: the least data on which a held-out evaluation can be computed at all (every fold of
+# the cross-validation below needs MIN_TEST_ROWS held-out rows). Whether a model is any good is decided by that
+# evaluation against a naive baseline, never by the row count.
+CV_FOLDS = 5
+MIN_TEST_ROWS = 8
+MIN_ROWS = CV_FOLDS * MIN_TEST_ROWS
+MIN_PER_CLASS = CV_FOLDS + 3          # each class in every stratified fold, with some left to learn from
+CV_MAX_ROWS = 20_000                  # above this a single large held-out split is already a stable estimate
 MAX_CLASSES = 20
 MAX_TEXT_CARDINALITY = 50
 LEAKAGE_CORR = 0.98
@@ -81,13 +87,41 @@ def screen_features(df: pd.DataFrame, target: str, task: str, features: list[str
     return keep, dropped
 
 
+def _cross_validate(model, X, y, task: str, seed: int, n_classes: int | None) -> dict:
+    """K-fold cross-validation of the same pipeline (preprocessing refitted inside every fold, so nothing leaks from
+    the held-out rows) against the naive baseline on the same folds."""
+    from sklearn.base import clone
+    from sklearn.metrics import balanced_accuracy_score, mean_absolute_error
+    from sklearn.model_selection import KFold, StratifiedKFold
+    folds = StratifiedKFold(CV_FOLDS, shuffle=True, random_state=seed) if task == "classification" else \
+        KFold(CV_FOLDS, shuffle=True, random_state=seed)
+    m_scores, b_scores = [], []
+    for tr, te in folds.split(X, y):
+        fitted = clone(model).fit(X.iloc[tr], y.iloc[tr])
+        pred = fitted.predict(X.iloc[te])
+        if task == "classification":
+            m_scores.append(balanced_accuracy_score(y.iloc[te], pred))
+            b_scores.append(1.0 / y.iloc[tr].nunique())          # a constant guess: one class fully recalled
+        else:
+            m_scores.append(mean_absolute_error(y.iloc[te], pred))
+            b_scores.append(mean_absolute_error(y.iloc[te], np.full(len(te), y.iloc[tr].mean())))
+    higher = task == "classification"
+    better = sum((m > b) if higher else (m < b) for m, b in zip(m_scores, b_scores))
+    return {"folds": CV_FOLDS, "metric": "balanced accuracy" if higher else "MAE", "higher_is_better": higher,
+            "model_mean": float(np.mean(m_scores)), "model_sd": float(np.std(m_scores)),
+            "baseline_mean": float(np.mean(b_scores)), "folds_better": int(better),
+            "baseline": "a constant guess (one class)" if higher else "the training mean of each fold"}
+
+
 def check_target(df: pd.DataFrame, target: str, task: str) -> pd.DataFrame:
     if target not in df.columns:
         raise Unsuitable(f"There is no column named '{target}'.")
     data = df[df[target].notna()]
     if len(data) < MIN_ROWS:
-        raise Unsuitable(f"Only {len(data)} rows have a value for '{target}'; at least {MIN_ROWS} are needed to train "
-                         "and test a model honestly.")
+        raise Unsuitable(f"Only {len(data)} rows have a value for '{target}'. A model has to be tested on rows it "
+                         f"did not learn from: {CV_FOLDS}-fold cross-validation with at least {MIN_TEST_ROWS} held-out rows "
+                         f"per fold needs at least {MIN_ROWS} rows. With fewer, no evaluation could show whether its predictions beat a "
+                         "simple average, so none is trained.")
     if task == "classification":
         counts = data[target].astype(str).value_counts()
         if len(counts) < 2:
@@ -195,6 +229,14 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
         classes = None
         balance = None
 
+    cv = _cross_validate(model, X, y, task, seed, len(classes) if classes else None) if len(y) <= CV_MAX_ROWS else None
+    if cv is not None:
+        metrics["cross_validation"] = cv
+        # On small data one split is noisy: the verdict comes from all folds -- better than the baseline on average
+        # AND in most folds.
+        beats = cv["model_mean"] > cv["baseline_mean"] + (0.05 if task == "classification" else 0) if cv["higher_is_better"] \
+            else cv["model_mean"] < cv["baseline_mean"] * 0.95
+        beats = bool(beats and cv["folds_better"] >= int(np.ceil(0.8 * cv["folds"])))
     imp = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=seed, scoring=scoring)
     importance = sorted(({"feature": f, "importance": float(m), "sd": float(s)}
                          for f, m, s in zip(feats, imp.importances_mean, imp.importances_std)),
@@ -208,7 +250,9 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
                            "good by favouring the common class, so read balanced accuracy, recall and F1 per class. "
                            "Classes were weighted during training to compensate.")
     if not beats:
-        limitations.insert(0, "The model does not clearly beat the naive baseline, so its predictions add little.")
+        limitations.insert(0, "The model does not clearly beat the naive baseline"
+                           + (f" (better in {cv['folds_better']} of {cv['folds']} cross-validation folds)" if cv else "")
+                           + ", so its predictions add little; use them only as a rough guide.")
     if task == "regression" and metrics["r2"] >= 0.995:
         limitations.insert(0, f"Near-perfect fit (R² {metrics['r2']:.3f}): '{target}' is probably (almost) a formula of "
                               "the inputs (for example units × price). That is a calculation, not a prediction problem; "

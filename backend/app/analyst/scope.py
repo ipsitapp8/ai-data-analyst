@@ -66,6 +66,20 @@ def _named(df: pd.DataFrame, message: str) -> tuple[dict, list]:
     return entities, ambiguous
 
 
+_NEGATION = re.compile(r"\b(?:exclud\w*|except(?: for)?|other than|besides|apart from|without|not (?:counting|including)|"
+                       r"ignor\w*|leav\w* out|minus|but not|aside from|everyone but|everybody but|all but|but)\b", re.I)
+
+
+def _negated(message: str, value: str) -> bool:
+    """The question names the value to leave it OUT ("everyone except Aarav", "excluding Rahul and Priya")."""
+    for m in _NEGATION.finditer(message):
+        tail = message[m.end():m.end() + 80]
+        clause = re.split(r"[.;?!]|\b(?:by|per|for each|in|during|over)\b", tail, maxsplit=1)[0]
+        if re.search(rf"\b{re.escape(value)}\b", clause, re.I):
+            return True
+    return False
+
+
 def _time(df: pd.DataFrame, message: str) -> dict | None:
     col = _date_col(df)
     if col is None:
@@ -92,18 +106,28 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
         binary = {c for c in df.columns if df[c].nunique(dropna=True) == 2}
         entities = {c: v for c, v in entities.items() if c not in binary}
         ambiguous = [(v, cols) for v, cols in ambiguous if not set(cols) <= binary]
+    excluded: dict[str, list[str]] = {}
+    for col in list(entities):
+        out = [v for v in entities[col] if _negated(message, v)]
+        if out:
+            excluded[col] = out
+            entities[col] = [v for v in entities[col] if v not in out]
+            if not entities[col]:
+                del entities[col]
     time = _time(df, message)
     target_period = None
     if time and _PREDICTIVE.search(message):
         target_period, time = time, None     # "forecast X for September 4, 2026": the date is what is predicted
     scope = {"entities": entities, "time": time, "inherited": False, "clarify": None, "target_period": target_period}
+    if excluded:
+        scope["excluded_entities"] = excluded
     if ambiguous:
         val, cols = ambiguous[0]
         scope["clarify"] = (f"'{val}' is a value of more than one column ({', '.join(cols)}). Which one do you mean — "
                             f"for example '{cols[0].replace('_', ' ')} {val}'?")
         return scope
     prev = memory.get("scope") or {}
-    if not entities and not time and (prev.get("entities") or prev.get("time")) and _ELLIPTIC.search(message) \
+    if not entities and not time and not excluded and (prev.get("entities") or prev.get("time")) and _ELLIPTIC.search(message) \
             and not _ALL_SCOPE.search(message):
         scope.update(entities={k: list(v) for k, v in (prev.get("entities") or {}).items() if k in df.columns},
                      time=prev.get("time"), inherited=True)
@@ -111,7 +135,7 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
 
 
 def active(scope: dict | None) -> bool:
-    return bool(scope and (scope.get("entities") or scope.get("time")))
+    return bool(scope and (scope.get("entities") or scope.get("time") or scope.get("excluded_entities")))
 
 
 def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
@@ -121,6 +145,9 @@ def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
     for col, vals in (scope.get("entities") or {}).items():
         if col in df.columns:
             keep &= df[col].astype(str).str.lower().isin([v.lower() for v in vals])
+    for col, vals in (scope.get("excluded_entities") or {}).items():
+        if col in df.columns:
+            keep &= ~df[col].astype(str).str.lower().isin([v.lower() for v in vals])
     t = scope.get("time")
     if t and t["column"] in df.columns:
         d = pd.to_datetime(df[t["column"]], errors="coerce")
@@ -135,6 +162,7 @@ def describe(scope: dict | None, n_in: int | None = None, n_all: int | None = No
     if not active(scope):
         return ""
     parts = [f"{c.replace('_', ' ')} = {' or '.join(v)}" for c, v in scope["entities"].items()]
+    parts += [f"{c.replace('_', ' ')} not {' or '.join(v)}" for c, v in (scope.get("excluded_entities") or {}).items()]
     t = scope.get("time")
     if t:
         parts.append(f"{t['column'].replace('_', ' ')} in "
@@ -155,6 +183,9 @@ def as_exclusions(scope: dict) -> list[dict]:
         else:
             out.append({"reason": "only " + " and ".join(vals),
                         "where": f"{col} not in [" + ", ".join(f"'{v}'" for v in vals) + "]"})
+    for col, vals in (scope.get("excluded_entities") or {}).items():
+        out.append({"reason": "excluding " + " and ".join(vals),
+                    "where": f"{col} == '{vals[0]}'" if len(vals) == 1 else f"{col} in [" + ", ".join(f"'{v}'" for v in vals) + "]"})
     t = scope.get("time")
     if t:
         cond = []
@@ -234,7 +265,7 @@ def replace_conflicting(exclusions: list[dict], sc: dict | None) -> list[dict]:
     when this question is about Aarav Mehta (same column), and an earlier period goes when a new one is named."""
     if not active(sc):
         return list(exclusions)
-    cols = set((sc.get("entities") or {}).keys())
+    cols = set((sc.get("entities") or {}).keys()) | set((sc.get("excluded_entities") or {}).keys())
     tcol = (sc.get("time") or {}).get("column")
     out = []
     for e in exclusions:

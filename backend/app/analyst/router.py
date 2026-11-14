@@ -56,6 +56,17 @@ def _numeric_named(df: pd.DataFrame, low: str) -> list[str]:
             stem = re.sub(r"[^a-z]", "", c.lower())[:5]
             if kind_of(df[c]) == "numeric" and len(stem) >= 4 and re.search(rf"\b{stem}", low):
                 cols.append(c)
+    if not cols:
+        # "the rate" when exactly one numeric column has the word rate in its name (hourly_rate): that column.
+        # Two or more (hourly_rate, overtime_rate) stay unresolved, so the caller asks which.
+        words = set(re.findall(r"[a-z]+", low)) - {"total", "value", "number", "amount", "count", "the", "per", "of"}
+        for w in words:
+            hits = [c for c in df.columns if kind_of(df[c]) == "numeric" and len(w) >= 4
+                    and w in re.split(r"[^a-z0-9]+", str(c).lower())]
+            if len(hits) == 1 and hits[0] not in cols:
+                cols.append(hits[0])
+        if len(cols) > 1:
+            cols = []
     return cols
 
 

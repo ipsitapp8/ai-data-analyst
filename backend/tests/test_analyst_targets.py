@@ -130,7 +130,7 @@ def test_a_derived_target_is_derived_not_replaced_by_an_input(monkeypatch):
     per_day = [_hours(a, b) * r for a, b, r in zip(rahul["clock_in"], rahul["clock_out"], rahul["hourly_rate"])]
     assert f["label"] == "labor cost" and f["frequency"] == "day"
     assert [p["value"] for p in f["points"]] == pytest.approx(per_day)
-    assert "hourly rate × hours from clock in to clock out" in f["definition"]
+    assert "hourly rate" in f["definition"] and "hours from clock in to clock out" in f["definition"]
     assert out["answer"].count("hourly rate") <= 2 and "Estimated labor cost" in out["answer"] or \
         "Predicted labor cost" in out["answer"]
     assert out["verification"][0]["ok"] and "labor cost" in out["verification"][0]["detail"]
@@ -153,14 +153,16 @@ def test_a_derived_target_on_another_schema(monkeypatch):
 
 def test_a_definition_of_a_different_metric_is_refused(monkeypatch):
     df = timesheet()
+    # a metric outside Silt's standard catalogue, so the model has to define it -- and defines something else
     scripted(monkeypatch, ['calc", "derive": {}}', '}', ']}', 'null}', '"hourly_rate": "sum(hourly_rate)"}}'])
-    out = orchestrator.ask("Predict Rahul Sharma's labor cost for the next day.", df, {})
+    out = orchestrator.ask("Predict Rahul Sharma's shift premium for the next day.", df, {})
     assert out["plan"]["type"] == "clarify" and not out["calls"]
-    assert "couldn't define labor cost" in out["answer"] and "won't forecast a different quantity" in out["answer"]
+    assert "couldn't define shift premium" in out["answer"] and "won't forecast a different quantity" in out["answer"]
 
 
 def test_a_derived_target_without_the_model_is_not_substituted():
-    out = orchestrator.ask("Predict Rahul Sharma's labor cost for the next day.", timesheet(), {}, use_model=False)
+    # outside the standard catalogue: with the model offline it cannot be defined, and nothing else is forecast
+    out = orchestrator.ask("Predict Rahul Sharma's shift premium for the next day.", timesheet(), {}, use_model=False)
     assert out["plan"]["type"] == "clarify" and not out["calls"]
     assert "not a column" in out["answer"] and "won't forecast a different quantity" in out["answer"]
 

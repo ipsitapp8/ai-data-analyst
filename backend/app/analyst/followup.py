@@ -402,8 +402,9 @@ def trend_of_measure(df: pd.DataFrame, memory: dict, sc: dict | None = None) -> 
     pts = series(frame, "__measure__", dates[0], freq, "sum")
     if len(pts) < 2:
         return None
+    origin = "with its standard definition" if memory.get("_defined") else "from the previous calculation"
     t = _trend_report(pts, name.replace("_", " "), dates[0], freq, "sum", source=f"total {name.replace('_', ' ')} "
-                      f"per {_FREQ[freq]} from the previous calculation ({len(frame)} eligible records)")
+                      f"per {_FREQ[freq]} {origin} ({len(frame)} eligible records)")
     t.update(excluded=frame.attrs.get("silt_excluded", []), scope=frame.attrs.get("silt_scope", ""))
     return t
 
@@ -894,6 +895,10 @@ def rank_request(message: str, df: pd.DataFrame) -> dict | None:
     cats = mentioned_order([c for c in find_column(df, rest) if kind_of(df[c]) == "categorical" and c not in filters],
                            rest)
     if not cats:
+        from app.analyst.metrics import group_column       # "top 2 staff", "top 3 depts": a column the noun names
+        g, _ = group_column("each " + re.split(r"\b(?:by|per|for|in|with)\b", rest, maxsplit=1)[0].strip(), df, skip=filters)
+        cats = [g] if g else []
+    if not cats:
         return None
     nums = [c for c in find_column(df, message) if kind_of(df[c]) == "numeric"]
     roles = business_roles(df)["roles"]
@@ -1071,7 +1076,8 @@ def forecast_target(message: str, df: pd.DataFrame, memory: dict, sc: dict | Non
     last = memory.get("last_calc")
     measure = None
     if last:
-        sums = [n for n, a in last["spec"]["aggregate"].items() if re.match(r"\s*sum\s*\(", a)]
+        from app.analyst.present import _SINGLE_TOTAL
+        sums = [n for n, a in last["spec"]["aggregate"].items() if _SINGLE_TOTAL.fullmatch(a.strip()) and a.strip().startswith("sum")]
         measure = sums[0] if sums else None
     if not want:
         return {"kind": "measure", "phrase": measure} if measure else {"kind": "unknown", "phrase": ""}

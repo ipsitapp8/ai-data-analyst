@@ -42,7 +42,10 @@ SOURCE = {"model": "Planned by the fine-tuned local model",
           "conversation_rules": "Explained by Silt from the computed results",
           "model_calc": "Planned and explained by the fine-tuned local model · numbers computed exactly by Silt's calculator",
           "model_calc_failed": "The local model's calculation plan could not be verified · nothing was computed",
-          "input_check": "Checked by Silt before analysis · nothing was computed"}
+          "input_check": "Checked by Silt before analysis · nothing was computed",
+          "metric": "Metric definition resolved and computed by Silt's calculator · no language model needed",
+          "refine": "The previous calculation re-run with your change by Silt's calculator",
+          "conversation_state": "Read against your open request · nothing was calculated"}
 EXAMPLES_DATA = ["Explain this dataset in simple terms.", "Which group has the highest total?",
                  "What trends do you notice?", "Find unusual records.", "What should we do next?",
                  "Show me a chart of the main measure by group."]
