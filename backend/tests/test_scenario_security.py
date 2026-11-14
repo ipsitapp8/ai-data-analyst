@@ -134,3 +134,27 @@ def test_error_responses_do_not_leak_server_paths_or_stack_traces(client):
     for r in replies:
         assert r.status_code in (400, 404, 422)
         assert "Traceback" not in r.text and "\\Users\\" not in r.text and "/home/" not in r.text
+
+
+@pytest.mark.parametrize("where", ["name", "scenario_key", "note"])
+@pytest.mark.parametrize("nul", ["\x00", "\\u0000"])
+def test_a_nul_character_is_refused_everywhere_text_is_stored_because_postgres_cannot_hold_it(client, where, nul):
+    """CI (Postgres) answered 500 to a name with a NUL; SQLite stored it. Now every body is refused with 422 and nothing is stored."""
+    ws = workspace(client)
+    body = {"name": "ok", "model": "unit_economics", "baseline": BASE, "scenarios": {"s": {"price": {"type": "pct", "value": 5.0}}}}
+    if where == "name":
+        body["name"] = f"a{nul}b"
+    elif where == "scenario_key":
+        body["scenarios"] = {f"s{nul}": {"price": {"type": "pct", "value": 5.0}}}
+    r = client.post("/api/scenarios", json=body, headers=ws["h"]) if where != "note" else client.post(
+        "/api/scenario-evidence", json={"kind": "scenario", "model": "unit_economics", "request": {"baseline": BASE}, "note": f"x{nul}y"}, headers=ws["h"])
+    assert r.status_code == 422, (where, r.status_code, r.text)
+    assert client.get("/api/scenarios", headers=ws["h"]).json()["total"] == 0
+    assert client.get("/api/scenario-evidence", headers=ws["h"]).json()["records"] == []
+
+
+def test_the_nul_guard_does_not_get_in_the_way_of_ordinary_requests(client):
+    ws = workspace(client)
+    r = client.post("/api/scenarios", json={"name": "caf\u00e9 \u2014 \u20b9 100", "model": "unit_economics", "baseline": BASE, "scenarios": {}}, headers=ws["h"])
+    assert r.status_code == 201 and r.json()["name"] == "caf\u00e9 \u2014 \u20b9 100"
+    assert client.get("/api/scenarios", headers=ws["h"]).status_code == 200

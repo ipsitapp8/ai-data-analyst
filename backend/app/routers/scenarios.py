@@ -17,10 +17,11 @@ from app.database import get_db
 from app.dataset_versions import latest_version
 from app.models import DatasetVersion, Scenario, ScenarioEvidence, Team, User
 from app.routers._common import team_dataset
+from app.routers._text import refuse_nul
 from app import rate_limit
 from app.security import get_current_team, get_current_user
 
-router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
+router = APIRouter(prefix="/api/scenarios", tags=["scenarios"], dependencies=[Depends(refuse_nul)])
 
 
 class BaselineRequest(BaseModel):

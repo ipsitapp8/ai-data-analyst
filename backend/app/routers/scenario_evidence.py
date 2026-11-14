@@ -17,9 +17,10 @@ from app import scenario_model_store, scenarios
 from app.database import get_db
 from app.models import Scenario, ScenarioEvidence, Team, User
 from app.routers.scenarios import _persist, resolve_model
+from app.routers._text import refuse_nul
 from app.security import get_current_team, get_current_user
 
-router = APIRouter(prefix="/api/scenario-evidence", tags=["scenario-evidence"])
+router = APIRouter(prefix="/api/scenario-evidence", tags=["scenario-evidence"], dependencies=[Depends(refuse_nul)])
 MAX_REQUEST_BYTES = 100_000
 
 
