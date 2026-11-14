@@ -801,6 +801,10 @@ def duplicate_scenario(scenario_id: int, name: str | None = None) -> dict:
     return _post(f"/api/scenarios/{scenario_id}/duplicate", {"name": name} if name else None)
 
 
+def rebase_scenario(scenario_id: int, dataset_version: int | None = None) -> dict:
+    return _post(f"/api/scenarios/{scenario_id}/rebase", {"dataset_version": dataset_version} if dataset_version else None, timeout=120)
+
+
 def export_scenario(scenario_id: int, fmt: str = "json") -> tuple[bytes, str]:
     """The file's bytes and the fingerprint the server sent with it."""
     resp = requests.get(f"{BACKEND_BASE_URL}/api/scenarios/{scenario_id}/export", params={"format": fmt}, headers=_headers(), timeout=TIMEOUT)

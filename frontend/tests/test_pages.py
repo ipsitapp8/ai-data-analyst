@@ -1344,3 +1344,62 @@ def test_what_if_export_is_prepared_on_request_and_is_what_was_saved(api, ws):
     fmt, (data, sha) = at.session_state[f"wi_file_{sid}"]
     assert fmt == "md" and b"not a validated forecast" in data and sha in data.decode()
     assert "Exactly what was saved" in text_of(at)
+
+
+# ------------------------------------------------ what-if: new data version, error and empty states --
+
+def test_what_if_stale_scenario_is_recalculated_on_new_data_and_the_original_is_kept(api, ws):
+    ds = api.get("/api/datasets", headers=ws["h"]).json()
+    ds_id = (ds["datasets"] if isinstance(ds, dict) else ds)[0]["id"]
+    from api_client import ApiError  # noqa: F401  (the page module imports the same name)
+    probe = api.post("/api/scenarios/baseline", headers=ws["h"], json={"dataset_id": ds_id, "model": "unit_economics",
+                                                                        "mapping": {"quantity_column": "units", "amount_column": "revenue", "total_cost_column": None},
+                                                                        "overrides": {"fixed_cost": 10.0, "unit_cost": 1.0}})
+    if probe.status_code != 200:
+        pytest.skip("the fixture dataset does not map to unit economics")
+    base = probe.json()["inputs"]
+    r = api.post("/api/scenarios", headers=ws["h"], json={"name": "From data", "model": "unit_economics", "baseline": base, "scenarios": {}, "dataset_id": ds_id,
+                                                          "baseline_source": {"dataset_version": 1, "mapping": {"quantity_column": "units", "amount_column": "revenue", "total_cost_column": None}}})
+    assert r.status_code == 201, r.text
+    sid = r.json()["id"]
+    at = healthy(page("14_What_If.py", ws))
+    assert not [b for b in at.button if b.key == f"wi_rebase_{sid}"], "no recalculate button while the data is current"
+    csv = b"region,units,revenue\nEast,1,2\nWest,2,4\n"
+    assert api.post(f"/api/datasets/{ds_id}/versions", files={"file": ("v2.csv", csv, "text/csv")}, headers=ws["h"]).status_code == 200
+    at = healthy(page("14_What_If.py", ws))
+    at.button(key=f"wi_rebase_{sid}").click().run()
+    healthy(at)
+    assert "is unchanged" in text_of(at) and "data version 2" in text_of(at)
+    scenarios = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"]
+    assert len(scenarios) == 2 and {s["name"] for s in scenarios} == {"From data", "From data (data v2)"}
+    assert api.get(f"/api/scenarios/{sid}", headers=ws["h"]).json()["freshness"]["status"] == "stale", "the original still says it is on version 1"
+
+
+def test_what_if_ask_box_shows_a_refusal_instead_of_failing(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.text_input(key="ask_text_unit_economics").set_value("increase price by 10000000%").run()
+    at.button(key="ask_go").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("outside what the What-If form allows" in str(e.value) for e in at.error), "the reason is shown"
+    assert api.get("/api/scenarios", headers=ws["h"]).json()["total"] == 0
+
+
+def test_what_if_ask_button_is_off_until_there_is_a_question_and_start_over_clears_it(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    assert at.button(key="ask_go").disabled
+    at.text_input(key="ask_text_unit_economics").set_value("increase the price by 10%").run()
+    at.button(key="ask_go").click().run()
+    assert at.session_state["ask_last_unit_economics"]["status"] == "ok"
+    at.button(key="ask_reset").click().run()
+    assert "ask_last_unit_economics" not in at.session_state and "ask_ctx_unit_economics" not in at.session_state
+
+
+def test_what_if_saved_tab_empty_state_and_single_pick_hint(api, ws):
+    at = healthy(page("14_What_If.py", ws))
+    assert "Nothing saved yet" in " ".join(str(m.value) for m in at.markdown)
+    at = _unit_economics(at)
+    _save_from_page(at, "Only one")
+    at = healthy(page("14_What_If.py", ws))
+    sid = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]["id"]
+    at.checkbox(key=f"wi_pick_{sid}").check().run()
+    assert "Tick two or more scenarios" in text_of(at)
