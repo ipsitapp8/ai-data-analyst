@@ -5,11 +5,12 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app import metric_engine as me
-from app import (provenance, scenario_evidence, scenario_nl, scenario_service, scenario_elasticity, scenario_model_store, scenario_models, scenario_segments, scenario_sensitivity,
+from app import (provenance, scenario_evidence, scenario_library, scenario_nl, scenario_service, scenario_elasticity, scenario_model_store, scenario_models, scenario_segments, scenario_sensitivity,
                  scenario_sim, scenario_solve, scenario_time, scenario_verify, scenarios)
 from app.database import get_db
 from app.dataset_versions import latest_version
@@ -146,9 +147,12 @@ def _simulate(model, baseline: dict, assumptions: dict, opts: SimulationOptions)
         raise HTTPException(400, str(e)) from e
 
 
-def _out(s: Scenario, full: bool = True) -> dict:
+def _out(s: Scenario, full: bool = True, fresh: dict | None = None) -> dict:
     out = {"id": s.id, "name": s.name, "model": s.model, "dataset_id": s.dataset_id,
-           "dataset_version_id": s.dataset_version_id, "created_at": s.created_at, "kind": "scenario"}
+           "dataset_version_id": s.dataset_version_id, "created_at": s.created_at, "kind": "scenario",
+           "revision": (s.adjustments_json or {}).get("revision", 1)}
+    if fresh is not None:
+        out["freshness"] = fresh
     if full:
         out.update({"baseline": s.baseline_json or {}, "request": s.adjustments_json or {},
                     "results": s.results_json or {}})
@@ -485,13 +489,9 @@ def goal_seek(payload: GoalSeekRequest, db: Session = Depends(get_db), user: Use
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("", status_code=201)
-def save_scenario(
-    payload: ScenarioSave,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    team: Team = Depends(get_current_team),
-):
+def _write(db: Session, team: Team, user: User, payload: ScenarioSave, row: Scenario | None, note: str) -> Scenario:
+    """Recompute a scenario on the server and store it, as a new row or as the next revision of `row`. Each write seals fresh evidence;
+    the sealed records of earlier revisions stay exactly as they were."""
     model = resolve_model(db, team, payload.model)
     results = _evaluate(payload, model)
     sim_config = None
@@ -509,30 +509,44 @@ def save_scenario(
         source = {**(payload.baseline_source or {}), "provenance": prov}
     if payload.baseline_source is not None and len(json.dumps(payload.baseline_source, default=str)) > 20_000:
         raise HTTPException(413, "The baseline source is too large")
-    row = Scenario(team_id=team.id, dataset_id=payload.dataset_id, dataset_version_id=version_id,
-                   name=payload.name.strip(), model=scenarios.model_key(model), baseline_json=results["baseline"]["inputs"],
-                   adjustments_json={"scenarios": payload.scenarios, "assumptions": results["assumptions"],
-                                     "sensitivity_pct": payload.sensitivity_pct, "spread_pct": payload.spread_pct,
-                                     "assumption_sources": results["assumption_sources"],
-                                     **({"baseline_source": source} if source else {}),
-                                     **({"simulation": sim_config} if sim_config else {})},
-                   results_json=results, created_by=user.id)
-    db.add(row)
+    revision = ((row.adjustments_json or {}).get("revision", 1) + 1) if row is not None else 1
+    adjustments = {"scenarios": payload.scenarios, "assumptions": results["assumptions"],
+                   "sensitivity_pct": payload.sensitivity_pct, "spread_pct": payload.spread_pct,
+                   "assumption_sources": results["assumption_sources"], "revision": revision,
+                   **({"baseline_source": source} if source else {}),
+                   **({"simulation": sim_config} if sim_config else {})}
+    if row is None:
+        row = Scenario(team_id=team.id, created_by=user.id)
+        db.add(row)
+    row.dataset_id, row.dataset_version_id, row.name = payload.dataset_id, version_id, payload.name.strip()
+    row.model, row.baseline_json = scenarios.model_key(model), results["baseline"]["inputs"]
+    row.adjustments_json, row.results_json = adjustments, results
     db.flush()
     prov = None
     if payload.dataset_id is not None:
         prov = {"dataset_id": source["provenance"]["dataset_id"], "dataset_version_id": source["provenance"]["dataset_version_id"],
                 "content_sha256": source["provenance"]["content_sha256"]}
     scenario_evidence.create(db, team_id=team.id, user_id=user.id, kind="scenario", model_ref=scenarios.model_key(model), model=model,
-                             request=_evaluation_request(payload), scenario_id=row.id, dataset=prov, note="saved with the scenario")
+                             request=_evaluation_request(payload), scenario_id=row.id, dataset=prov, note=note)
     if payload.simulation is not None:
         scenario_evidence.create(db, team_id=team.id, user_id=user.id, kind="simulation", model_ref=scenarios.model_key(model), model=model,
                                  request={"baseline": payload.baseline, "assumptions": results["assumptions"], **{
                                      **payload.simulation.model_dump(), "seed": sim_config["seed"]}},
-                                 scenario_id=row.id, dataset=prov, note="saved with the scenario")
+                                 scenario_id=row.id, dataset=prov, note=note)
+    return row
+
+
+@router.post("", status_code=201)
+def save_scenario(
+    payload: ScenarioSave,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    team: Team = Depends(get_current_team),
+):
+    row = _write(db, team, user, payload, None, "saved with the scenario")
     db.commit()
     db.refresh(row)
-    return _out(row)
+    return _out(row, fresh=scenario_library.freshness(db, team.id, row))
 
 
 @router.get("")
@@ -546,7 +560,7 @@ def list_scenarios(
     q = db.query(Scenario).filter_by(team_id=team.id)
     total = q.count()
     rows = q.order_by(Scenario.id.desc()).offset(offset).limit(limit).all()
-    return {"total": total, "limit": limit, "offset": offset, "scenarios": [_out(s, full=False) for s in rows]}
+    return {"total": total, "limit": limit, "offset": offset, "scenarios": [_out(s, full=False, fresh=scenario_library.freshness(db, team.id, s)) for s in rows]}
 
 
 def _owned(db: Session, team: Team, scenario_id: int) -> Scenario:
@@ -559,6 +573,7 @@ def _owned(db: Session, team: Team, scenario_id: int) -> Scenario:
 @router.get("/compare")
 def compare_scenarios(
     ids: str = Query(..., description="Comma-separated saved scenario ids (2 to 6)", max_length=100),
+    format: str = Query(default="json", pattern="^(json|csv)$"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
@@ -572,14 +587,22 @@ def compare_scenarios(
     rows = [_owned(db, team, i) for i in wanted]
     if len({r.model for r in rows}) > 1:
         raise HTTPException(400, "Only scenarios of the same model can be compared")
-    table = []
+    table, items = [], []
     for r in rows:
         res = r.results_json or {}
+        fresh = scenario_library.freshness(db, team.id, r)
+        version = db.get(DatasetVersion, r.dataset_version_id) if r.dataset_version_id else None
         table.append({"id": r.id, "name": r.name, "baseline_inputs": (res.get("baseline") or {}).get("inputs"),
                       "baseline_outputs": (res.get("baseline") or {}).get("outputs"),
                       "scenarios": {k: v.get("outputs") for k, v in (res.get("scenarios") or {}).items()},
-                      "assumptions": res.get("assumptions")})
-    return {"kind": "scenario", "disclaimer": scenarios.DISCLAIMER, "model": rows[0].model, "items": table}
+                      "assumptions": res.get("assumptions"), "freshness": fresh})
+        items.append({"id": r.id, "name": r.name, "results": res, "freshness": fresh, "dataset_id": r.dataset_id,
+                      "dataset_version": version.version_number if version else None})
+    analysis = scenario_library.compare(items)
+    if format == "csv":
+        return Response(scenario_library.comparison_csv(analysis), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="scenario-comparison.csv"'})
+    return {"kind": "scenario", "disclaimer": scenarios.DISCLAIMER, "model": rows[0].model, "items": table, "analysis": analysis}
 
 
 @router.get("/{scenario_id}")
@@ -589,7 +612,90 @@ def get_scenario(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    return _out(_owned(db, team, scenario_id))
+    row = _owned(db, team, scenario_id)
+    return _out(row, fresh=scenario_library.freshness(db, team.id, row))
+
+
+class ScenarioRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+@router.patch("/{scenario_id}")
+def rename_scenario(scenario_id: int, payload: ScenarioRename, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+                    team: Team = Depends(get_current_team)):
+    """Rename only. Nothing that was calculated is touched."""
+    row = _owned(db, team, scenario_id)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(422, "A scenario needs a name")
+    row.name = name
+    db.commit()
+    return _out(row, fresh=scenario_library.freshness(db, team.id, row))
+
+
+@router.put("/{scenario_id}")
+def edit_scenario(scenario_id: int, payload: ScenarioSave, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+                  team: Team = Depends(get_current_team)):
+    """Replace a saved scenario's settings. It is recalculated on the server, its revision number goes up, and new evidence is sealed.
+    Evidence sealed for earlier revisions is kept as it was, so the history of what was saved stays checkable."""
+    row = _owned(db, team, scenario_id)
+    _write(db, team, user, payload, row, f"revision {(row.adjustments_json or {}).get('revision', 1) + 1}")
+    db.commit()
+    db.refresh(row)
+    return _out(row, fresh=scenario_library.freshness(db, team.id, row))
+
+
+class DuplicateRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+
+
+def _copy_name(db: Session, team: Team, base: str) -> str:
+    taken = {n for (n,) in db.query(Scenario.name).filter(Scenario.team_id == team.id).all()}
+    stem = f"Copy of {base}"[:112]
+    if stem not in taken:
+        return stem
+    i = 2
+    while f"{stem} ({i})" in taken:
+        i += 1
+    return f"{stem} ({i})"
+
+
+@router.post("/{scenario_id}/duplicate", status_code=201)
+def duplicate_scenario(scenario_id: int, payload: DuplicateRequest | None = None, db: Session = Depends(get_db),
+                       user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
+    """A new saved scenario from the stored settings. It stays pinned to the data version the original used; it is never re-based onto
+    newer data. It is recalculated and sealed like any save."""
+    src = _owned(db, team, scenario_id)
+    adj = src.adjustments_json or {}
+    source = dict(adj.get("baseline_source") or {})
+    if src.dataset_id is not None:
+        version = db.get(DatasetVersion, src.dataset_version_id) if src.dataset_version_id else None
+        if version is None:
+            raise HTTPException(410, "The dataset version this scenario was built from is no longer available, so it cannot be copied")
+        source["dataset_version"] = version.version_number
+        source.pop("provenance", None)
+    name = (payload.name.strip() if payload and payload.name else "") or _copy_name(db, team, src.name)
+    body = ScenarioSave(model=src.model, name=name, baseline=src.baseline_json or {}, scenarios=adj.get("scenarios") or {},
+                        assumptions=adj.get("assumptions") or {}, assumption_sources=adj.get("assumption_sources") or {},
+                        sensitivity_pct=adj.get("sensitivity_pct", 10.0), spread_pct=adj.get("spread_pct"), dataset_id=src.dataset_id,
+                        simulation=SimulationOptions(**adj["simulation"]) if adj.get("simulation") else None,
+                        baseline_source=source or None)
+    row = _write(db, team, user, body, None, f"copied from scenario {src.id}")
+    db.commit()
+    db.refresh(row)
+    return _out(row, fresh=scenario_library.freshness(db, team.id, row))
+
+
+@router.get("/{scenario_id}/export")
+def export_scenario(scenario_id: int, format: str = Query(default="json", pattern="^(json|csv|md)$"), db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
+    """A file of the saved scenario as it was saved (never recalculated), with its disclaimer, data status, evidence records and a
+    fingerprint of its own content. Sharing is this file; there are no public links."""
+    row = _owned(db, team, scenario_id)
+    doc = scenario_library.export_document(db, team.id, row, scenario_library.freshness(db, team.id, row))
+    body, media, ext = scenario_library.render(doc, format)
+    return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="scenario-{row.id}.{ext}"',
+                                                     "X-Content-SHA256": doc["content_sha256"]})
 
 
 @router.delete("/{scenario_id}", status_code=204)
