@@ -27,11 +27,15 @@ from __future__ import annotations
 
 import itertools
 import math
+import random
 from typing import Any, Callable
 
+import numpy as np
 import pandas as pd
 
 from app import metric_engine as me
+
+ENGINE_VERSION = "scenarios.2"
 
 DISCLAIMER = ("Scenario output: arithmetic on the stated inputs and assumptions. It is not an observed "
               "fact and not a validated forecast.")
@@ -59,10 +63,33 @@ def _funnel(i: dict, a: dict) -> dict:
             "cost_per_order": acquisition_cost / orders if orders else None}
 
 
+def _unit_economics_vec(i: dict, a: dict) -> dict:
+    """The same formulas as `_unit_economics`, on arrays (Monte Carlo). A margin on zero revenue is NaN, not 0."""
+    revenue = i["price"] * i["volume"]
+    variable_cost = i["unit_cost"] * i["volume"]
+    gross_profit = revenue - variable_cost
+    profit = gross_profit - i["fixed_cost"]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        margin = np.where(revenue != 0, profit / revenue * 100, np.nan)
+    return {"revenue": revenue, "variable_cost": variable_cost, "gross_profit": gross_profit, "profit": profit,
+            "margin_pct": margin}
+
+
+def _funnel_vec(i: dict, a: dict) -> dict:
+    orders = i["visitors"] * i["conversion_rate"]
+    revenue = orders * i["average_order_value"]
+    acquisition_cost = i["visitors"] * i["cost_per_visitor"]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cost_per_order = np.where(orders != 0, acquisition_cost / orders, np.nan)
+    return {"orders": orders, "revenue": revenue, "acquisition_cost": acquisition_cost,
+            "profit": revenue - acquisition_cost, "cost_per_order": cost_per_order}
+
+
 MODELS: dict[str, dict[str, Any]] = {
     "unit_economics": {
         "title": "Unit economics (price, volume, cost)",
         "compute": _unit_economics,
+        "compute_vec": _unit_economics_vec,
         "inputs": {
             "price": {"label": "Price per unit", "unit": "currency/unit", "min": 0.0, "good": "up"},
             "volume": {"label": "Units sold", "unit": "units", "min": 0.0, "good": "up"},
@@ -76,6 +103,8 @@ MODELS: dict[str, dict[str, Any]] = {
         "outputs": {"revenue": "Revenue", "variable_cost": "Variable cost", "gross_profit": "Gross profit",
                     "profit": "Profit", "margin_pct": "Profit margin %"},
         "primary_output": "profit",
+        "additive_outputs": ["revenue", "variable_cost", "gross_profit", "profit"],
+        "ratio_outputs": {"margin_pct": {"numerator": "profit", "denominator": "revenue", "scale": 100.0}},
         "formulas": ["revenue = price × volume", "variable_cost = unit_cost × volume",
                      "gross_profit = revenue − variable_cost", "profit = gross_profit − fixed_cost",
                      "margin_pct = profit ÷ revenue × 100",
@@ -84,6 +113,7 @@ MODELS: dict[str, dict[str, Any]] = {
     "funnel": {
         "title": "Acquisition funnel (visitors, conversion, order value)",
         "compute": _funnel,
+        "compute_vec": _funnel_vec,
         "inputs": {
             "visitors": {"label": "Visitors", "unit": "visitors", "min": 0.0, "good": "up"},
             "conversion_rate": {"label": "Conversion rate", "unit": "fraction 0–1", "min": 0.0, "max": 1.0, "good": "up"},
@@ -94,6 +124,8 @@ MODELS: dict[str, dict[str, Any]] = {
         "outputs": {"orders": "Orders", "revenue": "Revenue", "acquisition_cost": "Acquisition cost",
                     "profit": "Profit", "cost_per_order": "Cost per order"},
         "primary_output": "profit",
+        "additive_outputs": ["orders", "revenue", "acquisition_cost", "profit"],
+        "ratio_outputs": {"cost_per_order": {"numerator": "acquisition_cost", "denominator": "orders", "scale": 1.0}},
         "formulas": ["orders = visitors × conversion_rate", "revenue = orders × average_order_value",
                      "acquisition_cost = visitors × cost_per_visitor", "profit = revenue − acquisition_cost",
                      "cost_per_order = acquisition_cost ÷ orders"],
@@ -107,10 +139,22 @@ def describe_models() -> list[dict]:
             for key, m in MODELS.items()]
 
 
-def _model(name: str) -> dict:
+def _model(name: "str | dict") -> dict:
+    """A model spec from a built-in name, or a compiled custom spec passed through unchanged (app/scenario_models.py)."""
+    if isinstance(name, dict):
+        return name
     if name not in MODELS:
         raise ScenarioError(f"Unknown model '{name}'. Available: {', '.join(MODELS)}")
     return MODELS[name]
+
+
+def model_key(model: "str | dict") -> str:
+    """The identifier of a model: the built-in name, or custom:<id>@<version> for a custom model."""
+    return model["key"] if isinstance(model, dict) else model
+
+
+for _name, _spec in MODELS.items():
+    _spec["key"] = _name
 
 
 def _number(value: Any, what: str) -> float:
@@ -172,7 +216,7 @@ def apply_adjustments(model: str, baseline: dict, adjustments: dict | None, assu
             out[name] = value
     # The one behavioural link in the model, and it is an explicit assumption.
     elasticity = assumptions.get("price_elasticity", 0.0)
-    if model == "unit_economics" and elasticity and baseline["price"] and "volume" not in (adjustments or {}):
+    if model_key(model) == "unit_economics" and elasticity and baseline["price"] and "volume" not in (adjustments or {}):
         price_change = out["price"] / baseline["price"] - 1
         out["volume"] = max(0.0, baseline["volume"] * (1 + elasticity * price_change))
     return validate_inputs(model, out)
@@ -190,29 +234,192 @@ def _delta(base: dict, new: dict) -> dict:
     return out
 
 
-def shapley_contributions(fn: Callable[[dict], float], base: dict, scenario: dict) -> dict[str, float]:
-    """How much of the change in an output each changed input accounts for.
+def outputs_vec(model: str, inputs: dict, assumptions: dict) -> dict:
+    """Outputs for array-valued inputs (every value may be a scalar or an array)."""
+    return _model(model)["compute_vec"](inputs, assumptions)
 
-    Inputs interact (price x volume), so "the effect of price" depends on the
-    order inputs are changed in. The Shapley value averages over every order;
-    the contributions always sum exactly to the total change."""
+
+# ------------------------------------------------------------- break-even --
+
+def break_even(model: str, inputs: dict, curve_points: int = 30) -> dict:
+    """Where profit crosses zero, from the model's own formulas.
+
+    unit_economics: profit(q) = (price - unit_cost) x q - fixed_cost, so the
+    break-even quantity is fixed_cost / (price - unit_cost) when a unit earns
+    a positive contribution, and does not exist when it does not.
+
+    funnel: the model has no fixed cost, so profit = visitors x (conversion x order value - cost per
+    visitor) is proportional to visitors. It is profitable at every scale or at none, and the break-even
+    that exists is a threshold on conversion rate, order value or cost per visitor.
+    """
+    _model(model)
+    if isinstance(model, dict):
+        return None        # a custom model has no built-in break-even; use goal seek on its profit-like output
+    if model == "unit_economics":
+        out = _break_even_units(inputs)
+    else:
+        out = _break_even_funnel(inputs)
+    out["model"] = model
+    out["curve"] = _break_even_curve(model, inputs, out, curve_points)
+    return out
+
+
+def _break_even_units(i: dict) -> dict:
+    price, volume, unit_cost, fixed = i["price"], i["volume"], i["unit_cost"], i["fixed_cost"]
+    contribution = price - unit_cost
+    out: dict[str, Any] = {
+        "formulas": ["contribution per unit = price − unit_cost",
+                     "break-even quantity = fixed_cost ÷ contribution per unit",
+                     "break-even revenue = break-even quantity × price",
+                     "safety margin % = (units sold − break-even quantity) ÷ units sold × 100"],
+        "contribution_per_unit": contribution, "current_units": volume,
+        "current_profit": contribution * volume - fixed,
+    }
+    if contribution > 0:
+        q = fixed / contribution
+        out.update(status="reachable", break_even_quantity=q, break_even_revenue=q * price,
+                   distance_units=volume - q, additional_units_needed=max(0.0, q - volume),
+                   above_break_even=volume >= q,
+                   safety_margin_pct=(volume - q) / volume * 100 if volume > 0 else None,
+                   explanation=(f"Each unit contributes {contribution:,.2f} towards fixed costs of {fixed:,.2f}, so "
+                                f"{q:,.2f} units are needed to break even; {volume:,.2f} are sold."))
+    elif contribution == 0 and fixed == 0:
+        out.update(status="flat", explanation="Price equals unit cost and there is no fixed cost: profit is zero at "
+                                              "every volume, so there is no single break-even point.")
+    elif contribution == 0:
+        out.update(status="never", explanation="Price equals unit cost, so no unit contributes towards the fixed "
+                                               f"cost of {fixed:,.2f}: the business cannot break even at any volume.")
+    else:
+        out.update(status="never", explanation=f"Each unit sells for {-contribution:,.2f} less than it costs, so selling "
+                                               "more increases the loss: there is no break-even volume at this price "
+                                               "and unit cost.")
+    return out
+
+
+def _break_even_funnel(i: dict) -> dict:
+    visitors, cr, aov, cpv = i["visitors"], i["conversion_rate"], i["average_order_value"], i["cost_per_visitor"]
+    per_visitor = cr * aov - cpv
+    out: dict[str, Any] = {
+        "formulas": ["profit per visitor = conversion_rate × average_order_value − cost_per_visitor",
+                     "break-even conversion rate = cost_per_visitor ÷ average_order_value",
+                     "break-even order value = cost_per_visitor ÷ conversion_rate",
+                     "break-even cost per visitor = conversion_rate × average_order_value"],
+        "profit_per_visitor": per_visitor, "current_visitors": visitors, "current_profit": per_visitor * visitors,
+        "break_even_conversion_rate": cpv / aov if aov > 0 else None,
+        "break_even_average_order_value": cpv / cr if cr > 0 else None,
+        "break_even_cost_per_visitor": cr * aov,
+    }
+    be_cr, be_aov, be_cpv = (out["break_even_conversion_rate"], out["break_even_average_order_value"],
+                             out["break_even_cost_per_visitor"])
+    out["safety_margin_pct"] = {
+        "conversion_rate": (cr - be_cr) / cr * 100 if be_cr is not None and cr > 0 else None,
+        "average_order_value": (aov - be_aov) / aov * 100 if be_aov is not None and aov > 0 else None,
+        "cost_per_visitor": (be_cpv - cpv) / be_cpv * 100 if be_cpv > 0 else None,
+    }
+    note = " This model has no fixed cost, so the break-even is a threshold on the rates, not a visitor count."
+    if per_visitor > 0:
+        out.update(status="profitable_at_any_scale", break_even_visitors=0.0, above_break_even=True,
+                   explanation=f"Each visitor earns {per_visitor:,.4f} after acquisition cost, so profit is positive at "
+                               "any number of visitors." + note)
+    elif per_visitor == 0:
+        out.update(status="flat", break_even_visitors=None, above_break_even=False,
+                   explanation="Each visitor earns exactly what it costs: profit is zero at any number of visitors." + note)
+    else:
+        out.update(status="never", break_even_visitors=None, above_break_even=False,
+                   explanation=f"Each visitor loses {-per_visitor:,.4f}, so more visitors increase the loss." + note)
+    return out
+
+
+def _break_even_curve(model: str, i: dict, be: dict, points: int) -> dict:
+    """Profit along the break-even variable, from the model's own array formulas, for the chart."""
+    points = max(5, min(int(points), 200))
+    if model == "unit_economics":
+        top = max(i["volume"], be.get("break_even_quantity") or 0.0) * 1.5 or 1.0
+        x = np.linspace(0.0, top, points)
+        profit = outputs_vec(model, {**i, "volume": x}, {})["profit"]
+        return {"x_label": "Units sold", "x": x.tolist(), "profit": profit.tolist(), "current_x": i["volume"],
+                "break_even_x": be.get("break_even_quantity")}
+    ref = max(i["conversion_rate"], be.get("break_even_conversion_rate") or 0.0)
+    top = min(1.0, ref * 1.5) if ref > 0 else 1.0
+    x = np.linspace(0.0, top, points)
+    profit = outputs_vec(model, {**i, "conversion_rate": x}, {})["profit"]
+    return {"x_label": "Conversion rate", "x": x.tolist(), "profit": profit.tolist(),
+            "current_x": i["conversion_rate"], "break_even_x": be.get("break_even_conversion_rate")}
+
+
+def shapley(fn: Callable[[dict], float], base: dict, scenario: dict, *, max_exact: int = 10, samples: int = 2000,
+            seed: int = 0) -> dict:
+    """How much of the change in an output each changed input accounts for, with how it was computed.
+
+    Inputs interact (price x volume), so "the effect of price" depends on the order inputs are changed in. The Shapley
+    value averages over every order. With up to `max_exact` changed inputs it is computed exactly from the subset
+    formula, evaluating the output once per subset (2^n evaluations, not n! orders). Beyond that it is estimated by
+    sampling random orders (each also taken reversed), with a standard error per input. Either way the contributions
+    sum exactly to the total change, because every order's contributions do."""
     changed = [k for k in base if not math.isclose(base[k], scenario[k], rel_tol=1e-12, abs_tol=1e-12)]
-    contributions = {k: 0.0 for k in changed}
-    if not changed:
-        return contributions
-    orders = list(itertools.permutations(changed))
-    for order in orders:
-        current = dict(base)
-        previous = fn(current)
-        for k in order:
-            current[k] = scenario[k]
-            value = fn(current)
-            contributions[k] += value - previous
-            previous = value
-    return {k: v / len(orders) for k, v in contributions.items()}
+    n = len(changed)
+    if n == 0:
+        return {"values": {}, "method": "exact", "changed_inputs": 0, "samples": None, "standard_errors": None}
+    if n <= max_exact:
+        value: dict[int, float] = {}
+
+        def f(mask: int) -> float:
+            if mask not in value:
+                value[mask] = fn({**base, **{changed[i]: scenario[changed[i]] for i in range(n) if mask >> i & 1}})
+            return value[mask]
+
+        weight = [math.factorial(k) * math.factorial(n - k - 1) / math.factorial(n) for k in range(n)]
+        values = {}
+        for i, name in enumerate(changed):
+            total = 0.0
+            for mask in range(1 << n):
+                if not mask >> i & 1:
+                    total += weight[bin(mask).count("1")] * (f(mask | 1 << i) - f(mask))
+            values[name] = total
+        return {"values": values, "method": "exact", "changed_inputs": n, "samples": None, "standard_errors": None}
+    rng = random.Random(seed)
+    pairs = max(1, samples // 2)
+    start = fn(dict(base))
+    sums = {k: 0.0 for k in changed}
+    sq = {k: 0.0 for k in changed}
+    for _ in range(pairs):
+        order = changed[:]
+        rng.shuffle(order)
+        avg = {k: 0.0 for k in changed}
+        for seq in (order, order[::-1]):
+            current, previous = dict(base), start
+            for k in seq:
+                current[k] = scenario[k]
+                val = fn(current)
+                avg[k] += (val - previous) / 2
+                previous = val
+        for k in changed:
+            sums[k] += avg[k]
+            sq[k] += avg[k] ** 2
+    values = {k: sums[k] / pairs for k in changed}
+    se = {k: math.sqrt(max(0.0, sq[k] / pairs - values[k] ** 2) / pairs) for k in changed}
+    return {"values": values, "method": "sampled", "changed_inputs": n, "samples": pairs * 2, "standard_errors": se}
 
 
-def evaluate(model: str, baseline: dict, scenarios: dict[str, dict] | None = None,
+def shapley_contributions(fn: Callable[[dict], float], base: dict, scenario: dict, **kw) -> dict[str, float]:
+    return shapley(fn, base, scenario, **kw)["values"]
+
+
+def _enforce(spec: dict, label: str, inputs: dict, assumptions: dict, outputs: dict, notes: dict, key: str) -> None:
+    """A custom model's constraints. A broken error-level constraint rejects the scenario like an impossible input;
+    a warning is returned beside the result."""
+    check = spec.get("constraint_violations")
+    if check is None:
+        return
+    found = check({**inputs, **assumptions, **{k: (math.nan if v is None else v) for k, v in outputs.items()}})
+    errors = [v for v in found if v["severity"] == "error"]
+    if errors:
+        raise ScenarioError(f"{label} breaks the model's constraint: {errors[0]['message']}")
+    if found:
+        notes[key] = found
+
+
+def evaluate(model: "str | dict", baseline: dict, scenarios: dict[str, dict] | None = None,
              assumptions: dict | None = None, sensitivity_pct: float = 10.0) -> dict:
     """Evaluate the baseline and each named scenario, with a sensitivity table
     and a contribution breakdown for the model's primary output."""
@@ -225,6 +432,8 @@ def evaluate(model: str, baseline: dict, scenarios: dict[str, dict] | None = Non
         raise ScenarioError("At most 12 scenarios per evaluation")
     primary = spec["primary_output"]
     base_out = _outputs(model, baseline, assumptions)
+    constraint_notes: dict[str, list] = {}
+    _enforce(spec, "The baseline", baseline, assumptions, base_out, constraint_notes, "baseline")
 
     def primary_of(inputs: dict) -> float:
         return _outputs(model, inputs, assumptions)[primary] or 0.0
@@ -233,11 +442,15 @@ def evaluate(model: str, baseline: dict, scenarios: dict[str, dict] | None = Non
     for name, adjustments in (scenarios or {}).items():
         inputs = apply_adjustments(model, baseline, adjustments, assumptions)
         outputs = _outputs(model, inputs, assumptions)
+        _enforce(spec, f"Scenario '{name}'", inputs, assumptions, outputs, constraint_notes, str(name)[:60])
+        sh = shapley(primary_of, baseline, inputs)
         results[str(name)[:60]] = {
             "adjustments": adjustments, "inputs": inputs, "outputs": outputs,
             "delta_vs_baseline": _delta(base_out, outputs),
-            "contributions": {"output": primary, "by_input": shapley_contributions(primary_of, baseline, inputs),
-                              "method": "Shapley average over the order in which inputs change"},
+            "contributions": {"output": primary, "by_input": sh["values"],
+                              "method": ("Shapley average over the order in which inputs change" if sh["method"] == "exact" else
+                                         f"Shapley average estimated from {sh['samples']:,} sampled orders (approximate)"),
+                              "computation": {k: sh[k] for k in ("method", "changed_inputs", "samples", "standard_errors")}},
         }
 
     sensitivity = []
@@ -252,17 +465,25 @@ def evaluate(model: str, baseline: dict, scenarios: dict[str, dict] | None = Non
 
     unsupported = ["Inputs change independently of each other, except where an assumption below links them.",
                    "Costs and prices scale linearly; no volume discounts, capacity limits or step costs."]
-    if "price_elasticity" in assumptions:
+    if isinstance(model, dict):
+        unsupported = ["Inputs change independently of each other, except where the model's own formulas link them.",
+                       "This is a custom model: every relationship is a formula in its definition, and the engine adds no "
+                       "behavioural link of its own (no price elasticity, no scaling)."]
+    elif "price_elasticity" in assumptions:
         e = assumptions["price_elasticity"]
         unsupported.append(
             "Price elasticity is 0: volume is assumed not to react to price at all." if e == 0 else
             f"Price elasticity of {e:g} is a stated assumption. It was not estimated from the dataset.")
     return {
-        "kind": "scenario", "disclaimer": DISCLAIMER, "model": model, "title": spec["title"],
+        "kind": "scenario", "data_kind": "scenario", "disclaimer": DISCLAIMER, "model": model_key(model), "title": spec["title"],
+        "engine_version": ENGINE_VERSION, "constraint_notes": constraint_notes,
         "formulas": spec["formulas"], "assumptions": assumptions, "unsupported_assumptions": unsupported,
         "baseline": {"inputs": baseline, "outputs": base_out},
         "scenarios": results, "primary_output": primary,
         "sensitivity": {"pct": sensitivity_pct, "output": primary, "rows": sensitivity},
+        "break_even": ({"baseline": break_even(model, baseline),
+                        "scenarios": {name: break_even(model, r["inputs"]) for name, r in results.items()}}
+                       if not isinstance(model, dict) else None),
     }
 
 

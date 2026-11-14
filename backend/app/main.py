@@ -44,6 +44,7 @@ from app.routers.investigations import router as investigations_router
 from app.routers.org import router as org_router
 from app.routers.jobs import router as jobs_router
 from app.routers.quality import router as quality_router
+from app.routers.scenario_models import router as scenario_models_router
 from app.routers.scenarios import router as scenarios_router
 from app.routers.semantic import router as semantic_router
 from app.routers.analyst import router as analyst_router
@@ -104,6 +105,7 @@ app.include_router(org_router)
 app.include_router(quality_router)
 app.include_router(copilot_router)
 app.include_router(scenarios_router)
+app.include_router(scenario_models_router)
 app.include_router(semantic_router)
 app.include_router(evals_router)
 app.include_router(analyst_router)
@@ -191,7 +193,8 @@ def _save_and_profile_upload(file: UploadFile, sheet: str | None = None) -> tupl
         try:
             import pandas as pd
             if sheet:
-                names = pd.ExcelFile(dest_path).sheet_names
+                with pd.ExcelFile(dest_path) as workbook:    # closed before any unlink: Windows cannot delete an open file
+                    names = workbook.sheet_names
                 if sheet not in names:
                     raise HTTPException(400, f"The workbook has no sheet named '{sheet}' (sheets: {', '.join(names)}).")
             frame = pd.read_excel(dest_path, sheet_name=sheet or 0)

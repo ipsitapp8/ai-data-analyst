@@ -346,6 +346,423 @@ def test_what_if_page_computes_scenarios_and_rejects_nothing_silently(api, ws):
     assert saved["total"] == 1 and saved["scenarios"][0]["name"] == "Price test"
 
 
+def _unit_economics(at, price=20.0, volume=1000.0, unit_cost=12.0, fixed_cost=3000.0):
+    for name, value in (("price", price), ("volume", volume), ("unit_cost", unit_cost), ("fixed_cost", fixed_cost)):
+        at.number_input(key=f"wi_in_unit_economics_{name}").set_value(value)
+    return at.run()
+
+
+def test_what_if_page_shows_break_even_and_the_independent_check(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    healthy(at)
+    text = text_of(at)
+    # 3000 / (20 - 12) = 375 units; 375 x 20 = 7500 revenue; 625 units above; 62.5% safety margin
+    assert "Break-even units" in text and "375.00" in text and "7,500.00" in text and "625.00" in text and "62.5%" in text
+    assert "Verified" in text and "Independent check of the scenario arithmetic" in text
+    at.selectbox(key="wi_model").select("funnel").run()
+    for name, value in (("visitors", 10000.0), ("conversion_rate", 0.02), ("average_order_value", 50.0), ("cost_per_visitor", 0.4)):
+        at.number_input(key=f"wi_in_funnel_{name}").set_value(value)
+    at.run()
+    healthy(at)
+    assert "Break-even conversion" in text_of(at) and "no fixed cost" in text_of(at)
+
+
+def test_what_if_simulation_runs_repeats_and_is_saved_with_its_seed(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    assert at.button(key="wi_mc_run").proto.disabled, "nothing is uncertain yet, so there is nothing to run"
+    assert "at least one input" in text_of(at)
+    at.selectbox(key="wi_mc_dist_unit_economics_price").select("normal").run()
+    at.number_input(key="wi_mc_sd_unit_economics_price").set_value(25.0)
+    at.number_input(key="wi_mc_iter").set_value(4000)
+    at.number_input(key="wi_mc_target").set_value(4000.0)
+    at.checkbox(key="wi_mc_target_on").check().run()
+    at.button(key="wi_mc_run").click().run()
+    healthy(at)
+    stored = at.session_state["wi_mc_result_unit_economics"]
+    result = stored["result"]
+    text = text_of(at)
+    assert "seed 42" in text and "4,000 runs" in text and "Expected profit" in text and "5th percentile" in text
+    assert "Chance profit is above zero" in text and "at least 4,000.00" in text and "assumptions you supplied" in text
+    assert result["verification"]["status"] == "verified" and "Verified" in text
+    assert any("Mean" in list(df.value.columns) for df in at.dataframe), "the per-output statistics table is shown"
+    again = api.post("/api/scenarios/simulate", json=stored["body"], headers=ws["h"]).json()
+    assert again["outputs"] == result["outputs"], "the same seed and settings reproduce the page's numbers"
+
+    at.number_input(key="wi_mc_sd_unit_economics_price").set_value(10.0).run()
+    assert "changed since this simulation ran" in text_of(at)
+
+    at.number_input(key="wi_mc_sd_unit_economics_price").set_value(25.0).run()
+    at.text_input(key="wi_name").set_value("Risky").run()
+    at.button(key="wi_save").click().run()
+    healthy(at)
+    saved = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]
+    full = api.get(f"/api/scenarios/{saved['id']}", headers=ws["h"]).json()
+    assert full["request"]["simulation"]["seed"] == 42 and full["results"]["simulation"]["config"]["iterations"] == 4000
+
+
+def test_what_if_simulation_errors_are_shown_not_raised(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    for name in ("price", "volume", "unit_cost"):
+        at.selectbox(key=f"wi_mc_dist_unit_economics_{name}").select("normal")
+    at.run()
+    for pair, value in ((("price", "volume"), 0.9), (("price", "unit_cost"), 0.9), (("volume", "unit_cost"), -0.9)):
+        at.slider(key=f"wi_mc_corr_unit_economics_{pair[0]}_{pair[1]}").set_value(value)
+    at.run()
+    at.button(key="wi_mc_run").click().run()
+    assert not at.exception
+    assert any("positive semidefinite" in str(e.value) for e in at.error), [e.value for e in at.error]
+    assert "wi_mc_result_unit_economics" not in at.session_state
+
+
+def test_what_if_goal_seek_solves_and_reports_an_impossible_goal(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.selectbox(key="wi_gs_out_unit_economics").select("margin_pct")
+    at.number_input(key="wi_gs_value_unit_economics").set_value(20.0)
+    at.selectbox(key="wi_gs_var_unit_economics").select("price").run()
+    at.button(key="wi_gs_run").click().run()
+    healthy(at)
+    text = text_of(at)
+    # margin = ((p - 12) x 1000 - 3000) / (1000 p) = 0.2  ->  p = 18.75
+    assert "Solved" in text and "18.75" in text and "Independent check of the solution" in text
+    assert at.session_state["wi_gs_result_unit_economics"]["result"]["verification"]["status"] == "verified"
+    at.number_input(key="wi_gs_value_unit_economics").set_value(150.0).run()
+    assert "changed since this was solved" in text_of(at)
+    at.button(key="wi_gs_run").click().run()
+    healthy(at)
+    assert "No solution" in text_of(at) and "only reach" in text_of(at)
+
+
+def test_what_if_goal_seek_respects_adjusted_inputs_and_constraints(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.number_input(key="wi_adj_unit_economics_volume").set_value(-50.0).run()
+    assert "stay at their adjusted values" in text_of(at)
+    assert "volume" not in [o for o in at.selectbox(key="wi_gs_var_unit_economics").options], "an adjusted input is not offered"
+    at.selectbox(key="wi_gs_out_unit_economics").select("margin_pct")
+    at.number_input(key="wi_gs_value_unit_economics").set_value(20.0)
+    at.selectbox(key="wi_gs_var_unit_economics").select("price").run()
+    at.button(key="wi_gs_run").click().run()
+    healthy(at)
+    assert "22.5" in text_of(at)          # volume 500: 0.8 p = 18  ->  p = 22.5
+    at.selectbox(key="wi_gs_cm_unit_economics_1").select("price")
+    at.selectbox(key="wi_gs_co_unit_economics_1").select("<=")
+    at.number_input(key="wi_gs_cv_unit_economics_1").set_value(20.0).run()
+    at.button(key="wi_gs_run").click().run()
+    healthy(at)
+    assert "No feasible solution" in text_of(at)
+
+
+def _demand_csv(n=36, e=-1.5, seed=0) -> bytes:
+    import io
+
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    price = 20 * np.exp(rng.normal(0, 0.12, n))
+    frame = pd.DataFrame({"date": pd.date_range("2022-01-01", periods=n, freq="MS"), "price": price,
+                          "units": 1000 * (price / 20) ** e * np.exp(rng.normal(0, 0.05, n))})
+    buf = io.StringIO()
+    frame.to_csv(buf, index=False)
+    return buf.getvalue().encode()
+
+
+def _pick(at, key: str, label: str):
+    box = at.selectbox(key=key)
+    return box.select_index([str(o) for o in box.options].index(label))
+
+
+def test_what_if_elasticity_estimate_is_a_suggestion_the_user_must_choose_to_use(api, ws):
+    up = api.post("/api/datasets/upload", files={"file": ("demand.csv", _demand_csv(), "text/csv")}, headers=ws["h"])
+    assert up.status_code == 200, up.text
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.slider(key="wi_as_unit_economics_price_elasticity").set_value(-0.7).run()
+    assert at.button(key="wi_el_run").proto.disabled, "no columns chosen yet"
+    _pick(at, "wi_el_ds", "demand.csv").run()
+    _pick(at, "wi_el_price", "price").run()
+    _pick(at, "wi_el_qty", "units").run()
+    _pick(at, "wi_el_date", "date")
+    at.run()
+    at.button(key="wi_el_run").click().run()
+    healthy(at)
+    text = text_of(at)
+    result = at.session_state["wi_el_result_unit_economics"]
+    assert result["status"] == "estimated" and abs(result["elasticity"]["estimate"] + 1.5) < 0.25
+    assert "Estimated elasticity" in text and "36 observations" in text and "Statistical estimate" in text and "Usable" in text
+    assert at.slider(key="wi_as_unit_economics_price_elasticity").value == -0.7, "the manual value is untouched by an estimate"
+    assert "Your value in the slider: <b>-0.7</b>" in text
+    saved_manual = _save(at, api, ws, "Manual elasticity")
+    assert saved_manual["request"]["assumption_sources"] == {}
+
+    at.button(key="wi_el_use").click().run()
+    healthy(at)
+    chosen = at.slider(key="wi_as_unit_economics_price_elasticity").value
+    assert chosen == round(result["elasticity"]["estimate"], 2)
+    saved_used = _save(at, api, ws, "Estimated elasticity")
+    src = saved_used["request"]["assumption_sources"]["price_elasticity"]
+    assert src["source"] == "estimate" and src["provenance"]["dataset_version"] == 1 and src["chosen_value"] == chosen
+
+    at.slider(key="wi_as_unit_economics_price_elasticity").set_value(-2.0).run()
+    assert _save(at, api, ws, "Back to manual")["request"]["assumption_sources"] == {}, "an edited value is no longer the estimate"
+
+
+def _save(at, api, ws, name: str) -> dict:
+    at.text_input(key="wi_name").set_value(name).run()
+    at.button(key="wi_save").click().run()
+    healthy(at)
+    listing = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"]
+    return api.get(f"/api/scenarios/{next(s for s in listing if s['name'] == name)['id']}", headers=ws["h"]).json()
+
+
+def test_what_if_elasticity_refuses_unsuitable_data_and_offers_no_button(api, ws):
+    api.post("/api/datasets/upload", files={"file": ("tiny.csv", _demand_csv(n=5), "text/csv")}, headers=ws["h"])
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    _pick(at, "wi_el_ds", "tiny.csv").run()
+    _pick(at, "wi_el_price", "price").run()
+    _pick(at, "wi_el_qty", "units").run()
+    _pick(at, "wi_el_date", "date")
+    at.run()
+    at.button(key="wi_el_run").click().run()
+    healthy(at)
+    text = text_of(at)
+    assert "Not estimated" in text and "only 5 usable observation" in text
+    assert not [b for b in at.button if b.key == "wi_el_use"], "an unusable estimate cannot be applied"
+
+
+def _fill_model(at, name="Revenue plan", formula="customers * price", profit_formula="revenue - 1000"):
+    at.text_input(key="cm_name").set_value(name)
+    for i, (n, unit) in enumerate((("customers", "customers"), ("price", "currency/customers"))):
+        at.text_input(key=f"cm_in_{i}_name").set_value(n)
+        at.text_input(key=f"cm_in_{i}_label").set_value(n.title())
+        at.text_input(key=f"cm_in_{i}_unit").set_value(unit)
+    for i, (n, unit, f) in enumerate((("revenue", "currency", formula), ("profit", "currency", profit_formula))):
+        at.text_input(key=f"cm_out_{i}_name").set_value(n)
+        at.text_input(key=f"cm_out_{i}_unit").set_value(unit)
+        at.text_input(key=f"cm_out_{i}_formula").set_value(f)
+    at.run()
+    at.selectbox(key="cm_primary").select("profit")
+    return at.run()
+
+
+def test_what_if_custom_model_is_built_checked_saved_and_run_from_the_page(api, ws):
+    at = healthy(page("14_What_If.py", ws))
+    _fill_model(at, formula="customers * price", profit_formula="revenue - nothing")
+    at.button(key="cm_validate").click().run()
+    healthy(at)
+    text = text_of(at)
+    assert "Not valid" in text and "nothing" in text, "an unknown name is reported with its reason, nothing is saved"
+    assert api.get("/api/scenario-models", headers=ws["h"]).json()["models"] == []
+
+    at.text_input(key="cm_out_1_formula").set_value("revenue - 1000").run()
+    at.button(key="cm_validate").click().run()
+    healthy(at)
+    assert "Valid" in text_of(at) and "revenue → profit" in text_of(at)
+    at.button(key="cm_save_new").click().run()
+    healthy(at)
+    models = api.get("/api/scenario-models", headers=ws["h"]).json()["models"]
+    assert [m["name"] for m in models] == ["Revenue plan"] and models[0]["ref"].endswith("@1")
+    assert "Saved 'Revenue plan' as version 1." in text_of(at)
+
+    ref = models[0]["ref"]
+    assert "Revenue plan (custom, v1)" in [str(o) for o in at.selectbox(key="wi_model").options]
+    at.selectbox(key="wi_model").select(ref).run()
+    at.number_input(key=f"wi_in_{ref}_customers").set_value(200.0)
+    at.number_input(key=f"wi_in_{ref}_price").set_value(15.0)
+    at.number_input(key=f"wi_adj_{ref}_price").set_value(10.0).run()
+    healthy(at)
+    frame = at.dataframe[0].value
+    # 200 x 15 = 3000 revenue, profit 2000; price +10% = 16.5 -> revenue 3300, profit 2300
+    assert frame.loc["profit", "baseline"] == 2000.0 and frame.loc["profit", "your scenario"] == 2300.0
+    assert "Independent check of the scenario arithmetic" in text_of(at) and "Verified" in text_of(at)
+    assert "custom model" in text_of(at), "the custom-model note replaces the built-in elasticity wording"
+    assert "Break-even" not in text_of(at), "a custom model has no built-in break-even"
+    at.button(key="wi_mc_run")  # the simulation and goal-seek tools are present for custom models too
+    at.selectbox(key=f"wi_mc_dist_{ref}_price").select("normal").run()
+    at.number_input(key="wi_mc_iter").set_value(2000)
+    at.button(key="wi_mc_run").click().run()
+    healthy(at)
+    assert at.session_state[f"wi_mc_result_{ref}"]["result"]["verification"]["status"] == "verified"
+    at.number_input(key=f"wi_adj_{ref}_price").set_value(0.0).run()       # an adjusted input is not offered as the one to solve for
+    at.selectbox(key=f"wi_gs_out_{ref}").select("profit")
+    at.number_input(key=f"wi_gs_value_{ref}").set_value(5000.0)
+    at.selectbox(key=f"wi_gs_var_{ref}").select("price").run()
+    at.button(key="wi_gs_run").click().run()
+    healthy(at)
+    assert abs(at.session_state[f"wi_gs_result_{ref}"]["result"]["solutions"][0]["value"] - 30.0) < 1e-9   # 200 x p - 1000 = 5000
+
+
+def test_what_if_custom_model_can_be_edited_into_a_new_version_without_changing_the_old_one(api, ws):
+    at = healthy(page("14_What_If.py", ws))
+    _fill_model(at)
+    at.button(key="cm_save_new").click().run()
+    healthy(at)
+    model = api.get("/api/scenario-models", headers=ws["h"]).json()["models"][0]
+    at.button(key=f"cm_edit_{model['id']}").click().run()
+    healthy(at)
+    assert at.text_input(key="cm_name").value == "Revenue plan" and at.text_input(key="cm_out_1_formula").value == "revenue - 1000"
+    at.text_input(key="cm_out_1_formula").set_value("revenue - 2000").run()
+    at.text_input(key="cm_note").set_value("fixed cost is 2000").run()
+    at.button(key="cm_save_version").click().run()
+    healthy(at)
+    got = api.get(f"/api/scenario-models/{model['id']}", headers=ws["h"]).json()
+    assert got["current_version"] == 2 and got["definition"]["outputs"]["profit"]["formula"] == "revenue - 2000"
+    old = api.get(f"/api/scenario-models/{model['id']}/versions/1", headers=ws["h"]).json()
+    assert old["definition"]["outputs"]["profit"]["formula"] == "revenue - 1000" and got["versions"][1]["note"] == "fixed cost is 2000"
+    assert "Revenue plan (custom, v2)" in [str(o) for o in at.selectbox(key="wi_model").options]
+
+
+def test_what_if_custom_baseline_comes_from_an_approved_metric_and_says_so(api, ws):
+    m = api.post("/api/semantic/metrics", json={"name": "Total revenue", "formula": "sum(revenue)"}, headers=ws["h"]).json()
+    assert api.post(f"/api/semantic/metrics/{m['id']}/versions/1/approve", headers=ws["h"]).status_code == 200
+    definition = {"inputs": {"base": {"label": "Revenue base", "unit": "currency", "min": 0, "source": {"type": "metric", "metric_id": m["id"]}},
+                             "uplift": {"label": "Uplift", "unit": "fraction", "min": 0}},
+                  "outputs": {"projected": {"unit": "currency", "formula": "base * (1 + uplift)"}}, "primary_output": "projected"}
+    made = api.post("/api/scenario-models", json={"name": "Revenue uplift", "definition": definition}, headers=ws["h"]).json()
+    ref = made["ref"]
+    at = healthy(page("14_What_If.py", ws))
+    at.selectbox(key="wi_model").select(ref).run()
+    at.button(key="wi_base_go").click().run()
+    healthy(at)
+    assert at.number_input(key=f"wi_in_{ref}_base").value == 277110.0
+    text = text_of(at)
+    assert "approved metric “Total revenue” v1" in text and "Revenue base" in text and "not in the data" in text
+    api.post(f"/api/semantic/metrics/{m['id']}/deprecate", headers=ws["h"])
+    at.button(key="wi_base_go").click().run()
+    assert any("deprecated, not approved" in str(e.value) for e in at.error), [e.value for e in at.error]
+
+
+def test_what_if_baseline_can_be_taken_from_one_period_and_the_scenario_remembers_it(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    for f, col in (("quantity_column", "units"), ("amount_column", "revenue"), ("total_cost_column", "cost")):
+        _pick(at, f"wi_map_unit_economics_{f}", col)
+    at.run()
+    _pick(at, "wi_date", "order_date").run()
+    at.selectbox(key="wi_ptype").select("month").run()
+    months = api.get("/api/scenarios/periods", params={"dataset_id": ws["ds"], "date_column": "order_date"}, headers=ws["h"]).json()["months"]
+    assert "(" in str(at.selectbox(key="wi_month").options[0]) and f"{months[0]['rows']:,} rows" in str(at.selectbox(key="wi_month").options[0])
+    at.selectbox(key="wi_month").select_index(0).run()
+    at.button(key="wi_base_go").click().run()
+    healthy(at)
+    text = text_of(at)
+    want = api.post("/api/scenarios/baseline", json={"dataset_id": ws["ds"], "model": "unit_economics", "date_column": "order_date",
+                    "mapping": {"quantity_column": "units", "amount_column": "revenue", "total_cost_column": "cost"},
+                    "period": {"type": "month", "year": months[0]["year"], "month": months[0]["month"]}}, headers=ws["h"]).json()
+    assert at.number_input(key="wi_in_unit_economics_volume").value == want["inputs"]["volume"]
+    assert at.number_input(key="wi_in_unit_economics_volume").value < sum(m["rows"] for m in months) * 100
+    assert "Historical actuals" in text and want["period"]["label"] in text and "dataset version 1" in text and "Independent check of the baseline" in text
+    at.number_input(key="wi_in_unit_economics_fixed_cost").set_value(500.0).run()
+    saved = _save(at, api, ws, "March baseline")
+    src = saved["request"]["baseline_source"]
+    assert src["period"] == {"type": "month", "year": months[0]["year"], "month": months[0]["month"]} and src["date_column"] == "order_date"
+    assert src["provenance"]["dataset_version"] == 1 and len(src["provenance"]["content_sha256"]) == 64
+
+
+def test_what_if_compare_periods_shows_actuals_the_change_and_its_drivers(api, ws):
+    at = healthy(page("14_What_If.py", ws))
+    assert "Historical actuals" in text_of(at) and "not produced here" in text_of(at), "the kinds of figure are explained"
+    for f, col in (("quantity_column", "units"), ("amount_column", "revenue"), ("total_cost_column", "cost")):
+        _pick(at, f"cp_map_unit_economics_{f}", col)
+    at.run()
+    at.selectbox(key="cp_a_ptype").select("month")
+    at.selectbox(key="cp_b_ptype").select("month").run()
+    at.selectbox(key="cp_a_month").select_index(0)
+    at.selectbox(key="cp_b_month").select_index(2).run()
+    at.button(key="cp_run").click().run()
+    assert any("fixed_cost" in str(e.value) for e in at.error), "an input the data does not supply is asked for, not assumed"
+    at.number_input(key="cp_ov_unit_economics_fixed_cost").set_value(500.0).run()
+    at.button(key="cp_run").click().run()
+    healthy(at)
+    r = at.session_state["cp_result"]
+    assert r["data_kind"] == "historical_actual" and r["verification"]["status"] == "verified"
+    assert r["periods"]["a"]["period"]["type"] == "month" and r["periods"]["a"]["period"]["label"] != r["periods"]["b"]["period"]["label"]
+    text = text_of(at)
+    assert "Historical actuals" in text and "dataset version 1" in text and "not a forecast" in text
+    assert any("Period A" in list(df.value.columns) for df in at.dataframe)
+    assert "Independent check of the comparison" in text and "Verified" in text
+
+
+def test_what_if_segments_tab_adjusts_one_segment_and_shows_each_segment_and_the_total(api, ws):
+    listing = api.get("/api/scenarios/segment-values", params={"dataset_id": ws["ds"], "segment_column": "region"}, headers=ws["h"]).json()
+    target = listing["segments"][0]["value"]
+    at = healthy(page("14_What_If.py", ws))
+    _pick(at, "sg_column", "region").run()
+    for f, col in (("quantity_column", "units"), ("amount_column", "revenue"), ("total_cost_column", "cost")):
+        _pick(at, f"sg_map_unit_economics_{f}", col)
+    at.run()
+    at.button(key="sg_run").click().run()
+    assert any("has no value in the data" in str(e.value) for e in at.error), "an input the data cannot supply is asked for, not assumed"
+    at.selectbox(key="sg_mode_unit_economics_fixed_cost").select("constant").run()
+    at.multiselect(key="sg_pick").select(target).run()
+    at.number_input(key=f"sg_adj_unit_economics_{target}_price").set_value(10.0).run()
+    at.button(key="sg_run").click().run()
+    healthy(at)
+    r = at.session_state["sg_result"]
+    assert r["verification"]["status"] == "verified" and r["partition"]["complete"]
+    seg = {s["value"]: s for s in r["segments"]}
+    assert seg[target]["scenario"]["outputs"]["revenue"] == pytest.approx(seg[target]["baseline"]["outputs"]["revenue"] * 1.1, rel=1e-9)
+    assert r["contributions"]["by_segment"][target]["share_pct"] == pytest.approx(100.0)
+    assert all(s["delta"]["profit"]["abs"] == 0 for v, s in seg.items() if v != target)
+    text = text_of(at)
+    assert "Every row counted once" in text and "Independent check of the segments" in text and "Verified" in text
+    assert "each row is in exactly one segment" in text.replace("every row", "each row") or "exactly one segment" in text
+    assert any("Share of total change %" in list(df.value.columns) for df in at.dataframe)
+    again = api.post("/api/scenarios/segments", json={"dataset_id": ws["ds"], "model": "unit_economics", "segment_column": "region", "constant_inputs": {"fixed_cost": 0.0},
+                                                      "mapping": {"quantity_column": "units", "amount_column": "revenue", "total_cost_column": "cost"},
+                                                      "segment_adjustments": {target: {"price": {"type": "pct", "value": 10.0}}}}, headers=ws["h"]).json()
+    assert again["overall"]["scenario"]["outputs"] == r["overall"]["scenario"]["outputs"], "the page shows exactly what the API computed"
+
+
+def test_what_if_segments_tab_shares_a_total_cost_out_once(api, ws):
+    at = healthy(page("14_What_If.py", ws))
+    _pick(at, "sg_column", "region").run()
+    for f, col in (("quantity_column", "units"), ("amount_column", "revenue"), ("total_cost_column", "cost")):
+        _pick(at, f"sg_map_unit_economics_{f}", col)
+    at.run()
+    at.selectbox(key="sg_mode_unit_economics_fixed_cost").select("total").run()
+    at.number_input(key="sg_val_unit_economics_fixed_cost").set_value(4000.0).run()
+    _pick(at, "sg_by_unit_economics_fixed_cost", "In proportion to Units sold").run()
+    at.button(key="sg_run").click().run()
+    healthy(at)
+    r = at.session_state["sg_result"]
+    assert sum(s["baseline"]["inputs"]["fixed_cost"] for s in r["segments"]) == pytest.approx(4000.0)
+    assert r["allocations"]["fixed_cost"]["allocate_by"] == "volume" and r["overall"]["baseline"]["inputs"]["fixed_cost"] == 4000.0
+    assert "in proportion to volume" in text_of(at) and r["verification"]["status"] == "verified"
+
+
+def test_what_if_heatmap_draws_the_grid_marks_break_even_and_is_checked(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.number_input(key="gr_xl_unit_economics").set_value(-50.0)
+    at.number_input(key="gr_xh_unit_economics").set_value(50.0)
+    at.number_input(key="gr_yl_unit_economics").set_value(-50.0)
+    at.number_input(key="gr_yh_unit_economics").set_value(50.0)
+    at.run()
+    at.button(key="gr_run").click().run()
+    healthy(at)
+    g = at.session_state["gr_result_unit_economics"]
+    assert g["x"]["input"] == "price" and g["y"]["input"] == "volume" and g["verification"]["status"] == "verified"
+    assert g["boundary"]["points"] and all(abs(p["x"] - (12 + 3000 / p["y"])) < 1e-6 for p in g["boundary"]["points"] if p["edge"] == "row")
+    text = text_of(at)
+    assert "Best on this grid" in text and "crosses 0" in text and "Independent check of the grid" in text and "Verified" in text
+    assert "not claimed to be a global optimum" in text
+    want = api.post("/api/scenarios/sensitivity-grid", json={"model": "unit_economics", "baseline": {"price": 20.0, "volume": 1000.0, "unit_cost": 12.0, "fixed_cost": 3000.0},
+                                                             "x_input": "price", "y_input": "volume", "resolution": 21,
+                                                             "x_range": {"mode": "pct", "low": -50.0, "high": 50.0}, "y_range": {"mode": "pct", "low": -50.0, "high": 50.0}},
+                    headers=ws["h"]).json()
+    assert want["z"] == g["z"], "the page draws exactly what the API computed"
+
+
+def test_what_if_heatmap_reports_an_invalid_choice_instead_of_failing(api, ws):
+    at = _unit_economics(healthy(page("14_What_If.py", ws)))
+    at.selectbox(key="gr_y_unit_economics").select("price").run()          # the same input on both axes
+    at.button(key="gr_run").click().run()
+    assert not at.exception and any("two different inputs" in str(e.value) for e in at.error)
+    assert "gr_result_unit_economics" not in at.session_state
+    at.selectbox(key="gr_y_unit_economics").select("unit_cost").run()
+    at.selectbox(key="gr_out_unit_economics").select("margin_pct").run()
+    at.button(key="gr_run").click().run()
+    healthy(at)
+    assert at.session_state["gr_result_unit_economics"]["output"]["key"] == "margin_pct"
+
+
 # ------------------------------------------------------------- data quality --
 
 def test_data_quality_page_lists_incidents_and_resolves_one(api, ws):
