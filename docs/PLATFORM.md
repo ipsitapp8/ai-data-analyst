@@ -306,7 +306,7 @@ provider, tokens and estimated cost, and each code run.
 
 ## 10. What-if simulator
 
-`backend/app/scenarios.py`
+`backend/app/scenarios.py`, `scenario_sim.py`, `scenario_solve.py`, `scenario_verify.py`
 
 Two explicit models, `unit_economics` and `funnel`, with their formulas returned in every response.
 
@@ -318,6 +318,262 @@ Two explicit models, `unit_economics` and `funnel`, with their formulas returned
 
 Every result is labelled `kind: "scenario"` with a disclaimer and a list of assumptions the data
 does not support. It is arithmetic, not a forecast.
+
+### 10.1 Break-even
+
+Returned inside every `evaluate` response (`break_even.baseline` and one per scenario).
+
+- `unit_economics`: break-even quantity = fixed cost / (price − unit cost); break-even revenue; distance from it
+  in units; units still needed; safety margin. When a unit does not contribute (price at or below unit cost) there
+  is no break-even and the response says `never` or `flat` with the reason, never a number.
+- `funnel`: the model has no fixed cost, so profit is proportional to visitors. The result is therefore a
+  threshold on conversion rate, order value or cost per visitor, and `profitable_at_any_scale` or `never`.
+- A profit curve over the break-even variable is returned for the chart.
+
+### 10.2 Risk simulation (Monte Carlo)
+
+`POST /api/scenarios/simulate`
+
+The caller states, per input, a distribution: `normal` (`sd_pct` or `sd`), `uniform` (`low`/`high`, as `_pct` or
+absolute) or `triangular` (`low`, `mode`, `high`). Percentages are of the scenario value. Inputs with no
+distribution are held fixed and listed as fixed. A request with no uncertain input is refused: no range is ever
+assumed on the caller's behalf, and none is estimated from data in this version.
+
+- Draws use a Gaussian copula. The optional correlation matrix is validated (square, symmetric, unit diagonal,
+  entries in [−1, 1], positive semidefinite). Each distribution is truncated to the input's physical range, and the
+  probability mass that was cut off is reported.
+- Volume follows a sampled price through the stated elasticity unless volume was adjusted or has its own distribution.
+- Outputs: mean, median, standard deviation, min, max, 5th/25th/75th/95th percentiles for every output, plus for
+  the chosen outcome: probability of being positive, negative, above the baseline and reaching an optional target
+  (each with its sampling standard error), a 40-bin histogram, and "low / expected / high" (5th percentile, mean,
+  95th percentile). Low and high describe the simulation; they are not bounds.
+- 100 to 200,000 iterations (default 10,000). The seed is returned; a fixed seed reproduces the run exactly. Raw
+  draws are never returned.
+
+### 10.3 Goal seek
+
+`POST /api/scenarios/goal-seek`
+
+Solves `output(input = x) = target` by numerical root finding on the same deterministic engine (grid search for
+sign changes, Brent refinement, then re-evaluation by the original model). Status is one of `solved`,
+`multiple_solutions` (all roots returned; the one closest to today's value is recommended), `no_solution`
+(with the range the output can reach), `no_feasible_solution` (roots exist but break a constraint),
+`no_dependence`, `undefined` (a division by zero everywhere) or `convergence_failure`. No solution is ever
+fabricated. Optional bounds and up to five constraints on any input or output. An input with no physical upper limit
+is searched up to a stated ceiling, and the result says so. Roots closer together than a grid step, or that only
+touch the target, can be missed; the grid size is returned.
+
+### 10.4 Independent verification
+
+Every `evaluate`, `simulate` and `goal-seek` response carries `verification`. A second implementation written in
+plain Python (separate formulas, a subset-formula Shapley, a hand-written percentile, an independent bisection
+scan) recomputes the results and compares. Status is `unverified` if any required check fails or did not run;
+otherwise `verified`. The block states its scope: the calculations were checked, the realism of the inputs and
+ranges was not (the check `input_ranges_supported_by_data` is always `not_run`). If a verifier itself fails, the
+result is `unverified` with the reason. Tampered results are reported `unverified` (covered by tests).
+
+### 10.5 Historical elasticity estimation (Phase 2)
+
+`backend/app/scenario_elasticity.py`, `POST /api/scenarios/elasticity`
+
+A suggestion, never an override: the slider value the user typed stays authoritative until they press the button that uses
+the estimate, and a saved scenario records `assumption_sources` (manual, or the estimate with its interval, engine version,
+dataset version and content hash).
+
+- **Model.** `ln(quantity) = a + e x ln(price) + controls`, least squares with the same `stats/series.py` code the
+  root-cause analysis uses: Newey-West errors for a single time series, HC3 otherwise, t-based intervals.
+- **Observations.** With a date column, rows are aggregated to day/week/month/quarter (quantity summed, price
+  quantity-weighted; `auto` picks the coarsest period with at least 24 observations). Without one, each row is an
+  observation and the result is cautioned. A segment column adds a per-segment intercept.
+- **Controls.** A linear trend (12+ observations); month-of-year or quarter dummies when the data spans two years;
+  segment intercepts. A control that cannot be supported, or that is collinear with price, is dropped and reported.
+- **Left out and counted:** missing values, non-finite values, price of zero or less, zero or negative quantity.
+  Outliers are found by studentized residuals re-checked after each removal; the estimate with and without them is shown,
+  and exclusion is the user's choice.
+- **Refused (`status: not_estimated`) with reasons:** fewer than 8 usable observations, fewer than 3 distinct prices, a
+  price spread under 2%.
+- **Returned:** estimate, standard error, interval, p-value, observations, R-squared, residual autocorrelation, outlier
+  report, controls used, a reliability level (`usable`, `use_with_caution`, `not_recommended`) with the reasons,
+  limitations, the dataset provenance (version, fingerprint) and an independent check (SVD least squares, closed-form
+  slope, the interval formula, and the observations rebuilt row by row in plain Python).
+
+### 10.6 Custom business models (Phase 2)
+
+`backend/app/scenario_formula.py`, `scenario_models.py`, `scenario_model_store.py`, `routers/scenario_models.py`;
+tables `scenario_models` and `scenario_model_versions` (migration `c4e6a8b0d2f1`).
+
+A model is a validated definition: inputs (with units, limits and an optional data binding), assumptions, outputs (a formula
+each, optionally `additive` or a `ratio_of` two outputs), a headline output and constraints.
+
+- **Safe formulas.** Parsed with `ast`, never evaluated as Python: numbers, names, `+ - * /`, a power with a constant
+  exponent, brackets and `abs sqrt log exp floor ceil min max`. Everything else is rejected when parsed. Undefined results
+  (division by zero, log of a non-positive number) are `None`, never 0.
+- **Dependencies.** Outputs are computed in dependency order; a cycle is refused and the loop is named
+  (`a → b → a`); an unknown name gets a suggestion. Every problem is reported at once.
+- **Units.** Units are checked dimensionally (adding unlike units, a declared unit that does not match, log of a unit). A
+  mismatch is a warning, or an error when the model sets `strict_units`. Percent and fraction are both dimensionless, so a
+  missing x100 is not caught.
+- **Semantic layer.** An input may be bound to an approved metric, a term, or the user's own formula. Only an
+  approved metric is accepted (checked at save and again when a baseline is derived); a draft or deprecated metric is refused
+  with its status. A term that matches two approved metrics returns 409 with the candidates. A formula binding is allowed
+  and labelled "not an approved metric". An output may be reconciled against an approved metric.
+- **Same engines.** A compiled model has the shape of the built-in specs, so evaluation, simulation, goal seek, sensitivity
+  grids, segments and period comparison run on it unchanged. A custom model matches the built-in `unit_economics` exactly
+  when written as one (tested). The engine adds no hidden behaviour: there is no built-in elasticity or break-even for a
+  custom model, and constraints at `error` level reject a scenario (or drop that Monte Carlo draw or grid cell).
+- **Versions.** A saved definition is immutable. Editing adds a version; a scenario refers to `custom:<id>@<version>` and so
+  keeps the version it used. Models are team-scoped (another team's looks like a missing one), can be archived and restored,
+  and names are unique per team.
+- **Verification** uses a separate evaluator that re-parses the definition's text and shares no code with the engine.
+
+### 10.7 Time-aware baselines and period comparison (Phase 2)
+
+`backend/app/scenario_time.py`; `POST /api/scenarios/baseline` (now with `date_column`, `period`, `dataset_version`),
+`GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`.
+
+- Periods are a year, quarter, month or custom range, taken from the dataset's own calendar (only periods with rows are
+  offered). A period with no rows is an error, not a baseline of zeros.
+- Every response says what kind of figure it is: `historical_actual` (recorded in a period), `scenario` (arithmetic on
+  inputs), `statistical_estimate` (elasticity), and `forecast`, which this feature does not produce.
+- A baseline can pin a dataset version and returns its provenance (version, whether a newer one exists, content hash); a saved
+  scenario keeps `baseline_source` and the version it used. Baselines are recomputed by the metric engine's independent
+  csv path.
+- A period comparison gives both periods, input and output changes, and a Shapley attribution of the change in the headline
+  output to the inputs that moved. It describes the past; it does not say why inputs moved.
+
+### 10.8 Segments (Phase 2)
+
+`backend/app/scenario_segments.py`; `GET /api/scenarios/segment-values`, `POST /api/scenarios/segments`.
+
+Segments partition the rows by one category column (a missing value is its own segment; at most 50). The total is the sum
+of the segments for `additive` outputs, ratios are recomputed from those sums, and other outputs are reported as not
+additive. A cost the data does not split is either a total allocated once (equally or in proportion to another input, in shares
+that sum to 1) or a value used as entered in every segment. A segment's own adjustment replaces a shared one for the same
+input, so no input is changed twice. Verification recounts segments from the file and checks that the segments add up to the
+figure computed from all rows at once: a mapped input that is not additive (a simple average of a price column) makes the
+result `unverified`.
+
+### 10.9 Two-way sensitivity and attribution at scale (Phase 2)
+
+`backend/app/scenario_sensitivity.py`; `POST /api/scenarios/sensitivity-grid`.
+
+One output over a grid of two inputs (up to 61 x 61 cells) with the exact current position, the best and worst cells (best on
+the grid, not a global optimum), and the points where the output crosses a threshold (break-even for profit at 0) by linear
+interpolation along grid edges. Ranges that leave an input's allowed range are refused, not clipped. Shapley attribution is exact
+for up to 10 changed inputs, computed from the subset formula (2^n evaluations rather than n! orders), and beyond that estimated
+from sampled orders, each also reversed, with a standard error per input; the contributions sum exactly to the change either
+way, and the response states which method was used.
+
+### 10.10 Persistence
+
+Saved scenarios need no schema change (their settings and results are JSON). Phase 2 adds only the two custom-model tables, in one additive Alembic revision (`c4e6a8b0d2f1`, after `b3d5f7a9c1e2`). `POST /api/scenarios` also keeps `assumption_sources` and `baseline_source` (dataset version, period, filters, mapping, fingerprint) and accepts an optional `simulation`; the server runs it, stores the result in
+`results_json["simulation"]` and the settings, including the seed it used, in `adjustments_json["simulation"]`, so
+a saved simulation can be reproduced exactly.
+
+### 10.11 One service for the What-If page and the Silt Copilot (Phase 3)
+
+`scenario_service.py` is the only place that calls the engines (`evaluate`, `simulate`, `goal_seek`, `grid`, `run_intent`, `ask`). The
+What-If router and the Copilot bridge (`analyst/scenario_bridge.py`) both go through it, and a test fails if either calls an engine
+directly. For the same inputs the two doors therefore give the same numbers and the same explanation text.
+
+The bridge answers what-if and goal sentences about a Copilot dataset only when the dataset's column names map cleanly to a built-in
+model (`unit_economics` or `funnel`; two candidate columns for one input means it does not guess). It asks for a fixed cost the data
+does not hold instead of assuming one, remembers it for that conversation, and returns control to the existing Copilot for anything else
+(plain questions, "increase revenue by 10%", a "why" with no scenario). Its notes say which columns were used and that the arithmetic
+was independently checked.
+
+### 10.12 Natural-language entry (Phase 3)
+
+`POST /api/scenarios/ask` (`scenario_nl.py`). Rules first: the parser reads wording only (verbs, percent / percentage points / absolute
+amounts, ₹, lakh, crore, k, goals such as "what price gives a 25% margin", break-even, comparisons). Every number must come from the user's
+message. Optional `use_model` lets a language model translate a sentence the rules could not read (tool `submit_scenario_request`); its
+output passes the same validator plus a check that each number appears in the user's message, so a model cannot supply a number. That path
+is rate-limited (15 per 60 s). Ambiguity (two inputs match, no input named) returns `status: "clarify"` with options; unreadable input
+returns `unsupported` with examples. The response always contains `interpretation`, so the user sees how the sentence was read before
+the answer. Conversation context is held by the client, fingerprinted by model + baseline + normalised assumptions, dropped if any of
+them change, and carried over only with "also/too/and". Follow-up answers are recomputed from stored adjustments, never from numbers in the context.
+
+### 10.13 Explanations (Phase 3)
+
+`scenario_explain.py`. Template-based, grounded in the result: every number in the text is taken from it, signed levels are
+kept apart from unsigned changes, and causal wording is rejected by a test (`CAUSAL`). Sections: what changed, what accounts for it
+(exact contributions), assumptions, risks, what this cannot tell you. `polish()` accepts an optional model rewrite only if all its
+numbers are grounded and it has no causal wording; otherwise the template text stands.
+
+### 10.14 Calculation evidence (Phase 3)
+
+`POST /api/scenarios/inspect` ("How was this calculated?") returns the formula, each step with the user's numbers substituted, inputs
+with their provenance (typed, dataset formula, elasticity estimate), assumptions, constraints and a `matches_engine` flag. With
+`persist`, and whenever a scenario is saved, a sealed record is stored in `scenario_evidence` (migration `d5f7b9c1e3a2`, after
+`c4e6a8b0d2f1`): request, result, verification, data version/fingerprint, seed, engine versions, and a SHA-256 over the canonical
+request, result and **context** (the custom model's definition hash, the dataset id/version/content hash, and the engine versions). The request
+itself already holds the model reference, baseline, changes, assumptions, their sources and the seed. Changing any sealed column afterwards is
+reported by `reproduce` as `record_intact: false`. Deleting a scenario keeps its evidence: the records are detached (`scenario_id` set to null), not deleted. Records are server-recomputed, team-scoped and append-only (`POST`, `GET` list/get, `POST /{id}/reproduce`; no
+PUT/PATCH/DELETE). `reproduce` re-runs the stored request and reports `reproduced: false` if the record was altered, the engine version
+changed, or the result differs, and says which.
+
+Limits: the Copilot bridge covers only the two built-in models; segment results are not sealed; the model translator and the model polish have only been
+tested with scripted providers, not a live one.
+
+### 10.15 Saved scenarios you come back to (Phase 4)
+
+No schema change: revision, data status and the rest are derived or kept in the scenario's existing JSON.
+
+- **Reopen and edit.** `GET /api/scenarios/{id}` returns the stored settings, `revision` and `freshness`. In the page, *Open in the builder*
+  loads the stored baseline, assumptions and percentage changes into the form and shows what it could not load (non-percentage changes,
+  other named scenarios, simulation settings). `PUT /api/scenarios/{id}` recalculates on the server, raises `revision` and seals new
+  evidence; evidence of earlier revisions is kept untouched (its `reproduce` still works).
+- **Rename and duplicate.** `PATCH /api/scenarios/{id}` changes the name only. `POST /api/scenarios/{id}/duplicate` makes an independent,
+  recalculated and sealed copy ("Copy of X", numbered if taken) that stays pinned to the data version the original used.
+- **Data status** (`scenario_library.freshness`): `typed_inputs`, `current`, `stale` (a newer dataset version exists), `changed` (the pinned
+  version's fingerprint no longer matches what was saved), `unavailable` (dataset or version gone). A revised or archived custom model is
+  reported too. Saved numbers are never rewritten and a scenario is never moved onto newer data; re-taking the baseline is a deliberate step.
+- **Comparison.** `GET /api/scenarios/compare?ids=` keeps its earlier keys and adds `analysis`: each scenario's change and % change against
+  its own baseline, highest/lowest by value only, and warnings when starting inputs, assumptions or data versions differ or a scenario's data is
+  stale. `format=csv` downloads it.
+- **Export and sharing.** `GET /api/scenarios/{id}/export?format=json|csv|md` is the scenario exactly as saved (not recalculated) with the
+  disclaimer, data status, verification, evidence references and a SHA-256 of its own content (also in `X-Content-SHA256`). Sharing means
+  sending this file; there are no public links. CSV cells that begin with `= + - @` are defused so a scenario name cannot run as a
+  spreadsheet formula.
+
+Limits: segment and period-comparison results are not saved scenarios, so they have no reopen/export; reopening cannot restore a
+non-percentage change into the form; the page was not run in a real browser.
+
+### 10.16 Recalculating on newer data, and how the What-If feature is tested (Phase 5)
+
+`POST /api/scenarios/{id}/rebase` takes the baseline again from another version of the scenario's dataset (the newest by default) using the
+mapping, date column and period the scenario recorded, applies the same changes and assumptions, and saves the result as a **new** scenario
+named "X (data vN)". The original is not touched. An input the data cannot supply (for example a fixed cost you typed) keeps the saved value
+and is listed in `kept_from_saved`. The response holds `inputs` (was/now) and the comparison `analysis`. It refuses a scenario with typed
+inputs only (400), a version it already uses (400), and a missing version (404). It also refuses (400) when none of the scenario's inputs can be taken from the data, instead of silently keeping every saved value. Rebase creates a new
+scenario and never changes the original row, its inputs, its data-version reference or its evidence (tested). The Saved tab offers it only while the
+scenario is `stale`.
+
+Test suites for the feature (all under `backend/tests/` unless noted):
+
+| Area | File | What it proves |
+|---|---|---|
+| Engines, per phase | `test_scenario_phase1.py`, `_elasticity`, `_custom_models`, `_time`, `_segments`, `_sensitivity` | Hand-worked numbers; the independent verifier agrees; bounds and refusals |
+| Natural language, explanations, evidence, Copilot bridge | `test_scenario_nl.py`, `_explain`, `_evidence`, `_bridge` | Numbers come only from the user; sealed records detect tampering; the Copilot gives the page's numbers |
+| Saved scenarios | `test_scenario_library.py` | Edit/rename/duplicate, data status, comparison, export, isolation |
+| End-to-end | `test_scenario_e2e.py` | The seven workflows (basic, Monte Carlo, goal seek, break-even, sentence, new data version, other team), each ending in a check done outside the code under test |
+| Performance and bounds | `test_scenario_performance.py` | Time budgets (several times the measured cost) and exact limits: iterations 100-200,000, grid 61, 20 uncertain inputs, formula size/depth/exponent |
+| Security | `test_scenario_security.py` | Every route of the three what-if routers (read from the routers, so a new route is covered automatically) refuses anonymous callers and callers with no or a foreign team; another team's id looks the same as a missing one; hostile names; prompt-injection sentences |
+| Pages | `frontend/tests/test_pages.py` (What-If cases) | Streamlit AppTest of every control on the page |
+
+Measured on a Windows laptop: 10,000 draws of a 14-input custom model 0.6 s; 200,000 draws 0.7 s; a 61 x 61 grid 0.06 s; attribution over 14
+changed inputs (sampled) about 4 s; a baseline from a 100,000-row file a few seconds.
+
+What this does **not** establish: nothing was run in a real browser, so Streamlit interaction and layout are verified only through `AppTest`; Postgres is
+exercised only in CI (which already caught one bug SQLite could not, the delete foreign key above), not on a production-like deployment; the time budgets
+in `test_scenario_performance.py` are several times the measured cost but have only been observed on a development laptop and on CI runs so far; attribution
+over more than 14 changed inputs takes about 4 s because it samples, a trade-off rather than a defect.
+
+Known limits found while testing: a plain chain of more than about 20 additions in one formula is refused as too deep (split it across
+named outputs); sentence entry refuses a percentage change outside -100% to +1000% (the same range as the form) while the API's `evaluate`
+accepts any number and relies on the model's own constraints; `GET /api/scenarios/models` needs a login but no team because it returns only the
+built-in catalogue.
+A request body containing the NUL character (raw or as ` `) is refused with 422 on all three what-if routers, because Postgres cannot store it in text or JSONB (CI found this: SQLite stored it, Postgres answered 500). The guard also refuses text that literally spells ` `.
 
 ## 11. Monitoring and alerts
 
@@ -453,7 +709,9 @@ List endpoints with `limit` and `offset` return `{total, limit, offset, ...}`.
 | Data quality | `GET /api/datasets/{id}/quality`, `POST /api/datasets/{id}/quality/run`, `PUT /api/datasets/{id}/quality/config`, `POST /api/quality/incidents/{id}/acknowledge`, `POST /api/quality/incidents/{id}/resolve` |
 | Alerts | `GET /api/alerts/{id}`, `POST /api/alerts/{id}/acknowledge`, `POST /api/alerts/{id}/resolve` |
 | Copilot | `POST /api/copilot/sessions`, `GET /api/copilot/sessions`, `GET /api/copilot/sessions/{id}`, `POST /api/copilot/sessions/{id}/messages`, `DELETE /api/copilot/sessions/{id}` |
-| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=`, `GET /api/scenarios/{id}`, `DELETE /api/scenarios/{id}` |
+| Scenario models | `POST /api/scenario-models/validate`, `POST/GET /api/scenario-models`, `GET /api/scenario-models/{id}`, `GET /api/scenario-models/{id}/versions/{v}`, `POST /api/scenario-models/{id}/versions`, `POST /api/scenario-models/{id}/archive`, `POST /api/scenario-models/{id}/restore` |
+| Scenario evidence | `POST /api/scenario-evidence`, `GET /api/scenario-evidence?scenario_id=&kind=`, `GET /api/scenario-evidence/{id}`, `POST /api/scenario-evidence/{id}/reproduce` |
+| Scenarios | `GET /api/scenarios/models`, `POST /api/scenarios/baseline`, `POST /api/scenarios/evaluate`, `POST /api/scenarios/simulate`, `POST /api/scenarios/goal-seek`, `POST /api/scenarios/inspect`, `POST /api/scenarios/ask`, `POST /api/scenarios/elasticity`, `POST /api/scenarios/sensitivity-grid`, `POST /api/scenarios/segments`, `GET /api/scenarios/segment-values`, `GET /api/scenarios/periods`, `POST /api/scenarios/compare-periods`, `POST /api/scenarios`, `GET /api/scenarios`, `GET /api/scenarios/compare?ids=&format=`, `GET /api/scenarios/{id}`, `PATCH /api/scenarios/{id}`, `PUT /api/scenarios/{id}`, `POST /api/scenarios/{id}/duplicate`, `POST /api/scenarios/{id}/rebase`, `GET /api/scenarios/{id}/export?format=`, `DELETE /api/scenarios/{id}` |
 | Semantic | `GET`, `POST /api/semantic/metrics`, `GET /api/semantic/metrics/{id}`, `POST /api/semantic/metrics/{id}/versions`, `POST /api/semantic/metrics/{id}/versions/{v}/approve`, `POST /api/semantic/metrics/{id}/deprecate`, `POST /api/semantic/validate`, `GET`, `POST /api/semantic/terms`, `DELETE /api/semantic/terms/{id}`, `POST /api/semantic/relationships`, `DELETE /api/semantic/relationships/{id}`, `GET /api/semantic/graph`, `POST /api/semantic/resolve`, `GET /api/semantic/search?q=` |
 | Evaluation | `GET /api/evals/suite`, `GET /api/evals/runs`, `GET /api/evals/runs/{id}`, `GET /api/evals/compare?base=&new=` |
 
