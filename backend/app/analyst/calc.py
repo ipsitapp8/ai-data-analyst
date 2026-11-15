@@ -641,6 +641,8 @@ def agg_value(expr: str, frame: pd.DataFrame, original: pd.DataFrame, constants:
         raise CalcError(f"'{expr}' gives a value per record, not one result; wrap it in an aggregate such as sum(...).")
     if isinstance(v, (bool, np.bool_)) or isinstance(v, str):
         raise CalcError(f"'{expr}' is not a number.")
+    if isinstance(v, (int, np.integer)):
+        return int(v)                   # a count stays a whole number
     v = float(v)
     return None if np.isnan(v) or np.isinf(v) else (int(v) if v.is_integer() and "count(" in expr.replace(" ", "") else v)
 
@@ -701,6 +703,9 @@ def _aggregate(func: str, values: pd.Series):
     v = pd.to_numeric(values, errors="coerce") if func not in ("count", "nunique") else values
     if func == "sum" and len(v) and v.notna().sum() == 0:
         return None                     # a total of nothing but missing values is unknown, not 0
+    if func == "sum" and (pd.api.types.is_bool_dtype(values) or (len(values) and values.dropna().map(
+            lambda x: isinstance(x, (bool, np.bool_))).all())):
+        return int(v.sum())             # a count of records meeting a condition is a whole number
     r = getattr(v, func)()
     return None if r is None or (isinstance(r, float) and np.isnan(r)) else (int(r) if func in ("count", "nunique") else float(r))
 

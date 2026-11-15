@@ -161,7 +161,7 @@ def _answer_phrase(pending: dict, message: str, df: pd.DataFrame | None, origina
     """The user's reply as a phrase to fold into the original request, or None if it does not answer the question."""
     from app.analyst.calc import named_values
     exp, opts = pending["expects"], pending.get("options") or []
-    if len(_words(message)) > 4 and re.match(r"^\W*(?:what|which|how|why|who|when|where|show|list|give|compare|predict|"
+    if len(_words(message)) > 4 and re.match(r"^\W*(?:if|suppose|imagine|assume|assuming|what|which|how|why|who|when|where|show|list|give|compare|predict|"
                                               r"forecast|estimate|plot|chart|calculate|compute|explain|describe|"
                                               r"summari[sz]e|train|rank|is|are|does|do|can|could|tell)\b", message, re.I):
         return None                     # a complete question of its own: a new request, not an answer

@@ -87,17 +87,23 @@ def screen_features(df: pd.DataFrame, target: str, task: str, features: list[str
     return keep, dropped
 
 
-def _cross_validate(model, X, y, task: str, seed: int, n_classes: int | None) -> dict:
+def _cross_validate(model, X, y, task: str, seed: int, n_classes: int | None, time_ordered: bool = False) -> dict:
     """K-fold cross-validation of the same pipeline (preprocessing refitted inside every fold, so nothing leaks from
     the held-out rows) against the naive baseline on the same folds."""
     from sklearn.base import clone
     from sklearn.metrics import balanced_accuracy_score, mean_absolute_error
     from sklearn.model_selection import KFold, StratifiedKFold
-    folds = StratifiedKFold(CV_FOLDS, shuffle=True, random_state=seed) if task == "classification" else \
-        KFold(CV_FOLDS, shuffle=True, random_state=seed)
+    from sklearn.model_selection import TimeSeriesSplit
+    folds = TimeSeriesSplit(CV_FOLDS) if time_ordered else (
+        StratifiedKFold(CV_FOLDS, shuffle=True, random_state=seed) if task == "classification" else
+        KFold(CV_FOLDS, shuffle=True, random_state=seed))
     m_scores, b_scores = [], []
     for tr, te in folds.split(X, y):
-        fitted = clone(model).fit(X.iloc[tr], y.iloc[tr])
+        if task == "classification" and y.iloc[tr].nunique() < 2:
+            continue                    # an early fold with one class has nothing to learn
+        m = clone(model)
+        m.set_params(forest__n_estimators=100, forest__n_jobs=-1)    # a fold verdict needs fewer trees than the final model
+        fitted = m.fit(X.iloc[tr], y.iloc[tr])
         pred = fitted.predict(X.iloc[te])
         if task == "classification":
             m_scores.append(balanced_accuracy_score(y.iloc[te], pred))
@@ -107,7 +113,8 @@ def _cross_validate(model, X, y, task: str, seed: int, n_classes: int | None) ->
             b_scores.append(mean_absolute_error(y.iloc[te], np.full(len(te), y.iloc[tr].mean())))
     higher = task == "classification"
     better = sum((m > b) if higher else (m < b) for m, b in zip(m_scores, b_scores))
-    return {"folds": CV_FOLDS, "metric": "balanced accuracy" if higher else "MAE", "higher_is_better": higher,
+    return {"folds": len(m_scores), "time_ordered": time_ordered,
+            "metric": "balanced accuracy" if higher else "MAE", "higher_is_better": higher,
             "model_mean": float(np.mean(m_scores)), "model_sd": float(np.std(m_scores)),
             "baseline_mean": float(np.mean(b_scores)), "folds_better": int(better),
             "baseline": "a constant guess (one class)" if higher else "the training mean of each fold"}
@@ -185,8 +192,20 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
     else:
         forest = RandomForestRegressor(n_estimators=300, random_state=seed, n_jobs=-1, min_samples_leaf=2)
     model = Pipeline([("prepare", pre), ("forest", forest)])
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=seed, stratify=y if task == "classification" else None)
+    # Time-aware validation when the records carry one date column with real spread: the most recent records are
+    # held out (a model must predict later records from earlier ones), and cross-validation chains forward.
+    dates = [c for c in data.columns if kind_of(data[c]) == "datetime" and c != target]
+    time_col = dates[0] if len(dates) == 1 and pd.to_datetime(data[dates[0]]).nunique() >= 10 else None
+    if time_col:
+        order = pd.to_datetime(data[time_col]).sort_values(kind="stable").index
+        X, y = X.loc[order], y.loc[order]
+        cut = int(round(len(y) * (1 - test_size)))
+        X_train, X_test, y_train, y_test = X.iloc[:cut], X.iloc[cut:], y.iloc[:cut], y.iloc[cut:]
+        if task == "classification" and (y_train.nunique() < 2 or y_test.nunique() < 1):
+            time_col = None             # a class missing from the past: fall back to a stratified random split
+    if not time_col:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=seed, stratify=y if task == "classification" else None)
     model.fit(X_train, y_train)
     pred = model.predict(X_test)
 
@@ -229,7 +248,8 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
         classes = None
         balance = None
 
-    cv = _cross_validate(model, X, y, task, seed, len(classes) if classes else None) if len(y) <= CV_MAX_ROWS else None
+    cv = _cross_validate(model, X, y, task, seed, len(classes) if classes else None, time_ordered=bool(time_col)) \
+        if len(y) <= CV_MAX_ROWS else None
     if cv is not None:
         metrics["cross_validation"] = cv
         # On small data one split is noisy: the verdict comes from all folds -- better than the baseline on average
@@ -265,7 +285,7 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
         "rows_used": int(len(data)), "train_rows": int(len(y_train)), "test_rows": int(len(y_test)),
         "classes": classes, "metrics": metrics, "beats_baseline": bool(beats), "class_balance": balance,
         "split": {"test_size": test_size, "train_share": round(1 - test_size, 2), "seed": seed,
-                  "stratified": task == "classification"},
+                  "stratified": task == "classification" and not time_col, "time_column": time_col},
         "importance": importance,
         # held-out rows, for an actual-versus-predicted chart (regression) or a check of the errors
         "test_predictions": ([{"actual": float(a), "predicted": float(b)} for a, b in zip(y_test, pred)][:500]
