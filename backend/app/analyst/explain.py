@@ -111,7 +111,7 @@ def render(tool: str, r: dict) -> str:
 
 
 def _metric(r):
-    agg = {"avg": "average", "count_distinct": "number of distinct", "std": "standard deviation", "var": "variance"}.get(
+    agg = {"sum": "total", "avg": "average", "count_distinct": "number of distinct", "std": "standard deviation", "var": "variance"}.get(
         r["aggregation"], r["aggregation"])
     what = f"{agg} {r['column']}" if r.get("column") else "number of rows"
     filt = "" if not r.get("filters") else " where " + " and ".join(f"{x['column']} {x['op']} {x['value']}" for x in r["filters"])

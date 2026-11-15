@@ -505,6 +505,35 @@ def duplicate_note(message: str, df: pd.DataFrame, scope: dict | None, out: dict
             "count._")
 
 
+def value_note(df: pd.DataFrame, scope: dict | None, out: dict) -> str | None:
+    """Missing and impossible values in the column a plain aggregate used (compute_metric), stated rather than silently
+    absorbed: a missing value is not counted; a negative amount is counted as recorded, and flagged. The analysis
+    programs and objectives list their own."""
+    from app.analyst.scope import _AMOUNT, active, mask  # noqa: PLC0415
+    ok = [c for c in out.get("calls", []) if c.get("status") == "ok"]
+    if df is None or not ok or any(c.get("tool") != "compute_metric" or (c.get("args") or {}).get("filters")
+                                   for c in ok):
+        return None                     # a tool's own filters: the records it used are not known here
+    cols = {str((c.get("args") or {}).get("column")) for c in ok} & set(map(str, df.columns))
+    used = df[mask(df, scope)] if active(scope) else df
+    if used.empty:
+        return None
+    pos = {i: n + 2 for n, i in enumerate(df.index)}
+    parts = []
+    for col in sorted(cols):
+        v = pd.to_numeric(used[col], errors="coerce")
+        miss = used.index[used[col].isna()]
+        if len(miss):
+            parts.append(f"{len(miss)} record(s) with no {col.replace('_', ' ')} (line{'s' if len(miss) > 1 else ''} "
+                         f"{', '.join(str(pos[i]) for i in miss[:10])}) were not counted")
+        neg = used.index[v.lt(0).fillna(False)]
+        if len(neg) and _AMOUNT.search(col):
+            parts.append(f"{len(neg)} record(s) with a negative {col.replace('_', ' ')} (line{'s' if len(neg) > 1 else ''} "
+                         f"{', '.join(str(pos[i]) for i in neg[:10])}) were counted as recorded — it may be a refund or "
+                         "an error")
+    return ("_" + "; ".join(parts) + "._") if parts else None
+
+
 def unanswered_parts(message: str, df: pd.DataFrame | None, out: dict) -> list[str]:
     """Parts of a multi-part question the answer does not cover (a program answer lists its own in its checklist):
     'and why' with no associations, 'any unusual values' with no anomaly check."""

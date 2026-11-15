@@ -274,9 +274,13 @@ def _bar(title, x, y, rows, fmt=None):
     return [{"type": "bar", "title": title, "x": x, "y": y, "data": rows, **({"format": fmt} if fmt else {})}] if rows else []
 
 
+_AGG_WORD = {"avg": "average", "sum": "total", "count_distinct": "distinct", "std": "standard deviation of",
+             "var": "variance of"}
+
+
 def _charts(tool: str, r: dict) -> list[dict]:
     if tool == "compute_metric" and r.get("groups"):
-        return [dict(c, additive=r.get("aggregation") in ("sum", "count")) for c in _bar(f"{r['aggregation']} {r.get('column') or 'rows'} by {r['group_by']}", r["group_by"], "value",
+        return [dict(c, additive=r.get("aggregation") in ("sum", "count")) for c in _bar(f"{_AGG_WORD.get(r['aggregation'], r['aggregation'])} {r.get('column') or 'rows'} by {r['group_by']}", r["group_by"], "value",
                     [{r["group_by"]: g["group"], "value": g["value"]} for g in r["groups"][:25] if g["value"] is not None])]
     if tool == "compare_groups" and r.get("kind") == "numeric":
         return [dict(c, additive=False) for c in _bar(f"mean {r['outcome']} by {r['group']}", r["group"], "mean",

@@ -44,7 +44,10 @@ def memory_for(conversation_id: str, persist: bool = False) -> dict:
 
 DOC_SYSTEM = ("You answer questions about a document using ONLY the passages given. Cite pages as (p. N). If the "
               "passages do not answer the question, say so plainly. Do not add facts or numbers that are not in the "
-              "passages. Write 2-5 sentences of plain prose, not JSON.")
+              "passages, and do not give a reason or cause unless a passage states it; say which facts the passages "
+              "give instead. Write 2-5 sentences of plain prose, not JSON.")
+DOC_SUMMARY_LABEL = ("_Written by the local model from the passages quoted below; every number in it was checked against "
+                     "them. The quotes, with their pages, are the source._")
 _DOC_WORDS = re.compile(r"\b(document|pdf|report|page|pages|paper|policy|contract|section|chapter|according to|"
                         r"the file says|in the text|mentions?)\b", re.I)
 _DOC_SUMMARY = re.compile(r"summari[sz]e|what is (this|the) (document|pdf|report|file) about|overview|what('s| is) in "
@@ -212,10 +215,13 @@ def _label(out, v, message, df, memory) -> dict:
     dn = verify.duplicate_note(message, df, memory.get("_scope"), out)
     if dn:
         out["answer"] += "\n\n" + dn
+    vn = verify.value_note(df, memory.get("_scope"), out)
+    if vn:
+        out["answer"] += "\n\n" + vn
     if v["status"] == "verified":
         line = _VERIFIED_LINE["verified"]
     else:
-        why = next((c["detail"].split("(", 1)[-1].rstrip(")") for c in (out.get("verification") or []) + v["checks"]
+        why = next((re.sub(r"\)$", "", c["detail"].split("(", 1)[-1]) for c in (out.get("verification") or []) + v["checks"]
                     if "not independently verified" in str(c.get("detail"))), "no independent check covers it")
         line = _VERIFIED_LINE["not independently verified"].format(why=why)
     missing = verify.unanswered_parts(message, df, out)
@@ -831,6 +837,8 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
         if answered and not redraw and not keep_scope:
             memory["scope"] = sc if scoping.active(sc) else None
             memory["last_analysis"] = "calc" if out.get("plan_source") in ("model_calc", "metric", "refine") else "other"
+            if memory["last_analysis"] == "other" and not scoping.active(sc):
+                _metric_as_last_calc(out, message, df, memory)
     evidence = [c.get("result") for c in out.get("calls", []) if c.get("status") == "ok"]
     followup.remember(memory, message, out, evidence[:3])
     from app.analyst import register
@@ -1786,7 +1794,8 @@ def _ask_document(message: str, meta: dict, model_on: bool, started: float) -> d
                 if bad:
                     notes.append(f"The model's answer cited numbers not in the passages ({', '.join(bad[:5])}); it was not shown.")
                 elif text:
-                    answer = f"{text}\n\n{SUMMARY_LABEL}\n\n{answer}"
+                    text = _drop_boilerplate(text, [], notes)
+                    answer = f"{text}\n\n{DOC_SUMMARY_LABEL}\n\n{answer}"
         except Exception as e:  # noqa: BLE001
             notes.append(f"No model answer ({type(e).__name__}); the passages are shown.")
     return {"answer": answer, "plan": {"type": "document"}, "plan_source": "document", "first_pass": None,
@@ -2026,6 +2035,32 @@ _REF_ALL = re.compile(r"^\W*(?:and |now |then |ok(?:ay)?,? )*(?:(?:for|show|what
                       r"the whole (?:team|company|dataset))\W*$", re.I)
 _REF_GROUP = re.compile(r"^\W*(?:and |now |then |ok(?:ay)?,? )*(?:by|per|break (?:it|that|this) down by|split (?:it )?by|"
                         r"group(?:ed)? by|for each|show (?:it|that) by)\b", re.I)
+
+
+_METRIC_FN = {"sum": "sum", "avg": "mean", "mean": "mean", "median": "median", "min": "min", "max": "max", "count": "count"}
+
+
+def _metric_as_last_calc(out: dict, message: str, df, memory: dict) -> None:
+    """A verified single aggregate ("total revenue by department") is also the calculation that short follow-ups such
+    as "Only Rahul." or "Exclude duplicates." refine: the same aggregate, as a calculator spec, re-run by Silt."""
+    ok = [c for c in out.get("calls", []) if c.get("status") == "ok"]
+    if df is None or out.get("verify_status") != "verified" or len(ok) != 1 or ok[0].get("tool") != "compute_metric":
+        return
+    a = ok[0].get("args") or {}
+    fn, col, group = _METRIC_FN.get(str(a.get("aggregation"))), a.get("column"), a.get("group_by")
+    if not fn or a.get("filters") or not isinstance(col, str) or not col.isidentifier() or col not in df.columns or \
+            (group is not None and (not isinstance(group, str) or not group.isidentifier() or group not in df.columns)):
+        return
+    spec = {"type": "calc", "derive": {}, "exclude": [], "group_by": group,
+            "aggregate": {col if fn == "sum" else f"{'average' if fn == 'mean' else fn}_{col}": f"{fn}({col})"},
+            "sort": None, "explain": ""}
+    try:
+        result = calc.run(spec, df, question=message)
+    except Exception:  # noqa: BLE001 - not refinable; the answer itself is unaffected
+        return
+    memory["last_calc"] = {"question": message, "spec": spec, "result": result,
+                           "meta": {k: result.get(k) for k in ("primary", "percent", "metric_label", "definition")}}
+    memory["last_analysis"] = "calc"
 
 
 def _refine_last(message: str, df: pd.DataFrame, memory: dict, model_on: bool, started: float,

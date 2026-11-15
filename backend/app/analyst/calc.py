@@ -1202,8 +1202,12 @@ _RANKING = re.compile(r"\b(highest|lowest|most|least|largest|smallest|biggest|to
 _SINGLE = re.compile(r"\b(single|individual|one record|per record|per row|per shift|per entry|each record|maximum|minimum)\b", re.I)
 
 
+_CHART_KIND = re.compile(r"\b(?:bar|line|pie|column|area|donut|doughnut)\s+(?:chart|graph|plot|diagram)s?\b", re.I)
+
+
 def named_values(df: pd.DataFrame, question: str) -> list[tuple[str, str]]:
     """(column, value) for category values the question names, e.g. ("department", "HR")."""
+    question = _CHART_KIND.sub(" chart", question)       # "a bar chart" names a chart type, not the value "Bar"
     out = []
     for c in df.columns:
         if kind_of(df[c]) != "categorical" or df[c].nunique() > 50 or _looks_like_time(df[c].dropna()):

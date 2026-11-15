@@ -22,7 +22,7 @@ import re
 
 import pandas as pd
 
-from app.analyst import metrics
+from app.analyst import metrics, semantics
 from app.analyst import program as P
 from app.analyst.data import find_column, kind_of
 from app.analyst.explain import f as fmt
@@ -509,6 +509,10 @@ def _closure(message, df, memory, sc):
     req = intent.read(message, df)
     nums = [c for c in req.measures if c in df.columns and kind_of(df[c]) == "numeric"
             and c not in (col,) and not str(c).startswith("is_")]
+    if len(nums) != 1 and not nums:
+        only = [c for c in df.columns if c != col and kind_of(df[c]) == "numeric" and not str(c).startswith("is_")
+                and semantics.column_role(df, c)["role"] not in ("identifier", "flag", "year")]
+        nums = only if len(only) == 1 else nums       # the dataset's one measure: nothing else could be meant
     if len(nums) != 1 and (memory.get("planned") or memory.get("program") or memory.get("last_calc")):
         return None                     # "...compared with the total you just worked out": an earlier result is meant
     if len(nums) != 1:
@@ -586,7 +590,25 @@ def handle(message: str, df: pd.DataFrame, memory: dict, sc: dict | None) -> dic
         if len(hist) < 2:
             return _reply_clar("There is only one scenario in this conversation so far, so there is nothing to compare "
                                "it with. Change an assumption first, for example *change the target to 320 hours*.")
-        return _compare_scenarios(hist[-2], hist[-1])
+        if hist[-2]["type"] == hist[-1]["type"]:
+            return _compare_scenarios(hist[-2], hist[-1])
+        # the last two are different kinds of analysis (a target, then a closure): they share no figures, so the two
+        # most recent analyses of the same kind are compared, and the answer says so
+        pair = next(((i, j) for j in range(len(hist) - 1, 0, -1) for i in range(j - 1, -1, -1)
+                     if hist[i]["type"] == hist[j]["type"]), None)
+        if pair is None:
+            return _reply_clar("The analyses in this conversation are of different kinds ("
+                               + ", ".join(dict.fromkeys(_KIND.get(o["type"], o["type"]) for o in hist))
+                               + "), so they have no figures in common to compare. Change an assumption of one of "
+                               "them first, for example *change the target to 45000*.")
+        out = _compare_scenarios(hist[pair[0]], hist[pair[1]])
+        out["answer"] = (f"_The latest analysis ({_KIND.get(hist[-1]['type'], hist[-1]['type'])}) has no earlier one of "
+                         f"the same kind, so the two most recent {_KIND.get(hist[pair[1]]['type'], hist[pair[1]]['type'])}"
+                         " analyses are compared._\n\n" + out["answer"].replace(
+                             "Comparing the last two analyses in this conversation.",
+                             f"Comparing two {_KIND.get(hist[pair[1]]['type'], hist[pair[1]]['type'])} analyses in "
+                             "this conversation."))
+        return out
     ch = _CHANGE.match(message)
     alt = _CHANGE_IF.search(message)
     if alt and not last and alt.group(1).lower() in ("target", "goal"):
@@ -740,9 +762,22 @@ def _key(o):
     return {"value": o.get("me"), "rank": o.get("rank")}
 
 
+_KIND = {"feasibility": "target", "absence": "absence", "closure": "closure", "vs_rest": "comparison with the rest"}
+
+
 def _compare_scenarios(a, b):
     ka, kb = _key(a), _key(b)
     keys = [k for k in ka if k in kb]
+    if not keys:                        # different kinds of analysis: listed, not set against each other
+        lines = ["**These two analyses are of different kinds, so they have no figures in common to compare.**", ""]
+        for lab, o, k in (("previous", a, ka), ("latest", b, kb)):
+            lines.append(f"- **{lab}** ({_KIND.get(o['type'], o['type'])}): " + "; ".join(
+                f"{n} {fmt(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else v}" for n, v in k.items()
+                if v is not None))
+        return {"answer": "\n".join(lines), "calls": [{"tool": "compare_scenarios", "status": "ok",
+                                                       "result": {"previous": ka, "latest": kb}}],
+                "charts": [], "notes": ["Both analyses were computed earlier in this conversation; nothing was "
+                                        "recalculated."], "plan": {"type": "program", "objective": "compare"}}
     lines = ["**Comparing the last two analyses in this conversation.**", "", "| | previous | latest | change |",
              "|---|---:|---:|---:|"]
     for k in keys:
