@@ -226,20 +226,6 @@ button:disabled { opacity: 0.55; }
 @keyframes h-countup { from { --n: 0; } }
 
 .h-ask-q { flex: 1; min-width: 0; }
-.h-ask-q .h-cycle { position: relative; width: 100%; min-height: 2.7em; }
-.h-cycle span { position: absolute; inset: 0 0 auto 0; opacity: 0; animation: h-cycle var(--cycle, 16s) infinite; }
-@keyframes h-cycle {
-  0% { opacity: 0; transform: translateY(6px); }
-  3%, 22% { opacity: 1; transform: translateY(0); }
-  25%, 100% { opacity: 0; transform: translateY(-6px); }
-}
-.h-cycle span:first-child { opacity: 1; }
-
-.h-ask { animation: h-drift 7s ease-in-out infinite; }
-.h-metric { animation: h-drift 8.5s ease-in-out -2s infinite; }
-@keyframes h-drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-.h-orb { animation: h-breathe 9s ease-in-out infinite; }
-@keyframes h-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
 
 .h-running { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 0.72rem; font-weight: 600; color: #6b5fa3; }
 
@@ -254,8 +240,57 @@ button:disabled { opacity: 0.55; }
 .stApp [class*="st-key-home_chips"] button > div, .stApp [class*="st-key-home_chips"] button p { justify-content: flex-start; text-align: left; width: 100%; }
 .stApp [class*="st-key-home_chips"] button:hover { transform: translateX(4px); color: var(--ink); border-color: #837ab6; }
 
-@media (prefers-reduced-motion: reduce) {
-  .h-ask, .h-metric, .h-orb, .h-count { animation: none; }
-  .h-cycle span { animation: none; opacity: 0; }
-  .h-cycle span:first-child { opacity: 1; }
+/* ---- home hero: raw dots -> evaluated -> one meaningful blob (16 s loop, CSS only) ---- */
+@property --amp { syntax: '<number>'; inherits: true; initial-value: 0; }
+.h-blob { position: absolute; inset: 4% 8% 4% 10%; pointer-events: none; }
+.h-orb { animation: h-orb 16s ease-in-out infinite; }
+@keyframes h-orb {
+  0%, 44% { opacity: 0; transform: scale(.78); filter: blur(10px); }
+  66%, 88% { opacity: 1; transform: scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: scale(.78); filter: blur(10px); }
 }
+.h-dot {
+  position: absolute; width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+  left: var(--ex); top: var(--ey); border-radius: 50%; background: #b9b5c9; opacity: .85;
+  animation: h-dot 16s cubic-bezier(.45,.05,.25,1) var(--lag) infinite;
+}
+.h-dot i { display: block; width: 100%; height: 100%; border-radius: inherit; background: inherit;
+  animation: h-wobble var(--wob) ease-in-out infinite alternate; }
+.h-dot.g0 { --c: #a855f7; } .h-dot.g1 { --c: #f6a93b; } .h-dot.g2 { --c: #ec6fa8; }
+@keyframes h-dot {
+  0%, 20% { left: var(--sx); top: var(--sy); background: #b9b5c9; --amp: 1; opacity: .8; }
+  40%, 52% { left: var(--cx); top: var(--cy); background: var(--c); --amp: .15; opacity: 1; }
+  68% { left: var(--ex); top: var(--ey); background: var(--c); --amp: 0; opacity: 1; }
+  74%, 88% { left: var(--ex); top: var(--ey); background: #fff; --amp: 0; opacity: .35; }
+  100% { left: var(--sx); top: var(--sy); background: #b9b5c9; --amp: 1; opacity: .8; }
+}
+@keyframes h-wobble {
+  from { transform: scale(1, 1) rotate(0deg); border-radius: 50%; }
+  to { transform: scale(calc(1 + var(--amp) * 1.1), calc(1 - var(--amp) * .55)) rotate(calc(var(--amp) * 70deg));
+       border-radius: calc(50% - var(--amp) * 18%) calc(50% + var(--amp) * 10%) 50% calc(50% - var(--amp) * 12%); }
+}
+.h-scan { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; opacity: 0;
+  background: linear-gradient(180deg, transparent, #a855f7, transparent); box-shadow: 0 0 18px 4px rgba(168,85,247,.35);
+  animation: h-scan 16s linear infinite; }
+@keyframes h-scan { 0%, 20% { left: 0; opacity: 0; } 24% { opacity: 1; } 40% { left: 100%; opacity: 1; } 42%, 100% { left: 100%; opacity: 0; } }
+
+.h-phase { position: absolute; left: 0; top: 0; font-size: 0.8rem; font-weight: 650; color: var(--ink); }
+.h-phase span { position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: h-phase 16s ease-in-out infinite; }
+.h-phase small { display: block; font-size: 0.68rem; font-weight: 500; color: var(--ink-soft); margin-top: 1px; }
+.h-phase span:nth-child(2) { animation-name: h-phase2; } .h-phase span:nth-child(3) { animation-name: h-phase3; }
+@keyframes h-phase  { 0%, 18% { opacity: 1; } 22%, 94% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes h-phase2 { 0%, 20% { opacity: 0; } 25%, 52% { opacity: 1; } 56%, 100% { opacity: 0; } }
+@keyframes h-phase3 { 0%, 58% { opacity: 0; } 64%, 90% { opacity: 1; } 95%, 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .h-orb, .h-dot, .h-dot i, .h-scan, .h-count, .h-phase span { animation: none; }
+  .h-orb { opacity: 1; transform: none; filter: none; }
+  .h-dot { background: #fff; opacity: .35; }
+  .h-scan, .h-phase span:nth-child(1), .h-phase span:nth-child(2) { display: none; }
+  .h-phase span:nth-child(3) { opacity: 1; }
+}
+
+/* keep the cards out of the dots' way: blob on the left, cards on the right */
+.h-orb, .h-blob { inset: 8% 32% 8% 2%; }
+.h-metric { left: auto; right: 0; bottom: auto; top: 46%; width: min(230px, 42%); }
+.h-ask { top: 2%; }

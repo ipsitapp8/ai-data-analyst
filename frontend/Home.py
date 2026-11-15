@@ -10,7 +10,7 @@ import time
 import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
-from home_dynamic import GENERIC_QUESTIONS, has_active_run, suggestions
+from home_dynamic import GENERIC_QUESTIONS, blob_dots, has_active_run, suggestions
 from style.theme import esc, html, page_setup, render_sidebar, verdict_badge
 
 page_setup("Home")
@@ -90,12 +90,25 @@ def _steps() -> str:
 
 
 
+def _blob_html() -> str:
+    dots = "".join(
+        f'<span class="h-dot g{d["cluster"]}" style="--sx:{d["sx"]}%;--sy:{d["sy"]}%;--cx:{d["cx"]}%;--cy:{d["cy"]}%;'
+        f'--ex:{d["ex"]}%;--ey:{d["ey"]}%;--s:{d["size"]}px;--lag:-{d["lag"]}s;--wob:{d["wob"]}s"><i></i></span>'
+        for d in blob_dots())
+    return ('<div class="h-blob" aria-hidden="true">' + dots + '<div class="h-scan"></div></div>'
+            '<div class="h-phase" aria-hidden="true"><span>Raw data<small>unlabelled, messy</small></span>'
+            '<span>Evaluating<small>profiling, testing, cross-checking</small></span>'
+            '<span>Verified insight<small>one answer you can trust</small></span></div>')
+
+
+_BLOB = _blob_html()
+
+
 @st.fragment(run_every=_REFRESH if _has_team else None)
 def _hero_stage() -> None:
     datasets, questions = _load()
     verified = _verified_of(questions)
     pool = [q for _, q in suggestions(datasets)] or list(EXAMPLE_QUESTIONS)
-    cycle = "".join(f'<span style="animation-delay:{i * 4}s">{esc(q)}</span>' for i, q in enumerate(pool))
     sub = (f"<b>of {len(questions)}</b> run in this workspace" if questions
            else "<b>ready</b> when you are")
     running = ('<div class="h-running"><span class="silt-dot silt-dot-on"></span>Analysis running</div>'
@@ -105,10 +118,10 @@ def _hero_stage() -> None:
         f"""
         <div class="h-stage">
           <div class="h-orb"></div>
-          <div class="h-float h-ask" style="--cycle:{len(pool) * 4}s">
+          {_BLOB}
+          <div class="h-float h-ask">
             <div class="h-ask-head"><div class="h-ask-ico">{I_SPARK}</div>
-              <div class="h-ask-q"><small>Ask Silt</small>
-                <div class="h-cycle" style="--cycle:{len(pool) * 4}s">{cycle}</div></div></div>
+              <div class="h-ask-q"><small>Ask Silt</small>{esc(pool[0])}</div></div>
             <div class="h-ask-list">{nxt}</div>
           </div>
           <div class="h-float h-metric">

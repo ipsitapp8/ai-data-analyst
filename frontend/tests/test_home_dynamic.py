@@ -47,3 +47,15 @@ def test_a_running_analysis_is_detected():
     assert has_active_run([{"status": "verified"}, {"status": "running"}])
     assert not has_active_run([{"status": "verified"}, {"status": "failed"}])
     assert not has_active_run([])
+
+
+def test_blob_dots_scatter_group_and_settle_inside_one_disc():
+    from home_dynamic import blob_dots
+
+    dots = blob_dots(38)
+    assert len(dots) == 38 and dots == blob_dots(38), "deterministic, so the page never re-renders differently"
+    for d in dots:
+        assert ((d["ex"] - 50) ** 2 + (d["ey"] - 50) ** 2) ** 0.5 <= 31, "the final blob is one compact disc"
+        assert 0 <= d["sx"] <= 100 and 0 <= d["sy"] <= 100 and d["cluster"] in (0, 1, 2)
+    assert len({(d["sx"], d["sy"]) for d in dots}) > 30, "start positions are scattered, not stacked"
+    assert {d["cluster"] for d in dots} == {0, 1, 2}
