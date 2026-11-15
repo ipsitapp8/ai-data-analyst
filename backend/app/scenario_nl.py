@@ -27,6 +27,7 @@ from app.scenarios import ScenarioError
 
 NL_VERSION = "scenario-nl.1"
 MAX_MESSAGE = 500
+MAX_PCT = 1000.0   # the same ceiling the What-If form puts on a percentage change
 MAX_SCENARIOS = 4
 MAX_ADJUSTMENTS = 8
 MULTIPLIERS = {"k": 1e3, "thousand": 1e3, "lakh": 1e5, "lakhs": 1e5, "lac": 1e5, "lacs": 1e5, "crore": 1e7, "crores": 1e7,
@@ -462,6 +463,9 @@ def _clean_adjustments(adj: Any, spec: dict) -> dict:
         v = a.get("value")
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(float(v)):
             raise ScenarioError(f"The change to '{k}' needs a finite number")
+        if a["type"] == "pct" and not -100.0 <= float(v) <= MAX_PCT:
+            raise ScenarioError(f"A change of {f'{float(v):,.2f}'.rstrip('0').rstrip('.')}% to '{k}' is outside what the What-If form allows (-100% to +{MAX_PCT:g}%). "
+                                "Give the exact value you mean instead.")
         out[k] = {"type": a["type"], "value": float(v)}
     return out
 

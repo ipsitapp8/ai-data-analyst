@@ -374,3 +374,13 @@ def test_model_assisted_asking_is_rate_limited_but_the_rules_are_not(client, ws)
     assert ask(client, ws, "gibberish words", use_model=True).status_code == 429
     assert ask(client, ws, "increase price by 10%").status_code == 200, "the rule-based path has no model cost and is not limited this way"
     _attempts.clear()
+
+
+def test_a_percentage_beyond_what_the_form_allows_is_refused_not_computed():
+    from app import scenario_nl as nl
+    spec = scenarios._model("unit_economics") if "scenarios" in globals() else __import__("app.scenarios", fromlist=["x"])._model("unit_economics")
+    for v in (1000.01, 10_000_000, -100.5):
+        with pytest.raises(Exception, match=r"outside what the What-If form allows"):
+            nl.validate_intent({"action": "evaluate", "scenarios": {"s": {"price": {"type": "pct", "value": v}}}}, spec)
+    for v in (-100, 0, 1000):
+        nl.validate_intent({"action": "evaluate", "scenarios": {"s": {"price": {"type": "pct", "value": v}}}}, spec)
