@@ -5,27 +5,49 @@ backend, same as the Overview page. The hero stage is drawn in CSS (no image ass
 """
 from __future__ import annotations
 
+import time
+
 import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
+from home_dynamic import GENERIC_QUESTIONS, has_active_run, suggestions
 from style.theme import esc, html, page_setup, render_sidebar, verdict_badge
 
 page_setup("Home")
 render_sidebar("home")
 
 _has_team = bool(st.session_state.get("active_team_id"))
+_REFRESH = "10s"          # how often the live panels re-read the backend
+_MAX_AGE = 8.0            # seconds; two panels refreshing together share one fetch
 
-try:
-    _datasets = list_datasets() if _has_team else []
-except ApiError:
-    _datasets = []
-try:
-    _questions = list_questions() if _has_team else []
-except ApiError:
-    _questions = []
 
-_verified = [q for q in _questions if q.get("verdict_state") in ("VERIFIED", "VERIFIED_WITH_CAVEATS")
-             or (not q.get("verdict_state") and q["status"] == "verified")]
+def _load() -> tuple[list, list]:
+    """(datasets, questions) for the active team, re-fetched at most every _MAX_AGE seconds."""
+    if not _has_team:
+        return [], []
+    key = ("home_data", st.session_state.get("active_team_id"))
+    cached = st.session_state.get("home_cache")
+    if cached and cached["key"] == key and time.time() - cached["at"] < _MAX_AGE:
+        return cached["datasets"], cached["questions"]
+    try:
+        datasets = list_datasets()
+    except ApiError:
+        datasets = cached["datasets"] if cached and cached["key"] == key else []
+    try:
+        questions = list_questions()
+    except ApiError:
+        questions = cached["questions"] if cached and cached["key"] == key else []
+    st.session_state["home_cache"] = {"key": key, "at": time.time(), "datasets": datasets, "questions": questions}
+    return datasets, questions
+
+
+def _verified_of(questions: list) -> list:
+    return [q for q in questions if q.get("verdict_state") in ("VERIFIED", "VERIFIED_WITH_CAVEATS")
+            or (not q.get("verdict_state") and q["status"] == "verified")]
+
+
+_datasets, _questions = _load()
+_verified = _verified_of(_questions)
 
 
 def _icon(body: str, size: int = 26) -> str:
@@ -47,12 +69,7 @@ I_LOG = _icon('<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>', 17)
 I_DASH = _icon('<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/>', 17)
 I_FILE = _icon('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>', 17)
 
-EXAMPLE_QUESTIONS = [
-    "Which region grew fastest last quarter?",
-    "Why did revenue dip in March?",
-    "Which customers are most at risk of churning?",
-    "Is the lift from the new campaign significant?",
-]
+EXAMPLE_QUESTIONS = GENERIC_QUESTIONS
 
 
 def _steps() -> str:
@@ -70,6 +87,85 @@ def _steps() -> str:
         if i < len(data) - 1:
             parts.append('<div class="h-arrow">→</div>')
     return "".join(parts)
+
+
+
+@st.fragment(run_every=_REFRESH if _has_team else None)
+def _hero_stage() -> None:
+    datasets, questions = _load()
+    verified = _verified_of(questions)
+    pool = [q for _, q in suggestions(datasets)] or list(EXAMPLE_QUESTIONS)
+    cycle = "".join(f'<span style="animation-delay:{i * 4}s">{esc(q)}</span>' for i, q in enumerate(pool))
+    sub = (f"<b>of {len(questions)}</b> run in this workspace" if questions
+           else "<b>ready</b> when you are")
+    running = ('<div class="h-running"><span class="silt-dot silt-dot-on"></span>Analysis running</div>'
+               if has_active_run(questions) else "")
+    nxt = "".join(f"<div>{esc(q)}</div>" for q in pool[1:4])
+    html(
+        f"""
+        <div class="h-stage">
+          <div class="h-orb"></div>
+          <div class="h-float h-ask" style="--cycle:{len(pool) * 4}s">
+            <div class="h-ask-head"><div class="h-ask-ico">{I_SPARK}</div>
+              <div class="h-ask-q"><small>Ask Silt</small>
+                <div class="h-cycle" style="--cycle:{len(pool) * 4}s">{cycle}</div></div></div>
+            <div class="h-ask-list">{nxt}</div>
+          </div>
+          <div class="h-float h-metric">
+            <div class="lbl">Analyses verified</div>
+            <div class="num h-count" style="--n:{len(verified)}" aria-label="{len(verified)}"></div>
+            <div class="sub">{sub}</div>
+            {running}
+          </div>
+          <div class="h-stage-title">Every number,<br>checked twice.</div>
+        </div>
+        """
+    )
+
+
+@st.fragment(run_every=_REFRESH if _has_team else None)
+def _chips() -> None:
+    """Clickable suggested questions, drawn from the newest datasets."""
+    picks = suggestions(_load()[0])
+    html('<div class="h-try">Try asking</div>')
+    with st.container(key="home_chips"):
+        for i, (ds_id, q) in enumerate(picks):
+            if st.button(q, key=f"chip_{i}", use_container_width=True):
+                st.session_state["prefill_question"] = q
+                if ds_id is not None:
+                    st.session_state["active_dataset_id"] = ds_id
+                st.switch_page("pages/3_Analyses.py")
+
+
+@st.fragment(run_every=_REFRESH if _has_team else None)
+def _snapshot() -> None:
+    datasets, questions = _load()
+    verified = _verified_of(questions)
+    if questions:
+        rows = ""
+        for item in questions[:3]:
+            tag = (verdict_badge(item["verdict_state"]) if item.get("verdict_state") else
+                   f'<span class="ds-badge ds-badge-neutral">{esc(item["status"].replace("_", " ").title())}</span>')
+            rows += f'<div class="h-snap-row"><div class="t">{esc(item["text"][:46])}</div>{tag}</div>'
+        foot = rows
+    else:
+        foot = (f'<div class="h-snap-foot"><div class="h-snap-ico">{I_SPARK}</div>'
+                '<div>No analyses yet — upload a CSV and ask your first question.</div></div>')
+    live = "Live" if _has_team else "Idle"
+    html(
+        f"""
+        <div class="h-snap">
+          <div class="h-snap-head"><span>Workspace Snapshot</span>
+            <span class="h-snap-live"><span class="silt-dot silt-dot-on"></span>{live}</span></div>
+          <div class="h-snap-tiles">
+            <div class="h-tile"><div class="h-tile-num h-count" style="--n:{len(datasets)}" aria-label="{len(datasets)}"></div><div class="h-tile-lbl">{I_DB}Datasets</div></div>
+            <div class="h-tile"><div class="h-tile-num h-count" style="--n:{len(questions)}" aria-label="{len(questions)}"></div><div class="h-tile-lbl">{_icon('<path d="M5 20V11M12 20V4M19 20v-6"/>', 16)}Analyses</div></div>
+            <div class="h-tile"><div class="h-tile-num h-count" style="--n:{len(verified)}" aria-label="{len(verified)}"></div><div class="h-tile-lbl">{_icon('<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/>', 16)}Verified</div></div>
+          </div>
+          {foot}
+        </div>
+        """
+    )
 
 
 # ------------------------------------------------------------------- hero --
@@ -94,28 +190,12 @@ with st.container(key="home_hero"):
             with b2:
                 if st.button("Upload data", key="btn_upload", use_container_width=True):
                     st.switch_page("pages/2_Datasets.py")
+        if _has_team:
+            _chips()
         html('<div class="h-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
              '<span>Fully auditable</span></div>')
     with right:
-        suggestions = "".join(f"<div>{esc(q)}</div>" for q in EXAMPLE_QUESTIONS[1:])
-        html(
-            f"""
-            <div class="h-stage">
-              <div class="h-orb"></div>
-              <div class="h-float h-ask">
-                <div class="h-ask-head"><div class="h-ask-ico">{I_SPARK}</div>
-                  <div class="h-ask-q"><small>Ask Silt</small>{esc(EXAMPLE_QUESTIONS[0])}</div></div>
-                <div class="h-ask-list">{suggestions}</div>
-              </div>
-              <div class="h-float h-metric">
-                <div class="lbl">Analyses verified</div>
-                <div class="num">{len(_verified)}</div>
-                <div class="sub"><b>of {len(_questions)}</b> run in this workspace</div>
-              </div>
-              <div class="h-stage-title">Every number,<br>checked twice.</div>
-            </div>
-            """
-        )
+        _hero_stage()
 
 # ------------------------------------------------------ capability strip --
 html(
@@ -133,30 +213,7 @@ with how_l:
     html(f'<div class="h-steps">{_steps()}</div>')
 
 with snap_r:
-    if _questions:
-        rows = ""
-        for item in _questions[:3]:
-            tag = (verdict_badge(item["verdict_state"]) if item.get("verdict_state") else
-                   f'<span class="ds-badge ds-badge-neutral">{esc(item["status"].replace("_", " ").title())}</span>')
-            rows += f'<div class="h-snap-row"><div class="t">{esc(item["text"][:46])}</div>{tag}</div>'
-        foot = rows
-    else:
-        foot = (f'<div class="h-snap-foot"><div class="h-snap-ico">{I_SPARK}</div>'
-                '<div>No analyses yet — upload a CSV and ask your first question.</div></div>')
-    html(
-        f"""
-        <div class="h-snap">
-          <div class="h-snap-head"><span>Workspace Snapshot</span>
-            <span class="h-snap-live"><span class="silt-dot silt-dot-on"></span>Live</span></div>
-          <div class="h-snap-tiles">
-            <div class="h-tile"><div class="h-tile-num">{len(_datasets)}</div><div class="h-tile-lbl">{I_DB}Datasets</div></div>
-            <div class="h-tile"><div class="h-tile-num">{len(_questions)}</div><div class="h-tile-lbl">{_icon('<path d="M5 20V11M12 20V4M19 20v-6"/>', 16)}Analyses</div></div>
-            <div class="h-tile"><div class="h-tile-num">{len(_verified)}</div><div class="h-tile-lbl">{_icon('<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/>', 16)}Verified</div></div>
-          </div>
-          {foot}
-        </div>
-        """
-    )
+    _snapshot()
 
 html('<div class="h-footer"><div>Silt <b>—</b> Autonomous Data Analyst</div>'
      '<div>Verified &nbsp;/&nbsp; Auditable &nbsp;/&nbsp; Actionable</div></div>')
