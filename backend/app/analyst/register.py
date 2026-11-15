@@ -75,12 +75,15 @@ def _headline(out: dict, memory: dict) -> tuple[dict | None, str, bool]:
                     f"{res.get('aggregation', 'total')} of {res.get('measure', '')}".strip(), False)
     lc = memory.get("last_calc")
     if out.get("plan_source") in ("metric", "model_calc", "refine") and lc:
-        r, prim = lc["result"], lc["meta"].get("primary")
+        aggs = list((lc.get("spec") or {}).get("aggregate") or {})
+        r, prim = lc["result"], (lc.get("meta") or {}).get("primary") or (aggs[0] if len(aggs) == 1 else None)
+        m = re.match(r"^\s*(\w+)\((\w+)\)\s*$", str(((lc.get("spec") or {}).get("aggregate") or {}).get(prim, "")))
+        name = f"{'avg' if m.group(1) == 'mean' else m.group(1)} of {m.group(2)}" if m else prim   # as compute_metric names it
         if prim and r.get("groups"):
-            return ({str(g.get("group")): g.get(prim) for g in r["groups"]}, f"{prim} by {r.get('group_by')}",
+            return ({str(g.get("group")): g.get(prim) for g in r["groups"]}, f"{name} by {r.get('group_by')}",
                     r.get("answer_type") == "scenario")
         if prim and isinstance(r.get("totals"), dict) and prim in r["totals"]:
-            return {"value": r["totals"][prim]}, str(prim), r.get("answer_type") == "scenario"
+            return {"value": r["totals"][prim]}, str(name), r.get("answer_type") == "scenario"
     return None, "", False
 
 

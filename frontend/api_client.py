@@ -218,7 +218,7 @@ def list_members(team_id: int) -> list[dict]:
 
 # ------------------------------------------------- organization / invitations --
 
-def _get(path: str, params: dict | None = None, with_team: bool = False) -> Any:
+def _org_get(path: str, params: dict | None = None, with_team: bool = False) -> Any:
     return _handle(requests.get(f"{BACKEND_BASE_URL}{path}", params=params,
                                 headers=_headers(with_team=with_team), timeout=TIMEOUT))
 
@@ -229,7 +229,7 @@ def _send(method: str, path: str, body: dict | None = None, with_team: bool = Fa
 
 
 def list_groups(community_id: int) -> list[dict]:
-    return _get(f"/api/communities/{community_id}/groups")
+    return _org_get(f"/api/communities/{community_id}/groups")
 
 
 def create_group(community_id: int, name: str) -> dict:
@@ -241,7 +241,7 @@ def create_team_in_group(community_id: int, name: str, group_id: int | None) -> 
 
 
 def org_members(community_id: int) -> list[dict]:
-    return _get(f"/api/communities/{community_id}/members")
+    return _org_get(f"/api/communities/{community_id}/members")
 
 
 def set_org_role(community_id: int, user_id: int, role: str) -> dict:
@@ -253,7 +253,7 @@ def remove_org_member(community_id: int, user_id: int) -> dict:
 
 
 def org_audit_events(community_id: int, limit: int = 50) -> list[dict]:
-    return _get(f"/api/communities/{community_id}/audit-events", {"limit": limit})
+    return _org_get(f"/api/communities/{community_id}/audit-events", {"limit": limit})
 
 
 def set_team_role(team_id: int, member_id: int, role: str) -> dict:
@@ -270,7 +270,7 @@ def create_invitation(team_id: int, email: str, team_role: str = "member", org_r
 
 
 def list_invitations(team_id: int) -> list[dict]:
-    return _get(f"/api/teams/{team_id}/invitations")
+    return _org_get(f"/api/teams/{team_id}/invitations")
 
 
 def revoke_invitation(team_id: int, invitation_id: int) -> dict:
@@ -287,7 +287,7 @@ def list_comments(target_type: str | None = None, target_id: int | None = None,
                   status: str | None = None) -> list[dict]:
     params = {k: v for k, v in {"target_type": target_type, "target_id": target_id, "status": status}.items()
               if v is not None}
-    return _get("/api/discussion", params, with_team=True)
+    return _org_get("/api/discussion", params, with_team=True)
 
 
 def post_comment(body: str, target_type: str | None = None, target_id: int | None = None,

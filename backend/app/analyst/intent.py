@@ -52,6 +52,8 @@ _COMPARE = re.compile(r"\b(compare|compared|comparison|versus|vs\.?|than|differe
                       r"stack up|against|relative to)\b", re.I)
 _EXTREME = re.compile(r"\b(which|what|who|where)\b[^?]{0,80}\b(most|highest|largest|biggest|best|top|longest|least|lowest|"
                       r"smallest|fewest|worst|slowest|shortest|bottom|fastest|weakest|strongest|poorest)\b", re.I)
+_SINGLE = re.compile(r"\b(single|maximum|minimum|max|min|individual|one (?:order|sale|record|transaction|row)|"
+                     r"per (?:order|sale|record|transaction|row)|largest one|biggest one)\b", re.I)
 _LOW = re.compile(r"\b(least|lowest|smallest|fewest|bottom|shortest|weakest|poorest)\b", re.I)
 _WHY = re.compile(r"\bwhy\b|\b(associated|linked|related|link|goes with|go with|what drives|drivers of|explains?|"
                   r"factors?|because|what lies behind|what is behind|influences?)\b", re.I)
@@ -468,6 +470,11 @@ def check(steps: list[dict], req: Request, df: pd.DataFrame, message: str = "") 
     if req.quantity == "total" and not req.per and not ({"sum"} & fns or any(s["op"] in ("project", "compare")
                                                                               for s in steps)):
         problems.append(f"the request asks for a total, but the program computes {', '.join(sorted(fns)) or 'none'}")
+    if req.extreme in ("min", "max", "either") and req.group and req.quantity is None and fns and fns <= {"max", "min"} \
+            and not _SINGLE.search(message):
+        problems.append(f"the request ranks each {req.group} by its overall level of the measure; 'highest' and "
+                        f"'lowest' compare the groups, not each group's single largest or smallest record: aggregate "
+                        f"with fn sum or mean by \"{req.group}\"")
     if req.quantity == "count" and not ({"count", "nunique", "sum"} & fns):
         problems.append("the request asks how many; use count (records) or nunique (distinct values)")
     for c in req.restrict:
