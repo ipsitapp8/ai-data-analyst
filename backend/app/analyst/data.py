@@ -11,12 +11,12 @@ MAX_CATEGORIES_LISTED = 12
 
 
 def load_table(path: str) -> pd.DataFrame:
-    """CSV or Excel (first sheet). Columns that look like dates are parsed."""
-    p = Path(path)
-    if p.suffix.lower() in (".xlsx", ".xlsm", ".xls"):
-        df = pd.read_excel(p, sheet_name=0)
-    else:
-        df = pd.read_csv(p)
+    """CSV or Excel (first sheet), read by app/ingest.py: delimiter, encoding, decimal mark, header and numbers
+    stored as text are detected, not assumed (files stored before uploads were normalised still read correctly).
+    The read report is kept in df.attrs["ingestion"]. Columns that look like dates are parsed."""
+    from app import ingest
+    df, report = ingest.read_table(path)
+    df.attrs["ingestion"] = report
     df.columns = [str(c).strip() for c in df.columns]
     for c in df.columns:
         if df[c].dtype == object and re.search(r"date|month|week|period|time", c, re.I):
@@ -116,8 +116,29 @@ def business_roles(df: pd.DataFrame) -> dict:
     return {"roles": roles, "evidence": evidence, "ambiguous": ambiguous}
 
 
+_STOP = {"the", "a", "an", "of", "and", "or", "in", "on", "by", "per", "for", "to", "is", "are", "what", "which", "how",
+         "with", "each", "all", "me", "show", "average", "total", "mean", "sum", "number", "count", "value", "values"}
+
+
+def _token_matches(t: str, w: str) -> bool:
+    """Column-name token `t` written as question word `w`: identical, a prefix of it ('exp' / 'expectancy',
+    'pop' / 'population'), or an in-order abbreviation with the same first letter ('dept' / 'department')."""
+    if t == w or (t.endswith("s") and t[:-1] == w) or (w.endswith("s") and w[:-1] == t):
+        return True
+    if len(t) < 3 or t.isdigit():
+        return False
+    if w.startswith(t) and len(w) - len(t) <= 8:
+        return True
+    if t[0] == w[0] and len(t) < len(w):
+        it = iter(w)
+        return all(ch in it for ch in t) and len(t) >= 4
+    return False
+
+
 def find_column(df: pd.DataFrame, words: str) -> list[str]:
-    """Columns whose name (as words) appears in `words`, longest names first."""
+    """Columns the text names, best first: the column's name as words ('total bill' for total_bill, plurals too);
+    otherwise every word of the column name abbreviated in the text ('life expectancy' for lifeExp, 'GDP per
+    capita' for gdpPercap, 'population' for pop, 'department' for dept_name)."""
     text = " " + re.sub(r"[^a-z0-9]+", " ", words.lower()) + " "
     hits = []
     for c in df.columns:
@@ -125,7 +146,31 @@ def find_column(df: pd.DataFrame, words: str) -> list[str]:
         forms = {w, w + "s", w + "es", w[:-1] if w.endswith("s") else w, w[:-1] + "ies" if w.endswith("y") else w}
         if any(f and f" {f} " in text for f in forms):
             hits.append(c)
-    return sorted(hits, key=lambda c: -len(c))
+    exact = sorted(hits, key=lambda c: -len(c))
+    qwords = [x for x in text.split() if x not in _STOP]
+    allw = text.split()
+    joined = [a + b for a, b in zip(allw, allw[1:])]            # "per capita" -> "percapita" (fillers kept here)
+    fuzzy = []
+    for c in df.columns:
+        if c in hits:
+            continue
+        toks = [t for t in re.sub(r"[^a-z0-9]+", " ", _words(c)).split() if t]
+        if not toks or all(len(t) <= 2 and not t.isalpha() for t in toks):
+            continue
+        used, ok = set(), True
+        for t in toks:
+            m = next((i for i, x in enumerate(qwords) if i not in used and _token_matches(t, x)), None)
+            if m is None:
+                j = next((k for k, x in enumerate(joined) if len(t) >= 4 and x.startswith(t)), None)
+                if j is None:
+                    ok = False
+                    break
+                used |= {j, j + 1}
+            else:
+                used.add(m)
+        if ok:
+            fuzzy.append(c)
+    return exact + sorted(fuzzy, key=lambda c: -len(c))
 
 
 def finite(values) -> np.ndarray:

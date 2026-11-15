@@ -45,7 +45,14 @@ SOURCE = {"model": "Planned by the fine-tuned local model",
           "input_check": "Checked by Silt before analysis · nothing was computed",
           "metric": "Metric definition resolved and computed by Silt's calculator · no language model needed",
           "refine": "The previous calculation re-run with your change by Silt's calculator",
-          "conversation_state": "Read against your open request · nothing was calculated"}
+          "conversation_state": "Read against your open request · nothing was calculated",
+          "program": "Analysis program: validated steps run by Silt's deterministic tools",
+          "model_program": "Analysis program planned by the local model; validated and computed by Silt",
+          "rule_program": "Analysis program built by Silt from the request's parts; validated and computed",
+          "withheld": "Withheld by Silt's answer verification · no figure shown"}
+# the answer-verification status of a computed answer (backend app/analyst/verify.py), shown with its source
+VERIFY = {"verified": "✓ Verified independently", "not independently verified": "◐ Not independently verified",
+          "withheld": "✕ Withheld — did not pass verification"}
 EXAMPLES_DATA = ["Explain this dataset in simple terms.", "Which group has the highest total?",
                  "What trends do you notice?", "Find unusual records.", "What should we do next?",
                  "Show me a chart of the main measure by group."]
@@ -161,9 +168,12 @@ with left:
                     else:
                         d = upload_dataset(up.name, up.getvalue(), sheet)
                         target = {"dataset_id": d["id"], "doc_id": None}
+                        read = ((d.get("profile") or {}).get("ingestion") or {})
+                        how = read.get("notes") or []
                         S["cp_flash"] = (f"Added **{d['filename']}** ({ui.file_kind(up.name)}"
                                          + (f", sheet {sheet}" if sheet else "") + f"): {d['row_count']:,} rows × "
-                                         f"{d['col_count']} columns. It is now selected.")
+                                         f"{d['col_count']} columns. It is now selected."
+                                         + ("\n\n**How the file was read:** " + " ".join(how[:6]) if how else ""))
                 if conv["log"]:
                     new_conv(**target)
                 else:
@@ -248,8 +258,10 @@ with main:
         else:
             st.markdown(answer)
             show_charts(r)
+        status = VERIFY.get(r.get("verify_status") or "")
         st.markdown(f"<div class='cp-src'>{html_escape(SOURCE.get(r.get('plan_source'), str(r.get('plan_source'))))} · "
-                    f"{r.get('elapsed_ms', 0) / 1000:.1f} s</div>", unsafe_allow_html=True)
+                    + (f"<b>{html_escape(status)}</b> · " if status else "")
+                    + f"{r.get('elapsed_ms', 0) / 1000:.1f} s</div>", unsafe_allow_html=True)
         details, notes = r.get("details") or "", r.get("notes") or []
         if details or notes:
             with st.expander("How this was calculated"):

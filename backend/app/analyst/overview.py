@@ -213,7 +213,14 @@ def trend(df: pd.DataFrame, value: str, date: str | None = None, agg: str = "sum
     dates = [c for c in df.columns if kind_of(df[c]) == "datetime"]
     date = date or (dates[0] if dates else None)
     if date is None:
-        raise ml.Unsuitable("This dataset has no date column, so a trend over time cannot be computed.")
+        from app.analyst.scope import year_column
+        yc = year_column(df)
+        if yc and yc != value:
+            # a calendar-year column is the time axis: one period per year
+            df = df.assign(**{yc: pd.to_datetime(pd.to_numeric(df[yc]).astype(int).astype(str), format="%Y")})
+            date, freq = yc, "Y"
+    if date is None:
+        raise ml.Unsuitable("This dataset has no date or year column, so a trend over time cannot be computed.")
     if kind_of(df[value]) != "numeric":
         raise ml.Unsuitable(f"'{value}' is not numeric, so its trend cannot be summed or averaged.")
     d = df[[date, value]].dropna()
@@ -228,7 +235,7 @@ def trend(df: pd.DataFrame, value: str, date: str | None = None, agg: str = "sum
     x = np.arange(len(points), dtype=float)
     y = np.array([p["value"] for p in points])
     slope = float(np.polyfit(x, y, 1)[0])
-    return {"value": value, "date": date, "aggregation": agg, "frequency": {"M": "month", "Q": "quarter", "W": "week", "D": "day"}[freq],
+    return {"value": value, "date": date, "aggregation": agg, "frequency": {"M": "month", "Q": "quarter", "W": "week", "D": "day", "Y": "year"}[freq],
             "points": points, "first": points[0], "last": points[-1], "change": last - first,
             "change_pct": float((last - first) / abs(first) * 100) if first else None,
             "peak": peak, "low": low, "slope_per_period": slope,

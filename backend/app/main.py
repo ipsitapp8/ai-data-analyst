@@ -2,6 +2,7 @@
 status polling, dashboard retrieval, and audit trail retrieval."""
 from __future__ import annotations
 
+import re
 import datetime as dt
 import json
 import uuid
@@ -190,35 +191,50 @@ def _save_and_profile_upload(file: UploadFile, sheet: str | None = None) -> tupl
                 )
             f.write(chunk)
 
-    if excel:
-        # An Excel workbook's first sheet is stored as CSV, so every CSV-based feature can read it.
-        try:
+    # Detect how the file is written (encoding, delimiter, decimal mark, header, numbers stored as text; for Excel the
+    # sheet and its header row), validate the table, and store it as a standard UTF-8 comma CSV, so every CSV-based
+    # feature reads the same columns. A file that cannot be read reliably is refused with the reason.
+    from app import ingest
+    try:
+        if excel and sheet:
             import pandas as pd
-            if sheet:
-                with pd.ExcelFile(dest_path) as workbook:    # closed before any unlink: Windows cannot delete an open file
-                    names = workbook.sheet_names
-                if sheet not in names:
-                    raise HTTPException(400, f"The workbook has no sheet named '{sheet}' (sheets: {', '.join(names)}).")
-            frame = pd.read_excel(dest_path, sheet_name=sheet or 0)
-        except HTTPException:
-            dest_path.unlink(missing_ok=True)
-            raise
-        except Exception as e:  # noqa: BLE001
-            dest_path.unlink(missing_ok=True)
-            raise HTTPException(400, f"Could not read the Excel file: {type(e).__name__}") from e
-        if frame.empty:
-            dest_path.unlink(missing_ok=True)
-            raise HTTPException(400, "The selected sheet has no data rows.")
+            with pd.ExcelFile(dest_path) as workbook:    # closed before any unlink: Windows cannot delete an open file
+                names = workbook.sheet_names
+            if sheet not in names:
+                raise HTTPException(400, f"The workbook has no sheet named '{sheet}' (sheets: {', '.join(names)}).")
+        frame, report = ingest.read_table(str(dest_path), sheet=sheet if excel else None)
+    except HTTPException:
+        dest_path.unlink(missing_ok=True)
+        raise
+    except ingest.IngestError as e:
+        dest_path.unlink(missing_ok=True)
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        dest_path.unlink(missing_ok=True)
+        raise HTTPException(400, f"Could not read the {'Excel' if excel else 'CSV'} file: {type(e).__name__}: {e}"[:300]) from e
+    if frame.empty:
+        dest_path.unlink(missing_ok=True)
+        raise HTTPException(400, "The selected sheet has no data rows." if excel else "The file has no data rows.")
+    # A standard UTF-8 comma CSV is stored exactly as uploaded (its content fingerprint is the user's file). Only a
+    # file whose structure other readers would misread -- another delimiter or encoding, decimal commas, no header,
+    # malformed or unnamed columns -- or an Excel sheet is stored as the normalised CSV.
+    structural = excel or report.get("delimiter") != "comma" or report.get("encoding") not in ("utf-8",) \
+        or report.get("decimal") == "," or report.get("skipped_lines") or any(
+            re.search(r"not column names|no name|named '|empty column", n) for n in report.get("notes", []))
+    if structural:
         csv_path = dest_path.with_suffix(".csv")
         frame.to_csv(csv_path, index=False)
-        dest_path.unlink(missing_ok=True)
+        if csv_path != dest_path:
+            dest_path.unlink(missing_ok=True)
         dest_path = csv_path
+        report["stored_as"] = "normalised UTF-8 comma-separated CSV"
 
     try:
         _, profile = load_and_profile_csv(str(dest_path))
     except Exception as e:
         dest_path.unlink(missing_ok=True)
         raise HTTPException(400, f"Could not parse CSV: {e}") from e
+    profile["ingestion"] = report
     return dest_path, profile
 
 

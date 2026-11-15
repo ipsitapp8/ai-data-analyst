@@ -75,3 +75,17 @@ def _reset_rate_limits():
     from app.rate_limit import _attempts
     _attempts.clear()
     yield
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _no_live_program_planner(monkeypatch):
+    """The model-assisted program planner never reaches a live model server from a test: unless a test supplies a
+    fake model, planning fails as if the server were down, and the deterministic paths answer."""
+    from app.analyst import nl_planner
+
+    def unavailable(*a, **k):
+        raise ConnectionError("no model server in tests")
+    monkeypatch.setattr(nl_planner, "model_chat", unavailable)

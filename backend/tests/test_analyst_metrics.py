@@ -393,3 +393,22 @@ def test_records_are_counted_per_group_without_a_model(no_model):
     assert "Each record (row) is counted as one shift" in " ".join(out["notes"])
     people = _res(_ask("Which dept has the most staff?", df, use_model=True))
     assert {g["group"]: g["number_of_staff"] for g in people["groups"]} == df.groupby("dept")["staff_name"].nunique().to_dict()
+
+
+@pytest.mark.parametrize("rule,question,applied", [
+    ({"reason": "cancelled shift", "where": "hourly_rate == 0"}, "Labor cost by dept excluding cancelled shifts", False),
+    ({"reason": "early start", "where": "clock_in < '07:00'"}, "Labor cost by dept excluding shifts that start before 7:00", True)])
+def test_a_condition_the_model_turns_into_an_invented_proxy_is_refused(monkeypatch, rule, question, applied):
+    """With the model on, a condition Silt cannot apply goes to the model's plan -- which must ground it in the data
+    or the question. 'cancelled = hourly_rate 0' is invented (no such data); '07:00' was stated by the user."""
+    df = shifts_a()
+    spec = {"type": "calc", "derive": {"h": "hours_between(clock_in, clock_out)", "labor_cost": "h * hourly_rate"},
+            "exclude": [rule], "group_by": "dept", "aggregate": {"labor_cost": "sum(labor_cost)"}}
+    monkeypatch.setattr(planner, "model_available", lambda: True)
+    monkeypatch.setattr(calc, "model_plan", lambda *a, **k: (dict(spec), []))
+    monkeypatch.setattr(planner, "model_chat", lambda *a, **k: "See above.")
+    out = _ask(question, df, use_model=True)
+    if applied:
+        assert out["plan_source"] == "model_calc" and _res(out)["exclusions"][0]["where"] == rule["where"]
+    else:
+        assert out["plan"]["type"] == "clarify" and not out["calls"] and "hourly_rate == 0" in out["answer"]

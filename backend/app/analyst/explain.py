@@ -21,6 +21,8 @@ def f(x: Any, pct: bool = False, digits: int = 2) -> str:
         return f"{x * 100:.1f}%"
     if isinstance(x, (int,)) or (isinstance(x, float) and x.is_integer() and abs(x) >= 100):
         return f"{x:,.0f}"
+    if isinstance(x, float) and 0 < abs(x) < 0.5 * 10 ** -digits:
+        return f"{x:.3g}"               # 0.000123 is not "0.00": a small per-unit rate keeps its significant digits
     return f"{x:,.{digits}f}"
 
 
@@ -118,7 +120,9 @@ def _metric(r):
         lines += [f"| {r['group_by']} | {what} | rows |", "|---|---:|---:|"]
         lines += [f"| {g['group']} | {f(g['value'])} | {g['rows']} |" for g in r["groups"][:25]]
         if r.get("top"):
-            lines += ["", f"Highest: **{r['top']['group']}** ({f(r['top']['value'])})." if r["groups"] and
+            vals = [g["value"] for g in r["groups"] if g.get("value") is not None]
+            word = "Lowest" if vals and r["top"]["value"] == min(vals) and r["top"]["value"] != max(vals) else "Highest"
+            lines += ["", f"{word}: **{r['top']['group']}** ({f(r['top']['value'])})." if r["groups"] and
                       r["groups"][0] is r["top"] else ""]
         return "\n".join(lines)
     return f"The {what}{filt} is **{f(r['value'])}** (computed over {r['rows']} rows)."
@@ -306,8 +310,10 @@ METRIC_NOTES = {
 def _forest(r):
     m = r["metrics"]
     sp = r.get("split") or {}
-    split = (f"{int(round(sp['train_share'] * 100))}/{int(round(sp['test_size'] * 100))} train/test split, seed {sp['seed']}"
-             + (", stratified by class" if sp.get("stratified") else "")) if sp else ""
+    split = ((f"time-aware: trained on the earliest {int(round(sp['train_share'] * 100))}% of records by "
+              f"{sp['time_column']}, tested on the latest {int(round(sp['test_size'] * 100))}%") if sp.get("time_column") else
+             (f"{int(round(sp['train_share'] * 100))}/{int(round(sp['test_size'] * 100))} train/test split, seed {sp['seed']}"
+              + (", stratified by class" if sp.get("stratified") else ""))) if sp else ""
     lines = [f"### Random Forest {r['task']} for '{r['target']}'",
              f"Trained on **{r['train_rows']}** rows, evaluated on **{r['test_rows']}** held-out rows it never saw"
              + (f" ({split})" if split else "") + ".", ""]
@@ -343,7 +349,9 @@ def _forest(r):
     judged_on = "balanced accuracy" if r["task"] == "classification" else "MAE"
     cv = m.get("cross_validation")
     if cv:
-        lines += ["", f"**Cross-validation** ({cv['folds']} folds, every row held out once): {cv['metric']} "
+        lines += ["", f"**Cross-validation** ({cv['folds']} folds, "
+                  + ("each trained on earlier records and tested on the next ones" if cv.get("time_ordered") else
+                     "every row held out once") + f"): {cv['metric']} "
                   f"{f(cv['model_mean'])} ± {f(cv['model_sd'])} for the model vs {f(cv['baseline_mean'])} for "
                   f"{cv['baseline']}; the model was better in **{cv['folds_better']} of {cv['folds']}** folds."]
     lines += ["", "**Verdict:** the model " + ("beats" if r["beats_baseline"] else "does **not** clearly beat")

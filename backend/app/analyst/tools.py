@@ -29,7 +29,7 @@ OPS = ("==", "!=", ">", ">=", "<", "<=", "in", "not_in", "contains")
 TOOLS: dict[str, dict[str, tuple]] = {
     "describe_dataset": {},
     "compute_metric": {"aggregation": ("agg", True, None), "column": ("column", False, None),
-                       "filters": ("filters", False, None), "group_by": ("column", False, "categorical"),
+                       "filters": ("filters", False, None), "group_by": ("column", False, "groupable"),
                        "order": ("order", False, None)},
     "describe_column": {"column": ("column", True, "numeric"), "filters": ("filters", False, None)},
     "compare_groups": {"outcome": ("column", True, None), "group": ("column", True, "categorical"),
@@ -151,7 +151,12 @@ def _check(tool: str, arg: str, typ: str, kind: str | None, v: Any, df: pd.DataF
     if typ == "column":
         if not isinstance(v, str) or v not in df.columns:
             raise InvalidCall(f"{where}: no column named {v!r}")
-        if kind and kind_of(df[v]) != kind:
+        if kind == "groupable":
+            # a breakdown: categories, or a number with few distinct values (an hour of day, a year, a rating)
+            if not (kind_of(df[v]) == "categorical" or (kind_of(df[v]) == "numeric" and df[v].nunique() <= 50)):
+                raise InvalidCall(f"{where}: '{v}' has {df[v].nunique()} distinct values; a breakdown needs a category "
+                                  "or a number with few distinct values")
+        elif kind and kind_of(df[v]) != kind:
             raise InvalidCall(f"{where}: '{v}' is {kind_of(df[v])}, a {kind} column is needed")
         return v
     if typ == "columns":

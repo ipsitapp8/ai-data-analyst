@@ -78,6 +78,40 @@ def _clarify(question: str, options: list[str], why: str) -> dict:
     return {"type": "clarify", "question": question, "options": options[:8], "router": why}
 
 
+# What a question is ABOUT (the data itself) and what it ASKS (explain / find patterns / suggest), recognised from
+# its parts rather than from a list of whole sentences: "Give me an overview of this file", "What is this data
+# about?", "Describe the columns", "What does each row represent?" are one intent with many wordings.
+_DATA_REF = (r"\b(?:data|dataset|data ?set|datasets|file|files|table|spreadsheet|sheet|csv|excel|columns?|fields?|"
+             r"variables?|features?|attributes?|rows?|records?|entries|schema|structure|it|this|contents?)\b")
+_EXPLAIN_CUE = (r"\b(?:explain\w*|describ\w*|overview|summar\w*|introduc\w*|walk me through|tell me about|what(?:'s| is| are) "
+                r"(?:in|inside)|what (?:is|are) (?:this|these|the|it)\b.*\babout|about\?|contain\w*|represent\w*|"
+                r"stand for|mean(?:s|ing)?|what kind of|what type of|what sort of|look like|understand|make sense of|"
+                r"profile|structure|what (?:is|are) (?:the )?(?:columns|fields|variables))\b")
+_PATTERN_CUE = (r"\b(?:patterns?|insights?|findings?|takeaways?|stand(?:s)? out|notable|noteworthy|interesting|"
+                r"important (?:things|points|facts|trends|patterns|relationships)|key (?:points|facts|trends|results|"
+                r"relationships)|highlights?|what can (?:i|we|you) learn|what do(?:es)? (?:the|this) (?:data|numbers) "
+                r"(?:say|tell|show))\b")
+_NEXT_CUE = (r"\b(?:look into|look at next|investigate|explore (?:next|further)|what (?:should|could|can) (?:i|we) "
+             r"(?:do|ask|analy[sz]e|check|look|focus|explore)|where (?:should|do|can) (?:i|we) start|next steps?|what "
+             r"else|what next|what questions)\b")
+
+
+def general_intent(low: str, df: pd.DataFrame) -> dict | None:
+    """Overview / patterns / next-steps requests, whatever their wording. A question that names a column or asks
+    for a computation (total, average, by ..., predict) is not one of these."""
+    if re.search(r"\b(total|sum|average|mean|median|count|how many|how much|predict|forecast|by \w+|per \w+|top \d|"
+                 r"compare|versus|vs\.?|correlat|relationship between|trend|over time|chart|plot|graph)\b", low):
+        return None
+    names = [c for c in df.columns if len(str(c)) > 2 and re.search(rf"\b{re.escape(str(c).lower())}\b", low)]
+    if re.search(_PATTERN_CUE, low) and not names:
+        return {"type": "router", "tool": "patterns", "args": {}, "reason": "important patterns"}
+    if re.search(_NEXT_CUE, low) and not names:
+        return {"type": "router", "tool": "understand", "args": {"focus": "suggestions"}, "reason": "suggested next analyses"}
+    if re.search(_EXPLAIN_CUE, low) and re.search(_DATA_REF, low) and not names:
+        return {"type": "router", "tool": "understand", "args": {}, "reason": "dataset overview"}
+    return None
+
+
 def route(message: str, df: pd.DataFrame, memory: dict | None = None) -> dict | None:
     """A plan for a request the planner's tools do not cover, or None. `memory` holds the group
     the previous answer ranked first, so "why is that region better?" knows which one."""
@@ -109,6 +143,9 @@ def route(message: str, df: pd.DataFrame, memory: dict | None = None) -> dict | 
                         "'Which region has the highest sales?') or name the group.", [], "group to explain")
 
     # --- dataset understanding -------------------------------------------------
+    general = general_intent(low, df)
+    if general:
+        return general
     if re.search(r"\bunderstand (it|this|the (data|dataset|file))|summari[sz]e (it|the|this|my)\b.*\b(data|dataset|file)?|"
                  r"what('s| is) in (this|the|my) (data|dataset|file)|describe (the|this|my) (data|dataset|file)|"
                  r"tell me about (this|the|my) (data|dataset|file)|overview of (the|this|my) (data|dataset)|"
@@ -132,15 +169,26 @@ def route(message: str, df: pd.DataFrame, memory: dict | None = None) -> dict | 
         dates = [c for c in df.columns if kind_of(df[c]) == "datetime"]
         named = _numeric_named(df, low)
         value = named[0] if named else (roles.get("revenue") or (numeric[0] if len(numeric) == 1 else None))
-        if not dates:
-            return {"type": "decline", "reason": "This dataset has no date column, so a trend over time cannot be "
-                                                 "computed.", "router": "trend over time"}
-        if value is None:
-            return _clarify("Which value should I show over time?", numeric, "trend")
+        from app.analyst.scope import year_column
+        year = year_column(df) if not dates else None
+        if not dates and not year:
+            return {"type": "decline", "reason": "This dataset has no date or year column, so a trend over time cannot "
+                                                 "be computed.", "router": "trend over time"}
+        if value is None or value == year:
+            return _clarify("Which value should I show over time?", [c for c in numeric if c != year], "trend")
         from app.analyst.followup import RATE_LIKE, auto_freq
-        freq = ("W" if re.search(r"week", low) else "Q" if re.search(r"quarter", low) else
-                "M" if re.search(r"month", low) else "D" if re.search(r"\b(day|daily)\b", low) else auto_freq(df[dates[0]]))
-        agg = ("avg" if re.search(r"average|mean", low) or (RATE_LIKE.search(value) and not re.search(r"total|sum", low))
+        if dates:
+            freq = ("W" if re.search(r"week", low) else "Q" if re.search(r"quarter", low) else
+                    "M" if re.search(r"month", low) else "D" if re.search(r"\b(day|daily)\b", low) else auto_freq(df[dates[0]]))
+        else:
+            freq = "Y"
+        # levels, rates and per-unit values are averaged per period; amounts are totalled
+        level = re.search(r"per|capita|exp|expectancy|price|rate|ratio|pct|percent|score|index|age|temp|level|avg|"
+                          r"average|mean|margin|share", value, re.I)
+        # a price, rate or level named in the question is averaged per period, not totalled
+        asked_level = re.search(r"\b(price|prices|rate|rates|level|levels|value of|index|temperature|score)\b", low)
+        agg = ("avg" if re.search(r"average|mean", low) or ((RATE_LIKE.search(value) or level or asked_level)
+                                                            and not re.search(r"total|sum", low))
                else "sum")
         return {"type": "router", "tool": "trend", "args": {"value": value, "freq": freq, "agg": agg}, "reason": "trend"}
 

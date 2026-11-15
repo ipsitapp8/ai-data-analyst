@@ -127,6 +127,7 @@ class Plan:
     percent: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     definition: str = ""
+    event_col: str | None = None        # a share's counted value: named in the question, but not a filter
 
 
 @dataclass
@@ -139,7 +140,7 @@ class Metric:
 
 
 CATALOGUE = [
-    Metric("overtime_hours", "overtime", r"\bover[- ]?time\b|\bhours? (?:beyond|over|above|in excess of|more than|past) "
+    Metric("overtime_hours", "overtime", r"\bover-?time\b(?<!over time)|\bhours? (?:beyond|over|above|in excess of|more than|past) "
            r"(?:a |an |the )?\d", "row", ("overtime",)),
     Metric("labor_cost", "labor cost", r"\blabou?r (?:costs?|spend|expenses?|bill)\b|\bwage (?:bill|costs?)\b|\bpayroll\b|"
            r"\bstaff(?:ing)? costs?\b|\bcosts? of (?:labou?r|staff|the shifts?)\b|\bpersonnel costs?\b|\bshift costs?\b|"
@@ -218,7 +219,9 @@ _TIME_UNITS = {"day", "days", "date", "dates", "week", "weeks", "month", "months
 _GROUP = re.compile(r"\b(?:by|per|for each|for every|each|every|across(?: all)?(?: the)?|in each|broken down by|split by|"
                     r"grouped by|for all(?: the)?|of each|among(?: the)?)\s+(?:the\s+)?([a-z][a-z_]*(?:\s[a-z][a-z_]*)?)", re.I)
 _WHICH = re.compile(r"\bwhich\s+([a-z][a-z_]*(?:\s[a-z][a-z_]*)?)\s+(?:has|had|have|is|was|gets|got|made|makes|spent|spends|"
-                    r"earned|earns|generated|generates|delivered|delivers|shows?|did|does|costs?|worked|works)\b", re.I)
+                    r"earned|earns|generated|generates|delivered|delivers|shows?|did|does|costs?|worked|works|contribute[sd]?|"
+                    r"drive[sn]?|drove|perform(?:s|ed)?|brings?|brought|accounts?|leads?|led|sells?|sold|produce[sd]?|"
+                    r"lose[s]?|lost|needs?|makes?|returns?|achieve[sd]?|are|were)\b", re.I)
 
 
 def _singular(w: str) -> str:
@@ -262,12 +265,12 @@ def group_column(message: str, df: pd.DataFrame, skip: set[str] = frozenset()) -
         for m in rx.finditer(message):
             phrase = m.group(1).lower()
             words = phrase.split()
+            direct = [c for c in find_column(df, phrase) if c in cats]
+            if direct and not (words[0] in ("the", "a", "an", "of") and len(words) == 1):
+                return direct[0], phrase          # a real column wins, even one called "day" or "hour"
             if words[0] in _TIME_UNITS or words[0] in ("shift", "shifts", "record", "records", "row", "rows", "entry",
                                                          "the", "a", "an", "of", "hour", "hours", "order", "orders"):
                 continue
-            direct = [c for c in find_column(df, phrase) if c in cats]
-            if direct:
-                return direct[0], phrase
             for w in (words if len(words) == 1 else [words[0], words[-1]]):
                 s = _singular(w)
                 hits = [c for c in cats if s in _tokens(c) or w in _tokens(c)]
@@ -426,6 +429,12 @@ def _b_profit(message, df, p):
     if bad:
         return bad
     f = _agg_func(message, CATALOGUE_BY["profit"])
+    if _tokens(r["cost"]) & {"spend", "spending", "budget"} and not [c for c in _role_columns(df, "cost")
+                                                                     if not _tokens(c) & {"spend", "spending", "budget"}]:
+        p.notes.append(f"This data has no cost-of-goods or operating-cost column, so 'profit' here is {_lab(r['revenue'])} "
+                       f"minus {_lab(r['cost'])} only. It overstates true profit; read it as what is left after "
+                       f"{_lab(r['cost'])}.")
+        p.label = f"{p.label} (after {_lab(r['cost'])} only)"
     p.spec = {"type": "calc", "derive": {"profit": f"{r['revenue']} - {r['cost']}"}, "exclude": [],
               "aggregate": {"profit": f"{f}(profit)", r["revenue"]: f"sum({r['revenue']})", r["cost"]: f"sum({r['cost']})"}}
     p.definition = f"profit = {_lab(r['revenue'])} − {_lab(r['cost'])} for each record; {_fname(f)} per group"
@@ -646,7 +655,26 @@ _COUNT_Q = re.compile(r"\b(?:which|what)\s+\w+(?:\s\w+)?\s+(?:has|had|have|gets|
                       r"\bhow many\s+(records?|rows?|entries|shifts?|orders?|transactions?|visits?|bookings?|tickets?|"
                       r"cases?)\s+(?:are there\s+|were there\s+|do we have\s+)?(?:per|by|for each|in each|for every)\b|"
                       r"\b(?:number|count) of (records?|rows?|entries|shifts?|orders?|transactions?|visits?|bookings?|"
-                      r"tickets?|cases?) (?:per|by|for each|in each)\b", re.I)
+                      r"tickets?|cases?) (?:per|by|for each|in each)\b|"
+                      r"\bhow many ([a-z]+) (?:did|does|do|has|have|had|got|gets|won|win) (?:each|every)\b", re.I)
+
+
+# a unit word and the abbreviations column names use for it
+UNIT_WORDS = {"kilometre": {"km", "kms", "kilometre", "kilometres", "kilometer", "kilometers"},
+              "mile": {"mi", "mile", "miles"}, "litre": {"l", "ltr", "litre", "litres", "liter", "liters"},
+              "minute": {"min", "mins", "minute", "minutes"}, "second": {"sec", "secs", "seconds"},
+              "kilogram": {"kg", "kgs", "kilo", "kilos", "kilogram", "kilograms"}, "gram": {"g", "grams"},
+              "metre": {"m", "metre", "metres", "meter", "meters"}, "gallon": {"gal", "gallon", "gallons"},
+              "tonne": {"t", "tonne", "tonnes", "ton", "tons"}, "pound": {"lb", "lbs", "pound", "pounds"}}
+
+
+def _unit_columns(noun: str, df: pd.DataFrame) -> list[str]:
+    """Numeric columns measured in the unit the noun names ('kilometres' -> km_driven)."""
+    w = noun.lower()
+    forms = next((v for v in UNIT_WORDS.values() if w in v or w.rstrip("s") in v), None)
+    if not forms:
+        return []
+    return [str(c) for c in df.columns if _numeric(df, c) and _tokens(str(c)) & forms]
 
 
 def count_plan(message: str, df: pd.DataFrame) -> Plan | None:
@@ -660,9 +688,17 @@ def count_plan(message: str, df: pd.DataFrame) -> Plan | None:
         return None
     noun = next(g for g in m.groups()[1:] if g) if any(m.groups()[1:]) else "records"
     one = _singular(noun.lower())
+    if re.search(r"\bin total\b|\btotal\b|\bsum\b|\bamount\b|\bvalue\b", message, re.I) and \
+            not re.fullmatch(r"records?|rows?|entries", noun, re.I):
+        return None                     # "the most votes in total": a total of a measure, not a count of rows
     if [c for c in find_column(df, noun) if _numeric(df, c)] or noun.lower() in ("revenue", "money", "spend", "cost",
                                                                                 "profit", "value", "time", "hours"):
         return None                     # "the most revenue" ranks by a measure; it is not a count of rows
+    if _unit_columns(noun, df):
+        return None                     # "the fewest kilometres" is a total of km_driven, not a count of rows
+    if re.search(r"\b(on average|average|mean|typical|per day|per week|per month)\b", message, re.I) and \
+            not re.fullmatch(r"records?|rows?|entries", noun, re.I):
+        return None                     # "on average how many visitors": a measure's average, not a count of rows
     # "employees", "customers", "orders": distinct values of the column that identifies one, when there is one
     ids = [c for c in map(str, df.columns) if c != group and kind_of(df[c]) == "categorical"
            and (one in _tokens(c) or (one in ("employee", "people", "person") and _tokens(c) & {"employee", "staff"}))
@@ -718,7 +754,8 @@ def formula_plan(message: str, df: pd.DataFrame) -> Plan | None:
     name = _ident(label) or "value"
     if name in df.columns:
         name = name + "_calc"
-    f = "mean" if _MEAN.search(message) else "sum"
+    # a ratio per record (tip / bill) is averaged, never totalled; other formulas are totalled unless an average is asked
+    f = "mean" if _MEAN.search(message) or _OPS[op] == "/" else "sum"
     p = Plan(name, label)
     expr = f"{a} {_OPS[op]} {b}"
     p.spec = {"type": "calc", "derive": {name: expr}, "exclude": [], "aggregate": {name: f"{f}({name})"},
@@ -729,6 +766,20 @@ def formula_plan(message: str, df: pd.DataFrame) -> Plan | None:
 
 # ------------------------------------------------------- rate of a yes/no event --
 _POSITIVE = ("yes", "true", "1", "y", "t", "churned", "left", "attrited", "converted", "won", "approved", "defaulted")
+_NEGATIVE = ("no", "false", "0", "n", "f", "stayed", "retained", "none", "not", "lost", "rejected", "active")
+
+
+def yes_no(df: pd.DataFrame, col: str) -> tuple[str, str] | None:
+    """(positive, negative) when a two-valued column is a yes/no flag -- its values form a recognised pair -- else
+    None ('x' and 'y' are two teams, not no and yes)."""
+    vals = [str(v) for v in df[col].dropna().unique()]
+    if len(vals) != 2:
+        return None
+    pos = [v for v in vals if v.lower() in _POSITIVE]
+    neg = [v for v in vals if v.lower() in _NEGATIVE or v.lower().startswith(("not ", "non", "no "))]
+    if len(pos) == 1 and len(neg) == 1 and pos[0] != neg[0]:
+        return pos[0], neg[0]
+    return None
 _EVENT_RATE = re.compile(r"\b([a-z][a-z_]{2,30}?)\s+(?:rate|rates|ratio|percentage|share)\b|\b(?:share|percentage|"
                          r"proportion|fraction|percent) of (?:\w+ )?(?:with|who|that|where)\s+([a-z_]+)", re.I)
 
@@ -788,3 +839,88 @@ def validity_rules(spec: dict, df: pd.DataFrame) -> list[dict]:
         if rule["where"].replace(" ", "") not in have and rule not in out:
             out.append(rule)
     return out
+
+
+# ------------------------------------------- shares of records and threshold counts --
+_SHARE = re.compile(r"\b(percentage|percent|share|proportion|fraction|what %|what part|ratio of)\b|%\s+of\b", re.I)
+_CMP_WORDS = [(r"(?:below|under|less than|lower than|fewer than|<)", "<"), (r"(?:at most|no more than|<=|up to)", "<="),
+              (r"(?:above|over|more than|greater than|higher than|exceed(?:s|ing)?|>)", ">"),
+              (r"(?:at least|no less than|>=|or more)", ">="), (r"(?:equal to|exactly|=)", "==")]
+
+
+def share_plan(message: str, df: pd.DataFrame) -> Plan | None:
+    """'What percentage of bills were paid by smokers?', 'share of tumours that are malignant by clinic':
+    the share of records with a named value of a category (or the positive value of a yes/no column)."""
+    from app.analyst.calc import named_values
+    if df is None or not _SHARE.search(message) or threshold_parts(message, df):
+        return None
+    hit = None
+    for col, val in named_values(df, message):
+        if kind_of(df[col]) == "categorical" and 2 <= df[col].nunique() <= 30:
+            hit = (col, val)
+            break
+    if hit is None:                     # "smokers" names the yes/no column smoker: its positive value
+        for w in re.findall(r"[a-z]+", message.lower()):
+            cols = [c for c in map(str, df.columns) if kind_of(df[c]) == "categorical" and yes_no(df, c)
+                    and (_singular(w) in _tokens(c) or w in _tokens(c))]
+            if len(cols) == 1:
+                hit = (cols[0], yes_no(df, cols[0])[0])
+                break
+    if hit is None:
+        return None
+    col, val = hit
+    name = f"share_{_ident(col)}_{_ident(val)}"
+    p = Plan(name, f"share with {_lab(col)} = {val}")
+    q = val.replace("'", "\\'")
+    p.spec = {"type": "calc", "derive": {}, "exclude": [{"reason": f"missing {_lab(col)}", "where": f"isnull({col})"}],
+              "aggregate": {name: f"mean({col} == '{q}')", f"records_{_ident(val)}": f"sum({col} == '{q}')"},
+              "group_by": group_column(message, df, skip={col})[0], "sort": "-" + name}
+    p.percent.append(name)
+    p.event_col = col
+    p.definition = f"records with {_lab(col)} = {val} ÷ all records with a {_lab(col)} value"
+    return p
+
+
+def threshold_parts(message: str, df: pd.DataFrame) -> tuple[str, str, float] | None:
+    """(column, operator, number) for 'attendance below 80%', 'orders over 500', 'age at least 65'."""
+    for pat, op in _CMP_WORDS:
+        m = re.search(rf"\b{pat}\s*\$?\s*(-?\d+(?:[.,]\d+)?)\s*%?", message, re.I)
+        if not m:
+            continue
+        before = message[:m.start()]
+        cols = [c for c in find_column(df, " ".join(before.split()[-4:])) if _numeric(df, c)]
+        if not cols:
+            cols = [c for c in find_column(df, before) if _numeric(df, c)]
+        if cols:
+            return cols[0], op, float(m.group(1).replace(",", "."))
+    return None
+
+
+_COUNTISH = re.compile(r"\b(how many|number of|count|percentage|percent|share|proportion|fraction|what %)\b", re.I)
+
+
+def threshold_plan(message: str, df: pd.DataFrame) -> Plan | None:
+    """'How many pupils have attendance below 80%?': records meeting a numeric condition, counted, with their
+    share. A record is one row; distinct values are counted when the question's noun names an ID column."""
+    if df is None or not _COUNTISH.search(message):
+        return None
+    parts = threshold_parts(message, df)
+    if parts is None:
+        return None
+    col, op, num = parts
+    n = f"{num:g}"
+    cond = f"{col} {op} {n}"
+    name = "records_meeting"
+    p = Plan(name, f"records with {_lab(col)} {op} {n}")
+    p.spec = {"type": "calc", "derive": {"meets": cond},
+              "exclude": [{"reason": f"missing {_lab(col)}", "where": f"isnull({col})"}],
+              "aggregate": {name: "sum(meets)", "share_meeting": "mean(meets)"},
+              "group_by": group_column(message, df, skip={col})[0], "sort": "-" + name}
+    p.percent.append("share_meeting")
+    if _SHARE.search(message):
+        p.name = "share_meeting"
+    p.definition = f"records where {_lab(col)} {op} {n}, counted (and as a share of records with a {_lab(col)} value)"
+    if re.search(r"%", message) and pd.to_numeric(df[col], errors="coerce").max() <= 1:
+        p.notes.append(f"'{col}' holds fractions (at most 1), but the question gives a percentage; check that "
+                       f"{n} is on the same scale.")
+    return p

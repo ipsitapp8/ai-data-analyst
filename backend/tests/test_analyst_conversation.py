@@ -60,7 +60,7 @@ def calc_result(out):
     return next(c["result"] for c in out["calls"] if c["tool"] == "calculator")
 
 
-GENERIC = "I can answer that best with a concrete calculation"
+GENERIC = "I couldn't turn **“"
 
 
 # ------------------------------------------------------------- the reported one --

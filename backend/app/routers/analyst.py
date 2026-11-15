@@ -96,9 +96,16 @@ def ask(payload: AskIn, db: Session = Depends(get_db), user: User = Depends(get_
             doc = documents.load(team.id, payload.document_id)
         except documents.DocumentError as e:
             raise HTTPException(404, str(e)) from e
-    memory = orchestrator.memory_for(f"{team.id}:{user.id}:{payload.dataset_id}:{payload.document_id}:{payload.conversation_id}")
-    out = orchestrator.ask(payload.message, df, memory, use_model=payload.use_model,
-                           filename=dataset.filename if dataset else None, document=doc)
+    key = orchestrator.memory_key(team.id, user.id, payload.dataset_id, payload.document_id, payload.conversation_id)
+    # only a conversation the client identified is kept across restarts: a request without one never loads another
+    # session's memory from disk
+    persist = "conversation_id" in payload.model_fields_set
+    with orchestrator.memory_lock(key):                # one turn at a time per conversation: no lost updates
+        memory = orchestrator.memory_for(key, persist=persist)
+        out = orchestrator.ask(payload.message, df, memory, use_model=payload.use_model,
+                               filename=dataset.filename if dataset else None, document=doc)
+        if persist:
+            orchestrator.save_memory(key, memory)
     return {**out,
             "dataset": {"id": dataset.id, "filename": dataset.filename, "rows": int(len(df))} if dataset else None,
             "document": documents.summary(doc) if doc else None}

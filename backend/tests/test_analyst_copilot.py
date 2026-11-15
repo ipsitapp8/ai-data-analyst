@@ -98,7 +98,7 @@ def test_routed_answers_are_labelled_and_charted():
 
 def test_trend_without_a_date_column_is_declined_not_invented():
     r = ask("Show the monthly trend of monthly_income", A)
-    assert r["plan"]["type"] == "decline" and "no date column" in r["answer"]
+    assert r["plan"]["type"] == "decline" and "no date or year column" in r["answer"]
 
 
 def test_outliers_and_missing_values_are_computed():
@@ -163,7 +163,7 @@ def test_classification_reports_full_held_out_metrics():
     r = ml.public(ml.train(A, "attrition", test_size=0.3, seed=7))
     m = r["metrics"]
     assert r["test_rows"] == round(len(A) * 0.3) and r["split"] == {"test_size": 0.3, "train_share": 0.7, "seed": 7,
-                                                                   "stratified": True}
+                                                                   "stratified": True, "time_column": None}
     for k in ("accuracy", "balanced_accuracy", "macro_precision", "macro_recall", "macro_f1", "roc_auc",
               "baseline_accuracy", "baseline_balanced_accuracy"):
         assert k in m

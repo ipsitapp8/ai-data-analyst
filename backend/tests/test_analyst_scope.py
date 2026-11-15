@@ -405,8 +405,13 @@ def test_a_mismatched_metric_is_not_shown_when_it_cannot_be_recomputed(monkeypat
     monkeypatch.setattr(planner, "rule_plan", lambda m, d, mem: {"type": "tools", "calls": [
         {"tool": "compute_metric", "args": {"aggregation": "count"}}]})
     monkeypatch.setattr(calc, "wanted", lambda *a, **k: None)
-    out = orchestrator.ask("What share of visits were at Clinic B?", df, {}, use_model=False)
+    # a share the deterministic layer cannot define (no value named): the planned count is not shown as a share
+    out = orchestrator.ask("What share of visits were long?", df, {}, use_model=False)
     assert "couldn't compute what you asked for" in out["answer"] and "rate or share" in out["answer"]
+    # a share of a named value is computed as one -- the value is counted, not used as a filter
+    share = orchestrator.ask("What share of visits were at Clinic B?", df, {}, use_model=False)
+    res = next(c["result"] for c in share["calls"] if c["tool"] == "calculator")
+    assert next(iter(res["totals"].values())) == pytest.approx((df["clinic"] == "Clinic B").mean())
 
 
 def _hr_people(n=200, seed=5):
@@ -439,3 +444,18 @@ def test_a_ratio_of_two_different_sums_is_a_legitimate_rate():
                                 {"derive": {}, "exclude": [], "group_by": "department"}, frame,
                                 "What is the conversion rate by department?", "What is the conversion rate by department?")
     assert not any("always 100%" in p for p in probs)
+
+
+def test_a_measure_named_expectancy_is_not_a_prediction_and_its_year_is_a_filter():
+    import numpy as np
+    from app.analyst import orchestrator, scope as S
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame({"region": np.repeat(["N", "S", "E"], 40), "season": np.tile(np.arange(2000, 2010).repeat(4), 3),
+                       "survival_expectancy": rng.normal(70, 5, 120).round(2)})
+    q = "What was the median survival expectancy by region in 2004?"
+    assert S.establish(q, df, {}).get("numeric_eq") == {"season": [2004]}
+    out = orchestrator.ask(q, df, {}, use_model=False)
+    want = df[df.season == 2004].groupby("region").survival_expectancy.median()
+    for g, v in want.items():
+        assert f"{v:.2f}" in out["answer"], g
+    assert S.establish("What survival expectancy is expected in 2011?", df, {}).get("numeric_eq") is None

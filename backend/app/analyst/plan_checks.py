@@ -78,4 +78,10 @@ def metric_mismatch(message: str, calls: list[dict], df: pd.DataFrame) -> str | 
             return f"the question asks for a total, but the plan computed an {agg}"
         if named and col and col not in named and agg != "count":
             return f"the question names {', '.join(named)}, but the plan computed {col}"
+        if not a.get("group_by") and re.search(r"\bwhich\s+[a-z]+\s+(?:has|had|have|is|was|gets|got|made|shows?)\b", message,
+                                               re.I):
+            from app.analyst.metrics import group_column
+            g, _ = group_column(message, df)
+            if g:
+                return f"the question asks which {g.replace('_', ' ')} ranks highest, but the plan computed one overall value"
     return None

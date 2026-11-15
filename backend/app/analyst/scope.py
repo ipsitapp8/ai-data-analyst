@@ -27,7 +27,8 @@ _MONTH_RE = re.compile(r"\b(" + "|".join(MONTHS + [m[:3] for m in MONTHS if m !=
 _YEAR_RE = re.compile(r"\b(?:in|during|for|of)\s+(\d{4})\b", re.I)
 
 
-_PREDICTIVE = re.compile(r"\b(predict\w*|forecast\w*|project(ed|ion)?|estimate\w*|will be|expect\w*)\b", re.I)
+# "expected", "expect" -- not "life expectancy", which is a measure, not a prediction
+_PREDICTIVE = re.compile(r"\b(predict\w*|forecast\w*|project(ed|ion)?|estimate\w*|will be|expect(?:s|ed|ing)?)\b", re.I)
 _RATE_WORDS = re.compile(r"\b(rate|share|percent\w*|proportion|fraction|ratio|how many|how often|likel\w*)\b", re.I)
 
 
@@ -44,6 +45,8 @@ def _named(df: pd.DataFrame, message: str) -> tuple[dict, list]:
     """Values the question names, by column; and values that name more than one column with nothing saying which."""
     from app.analyst.calc import named_values
     hits = named_values(df, message)
+    as_cols = column_values(message, df, hits)
+    hits = [h for h in hits if h not in as_cols]
     by_value: dict[str, list[str]] = {}
     for col, val in hits:
         by_value.setdefault(val.lower(), []).append(col)
@@ -64,6 +67,25 @@ def _named(df: pd.DataFrame, message: str) -> tuple[dict, list]:
         if val not in entities[col]:
             entities[col].append(val)
     return entities, ambiguous
+
+
+def column_values(message: str, df: pd.DataFrame, hits) -> set:
+    """Named values that are also the name of a numeric column ("votes for Joly" where Joly is a column of votes and
+    also a value of `winner`): read as that column -- the measure -- unless the message names the value's own column
+    next to it ("winner Joly", "where the winner is Joly"). Returns the (column, value) pairs that are columns, not filters."""
+    low = message.lower()
+    out = set()
+    for col, val in hits:
+        same = [c for c in df.columns if str(c).lower() == str(val).lower() and c != col and kind_of(df[c]) == "numeric"]
+        if not same:
+            continue
+        words = [w for w in re.split(r"[^a-z0-9]+", str(col).lower()) if len(w) >= 3]
+        v = re.escape(str(val).lower())
+        if any(re.search(rf"\b{re.escape(w)}\w*\s+(?:is\s+|was\s+|were\s+|=\s*|of\s+|equals?\s+|being\s+)?{v}\b|"
+                         rf"\b{v}\s+(?:is|was|as)\s+(?:the\s+)?{re.escape(w)}", low) for w in words):
+            continue                                     # "leader is Ash", "leader Ash": the value's own column, a filter
+        out.add((col, val))
+    return out
 
 
 _NEGATION = re.compile(r"\b(?:exclud\w*|except(?: for)?|other than|besides|apart from|without|not (?:counting|including)|"
@@ -106,6 +128,17 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
         binary = {c for c in df.columns if df[c].nunique(dropna=True) == 2}
         entities = {c: v for c, v in entities.items() if c not in binary}
         ambiguous = [(v, cols) for v, cols in ambiguous if not set(cols) <= binary]
+    # "for smokers", "among non-members": a yes/no column named as a noun selects its positive (or negative) value
+    from app.analyst.metrics import _singular, _tokens, yes_no  # noqa: PLC0415
+    both = re.search(r"\b(compar\w*|versus|vs\.?|between|difference|differ\w*|associat\w*|related|linked|explain\w*|"
+                     r"drive\w*|factors?|predict\w*|influenc\w*|affect\w*)\b", message, re.I)
+    for m in ([] if both else re.finditer(r"\b(?:for|among|of|from|with)\s+(?:the\s+)?(non[- ]?)?([a-z]{3,})\b", message, re.I)):
+        neg, word = bool(m.group(1)), m.group(2).lower()
+        cols = [c for c in df.columns if kind_of(df[c]) == "categorical" and (_singular(word) in _tokens(c)
+                or word in _tokens(c)) and c not in entities and yes_no(df, c)]
+        if len(cols) == 1:
+            pos, negv = yes_no(df, cols[0])
+            entities[cols[0]] = [negv if neg else pos]
     excluded: dict[str, list[str]] = {}
     for col in list(entities):
         out = [v for v in entities[col] if _negated(message, v)]
@@ -115,27 +148,53 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
             if not entities[col]:
                 del entities[col]
     time = _time(df, message)
+    numeric_eq: dict[str, list] = {}
+    if time is None and not _PREDICTIVE.search(message):
+        # "in 2007" with a numeric year column (no date column): a filter on that column, never silently dropped
+        y = re.search(r"\b(?:in|for|during|of|from)\s+((?:18|19|20)\d{2})\b", message, re.I)
+        yc = year_column(df)
+        if y and yc and int(y.group(1)) in set(pd.to_numeric(df[yc], errors="coerce").dropna().astype(int)):
+            numeric_eq[yc] = [int(y.group(1))]
     target_period = None
     if time and _PREDICTIVE.search(message):
         target_period, time = time, None     # "forecast X for September 4, 2026": the date is what is predicted
     scope = {"entities": entities, "time": time, "inherited": False, "clarify": None, "target_period": target_period}
     if excluded:
         scope["excluded_entities"] = excluded
+    if numeric_eq:
+        scope["numeric_eq"] = numeric_eq
     if ambiguous:
         val, cols = ambiguous[0]
         scope["clarify"] = (f"'{val}' is a value of more than one column ({', '.join(cols)}). Which one do you mean — "
                             f"for example '{cols[0].replace('_', ' ')} {val}'?")
         return scope
     prev = memory.get("scope") or {}
-    if not entities and not time and not excluded and (prev.get("entities") or prev.get("time")) and _ELLIPTIC.search(message) \
+    if not entities and not time and not excluded and not numeric_eq and (prev.get("entities") or prev.get("time")) and _ELLIPTIC.search(message) \
             and not _ALL_SCOPE.search(message):
         scope.update(entities={k: list(v) for k, v in (prev.get("entities") or {}).items() if k in df.columns},
                      time=prev.get("time"), inherited=True)
     return scope
 
 
+def year_column(df: pd.DataFrame) -> str | None:
+    """A numeric column holding calendar years (named year/yr, or every value a plausible year), when there is one."""
+    cands = []
+    for c in df.columns:
+        if kind_of(df[c]) != "numeric":
+            continue
+        v = pd.to_numeric(df[c], errors="coerce").dropna()
+        if not len(v) or not (v == v.round()).all() or not v.between(1800, 2100).all():
+            continue
+        if re.search(r"(^|_|\b)(year|yr|fy|season)s?($|_|\b)", str(c), re.I) or v.nunique() >= 2:
+            cands.append(c)
+    named = [c for c in cands if re.search(r"year|yr|fy|season", str(c), re.I)]
+    pick = named or cands
+    return pick[0] if len(pick) == 1 else None
+
+
 def active(scope: dict | None) -> bool:
-    return bool(scope and (scope.get("entities") or scope.get("time") or scope.get("excluded_entities")))
+    return bool(scope and (scope.get("entities") or scope.get("time") or scope.get("excluded_entities")
+                           or scope.get("numeric_eq")))
 
 
 def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
@@ -148,6 +207,9 @@ def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
     for col, vals in (scope.get("excluded_entities") or {}).items():
         if col in df.columns:
             keep &= ~df[col].astype(str).str.lower().isin([v.lower() for v in vals])
+    for col, vals in (scope.get("numeric_eq") or {}).items():
+        if col in df.columns:
+            keep &= pd.to_numeric(df[col], errors="coerce").isin(vals)
     t = scope.get("time")
     if t and t["column"] in df.columns:
         d = pd.to_datetime(df[t["column"]], errors="coerce")
@@ -163,6 +225,7 @@ def describe(scope: dict | None, n_in: int | None = None, n_all: int | None = No
         return ""
     parts = [f"{c.replace('_', ' ')} = {' or '.join(v)}" for c, v in scope["entities"].items()]
     parts += [f"{c.replace('_', ' ')} not {' or '.join(v)}" for c, v in (scope.get("excluded_entities") or {}).items()]
+    parts += [f"{c.replace('_', ' ')} = {' or '.join(map(str, v))}" for c, v in (scope.get("numeric_eq") or {}).items()]
     t = scope.get("time")
     if t:
         parts.append(f"{t['column'].replace('_', ' ')} in "
@@ -183,6 +246,9 @@ def as_exclusions(scope: dict) -> list[dict]:
         else:
             out.append({"reason": "only " + " and ".join(vals),
                         "where": f"{col} not in [" + ", ".join(f"'{v}'" for v in vals) + "]"})
+    for col, vals in (scope.get("numeric_eq") or {}).items():
+        out.append({"reason": f"only {col.replace('_', ' ')} " + " or ".join(map(str, vals)),
+                    "where": f"{col} != {vals[0]}" if len(vals) == 1 else f"{col} not in [{', '.join(map(str, vals))}]"})
     for col, vals in (scope.get("excluded_entities") or {}).items():
         out.append({"reason": "excluding " + " and ".join(vals),
                     "where": f"{col} == '{vals[0]}'" if len(vals) == 1 else f"{col} in [" + ", ".join(f"'{v}'" for v in vals) + "]"})
@@ -265,7 +331,8 @@ def replace_conflicting(exclusions: list[dict], sc: dict | None) -> list[dict]:
     when this question is about Aarav Mehta (same column), and an earlier period goes when a new one is named."""
     if not active(sc):
         return list(exclusions)
-    cols = set((sc.get("entities") or {}).keys()) | set((sc.get("excluded_entities") or {}).keys())
+    cols = set((sc.get("entities") or {}).keys()) | set((sc.get("excluded_entities") or {}).keys()) \
+        | set((sc.get("numeric_eq") or {}).keys())
     tcol = (sc.get("time") or {}).get("column")
     out = []
     for e in exclusions:

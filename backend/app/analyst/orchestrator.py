@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from collections import OrderedDict
 
@@ -10,7 +11,9 @@ import pandas as pd
 
 import re
 
-from app.analyst import business, calc, conversation, documents, explain, followup, intake, metrics, ml, plan_checks, planner, present, router, scenario_bridge, tools
+from app.analyst import business, calc, conversation, documents, explain, followup, intake, metrics, ml, objectives, plan_checks, planner, present, router, scenario_bridge, tools
+from app.analyst import nl_planner
+from app.analyst import program as P
 from app.analyst import scope as scoping
 
 logger = logging.getLogger(__name__)
@@ -23,12 +26,16 @@ NARRATE_SYSTEM = ("You are Silt's analyst. Write a short plain-language summary 
                   "new numbers; say when evidence is weak or a difference is not significant; never claim causation.")
 
 
-def memory_for(conversation_id: str) -> dict:
-    """Per-conversation state (trained model, last recommendation). In process
-    memory: it does not survive a restart."""
+def memory_for(conversation_id: str, persist: bool = False) -> dict:
+    """Per-conversation state (trained model, last recommendation), in process. With `persist` (the API route), the
+    conversation's result register and open objective are restored after a restart from that key's own file
+    (app/analyst/persist.py) -- never from another key's."""
     mem = _MEMORY.get(conversation_id)
     if mem is None:
         mem = _MEMORY[conversation_id] = {}
+        if persist:
+            from app.analyst import persist as _persist
+            mem.update(_persist.load(conversation_id))
         while len(_MEMORY) > MAX_CONVERSATIONS:
             _MEMORY.popitem(last=False)
     _MEMORY.move_to_end(conversation_id)
@@ -62,6 +69,11 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
     if document is not None and (df is None or _DOC_WORDS.search(message)):
         out = _ask_document(message, document, model_on, started)
         out.setdefault("details", "")
+        if out.get("calls"):
+            # a document's figures are quoted from its pages, not computed: they cannot be recomputed here
+            out["verify_status"] = "not independently verified"
+            out["answer"] += "\n\n" + _VERIFIED_LINE["not independently verified"].format(
+                why="figures are quoted from the document's pages, not computed from data")
         return out
     if df is None:
         return {"answer": "Choose a dataset or a document first.", "plan": {"type": "chat"}, "plan_source": "rules",
@@ -81,6 +93,22 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         message = res["message"]
         if res.get("correction"):
             message = conversation.retarget(message, memory, df) or message
+    # everyday measure words the columns name differently ("trip length", "visitors", "spend"): one matching column
+    # is read in their place, and the answer says so; several are asked about
+    from app.analyst import semantics as _sem
+    mw = _sem.measure_words(message, df)
+    if mw["ambiguous"]:
+        w, cs = mw["ambiguous"][0]
+        out = _reply(f"Which column do you mean by **{w}**?\n\nOptions: " + ", ".join(f"`{c}`" for c in cs), "tool",
+                     model_on, started, plan={"type": "clarify", "options": cs},
+                     notes=[f"'{w}' could be measured by {', '.join(cs)}; Silt asks rather than choosing one."])
+        out = _finish(out, message, df, memory, None, started)
+        conversation.record(memory, message, out)
+        return out
+    read_as = []
+    for w, c in mw["rewrite"]:
+        message = re.sub(rf"\b{re.escape(w)}\b", str(c), message, count=1, flags=re.I)
+        read_as.append(f"“{w}” read as `{c}` (the only column measuring it)")
     chart_kind = followup.chart_request(message)
     try:
         out = _dispatch(message, df, memory, model_on, filename, started, chart_kind)
@@ -89,13 +117,144 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         out = _reply(f"Something went wrong while answering that ({type(e).__name__}). Your conversation is kept; "
                      "try rephrasing, or ask a narrower question.", "rules", model_on, started,
                      notes=[f"Internal error: {type(e).__name__}: {e}"[:300]])
+    out = _verify_answer(out, message, df, memory, model_on, started)
     out = _finish(out, message, df, memory, chart_kind, started)
+    if read_as:
+        out["answer"] = "_" + "; ".join(read_as) + "._\n\n" + out["answer"]
+        out["notes"].insert(0, "Measure words: " + "; ".join(read_as) + ".")
+        out["understood_as"] = message
     if res:
         out["notes"].insert(0, res["note"] + (f" Run as: “{message}”." if message != said else ""))
         out["understood_as"] = message
         out["plan"] = {**out.get("plan", {}), "conversation": res["kind"]}
     conversation.record(memory, message, out)
     return out
+
+
+_VERIFIED_LINE = {"verified": "_Verification: ✓ the headline figure was recomputed independently with pandas from your "
+                               "question and matches._",
+                  "not independently verified": "_Verification: not independently verified — {why}. The steps are "
+                                                "under *How this was calculated*._"}
+
+
+def _verify_answer(out, message, df, memory, model_on, started) -> dict:
+    """Every answer that computed something passes app/analyst/verify.py, whichever path produced it. A figure that
+    fails is withheld: Silt's own program for the request answers instead if it verifies, otherwise nothing is shown."""
+    from app.analyst import verify
+    opts = (out.get("plan") or {}).get("options") or []
+    if (out.get("plan") or {}).get("type") == "clarify" and len(opts) == 1 and df is not None:
+        # "Which numeric column do you mean? Options: count": one option is no choice. Silt's own program for the
+        # request answers if it uses exactly that column and passes verification; otherwise the question stands.
+        rp = nl_planner.rule_plan(message, df, memory)
+        if rp and any(st.get("column") == opts[0] for st in rp.get("steps", [])):
+            alt = _run_program(rp, message, df, memory, model_on, started, "rule_program", {"status": "rule"},
+                               [f"The only column that fits is `{opts[0]}`, so Silt used it rather than asking."])
+            v2 = verify.check_answer(message, df, alt, memory.get("_scope"), memory) if alt else None
+            if alt is not None and (v2 or {}).get("status") == "verified":
+                alt["verify_status"] = "verified"
+                alt["answer"] = f"_Only one column fits: `{opts[0]}`._\n\n" + alt["answer"] + "\n\n" + _VERIFIED_LINE["verified"]
+                return alt
+        return out
+    try:
+        v = verify.check_answer(message, df, out, memory.get("_scope"), memory)
+    except Exception:  # noqa: BLE001 - a verifier error is reported as unverified, never as passed
+        logger.exception("answer verification failed to run")
+        v = {"status": "not independently verified", "checks": [{"check": "independent recomputation", "ok": True,
+             "detail": "not independently verified (the check could not run)"}]}
+    if v is None:
+        return out
+    if v["status"] == "failed":
+        bad = "; ".join(c["detail"] for c in v["checks"] if not c["ok"])
+        logger.info("answer withheld by verification (%s) calls=%s", out.get("plan_source"),
+                    [c.get("tool") for c in out.get("calls", [])])          # the question itself is not logged
+        said = _failure_reasons(v["checks"])       # what was wrong, without any figure of the rejected answer
+        if out.get("plan_source") in ("metric", "model_calc", "refine"):
+            memory.pop("last_calc", None)           # a follow-up ("Only Rahul.") must not refine a rejected figure
+        alt = None
+        if out.get("plan_source") not in ("rule_program",):
+            alt = _run_program(nl_planner.rule_plan(message, df, memory), message, df, memory, model_on, started,
+                               "rule_program", {"status": "rule"}, [
+                                   f"Silt's first answer (from its {out.get('plan_source')} path) did not pass answer "
+                                   f"verification ({said}); it was not shown, and Silt built the program from the "
+                                   "request itself."])
+        if alt is not None:
+            v2 = verify.check_answer(message, df, alt, memory.get("_scope"), memory) or \
+                {"status": "not independently verified", "checks": []}
+            if v2["status"] != "failed":
+                return _label(alt, v2, message, df, memory)
+        return _reply("**I computed an answer, but it did not pass Silt's verification, so I haven't shown it.** "
+                      f"{said[:1].upper() + said[1:]}. Try naming the measure, the grouping and any filter explicitly.",
+                      "withheld", model_on, started, plan={"type": "withheld"}, verification=v["checks"],
+                      verify_status="withheld",
+                      notes=["Withheld by answer verification: the computed figure did not match what the question "
+                             "asks for, and no deterministic program for the request passed verification either."])
+    return _label(out, v, message, df, memory)
+
+
+def _failure_reasons(checks) -> str:
+    out = []
+    for c in checks:
+        if c["ok"]:
+            continue
+        if str(c["check"]).startswith("independent recomputation"):
+            out.append("the figure did not match an independent recomputation from your question")
+        else:
+            out.append(c["detail"])
+    return "; ".join(dict.fromkeys(out))
+
+
+def _label(out, v, message, df, memory) -> dict:
+    """The verification status on the answer itself: verified, or not independently verified with the reason; plus
+    the duplicate note and any part of the question the answer does not cover."""
+    from app.analyst import verify
+    out["_post_checks"] = (out.get("_post_checks") or []) + v["checks"]
+    out["verify_status"] = v["status"]
+    dn = verify.duplicate_note(message, df, memory.get("_scope"), out)
+    if dn:
+        out["answer"] += "\n\n" + dn
+    if v["status"] == "verified":
+        line = _VERIFIED_LINE["verified"]
+    else:
+        why = next((c["detail"].split("(", 1)[-1].rstrip(")") for c in (out.get("verification") or []) + v["checks"]
+                    if "not independently verified" in str(c.get("detail"))), "no independent check covers it")
+        line = _VERIFIED_LINE["not independently verified"].format(why=why)
+    missing = verify.unanswered_parts(message, df, out)
+    if missing:
+        out["unanswered_parts"] = missing
+        line += " _Not answered here: " + "; ".join(missing) + "._"
+    out["answer"] += "\n\n" + line
+    return out
+
+
+def memory_key(team_id, user_id, dataset_id, document_id, conversation_id) -> str:
+    """team : user : dataset : document : conversation, each part escaped so no id containing ':' can stand for
+    another's parts (ids without ':' or '%' are unchanged)."""
+    def part(x):
+        return str(x).replace("%", "%25").replace(":", "%3A")
+    return ":".join(part(x) for x in (team_id, user_id, dataset_id, document_id, conversation_id))
+
+
+_LOCKS: dict = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def memory_lock(key: str) -> threading.Lock:
+    """The lock for one conversation's memory: concurrent requests in the same conversation take turns, so neither
+    turn's result register is lost or mixed into the other's."""
+    with _LOCKS_GUARD:
+        lk = _LOCKS.get(key)
+        if lk is None:
+            if len(_LOCKS) > 4 * MAX_CONVERSATIONS:
+                for k in [k for k, v in _LOCKS.items() if not v.locked()][: len(_LOCKS) // 2]:
+                    _LOCKS.pop(k, None)
+            lk = _LOCKS[key] = threading.Lock()
+        return lk
+
+
+def save_memory(conversation_id: str, memory: dict) -> None:
+    """Persist what a later turn may refer to (the result register, the open objective) for this key only."""
+    from app.analyst import persist as _persist
+    _persist.save(conversation_id, memory)
 
 
 def _reply(answer: str, source: str, model_on: bool, started: float, **extra) -> dict:
@@ -108,6 +267,19 @@ def _reply(answer: str, source: str, model_on: bool, started: float, **extra) ->
 
 
 def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> dict:
+    if not memory.get("_in_dispatch"):
+        # per-turn planner state (a finding's follow-up re-enters _dispatch within the same turn)
+        memory.pop("_nl_tried", None)
+        memory.pop("_nl_unsupported", None)
+        memory.pop("_model_spent_ms", None)
+    memory["_in_dispatch"] = True
+    try:
+        return _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
+    finally:
+        memory.pop("_in_dispatch", None)
+
+
+def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind) -> dict:
     opts = router.ml_options(message)
     memory["_ml_options"] = opts
     # 0. a follow-up to a what-if scenario in this conversation ("why did profit change?", "which input mattered most?") is
@@ -119,6 +291,9 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
                           notes=followed["notes"], details=followed.get("details", ""))
     # 1. conversation about the previous answer, recommendations, "why is X doing badly?"
     kind = followup.intent(message, memory)
+    if kind == "explain_previous" and memory.get("investigation") and finding_ref(
+            message, len(memory["investigation"]["findings"])) is not None:
+        kind = None                     # "explain the last thing you found": a stored finding, not the last answer
     if kind:
         out = _ask_conversation(kind, message, df, memory, model_on, started)
         if out is not None:
@@ -158,6 +333,117 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
         out = _chart_from_previous_answer(message, df, memory, chart_kind, model_on, started)
         if out is not None:
             return out
+    # "analyse sales instead" on a dataset with nothing called sales: another dataset is meant
+    sw = _SWITCH.search(message)
+    from app.analyst.data import find_column as _fc
+    if sw and re.search(r"\b(instead|switch|another|different)\b", message, re.I) and not _fc(df, sw.group(1)) \
+            and sw.group(1).lower() not in _STOPWORDS and not calc.named_values(df, sw.group(1)):
+        return _reply(f"This conversation works on the selected dataset ({len(df):,} records; columns "
+                      + ", ".join(f"`{c}`" for c in df.columns[:8]) + f"). It has nothing called **{sw.group(1)}**. To analyse "
+                      f"{sw.group(1)}, choose that file in the **Dataset** selector — each dataset keeps its own conversation.",
+                      "tool", model_on, started, plan={"type": "clarify", "switch_dataset": sw.group(1)})
+    out = _ask_investigation(message, df, memory, model_on, started, filename)
+    if out is not None:
+        return out
+    # "Which department performs worst and why?": an evaluative word with a grouping but no measure -- what
+    # "performing" means is the user's choice, so the candidate measures are offered (outcomes first), once
+    pq = _undefined_performance(message, df)
+    if pq is not None:
+        return pq if isinstance(pq, dict) and "answer" in pq else _reply(
+            f"Which measure should decide how each **{pq['group']}** performs? Options: "
+            + ", ".join(f"`{c}`" for c in pq["options"]), "tool", model_on, started,
+            plan={"type": "clarify", "options": pq["options"]},
+            notes=["'Performs' names no column; Silt asks which measure defines it rather than choosing one. With the "
+                   "measure chosen, the comparison and the 'why' (associations, not causes) are computed."])
+    # A concept two or more columns could mean ("revenue" with takings and online_sales), named by none of them: asked
+    # before any path -- deterministic or model -- picks one
+    amb = nl_planner.ambiguities(message, df)
+    if amb:
+        w, cs = next(iter(amb.items()))
+        return _reply(f"Which column do you mean by **{w}**?\n\nOptions: " + ", ".join(f"`{c}`" for c in cs), "tool",
+                      model_on, started, plan={"type": "clarify", "options": cs},
+                      notes=[f"'{w}' could mean any of {', '.join(cs)}; Silt asks rather than choosing one. Nothing was "
+                             "calculated."])
+    # "compare that with the previous result", "set that next to the original ask": earlier answers of this
+    # conversation, resolved from its ordered result register (app/analyst/register.py); two target/scenario
+    # objectives are compared as scenarios, anything else side by side
+    from app.analyst import register
+    tq = register.target_request(message, memory) or None
+    if tq is None:
+        rq = register.recall_request(message, memory)
+        if isinstance(rq, str):
+            return _reply(rq, "tool", model_on, started, plan={"type": "chat", "reference": "unresolved"},
+                          notes=["The reference names an earlier result this conversation does not have; nothing is "
+                                 "left pending, so the next question is read on its own."])
+        if rq is not None:
+            tq = register.recall(memory["register"][rq])
+    if tq is not None:
+        return _reply(tq["answer"], "program" if tq["calls"] else "tool", model_on, started, plan=tq["plan"],
+                      calls=tq["calls"], charts=tq["charts"], notes=tq["notes"])
+    cr = register.compare_request(message, memory)
+    if isinstance(cr, str):
+        return _reply(cr, "tool", model_on, started, plan={"type": "chat", "reference": "unresolved"},
+                      notes=["The reference names an earlier result this conversation does not have; nothing is "
+                             "left pending, so the next question is read on its own."])
+    if cr is not None:
+        reg = memory["register"]
+        a, b = reg[cr[0]], reg[cr[1]]
+        if a.get("objective") and b.get("objective"):
+            obj = objectives._compare_scenarios(a["objective"], b["objective"])  # noqa: SLF001
+            obj["notes"].insert(0, f"Resolved from the conversation's result register: result {a['n']} "
+                                   f"(*{a['question']}*) and result {b['n']} (*{b['question']}*).")
+        else:
+            obj = register.compare(a, b)
+        return _reply(obj["answer"], "program", model_on, started, plan=obj["plan"], calls=obj["calls"],
+                      charts=obj["charts"], notes=obj["notes"])
+    # Multi-step objectives (target feasibility, absence scenarios, entity vs the rest, changing an assumption,
+    # comparing scenarios) run as validated analysis programs (app/analyst/program.py, objectives.py).
+    try:
+        obj = objectives.handle(message, df, memory, sc)
+    except Exception as e:  # noqa: BLE001 - a program failure is reported, never hidden behind another answer
+        logger.exception("analysis program failed")
+        obj = {"answer": f"**The analysis program failed** ({type(e).__name__}: {e}). Nothing was estimated instead.",
+               "calls": [], "charts": [], "notes": [], "plan": {"type": "error"}}
+    if obj is not None:
+        return _reply(obj["answer"], "program", model_on, started, plan=obj["plan"], calls=obj["calls"],
+                      charts=obj["charts"], notes=obj["notes"], details=obj.get("details", ""),
+                      verification=obj.get("verification") or [])
+    # A request shaped like several analyses ("which ... is worst and why", "after accounting for", "if ... continues")
+    # is planned by the local model as one program before any single-purpose handler answers half of it.
+    if model_on and (nl_planner.composite(message, df) or nl_planner.follow_up(message, memory)):
+        out = _ask_nl_program(message, df, memory, model_on, started, filename, late=False)
+        if out is not None:
+            return out
+    elif not model_on and nl_planner.composite(message, df):
+        out = _run_program(nl_planner.rule_plan(message, df, memory), message, df, memory, model_on, started,
+                           "rule_program", {"status": "rule"}, [])
+        if out is not None:
+            return out
+    if nl_planner.composite(message, df):
+        # "what do outlets take per visitor": a per-unit figure whose numerator names no column -- ask which value,
+        # never answer about the denominator instead
+        from app.analyst import intent as _intent
+        _r = _intent.read(message, df)
+        if _r.per and _r.denominators and not _r.measures and _intent._RECORDS not in _r.denominators \
+                and metrics.recognise(message) is None:  # noqa: SLF001 - a catalogue metric ("cost per lead") defines it
+            from app.analyst import semantics as _sem
+            nums = [c for c in _sem.profile(df)["measures"] if c not in _r.denominators][:6]
+            if nums:
+                den = " / ".join(map(str, _r.denominators))
+                return _reply(f"Which value should be divided by **{den}**? Options: " + ", ".join(f"`{c}`" for c in nums),
+                              "tool", model_on, started, plan={"type": "clarify", "options": nums},
+                              notes=[f"The request asks for a figure per {den} but names no column to divide; Silt asks "
+                                     "rather than reporting the denominator itself."])
+        lost = nl_planner.unapplied(message, df)
+        if lost:
+            # the request is limited (a relative period, "only escalated") and no program could apply it: an answer
+            # over all the records would look right and be wrong
+            return _reply(f"**I couldn't apply {', '.join(lost)} to this question**, so I haven't computed it over all "
+                          "the records instead. Say which value to measure — for example *total <column> for "
+                          f"{lost[0].split(' (')[0]}* — and I'll apply it.", "tool", model_on, started,
+                          plan={"type": "clarify"},
+                          notes=["The request states a restriction that only an analysis program can apply; none could "
+                                 "be built, so nothing was calculated."])
     out = _refine_last(message, df, memory, model_on, started, sc)
     if out is not None:
         return out
@@ -172,13 +458,27 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
             elif problem:
                 return _reply(f"**I can't show a trend of {m.label} here:** {problem}.", "metric", model_on, started,
                               plan={"type": "clarify"})
-    # A what-if or goal sentence goes to the shared what-if service further down, which declines (None) anything it cannot read cleanly.
-    elif not (followup.wants_forecast(message) or re.search(r"\bpredict\w*\b", message, re.I) or _SCENARIO_Q.search(message)
-              or scenario_bridge.TRIGGER.search(message)):
+    # A what-if or goal sentence goes to the shared what-if service further down, which declines (None) anything it
+    # cannot read cleanly.
+    if not (followup.wants_forecast(message) or re.search(r"\bpredict\w*\b", message, re.I) or _SCENARIO_Q.search(message)
+            or scenario_bridge.TRIGGER.search(message)) \
+            and not (_TREND_WORDS.search(message) and metrics.recognise(message)):
         out = _ask_metric(message, df, memory, model_on, started, sc)
         if out is not None:
             return out
+    out = _ask_missing_target(message, df, memory, model_on, started)
+    if out is not None:
+        return out
     out = _ask_which_measure(message, df, model_on, started)
+    if out is not None:
+        return out
+    out = _ask_associations(message, df, memory, model_on, started)
+    if out is not None:
+        return out
+    out = _ask_compare_values(message, dfs, model_on, started)
+    if out is not None:
+        return out
+    out = _ask_compare_columns(message, dfs, model_on, started)
     if out is not None:
         return out
     rk = followup.rank_request(message, dfs)
@@ -231,11 +531,36 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
         if t is not None:
             return _trend_answer(message, t, model_on, started)
     deferred = memory.pop("_deferred_metric", None)
+    # one turn's model budget: after the program planner has spent most of it, the other model paths use their rules
+    more = model_on and memory.get("_model_spent_ms", 0) < MODEL_TURN_BUDGET_MS
     why_calc = (calc.wanted(message, df, memory) or ("the question sets its own conditions" if deferred else None)) \
-        if model_on else None
+        if more else None
     failed = None
     if why_calc:
         out = _ask_calc(message, df, memory, why_calc, started, sc=sc)
+        if deferred and out is not None and out["plan"].get("type") == "calc":
+            # the model was asked because of a condition Silt could not apply; a plan with no rule of its own (beyond
+            # validity, duplicates and the question's scope) did not apply it either, so it is not an answer
+            own = [e for e in (out["plan"].get("exclude") or []) if not re.search(
+                r"duplicate\(\)|<\s*0\b|isnull\(|!=\s*'|not\s+in\b|\byear\(|\bmonth\(|hours_between\([^)]*\)\s*<\s*0",
+                e.get("where", ""))]
+            # ...and each of its own rules must come from the data or the question: a column or value sharing a word
+            # with the condition ("status == 'cancelled'"), or a number/time the user stated ("clock_in < '09:00'").
+            # An invented proxy ("cancelled shift = hourly_rate == 0") is not an answer.
+            cond_words = {w[:5] for x in deferred["unhandled"] for w in re.findall(r"[a-z]{4,}", x.lower())}
+            def values(text):                       # 9:00 and 09:00 are the same time; 8 and 8.0 the same number
+                return {(int(h) * 60 + int(m or 0)) if ":" in t else float(t)
+                        for t, h, m in ((x, *(x.split(":") + [None])[:2]) for x in re.findall(r"\d+(?:\.\d+)?(?::\d+)?", text))}
+            stated = values(" ".join(deferred["unhandled"]))
+            def grounded(e):
+                words = {w[:5] for w in re.findall(r"[a-z]{4,}", e.get("where", "").lower().replace("_", " "))}
+                nums = values(e.get("where", ""))
+                return bool(words & cond_words) or bool(nums and nums & stated)
+            invented = [e for e in own if not grounded(e)]
+            if not own or invented:
+                if invented:
+                    deferred["invented"] = invented
+                out = None
         if out is not None and out["plan_source"] not in ("model_calc_failed",) and out["plan"].get("type") == "calc" \
                 and out.get("calls"):
             return out
@@ -243,11 +568,13 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
             return out
         failed = out
     if deferred:
+        guess = "; ".join(f"`{e['where']}`" for e in deferred.get("invented", []))
         return _reply(f"I can compute **{deferred['label']}** ({deferred['definition']}), but I couldn't apply "
                       + "; ".join(f"*{x}*" for x in deferred["unhandled"]) + " to this data — nothing in its columns "
-                      "records that, and the local model could not turn it into a check either. I haven't shown a number "
-                      "that ignores it, or a different quantity. Ask without that condition, or say which column and "
-                      "value identify it.", "metric", model_on, started,
+                      "records that" + (f" (the local model proposed {guess}, which the data does not support)" if guess
+                                        else ", and the local model could not turn it into a check either") +
+                      ". I haven't shown a number that ignores it, or a different quantity. Ask without that condition, "
+                      "or say which column and value identify it.", "metric", model_on, started,
                       plan={"type": "clarify", "unhandled": deferred["unhandled"]},
                       notes=["The question's condition could not be applied by Silt's deterministic metric layer or by "
                              "the model's validated calculation plan."])
@@ -258,8 +585,34 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
                 return _trend_answer(message, t, model_on, started)
         out = _ask_routed(message, dfs, memory, routed, model_on, filename, started)
         return _after_failed(out, failed)
-    out = _ask_planned(message, dfs, memory, model_on, started)
+    more = model_on and memory.get("_model_spent_ms", 0) < MODEL_TURN_BUDGET_MS
+    out = _ask_planned(message, dfs, memory, more, started)
+    from app.analyst import intent
+    _req = intent.read(message, df)
+    if more and _req.group and any(c.get("status") == "ok" for c in out.get("calls", [])) and not any(
+            (c.get("args") or {}).get(k) == _req.group for c in out.get("calls", []) for k in ("group", "group_by")):
+        # the request breaks the result down ("each outlet") but the model's plan does not: the deterministic plan,
+        # if it does, answers instead
+        rules = _ask_planned(message, dfs, memory, False, started)
+        if any((c.get("args") or {}).get(k) == _req.group for c in rules.get("calls", []) for k in ("group", "group_by")) \
+                and any(c.get("status") == "ok" for c in rules.get("calls", [])):
+            rules["notes"].insert(0, f"The model's plan left out the breakdown by {_req.group}; Silt's deterministic "
+                                     "plan, which keeps it, answered instead.")
+            out = rules
+    ug = _req.unknown_group
+    if ug and any((c.get("args") or {}).get(k) not in (None, "") and str((c.get("args") or {}).get(k)) not in
+                  followup_cols(df, message) for c in out.get("calls", []) for k in ("group", "group_by")):
+        # "compare the tips each waiter earns" with no waiter column: grouping by another column is not an answer
+        return _dataset_reply(message, df, memory, model_on, started, out)
     mismatch = plan_checks.metric_mismatch(message, out.get("calls", []), dfs)
+    if mismatch and model_on:
+        # the deterministic plan for the same question, before asking the model again
+        rules = _ask_planned(message, dfs, memory, False, started)
+        if any(c.get("status") == "ok" for c in rules.get("calls", [])) and \
+                not plan_checks.metric_mismatch(message, rules.get("calls", []), dfs):
+            rules["notes"].insert(0, f"Silt rejected the model's plan because {mismatch}; its deterministic plan "
+                                     "answered instead.")
+            return rules
     if mismatch:
         alt = _ask_calc(message, df, memory, f"the planned tool computed a different quantity: {mismatch}", started,
                         sc=sc) if model_on else None
@@ -274,20 +627,34 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
     # with nothing to run): the model gets the calculator instead of the user getting a dead end.
     if model_on and not why_calc and (out["plan"].get("type") in ("decline", "chat") or out["plan_source"] == "rules") \
             and not any(c.get("status") == "ok" for c in out["calls"]):
+        # no deterministic path and no catalogue tool answered: the model plans an analysis program
+        alt = _ask_nl_program(message, df, memory, model_on, started, filename, late=True)
+        if alt is not None:
+            return alt
         alt = _ask_calc(message, df, memory, "the trained tool catalogue had no way to answer it", started,
-                        previous=out, sc=sc)
+                        previous=out, sc=sc) if memory.get("_model_spent_ms", 0) < MODEL_TURN_BUDGET_MS else None
         if alt is not None:
             out = alt
     if opts and any(c.get("tool") == "random_forest" for c in out["calls"]):
         out["notes"].insert(0, "Training options taken from your message: " + ", ".join(
             f"{'test share ' + format(v * 100, 'g') + '%' if k == 'test_size' else 'seed ' + str(v)}" for k, v in opts.items()) + ".")
     out = _after_failed(out, failed)
+    if model_on and not any(c.get("status") == "ok" for c in out.get("calls", [])) and \
+            out["plan"].get("type") not in ("clarify", "decline"):
+        # nothing computed an answer (e.g. the calculation plan failed its checks): the program planner, if not tried
+        alt = _ask_nl_program(message, df, memory, model_on, started, filename, late=True)
+        if alt is not None:
+            return alt
     if out["plan"].get("type") == "chat" and _VAGUE.search(out["answer"]):
         # a placeholder reply ("I'm not sure what to compute") is not an answer: use the dataset context instead
         out = _dataset_reply(message, df, memory, model_on, started, out)
+        why = memory.pop("_nl_unsupported", None)
+        if why:
+            out["answer"] += f"\n\n_The local model's reading of the request: {why}_"
     return out
 
 
+MODEL_TURN_BUDGET_MS = 12000          # model time after which a turn stops consulting further model paths
 _TREND_WORDS = re.compile(r"\b(trends?|over time|by (day|week|month|quarter)|daily|weekly|monthly|month by month)\b",
                           re.I)
 _VAGUE = re.compile(r"not sure what to compute|could you rephrase|I'm not sure|cannot help", re.I)
@@ -317,19 +684,74 @@ def _empty_result(r) -> bool:
     return "value" in r and r.get("value") is None
 
 
+_ANALYSIS_WORDS = set("""change changed changes come comes coming doesn don didn isn aren wasn different difference
+differences appear appears associated association factors factor identify important entire whole problems problem issues
+issue business days day weeks week months month years year hours hour time target targets goal goals risk risks
+missing team workload capacity absent absence explain explains why happen happens happened would will could
+increase increased decrease decreased costs cost operating trend trends pattern patterns unusual investigate possible
+explanations explanation recommend option options feasible better best worse worst others other next""".split())
+_STOPWORDS = set("""a an the and or but if then than that this these those it its he she him her his they them their we
+our you your i me my to of in on at by for with from as is are was were be been being do does did can could should would
+will may might must shall what which who whom whose when where why how all any each every some no not only just also very
+more most less least much many few other others same such own so too up down out over under again further once here there
+about against between into through during before after above below off now please show tell give make let lets get got
+analyse analyze analysis instead forget compare comparison result results previous scenario scenarios thing things data
+dataset file value values number numbers total average mean sum count""".split())
+_SWITCH = re.compile(r"\b(?:analy[sz]e|switch to|use|open|look at|work on|move to)\s+(?:the\s+)?([a-z][a-z_]+)"
+                     r"(?:\s+(?:data|dataset|file|sheet|table))?\s*(?:instead)?\b", re.I)
+_REFER = re.compile(r"\b(him|her|them|that|this|it|those|these|previous|earlier|last|the others|scenario|result|before)\b",
+                    re.I)
+
+
+def _concept_offer(words, df):
+    from app.analyst import semantics
+    for w in words:
+        c = semantics.concept_candidates(w, df)
+        if c:
+            return w, c[:3]
+    return None
+
+
 def _dataset_reply(message, df, memory, model_on, started, previous) -> dict:
-    from app.analyst import overview
-    ov = overview.understand(df)
-    sugg = ov["suggested_questions"][:4]
-    prev = memory.get("last_answer")
-    answer = ("I can answer that best with a concrete calculation or comparison on this dataset"
-              + (f" ({ov['rows']} records; columns: " + ", ".join(f"`{c}`" for c in df.columns[:12]) + ")") + ". "
-              "For example:\n\n" + "\n".join(f"- {q}" for q in sugg))
-    if prev:
-        answer += f"\n\nOr ask me to explain the previous answer (*{prev['question'][:80]}*) in simple terms."
-    out = _reply(answer, "conversation", model_on, started, notes=previous.get("notes", []) + [
-        "The question was not specific enough to compute; suggestions are based on this dataset's columns."])
-    return out
+    """Nothing could answer the message. Say specifically what could not be connected and to what -- the open
+    request, words that are not in this data, another dataset -- and how to go on; never a generic list."""
+    from app.analyst.calc import named_values
+    from app.analyst.data import find_column
+    words = [w for w in re.findall(r"[a-z]+", message.lower()) if len(w) > 3 and w not in _STOPWORDS
+             and w not in _ANALYSIS_WORDS]
+    known = {t for c in df.columns for t in re.split(r"[^a-z0-9]+", str(c).lower())} | {
+        w for _, v in named_values(df, message) for w in re.findall(r"[a-z]+", v.lower())}
+    unknown = [w for w in dict.fromkeys(words) if w not in known and w.rstrip("s") not in known and not find_column(df, w)]
+    parts = [f"I couldn't turn **“{message.strip()}”** into an analysis of this dataset."]
+    sw = _SWITCH.search(message)
+    refers = bool(_REFER.search(message)) and bool(memory.get("last_calc") or memory.get("last_answer"))
+    if sw and not find_column(df, sw.group(1)) and sw.group(1).lower() not in _STOPWORDS:
+        parts.append(f"This conversation works on the selected dataset ({len(df):,} records; columns "
+                     + ", ".join(f"`{c}`" for c in df.columns[:8]) + f"). To analyse **{sw.group(1)}**, choose that file in "
+                     "the **Dataset** selector — each dataset has its own conversation.")
+    elif unknown and not refers and _concept_offer(unknown, df):
+        offer = _concept_offer(unknown, df)
+        parts.append(f"This data has nothing called **{offer[0]}**, but " + " or ".join(f"`{c}`" for c in offer[1])
+                     + " may mean the same thing. Ask again using that column, for example with *" + offer[1][0] + "*.")
+    elif unknown and not refers:
+        parts.append("This data has nothing called " + ", ".join(f"**{w}**" for w in unknown[:3])
+                     + " (columns: " + ", ".join(f"`{c}`" for c in df.columns[:10]) + ").")
+    last = memory.get("last_calc")
+    if _REFER.search(message) and last:
+        res = last["result"]
+        parts.append(f"The current result is from *{last['question']}*: {present.calc_headline(res, last['question'])} "
+                     "You can narrow it (*only <name>*), break it down (*by <column>*), exclude duplicates, chart it or "
+                     "ask me to explain it.")
+    elif _REFER.search(message) and memory.get("last_answer"):
+        parts.append(f"The last answer was for *{memory['last_answer']['question'][:100]}*; I couldn't tell how your "
+                     "message relates to it. Say what to change, or ask me to explain it.")
+    else:
+        from app.analyst import overview
+        sugg = overview.understand(df)["suggested_questions"][:3]
+        parts.append("Which value and which groups or period? For example:\n\n" + "\n".join(f"- {q}" for q in sugg))
+    return _reply("\n\n".join(parts), "conversation", model_on, started, plan={"type": "chat", "fallback": True},
+                  notes=previous.get("notes", []) + ["Nothing could compute this message; Silt said what it could not "
+                                                     "connect instead of guessing."])
 
 
 def _whole_sentences(text: str) -> str:
@@ -376,7 +798,7 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
     answered = any(c.get("status") == "ok" for c in out.get("calls", []))
     if out.get("plan_source") not in ("conversation", "conversation_rules", "input_check"):
         checks = list(out.get("verification") or [])
-        if scoping.active(sc):
+        if scoping.active(sc) and out.get("plan_source") != "model_program":
             used = _records_used(out)
             n_scope = int(scoping.mask(df, sc).sum()) if df is not None else None
             ok = answered and (used is None or 0 < used <= (n_scope if n_scope is not None else used))
@@ -393,6 +815,7 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
                 answered = False
             if answered and "**Scope:**" not in out["answer"] and out.get("plan_source") not in ("model_calc",):
                 out["answer"] = f"**Scope:** {checks[-1]['detail']}.\n\n" + out["answer"]
+        checks += out.pop("_post_checks", [])     # answer verification (verify.py), after the path's own checks
         if checks:
             out["verification"] = checks
             out["details"] = (out.get("details") or "") + ("\n\n" if out.get("details") else "") + \
@@ -401,13 +824,17 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
         # a chart of the previous result, or an estimate built from it, is the same analysis: it replaces neither the
         # calculation that follow-ups like "Only Rahul." refine, nor the scope they keep
         redraw = answered and all(c.get("tool") in ("chart_of_previous_result", "chart_of_previous_answer",
-                                                    "next_record_estimate")
+                                                    "next_record_estimate", "compare_scenarios")
                                   for c in out.get("calls", []) if c.get("status") == "ok")
-        if answered and not redraw:
+        # an analysis-program turn that names nobody ("change the target to 320") works on the same people as before
+        keep_scope = out.get("plan_source") == "program" and not scoping.active(sc)
+        if answered and not redraw and not keep_scope:
             memory["scope"] = sc if scoping.active(sc) else None
             memory["last_analysis"] = "calc" if out.get("plan_source") in ("model_calc", "metric", "refine") else "other"
     evidence = [c.get("result") for c in out.get("calls", []) if c.get("status") == "ok"]
     followup.remember(memory, message, out, evidence[:3])
+    from app.analyst import register
+    register.record(memory, message, out)
     if out.get("charts") and out.get("plan_source") not in ("conversation", "conversation_rules"):
         memory["last_charts"] = {"question": message, "charts": out["charts"],
                                  "columns": sorted({str(c.get(k)) for c in out["charts"] for k in ("x", "y")})}
@@ -539,6 +966,30 @@ def _chart_from_last(message, df, memory, model_on, started) -> dict | None:
 
 
 # only a breakdown and nothing else: "show department totals", "totals by team", "averages per region please"
+_TARGET_Q = re.compile(r"\b(targets?|goals?|quotas?|at risk of (?:missing|not)|on track|fall(?:ing)? short|miss(?:ing)? "
+                       r"(?:their|the|his|her|its)?\s*(?:target|goal|quota))\b", re.I)
+
+
+def _ask_missing_target(message, df, memory, model_on, started) -> dict | None:
+    """A question about targets with no target to compare against: asked for, never answered with something else
+    (a monthly trend of another column is not 'at risk of missing targets')."""
+    from app.analyst.data import find_column
+    if not _TARGET_Q.search(message):
+        return None
+    if [c for c in df.columns if re.search(r"target|goal|quota|plan|budget|forecast", str(c), re.I)]:
+        return None                    # the data has a target column: other paths can compare against it
+    if re.search(r"\b\d+(?:[.,]\d+)?\b", message) or (memory.get("target") or {}).get("value"):
+        return None                    # a stated target: the feasibility path handles it
+    nums = [c for c in find_column(df, message) if df[c].dtype != object]
+    what = nums[0].replace("_", " ") if nums else "the measure"
+    return _reply(f"**What is the target?** This data has no target column, so I can't tell who is at risk without one. "
+                  f"Tell me the value and the period — for example *a monthly target of 160 hours per employee* or "
+                  f"*{what} of 500 per month* — and I'll compare each one's pace with it.", "tool", model_on, started,
+                  plan={"type": "clarify", "expects": "target"},
+                  notes=["The question needs a target the data does not contain; Silt asks rather than substituting "
+                         "another analysis."])
+
+
 _BARE_BREAKDOWN = re.compile(r"^\W*(?:(?:please|now|ok(?:ay)?|and|then|can you|could you)\s+)*(?:show|give|list|get|"
                              r"what are|display|see)?\s*(?:me\s+)?(?:the\s+)?(?:(?:[a-z_]+)\s+)?(?:totals?|sums?|"
                              r"averages?|breakdown|summary)(?:\s+(?:by|per|for each|for every|across)\s+(?:the\s+)?"
@@ -565,6 +1016,341 @@ def _ask_which_measure(message, df, model_on, started) -> dict | None:
                   + ", ".join(f"`{o}`" for o in opts[:8]) + ".", "tool", model_on, started,
                   plan={"type": "clarify", "options": opts[:8], "group_by": group},
                   notes=["The question names a breakdown but no measure; Silt asks rather than picking one."])
+
+
+_INVESTIGATE = re.compile(r"\b(?:analy[sz]e|investigate|audit|examine|explore|review|study|go through|look through|"
+                          r"dig into|scan)\b[^?]{0,30}\b(?:entire|whole|full|all|complete)?\s*(?:this|the|my)?\s*(?:data|dataset|"
+                          r"data ?set|file|table|spreadsheet)\b|\b(?:find|identify|discover|spot|surface|show)\b[^?]{0,25}"
+                          r"\b(?:important|key|main|biggest|major)?\s*(?:patterns|problems|issues|risks|insights|findings)\b|"
+                          r"\bwhat(?:'s| is| are)?\s+(?:wrong|going on|interesting|important)\b[^?]{0,20}\b(?:data|dataset|"
+                          r"here)\b", re.I)
+_FINDING = re.compile(r"\b(?:finding|point|item|issue|number|#)\s*(\d+)\b", re.I)
+_ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8,
+             "ninth": 9, "tenth": 10, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+             "eight": 8, "nine": 9, "ten": 10, "last": -1, "final": -1}
+_REF_NOUN = r"(?:things?|findings?|points?|items?|issues?|results?|patterns?|insights?|observations?|ones?)"
+_FINDING_WORD = re.compile(r"\b(?:finding|point|item|issue|number)\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b"
+                           r"|\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|final|"
+                           r"(\d+)(?:st|nd|rd|th))\s+(?:\w+\s+)?" + _REF_NOUN + r"\b", re.I)
+
+
+def finding_ref(message: str, n: int) -> int | None:
+    """Which stored finding a message points at, 1-based: 'finding 2', 'finding two', 'the second thing you found',
+    'the 3rd point', 'the last finding'. None when it names none; an index outside 1..n is returned as is (asked)."""
+    m = _FINDING.search(message)
+    if m:
+        return int(m.group(1))
+    m = _FINDING_WORD.search(message)
+    if not m:
+        return None
+    w = (m.group(1) or m.group(2)).lower()
+    i = int(m.group(3)) if m.group(3) else _ORDINALS[w]
+    return n if i == -1 else i
+
+
+def _ask_investigation(message, df, memory, model_on, started, filename) -> dict | None:
+    """'Analyse this entire dataset and identify important patterns': the investigation (app/analyst/investigate.py)
+    picks analyses that fit this data and reports evidence-backed findings. 'Tell me more about finding 2' and
+    'dig into finding 2' refer to them afterwards."""
+    from app.analyst import investigate
+    stored = memory.get("investigation")
+    fi = finding_ref(message, len(stored["findings"])) if stored else None
+    if stored and fi is not None:
+        i = fi
+        if not 1 <= i <= len(stored["findings"]):
+            return _reply(f"There are {len(stored['findings'])} findings; which one?", "tool", model_on, started,
+                          plan={"type": "clarify"})
+        x = stored["findings"][i - 1]
+        if re.search(r"\b(dig|investigate|analy[sz]e|drill|explore|run|check)\b", message, re.I):
+            return _dispatch(x["follow_up"], df, memory, model_on, filename, started, followup.chart_request(x["follow_up"]))
+        return _reply(investigate.detail(x, i), "program", model_on, started, plan={"type": "program", "objective": "finding"},
+                      calls=[{"tool": "investigation_finding", "status": "ok", "result": _jsonable(x)}])
+    if not _INVESTIGATE.search(message) or re.search(r"\b(trend|chart|plot|predict|forecast)\b", message, re.I):
+        return None
+    if [c for c in followup_cols(df, message)]:
+        return None                    # "analyse sales by region" names a column: an ordinary question
+    try:
+        r = investigate.investigate(df)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("investigation failed")
+        return _reply(f"**The investigation failed** ({type(e).__name__}: {e}). Nothing was estimated instead.", "tool",
+                      model_on, started, plan={"type": "error"})
+    memory["investigation"] = {"findings": r["findings"], "program": r["program"]}
+    memory["program"] = {"investigation": {"steps": r["program"], "results": r["results"]}}
+    charts = []
+    if r["findings"]:
+        charts = [{"type": "bar", "x": "finding", "y": "importance", "additive": False, "title": "Findings by importance",
+                   "data": [{"finding": f"{i}. {x['title'][:40]}", "importance": round(x["score"], 2)}
+                            for i, x in enumerate(r["findings"][:8], 1)]}]
+    details = "**Analysis program**\n" + "\n".join(
+        f"- `{st['id']}` **{st['op']}** " + ", ".join(f"{k}={v}" for k, v in st.items() if k not in ("id", "op"))
+        for st in r["program"])
+    return _reply(investigate.text(r, filename), "program", model_on, started,
+                  plan={"type": "program", "objective": "investigation"},
+                  calls=[{"tool": "analysis_program", "status": "ok",
+                          "result": {"objective": "investigation", "programs": {"": r["program"]},
+                                     "results": {"": r["results"]}, "findings": _jsonable(r["findings"])}}],
+                  charts=charts, details=details,
+                  notes=["Analyses were chosen from what the columns are (semantic profile) and run as one validated "
+                         "program; findings below a stated evidence bar are not reported."])
+
+
+_PERFORM = re.compile(r"\b(perform\w*|underperform\w*|doing (?:best|worst|badly|well|poorly)|struggl\w*|"
+                      r"(?:best|worst|weakest|strongest) (?:performer|performing|results?))\b|\b(?:best|worst)\b", re.I)
+
+
+def _undefined_performance(message, df) -> dict | None:
+    """{group, options} when the request ranks groups by an undefined notion of performance and names no measure."""
+    from app.analyst import intent, semantics
+    if not _PERFORM.search(message):
+        return None
+    try:
+        r = intent.read(message, df)
+    except Exception:  # noqa: BLE001
+        return None
+    if r.measures or not r.group or r.per or r.restrict:
+        return None
+    prof = semantics.profile(df)
+    opts = [c for c in prof["outcomes"] if c != r.group] + [c for c in prof["measures"] if c != r.group]
+    opts = list(dict.fromkeys(map(str, opts)))[:6]
+    return {"group": r.group, "options": opts} if len(opts) >= 2 else None
+
+
+def _ask_nl_program(message, df, memory, model_on, started, filename, late) -> dict | None:
+    """The local model plans an analysis program (app/analyst/nl_planner.py); Silt checks and runs it. None when the
+    model is unavailable, its plan failed the checks, or (before the deterministic handlers) it found the request
+    unsupported -- the deterministic paths then answer as before."""
+    if memory.get("_nl_tried") == message:
+        return None                    # one planning attempt per message (the late hook after the early one)
+    memory["_nl_tried"] = message
+    # a request whose every part is grounded gets its program without a model: the same checks, no inference wait
+    if not nl_planner.follow_up(message, memory):
+        out = _run_program(nl_planner.rule_plan(message, df, memory), message, df, memory, model_on, started,
+                           "rule_program", {"status": "rule"}, [])
+        if out is not None:
+            return out
+    p = nl_planner.plan(message, df, memory)
+    ms = sum(t.get("ms", 0) for t in p["trace"])
+    trace = {"attempts": len(p["trace"]), "model_ms": ms, "status": p["status"],
+             "rejected": [x for t in p["trace"] for x in t.get("problems", [])][:3],
+             "output": p["trace"][-1].get("output", "")[:3000] if p["trace"] else ""}
+    note = (f"Planned by the local model in {len(p['trace'])} attempt(s), {ms / 1000:.1f} s"
+            + (f"; Silt rejected a first plan ({trace['rejected'][0][:160]}) and the model corrected it"
+               if trace["rejected"] and p["status"] == "ok" else "") + ".")
+    memory["_nl_last"] = trace
+    memory["_model_spent_ms"] = memory.get("_model_spent_ms", 0) + ms
+    if p["status"] == "failed":
+        logger.info("model program planning failed: %s", p["reason"])
+        rp = nl_planner.rule_plan(message, df, memory)
+        return _run_program(rp, message, df, memory, model_on, started, "rule_program", trace,
+                            [note.rstrip(".") + "; its plan did not pass Silt's checks (" + p["reason"][:200]
+                             + "), so Silt built the program from the request itself."]) if rp else None
+    if p["status"] == "unsupported":
+        # the planner never turns a request into a decline on its own: the deterministic paths (and their checked
+        # declines) still answer; the reason is kept for the final fallback reply
+        memory["_nl_unsupported"] = p["reason"]
+        return None
+    if p["status"] == "clarify":
+        q = p["question"] + (("\n\nOptions: " + ", ".join(f"`{o}`" for o in p["options"])) if p["options"] else "")
+        return _reply(q, "model_program", model_on, started, plan={"type": "clarify", "options": p["options"],
+                                                                    "planner": trace},
+                      notes=[note, "Silt asks rather than guessing; nothing was calculated."])
+    if p["status"] == "reference":
+        if p["kind"] == "rerun":
+            key = "target" if p["key"] == "target" else "absence"
+            cmd = (f"change the target to {p['value']:g}" if key == "target" else f"change the absence to {int(p['value'])} days")
+            obj = objectives.handle(cmd, df, memory, None)
+            if obj is None:
+                return None
+            obj["notes"].insert(0, f"The local model read this as a change to the open analysis ({cmd}); Silt re-ran it.")
+            return _reply(obj["answer"], "model_program", model_on, started, plan={**obj["plan"], "planner": trace},
+                          calls=obj["calls"], charts=obj["charts"], notes=obj["notes"] + [note],
+                          details=obj.get("details", ""))
+        if p["kind"] == "compare":
+            hist = memory["objectives"]
+            obj = objectives._compare_scenarios(hist[p["a"] - 1], hist[p["b"] - 1])  # noqa: SLF001
+            return _reply(obj["answer"], "model_program", model_on, started, plan={**obj["plan"], "planner": trace},
+                          calls=obj["calls"], charts=obj["charts"],
+                          notes=[f"The local model read this as comparing analyses {p['a']} and {p['b']}."] + obj["notes"] + [note])
+        if p["kind"] == "finding":
+            verb = "dig into" if p["mode"] == "dig" else "tell me more about"
+            out = _ask_investigation(f"{verb} finding {p['n']}", df, memory, model_on, started, filename)
+            if out is not None:
+                out["notes"].insert(0, f"The local model read this as being about finding {p['n']}.")
+                out["plan"] = {**out.get("plan", {}), "planner": trace}
+            return out
+        return None
+    out = _run_program(p, message, df, memory, model_on, started, "model_program", trace,
+                       [note, "The model only wrote the plan; every step was validated and computed by Silt from the "
+                              "records. The steps are under *How this was calculated*."])
+    if out is None:
+        failed_check = memory.pop("_verify_failed", None)
+        memory["_nl_last"] = {**trace, "status": "verify_failed" if failed_check else "run_failed"}
+        if failed_check:
+            rp = nl_planner.rule_plan(message, df, memory)
+            out = _run_program(rp, message, df, memory, model_on, started, "rule_program", memory["_nl_last"],
+                               [note.rstrip(".") + "; its program did not pass Silt's answer verification ("
+                                + "; ".join(c["detail"] for c in failed_check["checks"] if not c["ok"])[:200]
+                                + "), so Silt built the program from the request itself."]) if rp else None
+    return out
+
+
+def _run_program(p, message, df, memory, model_on, started, source, trace, notes) -> dict | None:
+    """Run a checked program (planned by the model, or built from the request) and present it."""
+    if not p:
+        return None
+    try:
+        r = nl_planner.execute(p, df, memory, message)
+    except P.ProgramError as e:
+        logger.info("analysis program failed at run time: %s", e)
+        return None
+    from app.analyst import verify
+    # the question's scope (a named value, a year column value, a month) is part of what the figure must be computed
+    # over: a program that leaves it out does not answer the question
+    v = verify.check(message, df, r["steps"], r["results"], scope=memory.get("_scope"))
+    if v["status"] == "failed":
+        # the program ran but does not answer the request, or its figure differs from an independent recomputation:
+        # not shown; the next path (Silt's own program, or its other handlers) answers instead
+        logger.info("verification failed for %s: %s", source, [c["detail"] for c in v["checks"] if not c["ok"]])
+        memory["_verify_failed"] = {"source": source, "checks": v["checks"]}
+        memory.get("planned", {}).pop(r["name"], None)
+        return None
+    if source == "rule_program" and not notes:
+        notes = ["Built by Silt from the request's parts (measure, grouping, comparison, why) without a model; every "
+                 "step was validated and computed from the records."]
+    return _reply(r["answer"], source, model_on, started, verification=v["checks"],
+                  plan={"type": "program", "objective": "model_planned" if source == "model_program" else "rule_planned",
+                        "planner": trace},
+                  calls=[{"tool": "analysis_program", "status": "ok",
+                          "result": {"objective": "model_planned" if source == "model_program" else "rule_planned",
+                                     "programs": {"": r["steps"]}, "results": {"": r["results"]}, "name": r["name"]}}],
+                  charts=r["charts"], details=r["details"], notes=notes)
+
+
+def followup_cols(df, message):
+    """Columns the message names as whole words ("analyse sales by region"), not by fuzzy similarity ("dataset" is
+    not the column date)."""
+    from app.analyst.data import _words
+    low = " " + re.sub(r"[^a-z0-9]+", " ", message.lower()) + " "
+    out = []
+    for c in df.columns:
+        w = re.sub(r"[^a-z0-9]+", " ", _words(str(c))).strip()
+        if w and re.search(rf" {re.escape(w)}s? ", low):
+            out.append(c)
+    return out
+
+
+_ASSOC = re.compile(r"\b(?:factors?|drivers?|variables?|columns?|features?|things?|what)\b[^?]{0,40}?\b(?:associated|"
+                    r"related|linked|correlated|connected|tied)\s+(?:with|to)\s+(.+)|\b(?:what|which)\s+(?:\w+\s+){0,2}?(?:best\s+)?"
+                    r"(?:affects?|influences?|drives?|explains?|predicts?|determines?|impacts?)\s+(.+)|"
+                    r"\b(?:drivers|predictors|determinants|causes) of\s+(.+)", re.I)
+
+
+def _ask_associations(message, df, memory, model_on, started) -> dict | None:
+    """'Which factors are associated with progression?': measured directly (correlation, eta squared, Cramer's V),
+    no model needed. When a model was trained in this conversation, its feature importance remains available."""
+    from app.analyst import associations
+    from app.analyst.data import find_column
+    m = _ASSOC.search(message)
+    if not m or re.search(r"feature importance|the model|trained", message, re.I):
+        return None
+    tail = next(g for g in m.groups() if g)
+    cols = find_column(df, tail)
+    if not cols:
+        from app.analyst import semantics
+        words = re.findall(r"[a-z]+", tail.lower())
+        words = sorted(words, key=lambda w: not semantics.outcome_concept(w))   # outcome words (quitting) first
+        offers = [c for w in words for c in semantics.concept_candidates(w, df)]
+        offers = list(dict.fromkeys(offers))
+        if offers:
+            return _reply(f"This data has nothing called *{tail.strip(' ?.')}*. Do you mean " + " or ".join(f"`{c}`" for c in offers[:3])
+                          + "? Options: " + ", ".join(f"`{c}`" for c in offers[:3]), "tool", model_on, started,
+                          plan={"type": "clarify", "options": offers[:3]},
+                          notes=["A word in the question matches a column by meaning, not by name; Silt asks before "
+                                 "using it."])
+        return None
+    # the outcome is the head of the phrase: in "machine failure" it is failure, not machine
+    cols = followup.mentioned_order(cols, tail)[-1:] + [c for c in cols if c != followup.mentioned_order(cols, tail)[-1]]
+    sc = memory.get("_scope")
+    if sc and cols[0] in (sc.get("entities") or {}):
+        memory["_scope"] = {**sc, "entities": {k: v for k, v in sc["entities"].items() if k != cols[0]}}
+    r = associations.compute(df, cols[0])
+    chart = {"type": "bar", "x": "column", "y": "strength", "additive": False,
+             "title": f"Association with {cols[0]} (strength)",
+             "data": [{"column": x["factor"], "strength": x["strength"]} for x in r["factors"][:12]]}
+    return _reply(associations.text(r), "tool", model_on, started, charts=[chart] if r["factors"] else [],
+                  calls=[{"tool": "associations", "status": "ok", "result": _jsonable(r)}],
+                  notes=["Measured directly by Silt (correlation / eta squared / Cramér's V with Holm-adjusted p-values); "
+                         "no model was trained."])
+
+
+def _ask_compare_values(message, df, model_on, started) -> dict | None:
+    """'Compare life expectancy between Europe and Africa': two (or more) named values of one category, compared on a
+    measure with the existing statistical comparison, restricted to those groups."""
+    from app.analyst.data import find_column, kind_of
+    if not re.search(r"\b(compare|comparison|versus|vs\.?|difference between|differ)\b", message, re.I):
+        return None
+    hits = calc.named_values(df, message)
+    by_col: dict[str, list[str]] = {}
+    for c, v in hits:
+        by_col.setdefault(c, []).append(v)
+    pick = [(c, v) for c, v in by_col.items() if len(v) >= 2 and kind_of(df[c]) == "categorical"]
+    if len(pick) != 1:
+        return None
+    col, vals = pick[0]
+    nums = [c for c in find_column(df, message) if kind_of(df[c]) == "numeric" and c != col]
+    if not nums:
+        return None
+    sub = df[df[col].astype(str).isin(vals)]
+    try:
+        r = tools.run({"tool": "compare_groups", "args": {"outcome": nums[0], "group": col}}, sub, {})
+    except Exception:  # noqa: BLE001
+        return None
+    return _reply(explain.render("compare_groups", r), "tool", model_on, started,
+                  charts=present.charts("compare_groups", r),
+                  calls=[{"tool": "compare_groups", "status": "ok", "result": _jsonable(r)}],
+                  notes=[f"Compared only the {col.replace('_', ' ')} values you named: " + ", ".join(vals) + "."])
+
+
+_WHICH_TOP = re.compile(r"\bwhich\s+([a-z]+)\s+(?:has|had|have|is|was|shows?|got|gets)\s+(?:the\s+)?(highest|lowest|"
+                        r"largest|smallest|biggest|best|worst|most|least|greatest)\b", re.I)
+
+
+def _ask_compare_columns(message, df, model_on, started) -> dict | None:
+    """Wide data -- one column per stock, product or site -- asked 'which stock had the highest average price?':
+    the noun names no column, so the numeric columns themselves are the things compared. Said explicitly."""
+    from app.analyst.data import find_column, kind_of
+    from app.analyst.scope import year_column
+    m = _WHICH_TOP.search(message)
+    if not m:
+        return None
+    noun = m.group(1).lower()
+    if metrics.group_column(message, df)[0] or find_column(df, noun) or metrics.recognise(message):
+        return None
+    yc = year_column(df)
+    cols = [c for c in df.columns if kind_of(df[c]) == "numeric" and c != yc and not re.search(r"(^|_)id$", str(c), re.I)
+            and df[c].nunique() > 2]
+    if len(cols) < 2 or [c for c in find_column(df, message) if c in cols]:
+        return None
+    agg = "sum" if re.search(r"\b(total|sum|overall)\b", message, re.I) else \
+        "median" if re.search(r"median", message, re.I) else "max" if re.search(r"\b(peak|maximum|max)\b", message, re.I) else "mean"
+    vals = {c: float(getattr(pd.to_numeric(df[c], errors="coerce"), agg)()) for c in cols}
+    low = m.group(2).lower() in ("lowest", "smallest", "worst", "least")
+    order = sorted(vals.items(), key=lambda kv: kv[1], reverse=not low)
+    word = {"mean": "average", "sum": "total", "median": "median", "max": "maximum"}[agg]
+    from app.analyst.explain import f
+    lines = [f"**{order[0][0]}** has the {'lowest' if low else 'highest'} {word} value: **{f(order[0][1])}** "
+             f"({order[-1][0]} has the {'highest' if low else 'lowest'}: {f(order[-1][1])}).", "",
+             f"| {noun} (column) | {word} | records |", "|---|---:|---:|"]
+    lines += [f"| {c} | {f(v)} | {int(pd.to_numeric(df[c], errors='coerce').notna().sum())} |" for c, v in order]
+    lines += ["", f"_No column names the {noun}s, so each numeric column was treated as one {noun} ("
+              + ", ".join(cols[:8]) + ("…" if len(cols) > 8 else "") + "). They are compared as recorded — check they "
+              "are in the same units._"]
+    chart = {"type": "bar", "x": noun, "y": word, "additive": agg == "sum",
+             "title": f"{word.capitalize()} by {noun}", "data": [{noun: c, word: v} for c, v in order]}
+    return _reply("\n".join(lines), "tool", model_on, started, charts=[chart],
+                  calls=[{"tool": "compare_columns", "status": "ok", "result": {"aggregation": agg, "values": vals}}],
+                  notes=[f"Compared the numeric columns as {noun}s ({word} of each)."])
 
 
 def _per_record(last: dict, df: pd.DataFrame, sc: dict | None) -> dict | None:
@@ -648,7 +1434,8 @@ def _chart_from_previous_answer(message, df, memory, kind, model_on, started) ->
     """'Show that as a pie chart' after any answer that had a chart (a comparison, a trend, a ranking): redraw the same
     computed values as the requested type. Only when the question refers back and names nothing new."""
     prev = memory.get("last_charts")
-    if not prev or not re.search(r"\b(that|it|this|these|those|them|same|the (result|answer|previous))\b", message, re.I):
+    if not prev or not re.search(r"\b(that|it|this|these|those|them|same|the (result|answer|previous|difference|"
+                                 r"differences|comparison|gap|change|changes))\b", message, re.I):
         return None
     from app.analyst.data import find_column
     if calc.named_values(df, message) or [m for m in calc._STRONG.finditer(message)] or (  # noqa: SLF001
@@ -1177,7 +1964,7 @@ def _ask_metric(message: str, df: pd.DataFrame, memory: dict, model_on: bool, st
     definition is resolved against this data's columns and run by the calculator. No language model is needed; when
     an input is missing or ambiguous the user is asked, and no other quantity is substituted."""
     p = metrics.plan(message, df) or metrics.count_plan(message, df) or metrics.formula_plan(message, df) \
-        or metrics.event_rate_plan(message, df)
+        or metrics.threshold_plan(message, df) or metrics.share_plan(message, df) or metrics.event_rate_plan(message, df)
     if p is None:
         return None
     if not p.clarify:
@@ -1198,6 +1985,10 @@ def _ask_metric(message: str, df: pd.DataFrame, memory: dict, model_on: bool, st
                       notes=[f"Silt recognised the metric **{p.label}** but could not resolve its inputs in this data "
                              "without guessing, so nothing was calculated."])
     spec = p.spec
+    if p.event_col and sc and p.event_col in (sc.get("entities") or {}):
+        # "share of visits at Clinic B": Clinic B is what is counted, not a filter on the records
+        sc = {**sc, "entities": {k: v for k, v in sc["entities"].items() if k != p.event_col}}
+        memory["_scope"] = sc
     notes = ([f"**{p.label}** is not a column of this data, so Silt derived it with its standard definition: "
               f"{p.definition}. The calculation was resolved and run by Silt's deterministic calculator — no language "
               "model was needed."] if metrics.recognise(message) else

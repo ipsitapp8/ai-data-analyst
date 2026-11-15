@@ -203,12 +203,37 @@ def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
         return {"type": "tools", "intent": "group_comparison", "calls": [
             {"tool": "compute_metric", "args": {"aggregation": agg, "column": num_cols[0], "group_by": cat_cols[0], "order": order}},
             {"tool": "compare_groups", "args": {"outcome": num_cols[0], "group": cat_cols[0]}}]}
-    agg = next((a for pat, a in ((r"average|mean", "avg"), (r"median", "median"), (r"total|sum", "sum"),
+    agg = next((a for pat, a in ((r"averages?|means?", "avg"), (r"medians?", "median"), (r"totals?|sums?", "sum"),
                                   (r"maximum|max|highest|largest", "max"), (r"minimum|min|lowest|smallest", "min"))
                 if re.search(rf"\b(?:{pat})\b", low)), None)
+    by = re.search(r"\b(by|per|for each|across|for every|in each)\b", low)
+    if not by:
+        # "how many visitors does each outlet get": a category named right after "each" is the breakdown
+        ea = re.search(r"\beach\s+([a-z][a-z_]*)", low)
+        if ea and [c for c in find_column(df, ea.group(1)) if kind_of(df[c]) == "categorical"]:
+            by = re.search(r"\beach\b", low)
+    if not by:
+        # "day totals", "region averages": the word before totals/averages names the breakdown
+        nt = re.search(r"\b([a-z][a-z_]*)\s+(?:totals|averages|sums|breakdown)\b", low)
+        if nt and [c for c in find_column(df, nt.group(1)) if kind_of(df[c]) == "categorical"
+                   or (kind_of(df[c]) == "numeric" and df[c].nunique() <= 50)]:
+            by = re.search(re.escape(nt.group(1)), low)
+            by = type("M", (), {"end": lambda self, b=by: b.start()})()
+    if agg and by:
+        # the column after "by" is the breakdown -- a category, or a number with few distinct values (an hour, a
+        # year, a rating) -- and not the measure
+        from app.analyst.followup import mentioned_order
+        tail = low[by.end():]
+        after = mentioned_order([c for c in find_column(df, tail)
+                                 if kind_of(df[c]) == "categorical" or (kind_of(df[c]) == "numeric" and df[c].nunique() <= 50)],
+                                tail)
+        if after and kind_of(df[after[0]]) == "numeric" and not [c for c in num_cols if c != after[0]]:
+            after = []                  # the only number named is the measure, not the breakdown
+        if after:
+            cat_cols = [after[0]] + [c for c in cat_cols if c != after[0]]
+            num_cols = [c for c in num_cols if c != after[0]]
     if agg and num_cols:
         args = {"aggregation": agg, "column": num_cols[0]}
-        by = re.search(r"\b(by|per|for each|across)\b", low)
         if by and cat_cols:
             args["group_by"] = cat_cols[0]
         return {"type": "tools", "intent": "metric", "calls": [{"tool": "compute_metric", "args": args}]}
