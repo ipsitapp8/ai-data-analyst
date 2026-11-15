@@ -145,9 +145,23 @@ def core(result: dict) -> dict:
     return clean_json({k: v for k, v in result.items() if k not in VOLATILE})
 
 
-def seal(request: dict, result_core: dict) -> str:
-    body = json.dumps({"request": clean_json(request), "result": result_core}, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return hashlib.sha256(body.encode()).hexdigest()
+def context_of(model_sha256: str | None, dataset_id: int | None, dataset_version_id: int | None, dataset_sha256: str | None,
+               engine_versions: dict | None) -> dict:
+    """What a result depended on besides the request: the custom model's definition hash, the dataset version and its content hash, and the
+    engine versions. It is sealed with the request and result, so changing any of it afterwards is detected."""
+    return {"model_sha256": model_sha256, "dataset": {"dataset_id": dataset_id, "dataset_version_id": dataset_version_id, "content_sha256": dataset_sha256},
+            "engine_versions": engine_versions or {}}
+
+
+def seal(request: dict, result_core: dict, context: dict | None = None) -> str:
+    doc = {"request": clean_json(request), "result": result_core}
+    if context is not None:
+        doc["context"] = clean_json(context)
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def row_context(row: ScenarioEvidence) -> dict:
+    return context_of(row.model_sha256, row.dataset_id, row.dataset_version_id, row.dataset_sha256, row.engine_versions_json)
 
 
 def compute(kind: str, model: "str | dict", request: dict) -> dict:
@@ -188,13 +202,16 @@ def create(db: Session, *, team_id: int, user_id: int | None, kind: str, model_r
     spec = scenarios._model(model)  # noqa: SLF001
     seed = (result.get("config") or {}).get("seed") if kind == "simulation" else None
     stored_request = {**clean_json(request), **({"seed": seed} if seed is not None else {}), "model": scenarios.model_key(model)}
+    versions = _versions(result)
+    model_hash = spec["custom"]["definition_sha256"] if "custom" in spec else None
+    context = context_of(model_hash, (dataset or {}).get("dataset_id"), (dataset or {}).get("dataset_version_id"), (dataset or {}).get("content_sha256"), versions)
     row = ScenarioEvidence(
         team_id=team_id, scenario_id=scenario_id, kind=kind, model_ref=scenarios.model_key(model),
         model_sha256=spec["custom"]["definition_sha256"] if "custom" in spec else None,
         dataset_id=(dataset or {}).get("dataset_id"), dataset_version_id=(dataset or {}).get("dataset_version_id"),
         dataset_sha256=(dataset or {}).get("content_sha256"), request_json=stored_request, result_json=rc,
         verification_status=ver.get("status", "unverified"), verification_json=clean_json(ver),
-        engine_versions_json=_versions(result), seed=seed, content_sha256=seal(stored_request, rc), note=(note or "")[:500],
+        engine_versions_json=versions, seed=seed, content_sha256=seal(stored_request, rc, context), note=(note or "")[:500],
         created_by=user_id)
     db.add(row)
     return row
@@ -219,8 +236,9 @@ def reproduce(row: ScenarioEvidence, model: "str | dict") -> dict:
         request["seed"] = stored_seed
     now = core(compute(row.kind, model, request))
     stored_request = dict(row.request_json or {})
-    sealed_now = seal(stored_request, now)
-    stored_hash_ok = seal(stored_request, row.result_json or {}) == row.content_sha256          # the stored row itself is intact
+    context = row_context(row)
+    sealed_now = seal(stored_request, now, context)
+    stored_hash_ok = seal(stored_request, row.result_json or {}, context) == row.content_sha256          # the stored row itself is intact
     differences = [k for k in sorted(set(now) | set(row.result_json or {})) if now.get(k) != (row.result_json or {}).get(k)]
     reproduced = sealed_now == row.content_sha256 and stored_hash_ok and not differences     # a record that was altered never counts
     return {"evidence_id": row.id, "reproduced": reproduced, "record_intact": stored_hash_ok,

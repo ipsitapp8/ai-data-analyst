@@ -6,12 +6,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from api_client import (ApiError, compare_scenarios, delete_scenario, evaluate_scenarios, list_custom_models,
+from api_client import (ApiError, edit_scenario, evaluate_scenarios, list_custom_models,
                         list_datasets, list_scenarios, save_scenario, scenario_baseline, scenario_models)
 from style.theme import esc, html, page_header, page_setup, plot, render_sidebar, require_active_team
 from what_if_ask import ask_box
 from what_if_data import elasticity_panel
-from what_if_evidence import evidence_list, explanation_panel, inspector
+from what_if_evidence import explanation_panel, inspector
+from what_if_library import editing_banner, library_tab
 from what_if_grid import grid_section
 from what_if_models import builder_tab, model_choices
 from what_if_segments import segments_tab
@@ -41,6 +42,7 @@ build_tab, segments_tab_, periods_tab, models_tab, saved_tab = st.tabs(["Build a
 def render_build():
     model_key = st.selectbox("Model", list(models), format_func=lambda k: models[k]["title"], key="wi_model")
     model = models[model_key]
+    editing_banner()
     ask_slot = st.container()
     with st.expander("Formulas this model uses"):
         for f in model["formulas"]:
@@ -172,13 +174,32 @@ def render_build():
     goal_seek_section(model_key, model, baseline, assumptions, adjustments)
     grid_section(model_key, model, baseline, assumptions, adjustments)
 
+    editing = st.session_state.get("wi_editing")
+    # What a save records about the data: a freshly taken baseline if there is one, otherwise what the opened scenario was built on.
+    if seed:
+        dataset_id, source = st.session_state.get("wi_dataset_id"), st.session_state.get("wi_baseline_source")
+    elif editing and editing["model"] == model_key:
+        dataset_id, source = editing["dataset_id"], editing["baseline_source"]
+    else:
+        dataset_id, source = None, None
+    record = {**payload, "dataset_id": dataset_id, **({"baseline_source": source} if dataset_id and source else {}),
+              **({"simulation": simulation_options} if simulation_options else {})}
+    if editing and editing["model"] == model_key:
+        u1, u2 = st.columns([3, 1])
+        new_name = u1.text_input("Name", value=editing["name"], key="wi_edit_name", max_chars=120, label_visibility="collapsed")
+        if u2.button("Update saved scenario", type="primary", key="wi_update", disabled=not new_name.strip()):
+            try:
+                edit_scenario(editing["id"], {**record, "name": new_name.strip()})
+                st.session_state.pop("wi_editing", None)
+                st.success("Updated. Earlier evidence for this scenario is kept.")
+                st.rerun()
+            except ApiError as e:
+                st.error(str(e))
     s1, s2 = st.columns([3, 1])
-    name = s1.text_input("Save as", key="wi_name", max_chars=120, label_visibility="collapsed", placeholder="Name this scenario to save it")
-    if s2.button("Save", type="primary", key="wi_save", disabled=not name.strip()):
+    name = s1.text_input("Save as", key="wi_name", max_chars=120, label_visibility="collapsed", placeholder="Name this scenario to save it as a new one")
+    if s2.button("Save as new", type="primary" if not editing else "secondary", key="wi_save", disabled=not name.strip()):
         try:
-            save_scenario({**payload, "name": name.strip(), "dataset_id": st.session_state.get("wi_dataset_id") if seed else None,
-                           **({"baseline_source": st.session_state["wi_baseline_source"]} if seed and st.session_state.get("wi_baseline_source") else {}),
-                           **({"simulation": simulation_options} if simulation_options else {})})
+            save_scenario({**record, "name": name.strip()})
             st.success("Saved.")
             st.rerun()
         except ApiError as e:
@@ -197,35 +218,4 @@ with models_tab:
     builder_tab(custom_models)
 
 with saved_tab:
-    if not saved:
-        html('<div class="ds-row-meta" style="padding:16px 0;">Nothing saved yet.</div>')
-    chosen = []
-    for s in saved:
-        c1, c2, c3 = st.columns([0.5, 5, 1])
-        if c1.checkbox("Select", key=f"wi_pick_{s['id']}", label_visibility="collapsed"):
-            chosen.append(s["id"])
-        base = s.get("baseline_primary")
-        c2.markdown(f"**{s['name']}** · {models.get(s['model'], {}).get('title', s['model'])} · baseline "
-                    f"{s.get('primary_output')}: {base:,.2f}" if base is not None else f"**{s['name']}**")
-        with c2.expander("Evidence"):
-            evidence_list(s["id"], f"wi_ev_{s['id']}")
-        if c3.button("Delete", key=f"wi_del_{s['id']}"):
-            try:
-                delete_scenario(s["id"])
-            except ApiError as e:
-                st.error(str(e))
-            st.rerun()
-    if len(chosen) >= 2:
-        try:
-            cmp = compare_scenarios(chosen)
-            rows = []
-            for item in cmp["items"]:
-                rows.append({"Saved as": item["name"], "Scenario": "baseline", **(item["baseline_outputs"] or {})})
-                for k, v in (item["scenarios"] or {}).items():
-                    rows.append({"Saved as": item["name"], "Scenario": k, **(v or {})})
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-            st.caption(cmp["disclaimer"])
-        except ApiError as e:
-            st.error(str(e))
-    elif saved:
-        st.caption("Tick two or more scenarios of the same model to compare them.")
+    library_tab(models, saved)
