@@ -11,8 +11,6 @@ short_description: Autonomous AI data analyst with a self-verifying Critic
 ---
 
 # Silt
-nAn autonomous AI data analyst (formerly DataSage).
-
 An autonomous AI agent that takes a raw CSV and a plain-English business question, and
 independently **plans → writes code → executes it (sandboxed) → self-corrects on errors →
 verifies its own conclusions → presents a dashboard with a full audit trail**.
