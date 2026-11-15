@@ -1403,3 +1403,31 @@ def test_what_if_saved_tab_empty_state_and_single_pick_hint(api, ws):
     sid = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]["id"]
     at.checkbox(key=f"wi_pick_{sid}").check().run()
     assert "Tick two or more scenarios" in text_of(at)
+
+
+# ------------------------------------------------------------------ home --
+
+def _home(ws) -> AppTest:
+    at = AppTest.from_file(str(FRONTEND_DIR / "Home.py"), default_timeout=60)
+    at.session_state["auth_user"] = {"id": 0, "email": ws["email"], "display_name": "T"}
+    at.session_state["auth_token"] = ws["token"]
+    at.session_state["active_team_id"] = ws["team"]
+    return at.run()
+
+
+def test_home_shows_live_counts_animated_and_suggestions_that_prefill_the_question(api, ws, monkeypatch):
+    import streamlit as st
+
+    went = []
+    monkeypatch.setattr(st, "switch_page", lambda target: went.append(target))
+    ask_and_run(api, ws, "Total revenue by region")
+    at = healthy(_home(ws))
+    page_html = " ".join(str(m.value) for m in at.markdown)
+    assert 'class="num h-count" style="--n:1"' in page_html, "the verified count is a real number, animated by CSS"
+    assert "h-cycle" in page_html and "Try asking" in page_html
+    chips = [b for b in at.button if b.key and b.key.startswith("chip_")]
+    assert chips, "suggested questions are buttons"
+    wanted = chips[0].label
+    chips[0].click().run()
+    assert at.session_state["prefill_question"] == wanted, "the Analyses page receives the chosen question"
+    assert went == ["pages/3_Analyses.py"]
