@@ -741,6 +741,22 @@ def sensitivity_grid(payload: dict) -> dict:
     return _post("/api/scenarios/sensitivity-grid", payload, timeout=60)
 
 
+def ask_scenario(payload: dict) -> dict:
+    return _post("/api/scenarios/ask", payload, timeout=60)
+
+
+def inspect_calculation(payload: dict) -> dict:
+    return _post("/api/scenarios/inspect", payload, timeout=60)
+
+
+def list_evidence(scenario_id: int | None = None) -> dict:
+    return _get("/api/scenario-evidence", scenario_id=scenario_id)
+
+
+def reproduce_evidence(evidence_id: int) -> dict:
+    return _post(f"/api/scenario-evidence/{evidence_id}/reproduce", timeout=120)
+
+
 def simulate_scenario(payload: dict) -> dict:
     return _post("/api/scenarios/simulate", payload, timeout=120)
 

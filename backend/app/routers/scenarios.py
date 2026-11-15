@@ -9,12 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app import metric_engine as me
-from app import (provenance, scenario_elasticity, scenario_model_store, scenario_models, scenario_segments, scenario_sensitivity,
+from app import (provenance, scenario_evidence, scenario_nl, scenario_service, scenario_elasticity, scenario_model_store, scenario_models, scenario_segments, scenario_sensitivity,
                  scenario_sim, scenario_solve, scenario_time, scenario_verify, scenarios)
 from app.database import get_db
 from app.dataset_versions import latest_version
-from app.models import DatasetVersion, Scenario, Team, User
+from app.models import DatasetVersion, Scenario, ScenarioEvidence, Team, User
 from app.routers._common import team_dataset
+from app import rate_limit
 from app.security import get_current_team, get_current_user
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
@@ -104,16 +105,10 @@ def resolve_model(db: Session, team: Team, ref: str):
 
 def _evaluate(req: EvaluateRequest, model) -> dict:
     try:
-        named = dict(req.scenarios)
-        if req.spread_pct is not None:
-            named = {**scenarios.standard_scenarios(model, req.spread_pct), **named}
-        out = scenarios.evaluate(model, req.baseline, named, req.assumptions, req.sensitivity_pct)
+        return scenario_service.evaluate(model, req.baseline, req.scenarios, req.assumptions, sensitivity_pct=req.sensitivity_pct,
+                                         spread_pct=req.spread_pct, assumption_sources=req.assumption_sources)
     except scenarios.ScenarioError as e:
         raise HTTPException(400, str(e)) from e
-    out["verification"] = scenario_verify.safe(scenario_verify.verify_evaluation, out, scenarios._model(model))
-    sources = {k: v for k, v in req.assumption_sources.items() if k in out["assumptions"]}
-    out["assumption_sources"] = {k: {"source": "manual", **v} if "source" not in v else v for k, v in sources.items()}
-    return out
 
 
 def _versioned_frame(db: Session, team: Team, dataset_id: int, version_number: int | None):
@@ -143,9 +138,10 @@ def _versioned_frame(db: Session, team: Team, dataset_id: int, version_number: i
 
 def _simulate(model, baseline: dict, assumptions: dict, opts: SimulationOptions) -> dict:
     try:
-        return scenario_sim.simulate(model, baseline, opts.adjustments, assumptions, opts.uncertainty,
-                                     opts.correlation, opts.iterations, opts.seed, opts.target_output,
-                                     opts.target_value, opts.target_direction)
+        return scenario_service.simulate(model, baseline, assumptions, adjustments=opts.adjustments, uncertainty=opts.uncertainty,
+                                         correlation=opts.correlation, iterations=opts.iterations, seed=opts.seed,
+                                         target_output=opts.target_output, target_value=opts.target_value,
+                                         target_direction=opts.target_direction)
     except scenarios.ScenarioError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -283,7 +279,7 @@ def segments(payload: SegmentsRequest, db: Session = Depends(get_db), user: User
         raise HTTPException(409, {"message": str(e), "candidates": e.candidates}) from e
     except (scenarios.ScenarioError, me.FormulaError) as e:
         raise HTTPException(400, str(e)) from e
-    return {**out, "period": scenario_time.describe_period(period, payload.date_column, int(len(scope)), df), "provenance": prov,
+    return {**scenario_service.explained(out), "period": scenario_time.describe_period(period, payload.date_column, int(len(scope)), df), "provenance": prov,
             "data_kinds": scenario_time.DATA_KINDS}
 
 
@@ -320,7 +316,7 @@ def compare_periods(payload: ComparePeriodsRequest, db: Session = Depends(get_db
     out["verification"] = scenario_verify.safe(scenario_verify.verify_period_comparison, out, scenarios._model(model))
     out["periods"] = {k: {"period": v["period"], "sources": v["sources"], "rows_used": v["rows_used"],
                           "baseline_verification": v["verification"]} for k, v in sides.items()}
-    return {**out, "provenance": prov}
+    return {**scenario_service.explained(out), "provenance": prov}
 
 
 @router.post("/evaluate")
@@ -355,7 +351,7 @@ def estimate_elasticity(payload: ElasticityRequest, db: Session = Depends(get_db
                                            exclude_outliers=payload.exclude_outliers, level=payload.level)
     except scenarios.ScenarioError as e:
         raise HTTPException(400, str(e)) from e
-    return {**out, "provenance": prov}
+    return {**scenario_service.explained(out), "provenance": prov}
 
 
 class GridRequest(BaseModel):
@@ -380,10 +376,91 @@ def sensitivity_grid(payload: GridRequest, db: Session = Depends(get_db), user: 
     crosses a threshold (break-even for profit at 0), independently verified."""
     model = resolve_model(db, team, payload.model)
     try:
-        return scenario_sensitivity.two_way(model, payload.baseline, payload.x_input, payload.y_input, payload.output,
-                                            adjustments=payload.adjustments, assumptions=payload.assumptions,
-                                            x_range=payload.x_range, y_range=payload.y_range, resolution=payload.resolution,
-                                            threshold=payload.threshold)
+        return scenario_service.grid(model, payload.baseline, payload.x_input, payload.y_input, payload.output,
+                                     adjustments=payload.adjustments, assumptions=payload.assumptions, x_range=payload.x_range,
+                                     y_range=payload.y_range, resolution=payload.resolution, threshold=payload.threshold)
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+class InspectRequest(EvaluateRequest):
+    scenario: str = Field(default="baseline", max_length=60)
+    output: str | None = Field(default=None, max_length=60)
+    persist: bool = False
+    dataset_id: int | None = None
+    dataset_version: int | None = Field(default=None, ge=1)
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/inspect")
+def inspect_calculation(payload: InspectRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+                        team: Team = Depends(get_current_team)):
+    """"How was this calculated?" for one output of the baseline or one scenario: formula, substituted values, every step,
+    inputs and their sources. The calculation is recomputed here from the request. With `persist`, a sealed evidence record
+    is stored as well."""
+    model = resolve_model(db, team, payload.model)
+    result = _evaluate(payload, model)
+    spec = scenarios._model(model)
+    output = payload.output or result["primary_output"]
+    if payload.scenario == "baseline":
+        inputs, adjustments = result["baseline"]["inputs"], {}
+    elif payload.scenario in result["scenarios"]:
+        inputs, adjustments = result["scenarios"][payload.scenario]["inputs"], result["scenarios"][payload.scenario]["adjustments"]
+    else:
+        raise HTTPException(400, f"There is no scenario '{payload.scenario}'. Available: baseline, {', '.join(result['scenarios'])}")
+    try:
+        tr = scenario_evidence.trace(model, result["baseline"]["inputs"], inputs, result["assumptions"], output, scenario=payload.scenario,
+                                     adjustments=adjustments, assumption_sources=result["assumption_sources"])
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+    out = {"trace": tr, "verification": result["verification"], "explanation": result["explanation"]}
+    if payload.persist:
+        out["evidence"] = _persist(db, team, user, "scenario", model, _evaluation_request(payload), payload.dataset_id, payload.dataset_version, payload.note)
+    return out
+
+
+def _evaluation_request(p: EvaluateRequest) -> dict:
+    return {"baseline": p.baseline, "scenarios": p.scenarios, "assumptions": p.assumptions, "sensitivity_pct": p.sensitivity_pct,
+            "spread_pct": p.spread_pct, "assumption_sources": p.assumption_sources}
+
+
+def _persist(db: Session, team: Team, user: User, kind: str, model, request: dict, dataset_id: int | None, dataset_version: int | None,
+             note: str = "", scenario_id: int | None = None) -> dict:
+    prov = None
+    if dataset_id is not None:
+        _, _, _, prov = _versioned_frame(db, team, dataset_id, dataset_version)
+        prov = {"dataset_id": prov["dataset_id"], "dataset_version_id": prov["dataset_version_id"], "content_sha256": prov["content_sha256"]}
+    try:
+        row = scenario_evidence.create(db, team_id=team.id, user_id=user.id, kind=kind, model_ref=scenarios.model_key(model), model=model,
+                                       request=request, scenario_id=scenario_id, dataset=prov, note=note)
+    except scenarios.ScenarioError as e:
+        raise HTTPException(400, str(e)) from e
+    db.commit()
+    db.refresh(row)
+    return scenario_evidence.out(row)
+
+
+class AskRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=scenario_nl.MAX_MESSAGE)
+    model: str
+    baseline: dict[str, float]
+    assumptions: dict[str, float] = {}
+    context: dict[str, Any] | None = None
+    use_model: bool = False
+
+
+@router.post("/ask")
+def ask(payload: AskRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+        team: Team = Depends(get_current_team)):
+    """A what-if question in plain words. The sentence is read into a structured request, validated, and run through the same
+    engines, checks and explanation as the form. Anything unclear comes back as a question. A language model is used only
+    if `use_model` is set, only to translate a sentence the rules could not read, and never supplies a number."""
+    model = resolve_model(db, team, payload.model)
+    if payload.use_model:
+        rate_limit.enforce(f"scenario-ask:{team.id}:{user.id}", 15, 60)
+    try:
+        return scenario_service.ask(model, payload.baseline, payload.assumptions, payload.message, payload.context,
+                                    use_model=payload.use_model)
     except scenarios.ScenarioError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -401,9 +478,9 @@ def goal_seek(payload: GoalSeekRequest, db: Session = Depends(get_db), user: Use
     """The value of one input that reaches a target output, found on the deterministic engine and verified."""
     model = resolve_model(db, team, payload.model)
     try:
-        return scenario_solve.goal_seek(model, payload.baseline, payload.target_output, payload.target_value,
-                                        payload.solve_for, payload.adjustments, payload.assumptions, payload.lower,
-                                        payload.upper, [c.model_dump() for c in payload.constraints])
+        return scenario_service.goal_seek(model, payload.baseline, payload.target_output, payload.target_value, payload.solve_for,
+                                          adjustments=payload.adjustments, assumptions=payload.assumptions, lower=payload.lower,
+                                          upper=payload.upper, constraints=[c.model_dump() for c in payload.constraints])
     except scenarios.ScenarioError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -441,6 +518,18 @@ def save_scenario(
                                      **({"simulation": sim_config} if sim_config else {})},
                    results_json=results, created_by=user.id)
     db.add(row)
+    db.flush()
+    prov = None
+    if payload.dataset_id is not None:
+        prov = {"dataset_id": source["provenance"]["dataset_id"], "dataset_version_id": source["provenance"]["dataset_version_id"],
+                "content_sha256": source["provenance"]["content_sha256"]}
+    scenario_evidence.create(db, team_id=team.id, user_id=user.id, kind="scenario", model_ref=scenarios.model_key(model), model=model,
+                             request=_evaluation_request(payload), scenario_id=row.id, dataset=prov, note="saved with the scenario")
+    if payload.simulation is not None:
+        scenario_evidence.create(db, team_id=team.id, user_id=user.id, kind="simulation", model_ref=scenarios.model_key(model), model=model,
+                                 request={"baseline": payload.baseline, "assumptions": results["assumptions"], **{
+                                     **payload.simulation.model_dump(), "seed": sim_config["seed"]}},
+                                 scenario_id=row.id, dataset=prov, note="saved with the scenario")
     db.commit()
     db.refresh(row)
     return _out(row)
@@ -510,5 +599,10 @@ def delete_scenario(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    db.delete(_owned(db, team, scenario_id))
+    row = _owned(db, team, scenario_id)
+    # Evidence records are append-only and outlive the scenario they were sealed for: they are detached from it, never deleted. (The link is a
+    # foreign key; Postgres refuses to delete a scenario that records still point at, SQLite does not check, so this is done explicitly.)
+    db.query(ScenarioEvidence).filter(ScenarioEvidence.team_id == team.id, ScenarioEvidence.scenario_id == row.id).update(
+        {ScenarioEvidence.scenario_id: None}, synchronize_session=False)
+    db.delete(row)
     db.commit()

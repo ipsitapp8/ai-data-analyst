@@ -10,7 +10,7 @@ import pandas as pd
 
 import re
 
-from app.analyst import business, calc, conversation, documents, explain, followup, intake, metrics, ml, plan_checks, planner, present, router, tools
+from app.analyst import business, calc, conversation, documents, explain, followup, intake, metrics, ml, plan_checks, planner, present, router, scenario_bridge, tools
 from app.analyst import scope as scoping
 
 logger = logging.getLogger(__name__)
@@ -110,6 +110,13 @@ def _reply(answer: str, source: str, model_on: bool, started: float, **extra) ->
 def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> dict:
     opts = router.ml_options(message)
     memory["_ml_options"] = opts
+    # 0. a follow-up to a what-if scenario in this conversation ("why did profit change?", "which input mattered most?") is
+    # explained from a fresh run of the shared what-if service, before the Copilot's own follow-up reading can take it.
+    if memory.get("scenario_context") and scenario_bridge.FOLLOW_UP.search(message):
+        followed = scenario_bridge.try_answer(message, df, memory, filename)
+        if followed is not None:
+            return _reply(followed["answer"], "tool", model_on, started, plan=followed["plan"], calls=followed["calls"],
+                          notes=followed["notes"], details=followed.get("details", ""))
     # 1. conversation about the previous answer, recommendations, "why is X doing badly?"
     kind = followup.intent(message, memory)
     if kind:
@@ -165,7 +172,9 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
             elif problem:
                 return _reply(f"**I can't show a trend of {m.label} here:** {problem}.", "metric", model_on, started,
                               plan={"type": "clarify"})
-    elif not (followup.wants_forecast(message) or re.search(r"\bpredict\w*\b", message, re.I) or _SCENARIO_Q.search(message)):
+    # A what-if or goal sentence goes to the shared what-if service further down, which declines (None) anything it cannot read cleanly.
+    elif not (followup.wants_forecast(message) or re.search(r"\bpredict\w*\b", message, re.I) or _SCENARIO_Q.search(message)
+              or scenario_bridge.TRIGGER.search(message)):
         out = _ask_metric(message, df, memory, model_on, started, sc)
         if out is not None:
             return out
@@ -196,6 +205,14 @@ def _dispatch(message, df, memory, model_on, filename, started, chart_kind) -> d
         out = _ask_forecast(message, df, memory, model_on, started, sc)
         if out is not None:
             return out
+    # A what-if or goal sentence about a dataset that fits a built-in model goes to the shared what-if service (the same one the
+    # What-If page uses). It acts only when the sentence reads cleanly on the model's own inputs; anything else returns None here
+    # and is answered exactly as it was before.
+    bridged = scenario_bridge.try_answer(message, dfs, memory, filename,
+                                         scope_note=(scoping.describe(sc, len(dfs), len(df)) if scoping.active(sc) else None))
+    if bridged is not None:
+        return _reply(bridged["answer"], "tool", model_on, started, plan=bridged["plan"], calls=bridged["calls"], notes=bridged["notes"],
+                      details=bridged.get("details", ""))
     routed = router.route(message, dfs, memory)
     # 4. "what if X changes by N%" where X feeds the result just computed: re-run that calculation
     if routed and routed.get("type") == "router" and routed["tool"] == "column_change":

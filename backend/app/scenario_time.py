@@ -159,6 +159,7 @@ def compare_periods(model: "str | dict", a: dict, b: dict, assumptions: dict | N
     return {"kind": "period_comparison", "data_kind": "historical_actual", "data_kinds": DATA_KINDS,
             "engine_version": TIME_VERSION, "model": scenarios.model_key(model), "title": spec["title"],
             "assumptions": assumptions, "primary_output": primary, "formulas": spec["formulas"],
+            "input_labels": {k: r["label"] for k, r in spec["inputs"].items()}, "output_labels": dict(spec["outputs"]),
             "a": {"inputs": a, "outputs": out_a}, "b": {"inputs": b, "outputs": out_b},
             "input_changes": {k: _change(a[k], b[k]) for k in a},
             "output_changes": scenarios._delta(out_a, out_b),  # noqa: SLF001
