@@ -45,6 +45,11 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.6-flash"
 # Bounded retry-with-backoff for the free tier's per-minute rate limit (429),
 # tried before failing over to Llama -- most 429s clear within a retry or two.
 GEMINI_RATE_LIMIT_RETRIES = int(os.getenv("GEMINI_RATE_LIMIT_RETRIES", "2"))
+# Gemini sometimes answers without the required structured output (an empty reply, prose, a malformed
+# function call), most often while it is overloaded. One more try on Gemini costs seconds and often succeeds,
+# where failing straight over to the backup model ends the run whenever the backup is not healthy.
+# Truncated, filtered, blocked and wrong-function replies are never retried: asking again does not change them.
+GEMINI_MALFORMED_RETRIES = int(os.getenv("GEMINI_MALFORMED_RETRIES", "1"))
 GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "30"))
 
 # --- Llama (Critic only) ---
