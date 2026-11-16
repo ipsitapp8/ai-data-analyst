@@ -32,7 +32,7 @@ import plotly.graph_objects as go
 PALETTES: dict[str, list[str]] = {
     # The dashboard's own data colours (style.theme.DASHBOARD_COLORWAY): the default, so a chart
     # re-drawn here matches the charts around it until a different palette is picked.
-    "Dashboard": ["#FF824D", "#FFD166", "#83D8C5", "#E87983", "#A6A2E8", "#61BDE0"],
+    "Dashboard": ["#A78BFA", "#F472B6", "#7DD3FC", "#FBBF24", "#6D5EFC", "#4ADE80"],
     "SILT": ["#4f8fe0", "#3fb87a", "#e0a83e", "#d1596b", "#9575cd", "#41b8c4"],
     "Light blue": ["#7cc4fa", "#4dabf7", "#a5d8ff", "#339af0", "#d0ebff", "#1c7ed6"],
     "Ocean": ["#0b84a5", "#4fb3bf", "#93d5db", "#1f5f8b", "#6ac1e5", "#2e86ab"],

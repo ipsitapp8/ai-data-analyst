@@ -10,7 +10,8 @@ import time
 import streamlit as st
 
 from api_client import ApiError, list_datasets, list_questions
-from home_dynamic import GENERIC_QUESTIONS, blob_dots, has_active_run, suggestions
+from hero_scene import SCENE_HTML
+from home_dynamic import GENERIC_QUESTIONS, has_active_run, suggestions
 from style.theme import esc, html, page_setup, render_sidebar, verdict_badge
 
 page_setup("Home")
@@ -90,20 +91,6 @@ def _steps() -> str:
 
 
 
-def _blob_html() -> str:
-    dots = "".join(
-        f'<span class="h-dot g{d["cluster"]}" style="--sx:{d["sx"]}%;--sy:{d["sy"]}%;--cx:{d["cx"]}%;--cy:{d["cy"]}%;'
-        f'--ex:{d["ex"]}%;--ey:{d["ey"]}%;--s:{d["size"]}px;--lag:-{d["lag"]}s;--wob:{d["wob"]}s"><i></i></span>'
-        for d in blob_dots())
-    return ('<div class="h-blob" aria-hidden="true">' + dots + '<div class="h-scan"></div></div>'
-            '<div class="h-phase" aria-hidden="true"><span>Raw data<small>unlabelled, messy</small></span>'
-            '<span>Evaluating<small>profiling, testing, cross-checking</small></span>'
-            '<span>Verified insight<small>one answer you can trust</small></span></div>')
-
-
-_BLOB = _blob_html()
-
-
 @st.fragment(run_every=_REFRESH if _has_team else None)
 def _hero_stage() -> None:
     datasets, questions = _load()
@@ -117,8 +104,6 @@ def _hero_stage() -> None:
     html(
         f"""
         <div class="h-stage">
-          <div class="h-orb"></div>
-          {_BLOB}
           <div class="h-float h-ask">
             <div class="h-ask-head"><div class="h-ask-ico">{I_SPARK}</div>
               <div class="h-ask-q"><small>Ask Silt</small>{esc(pool[0])}</div></div>
@@ -208,7 +193,9 @@ with st.container(key="home_hero"):
         html('<div class="h-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
              '<span>Fully auditable</span></div>')
     with right:
-        _hero_stage()
+        with st.container(key="home_stage"):
+            st.iframe(SCENE_HTML, height=470)   # canvas scene; cards below float over it
+            _hero_stage()
 
 # ------------------------------------------------------ capability strip --
 html(

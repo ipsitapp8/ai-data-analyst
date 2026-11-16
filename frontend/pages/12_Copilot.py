@@ -29,7 +29,7 @@ require_active_team("Silt Copilot")
 S = st.session_state
 S.setdefault("cp_convs", {})
 S.setdefault("cp_upload_n", 0)
-S.setdefault("cp_theme", "light")
+S["cp_theme"] = "dark"          # the site is one deep-indigo skin; the page no longer has a light mode
 st.markdown(ui.css(S["cp_theme"]), unsafe_allow_html=True)
 
 SOURCE = {"model": "Planned by the fine-tuned local model",
@@ -116,10 +116,6 @@ with h2:
     a, b = st.columns([3, 1])
     a.markdown(f"<div style='text-align:right;margin-top:6px'>{pill}<div class='cp-src'>{ident}</div></div>",
                unsafe_allow_html=True)
-    if b.button("☾" if S["cp_theme"] == "light" else "☀", key="cp_theme_btn",
-                help="Switch between light and dark theme"):
-        S["cp_theme"] = "dark" if S["cp_theme"] == "light" else "light"
-        st.rerun()
 
 left, main = st.columns([1, 3.4], gap="medium")
 

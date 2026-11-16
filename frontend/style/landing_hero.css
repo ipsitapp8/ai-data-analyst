@@ -1,0 +1,96 @@
+/* Landing hero: atmosphere, the intelligence-core stage, holographic agent panels, headline, buttons.
+   Palette is the existing Silt one: violet, lavender, pink, white on midnight indigo. Loaded after landing_indigo.css. */
+:root { --lp-px: 0; --lp-py: 0; --lp-mx: 70vw; --lp-my: 30vh; }
+
+/* ---- atmosphere: slow aurora, a cursor-following light, distant texture ---- */
+.stApp .lp-aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.stApp .lp-aurora i { position: absolute; border-radius: 50%; filter: blur(96px); mix-blend-mode: screen; will-change: transform; }
+.stApp .lp-aurora .a1 { width: 52vw; height: 40vw; left: -12vw; top: -14vw; background: radial-gradient(closest-side, rgba(124,92,255,.40), rgba(124,92,255,0)); animation: lp-au1 32s ease-in-out infinite; }
+.stApp .lp-aurora .a2 { width: 44vw; height: 36vw; right: -10vw; top: 4vh; background: radial-gradient(closest-side, rgba(244,114,182,.22), rgba(244,114,182,0)); animation: lp-au2 38s ease-in-out infinite; }
+.stApp .lp-aurora .a3 { width: 60vw; height: 34vw; left: 18vw; bottom: -18vw; background: radial-gradient(closest-side, rgba(99,102,241,.26), rgba(99,102,241,0)); animation: lp-au3 44s ease-in-out infinite; }
+@keyframes lp-au1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(9vw,7vh) scale(1.18); } }
+@keyframes lp-au2 { 0%,100% { transform: translate(0,0) scale(1.05); } 50% { transform: translate(-8vw,9vh) scale(.9); } }
+@keyframes lp-au3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-7vw,-8vh) scale(1.16); } }
+.stApp .lp-aurora::after { content: ""; position: absolute; inset: 0; opacity: .05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.stApp .lp-spot { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(460px circle at var(--lp-mx) var(--lp-my), rgba(196,181,253,.13), rgba(167,139,250,.05) 45%, transparent 70%); }
+/* the scene itself: a transparent canvas fixed behind the content (the iframe must declare the page's colour scheme to stay transparent) */
+.stApp .st-key-lp_scene { height: 0; overflow: visible; }
+.stApp .st-key-lp_scene iframe, .stApp .st-key-lp_scene [data-testid="stIFrame"] { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important;
+  z-index: 1 !important; pointer-events: none !important; border: 0 !important; background: transparent !important; color-scheme: dark !important; }
+
+/* ---- hero layout ---- */
+.stApp .lp-hero2 { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr); gap: 12px; align-items: center;
+  max-width: 1180px; margin: 0 auto; min-height: 100vh; padding: 13vh 0 5vh; font-family: 'Poppins', 'Inter', sans-serif; }
+.stApp .lp-hcopy { text-align: left; }
+.stApp .lp-kicker { display: inline-flex; align-items: center; gap: 10px; font-size: .72rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: #c4b5fd;
+  padding: 7px 14px 7px 12px; border-radius: 999px; background: rgba(60,40,150,.28); box-shadow: inset 0 0 0 1px rgba(196,181,253,.24); margin-bottom: 26px; animation: lp-rise .8s ease-out both; }
+.stApp .lp-kicker .dot { width: 6px; height: 6px; border-radius: 50%; background: #f0abfc; box-shadow: 0 0 12px #f472b6; animation: lp-dotp 2.4s ease-in-out infinite; }
+@keyframes lp-dotp { 50% { opacity: .35; transform: scale(.7); } }
+
+.stApp .lp-hero2 .lp-title { font-family: 'Poppins', 'Inter', sans-serif !important; text-align: left !important; max-width: 680px; margin: 0 0 24px !important; padding: 0 !important; color: #f4f0ff !important;
+  font-size: clamp(2.3rem, 4.25vw, 3.9rem) !important; line-height: 1.04 !important; letter-spacing: -.045em !important; font-weight: 700 !important; animation: lp-rise .9s .08s ease-out both; }
+.stApp .lp-title .l1 { display: block; font-size: .46em; font-weight: 500; letter-spacing: 0; color: #a9a3d6; margin-bottom: .55em; }
+.stApp .lp-title .grad { background: linear-gradient(100deg, #c4b5fd 0%, #a78bfa 28%, #f472b6 58%, #e9d5ff 82%, #c4b5fd 100%); background-size: 260% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent !important; -webkit-text-fill-color: transparent; animation: lp-grad 11s ease-in-out infinite alternate; }
+@keyframes lp-grad { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+.stApp .lp-hero2 .lp-sub { text-align: left !important; max-width: 520px !important; margin: 0 0 32px !important; color: #b6b0e0 !important; font-size: 1.06rem !important; line-height: 1.62 !important; animation: lp-rise .9s .2s ease-out both; }
+.stApp .lp-hero2 .lp-ctas { display: flex; gap: 14px; flex-wrap: wrap; justify-content: flex-start; animation: lp-rise .9s .32s ease-out both; }
+.stApp .lp-hero2 .lp-btn { position: relative; transition: transform .22s cubic-bezier(.2,.7,.2,1), box-shadow .3s, border-color .3s; will-change: transform; }
+.stApp .lp-hero2 .lp-btn.dark::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: linear-gradient(120deg, rgba(255,255,255,.0), rgba(255,255,255,.35), rgba(255,255,255,0)); background-size: 200% 100%; animation: lp-sheen 2.6s linear infinite; }
+.stApp .lp-hero2 .lp-btn.dark:hover::after { opacity: 1; }
+@keyframes lp-sheen { to { background-position: -200% 0; } }
+.stApp .lp-btn .arr { display: inline-block; transition: transform .28s cubic-bezier(.2,.7,.2,1); }
+.stApp .lp-btn:hover .arr { transform: translateX(6px); }
+.stApp .lp-hero2 .lp-btn.light:hover { border-color: rgba(216,200,255,.7) !important; box-shadow: 0 0 0 1px rgba(216,200,255,.35), 0 12px 34px rgba(124,92,255,.35) !important; }
+
+/* ---- the core stage and the three agent panels ---- */
+.stApp .lp-core-stage { position: relative; min-height: 600px; animation: lp-rise 1.1s .15s ease-out both; }
+.stApp .lp-panel { position: absolute; z-index: 3; width: 226px; padding: 13px 15px 14px; border-radius: 14px; text-align: left; color: #ece8ff;
+  background: linear-gradient(160deg, rgba(64,42,160,.36), rgba(22,14,66,.58));
+  box-shadow: inset 0 0 0 1px rgba(196,181,253,.20), 0 20px 44px rgba(4,2,22,.55);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transform: translate(calc(var(--lp-px) * var(--k, 12px)), calc(var(--lp-py) * var(--k, 12px)));
+  transition: box-shadow .6s, background .6s; animation: lp-pfloat 8s ease-in-out infinite; }
+.stApp .lp-panel::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; opacity: .5; transition: opacity .6s;
+  background: linear-gradient(135deg, rgba(255,255,255,.7), rgba(167,139,250,0) 42%, rgba(244,114,182,.55));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.stApp .lp-panel::after { content: ""; position: absolute; left: 14px; right: 14px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); opacity: .5; }
+.stApp .lp-panel.on { background: linear-gradient(160deg, rgba(84,56,200,.52), rgba(30,18,84,.66)); box-shadow: inset 0 0 0 1px rgba(226,212,255,.5), 0 0 40px rgba(167,139,250,.38), 0 20px 44px rgba(4,2,22,.55); }
+.stApp .lp-panel.on::before { opacity: 1; }
+.stApp .lp-p1 { left: -3%; top: 7%; --k: 14px; }
+.stApp .lp-p2 { right: -6%; top: 44%; --k: -16px; animation-delay: -2.7s; }
+.stApp .lp-p3 { left: 0; bottom: 5%; --k: 11px; animation-delay: -5.2s; }
+@keyframes lp-pfloat { 0%,100% { translate: 0 0; } 50% { translate: 0 -9px; } }
+.stApp .lp-ptag { display: flex; align-items: center; gap: 8px; font: 600 .6rem/1 ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: .18em; color: #c4b5fd; }
+.stApp .lp-ptag i { width: 6px; height: 6px; border-radius: 50%; background: #6b64a3; transition: background .4s, box-shadow .4s; }
+.stApp .lp-panel.on .lp-ptag i { background: #f0abfc; box-shadow: 0 0 10px #f472b6, 0 0 2px #fff; animation: lp-dotp 1.1s ease-in-out infinite; }
+.stApp .lp-ptitle { font-size: .96rem; font-weight: 600; letter-spacing: -.01em; margin: 9px 0 5px; color: #f4f0ff; }
+.stApp .lp-pline { font-size: .76rem; line-height: 1.45; color: #cfc8f5; } .stApp .lp-pline.lp-dim { color: #8f89c4; }
+.stApp .lp-pmeter { height: 2px; border-radius: 2px; margin-top: 11px; background: rgba(167,139,250,.2); overflow: hidden; }
+.stApp .lp-pmeter b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #a78bfa, #f472b6); transition: width 1.4s cubic-bezier(.2,.7,.2,1); }
+.stApp .lp-panel.on .lp-pmeter b { width: 100%; }
+.stApp .lp-core-cap { position: absolute; left: 0; right: 0; bottom: -4px; text-align: center; font: 500 .66rem/1.4 ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: .08em; color: #7d77ad; }
+
+/* strip and sections sit above the fixed layers */
+.stApp .lp-strip, .stApp .lp-sec, .stApp .lp-final { position: relative; z-index: 2; }
+
+/* ---- small screens: copy first, then the core, panels stacked under it ---- */
+@media (max-width: 980px) {
+  .stApp .lp-hero2 { grid-template-columns: 1fr; min-height: 0; padding: 14vh 0 4vh; gap: 20px; }
+  .stApp .lp-core-stage { min-height: 0; padding-top: 360px; display: flex; flex-direction: column; gap: 10px; }
+  .stApp .lp-panel { position: relative; inset: auto; width: auto; padding: 11px 14px 12px; animation: none; transform: none; }
+  .stApp .lp-core-cap { position: static; margin-top: 4px; }
+}
+@media (max-width: 520px) { .stApp .lp-pline.lp-dim { display: none; } .stApp .lp-core-stage { padding-top: 330px; } }
+
+/* the fixed nav gets a soft fade so content never collides with it while scrolling */
+.stApp .lp-nav::before { content: ""; position: absolute; inset: -14px -50vw 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(11,8,32,.92) 35%, rgba(11,8,32,0)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .stApp .lp-aurora i, .stApp .lp-title .grad, .stApp .lp-panel, .stApp .lp-kicker, .stApp .lp-kicker .dot, .stApp .lp-hero2 .lp-btn.dark::after,
+  .stApp .lp-hero2 .lp-title, .stApp .lp-hero2 .lp-sub, .stApp .lp-hero2 .lp-ctas, .stApp .lp-core-stage { animation: none !important; }
+  .stApp .lp-title .grad { background-position: 40% 50%; }
+}
