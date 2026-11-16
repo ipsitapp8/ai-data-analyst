@@ -91,12 +91,37 @@ def _hinted(message: str, names: list[str]) -> list[str]:
 
 def _referenced(message: str, df: pd.DataFrame, col: str) -> list[str]:
     """Columns the question uses: named outright, or through a value of theirs written as in the data."""
+    return _references(message, df, col)[0]
+
+
+def _references(message: str, df: pd.DataFrame, col: str) -> tuple[list[str], list[str]]:
+    """(every column the question may use, the ones it names firmly). Firm: the column's own name ("revenue",
+    "region") or a value written as in the data. A looser match -- one word of a longer name, "margin" in "profit
+    margin" finding `Margin %` -- is kept for the list but does not decide which table answers."""
     from app.analyst.calc import named_values
     from app.analyst.data import find_column
-    from app.analyst.scope import _lowercase_word_only
-    cols = [c for c in find_column(df, message) if c != col]
-    cols += [c for c, v in named_values(df, message) if c != col and not _lowercase_word_only(message, c, v)]
-    return list(dict.fromkeys(cols))
+    from app.analyst.scope import _lowercase_word_only, column_named
+    found = [c for c in find_column(df, message) if c != col]
+    vals = [c for c, v in named_values(df, message) if c != col and not _lowercase_word_only(message, c, v)]
+    cols = list(dict.fromkeys(found + vals))
+    firm = [c for c in cols if c in vals or column_named(message, c) or _says(message, c)]
+    return cols, firm
+
+
+def _says(message: str, col: str) -> bool:
+    """The question writes the column's whole name, also one ending in a symbol ("margin %", "discount %")."""
+    name = re.sub(r"[_\s]+", " ", str(col)).strip().lower()
+    return bool(name) and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", re.sub(r"[_\s]+", " ", message.lower())) is not None
+
+
+def _weak_name(message: str, table: str) -> bool:
+    """`table` is named only as an everyday word: one word, written in lower case, without "table" beside it
+    ("the top five customers" -- not "Customers", not "the customers table"). Such a word names the table only
+    when that table has the columns the question uses."""
+    p = _phrase(table)
+    if " " in p or re.search(rf"\b{re.escape(table)}\b", message):
+        return False
+    return not re.search(rf"\b{re.escape(p)}\s+table\b|\btable\s+{re.escape(p)}\b", message.lower())
 
 
 def subset(df: pd.DataFrame, col: str, table: str) -> pd.DataFrame:
@@ -154,9 +179,12 @@ def select(message: str, df: pd.DataFrame, memory: dict) -> dict | None:
     sizes = tables(df, col)
     names = list(sizes)
     named = named_tables(message, names)
-    refs = _referenced(message, df, col)
+    every, firm = _references(message, df, col)
+    # the table is chosen by the columns the question names firmly; loose matches decide only when there are none
+    refs = firm or every
     filled = {t: set(df.columns[df[df[col].astype(str) == t].notna().any()]) for t in names}
     fits = [t for t in names if refs and all(r in filled[t] for r in refs)]
+    named = [t for t in named if not (_weak_name(message, t) and refs and t not in fits)]
     prev = (memory.get("logical_table") or {}).get("table")
     if len(named) == 1:
         return {"column": col, "table": named[0], "how": "named", "outside": outside(message, df, col, named[0])}
@@ -181,6 +209,15 @@ def select(message: str, df: pd.DataFrame, memory: dict) -> dict | None:
                            + ", ".join(f"**{t}** ({sizes[t]:,} records)" for t in fits)
                            + ". Which table should I use? I won't add them together, because they are different "
                              "kinds of records."}
+    if refs and prev in names:
+        # no table has every column named: a follow-up stays on the conversation's table when no other table covers
+        # more of them ("number of orders" names `Orders` of another table but counts this table's records); the
+        # columns it lacks are said, not used
+        cover = {t: sum(r in filled[t] for r in refs) for t in names}
+        if cover[prev] and cover[prev] == max(cover.values()):
+            lacking = [r for r in refs if r not in filled[prev]]
+            return {"column": col, "table": prev, "how": "previous", "lacking": lacking,
+                    "outside": [o for o in outside(message, df, col, prev) if not o["named"]]}
     if refs:
         where = {r: [t for t in names if r in filled[t]] for r in refs}
         split = "; ".join(f"`{r}` is in {', '.join(ts) if ts else 'no table'}" for r, ts in where.items())

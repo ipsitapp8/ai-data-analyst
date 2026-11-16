@@ -559,6 +559,23 @@ def check(steps: list[dict], req: Request, df: pd.DataFrame, message: str = "") 
                               for s in steps):
         problems.append(f"the request is limited to {req.period['label']}: select period start {req.period['start']} "
                         f"end {req.period['end']}")
+    if message:
+        # a numeric condition the question does not state ("Revenue >= 0" when nobody asked to drop refunds) is the
+        # model's own exclusion rule: records are kept unless the request filters them (one policy, see
+        # metrics.never_negative); a threshold the question states, or a sign it names, is the user's own
+        from app.analyst.calc import stated_numbers
+        stated = stated_numbers(message)
+        signed = re.search(r"\b(negative|positive|non-?negative|below zero|above zero|zero|refunds?|losses|loss-?making|"
+                           r"profitable|credits?)\b", message, re.I)
+        for st in steps:
+            if st["op"] != "select":
+                continue
+            for w in st.get("where") or []:
+                v = w.get("value")
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and w.get("op") in (">", ">=", "<", "<=") \
+                        and float(v) not in stated and not (float(v) == 0 and signed):
+                    problems.append(f"the request sets no condition {w.get('column')} {w.get('op')} {v}; the program "
+                                    "must not filter records the question does not ask to filter")
     for c, v in req.excluded:
         if not any(v.lower() in [str(x).lower() for x in (s.get("except") or {}).get(c, [])] for s in steps) and \
                 not any(str(w.get("value")).lower() == v.lower() and w.get("op") == "!=" for s in steps

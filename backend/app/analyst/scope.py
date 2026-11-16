@@ -158,6 +158,55 @@ def _time(df: pd.DataFrame, message: str) -> dict | None:
     return None
 
 
+_SUP = r"(highest|lowest|largest|biggest|smallest|top|best|worst|leading)"
+_STOP = r"(?=\s*[,;:?.!]|\s+(?:what|which|who|show|list|give|are|is|was|were|how|and|by)\b|\s*$)"
+_SUPERLATIVE_REF = (
+    # "within the highest-revenue region", "for the lowest cost category"
+    re.compile(rf"\b(?:within|in|inside|among|for|from|of)\s+(?:the|that)\s+{_SUP}[\s-]+([a-z][\w %-]*?)[\s-]+([a-z]+){_STOP}",
+               re.I),
+    # "in the region with the highest revenue"
+    re.compile(rf"\b(?:within|in|inside|among|for|from|of)\s+(?:the|that)\s+([a-z]+)\s+with\s+the\s+{_SUP}\s+"
+               rf"([a-z][\w %-]*?){_STOP}", re.I))
+
+
+def superlative_group(message: str, df: pd.DataFrame) -> dict | None:
+    """A group the question picks out by rank instead of by name ("within the highest-revenue region"): resolved
+    from the data with the shared ranking rule (app/analyst/intent.ranking_aggregate -- revenue is compared by its
+    total, "average revenue" by its mean; a measure that says neither is asked about). Returns {"column", "value",
+    "text"}, {"clarify"}, or None when the question names no such group."""
+    from app.analyst.data import find_column  # noqa: PLC0415
+    from app.analyst.intent import ranking_aggregate  # noqa: PLC0415
+    from app.analyst.metrics import group_column  # noqa: PLC0415
+    for i, rx in enumerate(_SUPERLATIVE_REF):
+        m = rx.search(message)
+        if not m:
+            continue
+        if i == 0:
+            sup, measure_txt, noun = m.group(1), m.group(2), m.group(3)
+        else:
+            noun, sup, measure_txt = m.group(1), m.group(2), m.group(3)
+        col, _ = group_column(f"each {noun}", df)
+        nums = [c for c in find_column(df, measure_txt) if kind_of(df[c]) == "numeric"]
+        if col is None or len(nums) != 1:
+            continue
+        measure = nums[0]
+        how = ranking_aggregate(m.group(0), measure)
+        low = sup.lower() in ("lowest", "smallest", "worst")
+        if how is None:
+            return {"clarify": f"By “the {sup} {measure_txt} {noun}”, do you mean the {col} with the {sup} **total** "
+                               f"{measure} or the {sup} **average** {measure}?"}
+        vals = pd.to_numeric(df[measure], errors="coerce").groupby(df[col].astype(str)).agg(how).dropna()
+        if vals.empty:
+            continue
+        pick = vals.idxmin() if low else vals.idxmax()
+        word = {"sum": "total", "mean": "average", "median": "median", "max": "largest single",
+                "min": "smallest single"}[how]
+        return {"column": col, "value": str(pick), "span": m.span(), "phrase": m.group(0),
+                "prep": m.group(0).split()[0],
+                "text": f"the {col} with the {'lowest' if low else 'highest'} {word} {measure}: {vals[pick]:,.2f}"}
+    return None
+
+
 def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dict:
     from app.analyst.calc import _ALL_SCOPE, _ELLIPTIC  # noqa: PLC0415 - one definition of "follow-up" and "everyone"
     memory = memory or {}
@@ -334,12 +383,14 @@ def eligibility(df: pd.DataFrame, columns: list[str], historical: bool) -> tuple
     """Which records are valid observations for an analysis that uses `columns`, and why the others are not.
     Judged from the meaning of the columns used, not by generic cleaning:
       exact duplicate of an earlier record     -> the same observation twice (a repeated event differs in some field)
-      negative value of an amount-like column  -> invalid (a cost, rate, count or duration cannot be negative)
+      negative value of a column that can never be negative (a rate, hours, a price, a quantity, a count) -> invalid;
+        a negative revenue, cost, profit or other amount is a refund, credit or loss: kept (see signed_negatives)
       end time before start time (two time-of-day columns used) -> invalid as recorded
       missing value in a column used           -> unusable for that analysis only (zero is a value, not missing)
       dated after today, for historical analysis (trends, forecasts) -> a planned or future record, not history
     Unusual-but-possible values (outliers) are NOT excluded."""
     from app.analyst.calc import _looks_like_time, _to_hours  # noqa: PLC0415
+    from app.analyst.metrics import never_negative  # noqa: PLC0415 - the one rule for negative values
     keep = pd.Series(True, index=df.index)
     reasons: list[dict] = []
 
@@ -353,7 +404,7 @@ def eligibility(df: pd.DataFrame, columns: list[str], historical: bool) -> tuple
     drop(df.duplicated(keep="first"), "exact duplicate of an earlier record")
     cols = [c for c in columns if c in df.columns]
     for c in cols:
-        if kind_of(df[c]) == "numeric" and _AMOUNT.search(c):
+        if kind_of(df[c]) == "numeric" and never_negative(c):
             drop(pd.to_numeric(df[c], errors="coerce") < 0, f"negative {c.replace('_', ' ')}")
     times = [c for c in cols if kind_of(df[c]) == "categorical" and len(df[c].dropna()) and _looks_like_time(df[c].dropna())]
     if len(times) >= 2:
@@ -366,6 +417,20 @@ def eligibility(df: pd.DataFrame, columns: list[str], historical: bool) -> tuple
         drop(pd.to_datetime(df[date], errors="coerce") > today(), f"dated after today ({today().date()}): a planned "
                                                                   "or future record, not history")
     return keep, reasons
+
+
+def signed_negatives(df: pd.DataFrame, columns: list[str]) -> list[dict]:
+    """Negative values of amount columns that CAN be negative (revenue, cost, profit, salary ...) among `columns`:
+    kept as recorded, and reported, as the calculator's data checks report them."""
+    from app.analyst.metrics import never_negative  # noqa: PLC0415
+    out = []
+    for c in columns:
+        if c in df.columns and kind_of(df[c]) == "numeric" and _AMOUNT.search(str(c)) and not never_negative(c):
+            hit = pd.to_numeric(df[c], errors="coerce") < 0
+            if hit.any():
+                out.append({"reason": f"negative {str(c).replace('_', ' ')} (kept, as recorded)", "records": int(hit.sum()),
+                            "lines": [int(i) + 2 for i in hit[hit].index][:20], "kept": True, "negative": str(c)})
+    return out
 
 
 # ------------------------------------------------------------- verification --

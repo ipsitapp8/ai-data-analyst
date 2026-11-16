@@ -99,6 +99,21 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
     # A file of several tables stacked in one sheet: the question is answered on ONE of them, chosen before any
     # measure, group or filter is read, so no other table's records or empty columns take part (app/analyst/tables.py)
     df, message, table_note = _logical_table(message, df, memory)
+    # "within the highest-revenue region": the group is found from the data (shared ranking rule) and the question
+    # then reads "within East" for every later step -- scope, planner and verifier see one, named group
+    ranked = scoping.superlative_group(message, df) if not isinstance(table_note, dict) else None
+    if ranked and ranked.get("clarify"):
+        out = _reply(ranked["clarify"], "tool", model_on, started, plan={"type": "clarify"},
+                     notes=["The question picks a group by rank, and the measure does not say whether to compare totals "
+                            "or averages; nothing was calculated."])
+        out = _finish(out, message, df, memory, None, started)
+        conversation.record(memory, message, out)
+        return out
+    if ranked:
+        a, b = ranked["span"]
+        message = f"{message[:a]}{ranked['prep']} {ranked['value']}{message[b:]}"
+        line = f"_“{ranked['phrase'].split(None, 1)[1]}” = **{ranked['column']} {ranked['value']}** ({ranked['text']})._"
+        table_note = f"{table_note}\n\n{line}" if table_note else line
     if isinstance(table_note, dict):
         out = _finish(_reply(table_note["clarify"], "tool", model_on, started,
                              plan={"type": "clarify", "options": table_note.get("options") or []},
@@ -185,13 +200,19 @@ def _logical_table(message: str, df: pd.DataFrame, memory: dict):
     if dropped:
         note += " Not applied as filters: " + "; ".join(f"“{' or '.join(o['values'])}” ({o['column']} is empty for "
                                                          f"{table})" for o in dropped) + "."
+    if pick.get("lacking"):
+        note += (" " + ", ".join(f"`{c}`" for c in pick["lacking"]) + f" {'is' if len(pick['lacking']) == 1 else 'are'} "
+                 f"not recorded for {table}, so {'it was' if len(pick['lacking']) == 1 else 'they were'} not used.")
     note += "_"
     if pick["how"] == "named":
         # "... in Sales Transactions": the table is chosen; its name is not a measure or a group ("sales")
         forms = {table, table[:-1] if table.endswith("s") else table}       # "Sales Transactions" / "Sales Transaction"
         name = "|".join(re.escape(f).replace(r"\ ", r"\s+") for f in sorted(forms, key=len, reverse=True))
+        # ... except after "overview / summary / description of", where the table is the object: "this table"
+        stripped = re.sub(rf"\b(overview|summary|description|profile|structure|snapshot)\s+of\s+(?:the\s+)?(?:{name})"
+                          rf"(?:\s+table)?\b", r"\1 of this table", message, flags=re.I)
         stripped = re.sub(rf"[\s,]*\b(?:in|from|within|for|across|of|on)\s+(?:the\s+)?(?:{name})(?:\s+table)?\b", "",
-                          message, flags=re.I)
+                          stripped, flags=re.I)
         if stripped.strip(" ?.!") and stripped != message:
             message = stripped
     return sub, message, note
@@ -364,8 +385,15 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     if reconcile.ASK.search(message) and reconcile.columns(df):
         rsc = scoping.establish(message, df, memory)        # "... for Returned orders": only those records
         rec = reconcile.check(df[scoping.mask(df, rsc)] if scoping.active(rsc) and not rsc["clarify"] else df)
-        return _reply(reconcile.text(rec), "tool", model_on, started, plan={"type": "tools", "intent": "reconcile"},
-                      calls=[{"tool": "reconcile_profit", "status": "ok", "args": {}, "result": _jsonable(rec)}],
+        text, calls = reconcile.text(rec), [{"tool": "reconcile_profit", "status": "ok", "args": {}, "result": _jsonable(rec)}]
+        if re.search(r"\b(overview|summary|summari[sz]e|describe|profile)\b", message, re.I):
+            # "an overview of the table and reconcile the profit": both parts are answered, the overview first
+            routed = {"type": "router", "tool": "understand", "args": {}, "reason": "dataset overview"}
+            ov = router.run(routed, df, memory, filename)
+            text = _ROUTED_RENDER["understand"](ov) + "\n\n### Profit reconciliation\n\n" + text
+            calls.insert(0, {"tool": "understand", "args": {}, "status": "ok", "result": _jsonable(ov)})
+        return _reply(text, "tool", model_on, started, plan={"type": "tools", "intent": "reconcile"},
+                      calls=calls,
                       notes=[f"Computed record by record with pandas: {rec['profit']} against {rec['revenue']} − "
                              f"{rec['cost']} over {rec['records']:,} records."])
     # 1. conversation about the previous answer, recommendations, "why is X doing badly?"
@@ -563,30 +591,36 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     out = _ask_compare_columns(message, dfs, model_on, started)
     if out is not None:
         return out
-    rk = followup.rank_request(message, dfs)
+    rks = followup.rank_requests(message, dfs)
+    rk = rks[0] if rks else None
     if rk is not None and not (model_on and calc.wanted(message, df, memory)):
-        if rk["measure"] is None:
+        missing = next((x for x in rks if x["measure"] is None), None)
+        if missing:
             from app.analyst.data import kind_of
             nums = [c for c in df.columns if kind_of(df[c]) == "numeric"]
-            return _reply(f"Top {rk['n']} {rk['group']} by which value? For example: " + ", ".join(
+            return _reply(f"Top {missing['n']} {missing['group']} by which value? For example: " + ", ".join(
                 f"`{c}`" for c in nums[:8]) + ".", "tool", model_on, started, plan={"type": "clarify"})
         within = None
         lf = memory.get("last_focus") or {}
         if re.search(r"\b(its|their)\b", message, re.I) and lf.get("group_column") in dfs.columns \
-                and lf["group_column"] != rk["group"] and not scoping.active(sc):
+                and all(lf["group_column"] != x["group"] for x in rks) and not scoping.active(sc):
             # "Show its top five cities" after "the highest revenue region is East": the cities of East
             within = (lf["group_column"], lf["group"])
             dfs = dfs[dfs[within[0]].astype(str) == str(within[1])]
-        r = followup.rank_groups(dfs, rk["group"], rk["measure"], rk["n"], rk["low"])
-        chart = {"type": "bar", "additive": r["additive"], "x": rk["group"], "y": rk["measure"], "title": f"{'Bottom' if rk['low'] else 'Top'} "
-                 f"{rk['n']} {rk['group']} by {r['aggregation'] if r['aggregation'] == 'mean' else 'total'} {rk['measure']}",
-                 "data": [{rk["group"]: x["group"], rk["measure"]: x["value"]} for x in r["rows"]]}
-        text = followup.rank_text(r, rk["assumed_measure"])
+        texts, charts, calls = [], [], []
+        for x in rks:
+            r = followup.rank_groups(dfs, x["group"], x["measure"], x["n"], x["low"])
+            charts.append({"type": "bar", "additive": r["additive"], "x": x["group"], "y": x["measure"],
+                           "title": f"{'Bottom' if x['low'] else 'Top'} {x['n']} {x['group']} by "
+                                    f"{r['aggregation'] if r['aggregation'] == 'mean' else 'total'} {x['measure']}",
+                           "data": [{x["group"]: g["group"], x["measure"]: g["value"]} for g in r["rows"]]})
+            texts.append(followup.rank_text(r, x["assumed_measure"]))
+            calls.append({"tool": "rank_groups", "status": "ok", "result": _jsonable(r)})
+        text = "\n\n".join(texts)
         if within:
             text = (f"**Within {within[0]} = {within[1]}** (“its” — the leading {within[0]} of the previous answer; "
                     f"{len(dfs):,} records):\n\n" + text)
-        return _reply(text, "tool", model_on, started, charts=[chart],
-                      calls=[{"tool": "rank_groups", "status": "ok", "result": _jsonable(r)}],
+        return _reply(text, "tool", model_on, started, charts=charts, calls=calls,
                       notes=["Ranked by Silt's deterministic tools over "
                              + (f"the records in scope ({scoping.describe(sc, len(dfs), len(df))})." if scoping.active(sc)
                                 else f"the {within[0]} = {within[1]} records." if within else "all records.")])
@@ -680,6 +714,16 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
         return _after_failed(out, failed)
     more = model_on and memory.get("_model_spent_ms", 0) < MODEL_TURN_BUDGET_MS
     out = _ask_planned(message, dfs, memory, more, started)
+    asked = [o for o in (out["plan"].get("options") or []) if o in dfs.columns]
+    if more and out["plan"].get("type") == "clarify" and out["plan_source"] == "model" and \
+            len([o for o in asked if scoping.column_named(message, o)]) == 1:
+        # "Predict customer churn." -> "Which column should I predict? churn, ...": the question already names one of
+        # the options, so there is no choice to make; Silt's deterministic plan answers if it can
+        rules = _ask_planned(message, dfs, memory, False, started)
+        if any(c.get("status") == "ok" for c in rules.get("calls", [])):
+            rules["notes"].insert(0, "The model asked which column to use, but the question names it; Silt's "
+                                     "deterministic plan answered.")
+            out = rules
     from app.analyst import intent
     _req = intent.read(message, df)
     if more and _req.group and any(c.get("status") == "ok" for c in out.get("calls", [])) and not any(
@@ -719,7 +763,7 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     # The trained catalogue could not answer (the model declined, or its plan was invalid and the rules took over
     # with nothing to run): the model gets the calculator instead of the user getting a dead end.
     if model_on and not why_calc and (out["plan"].get("type") in ("decline", "chat") or out["plan_source"] == "rules") \
-            and not any(c.get("status") == "ok" for c in out["calls"]):
+            and not any(c.get("status") == "ok" for c in out["calls"]) and not _reply_stands(out, message, df):
         # no deterministic path and no catalogue tool answered: the model plans an analysis program
         alt = _ask_nl_program(message, df, memory, model_on, started, filename, late=True)
         if alt is not None:
@@ -733,7 +777,7 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
             f"{'test share ' + format(v * 100, 'g') + '%' if k == 'test_size' else 'seed ' + str(v)}" for k, v in opts.items()) + ".")
     out = _after_failed(out, failed)
     if model_on and not any(c.get("status") == "ok" for c in out.get("calls", [])) and \
-            out["plan"].get("type") not in ("clarify", "decline"):
+            out["plan"].get("type") not in ("clarify", "decline") and not _reply_stands(out, message, df):
         # nothing computed an answer (e.g. the calculation plan failed its checks): the program planner, if not tried
         alt = _ask_nl_program(message, df, memory, model_on, started, filename, late=True)
         if alt is not None:
@@ -745,6 +789,19 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
         if why:
             out["answer"] += f"\n\n_The local model's reading of the request: {why}_"
     return out
+
+
+def _reply_stands(out: dict, message: str, df) -> bool:
+    """A conversational reply or a reasoned decline to a message that names nothing in the data ("Hello.", "What is
+    Random Forest?", "Which area should get the next campaign?" on data with no campaigns) is the answer -- not a dead
+    end for the analysis-program planner to replace with a computation nobody asked for. A placeholder reply, or a
+    message that names a column, is still handed on."""
+    from app.analyst.data import find_column
+    if out["plan"].get("type") not in ("chat", "decline") or out.get("plan_source") == "rules":
+        return False
+    if _VAGUE.search(out.get("answer") or "") or df is None:
+        return False
+    return not find_column(df, message)
 
 
 MODEL_TURN_BUDGET_MS = 12000          # model time after which a turn stops consulting further model paths
@@ -761,7 +818,7 @@ def _after_failed(out: dict, failed: dict | None) -> dict:
         or out["plan"].get("type") in ("clarify",)
     if useful:
         out["notes"].insert(0, "The model's calculation plan did not pass Silt's checks ("
-                            + (failed.get("first_pass") or {}).get("error", "see trace")[:200]
+                            + str((failed.get("first_pass") or {}).get("error") or "see trace")[:200]
                             + "), so this was answered with Silt's other tools.")
         return out
     return failed
@@ -2064,7 +2121,9 @@ def _ask_metric(message: str, df: pd.DataFrame, memory: dict, model_on: bool, st
     """A recognised business metric that is not a column (labor cost, conversion rate, ROI, ...): its standard
     definition is resolved against this data's columns and run by the calculator. No language model is needed; when
     an input is missing or ambiguous the user is asked, and no other quantity is substituted."""
-    p = metrics.plan(message, df) or metrics.multi_plan(message, df) or metrics.count_plan(message, df) \
+    # a list of several results ("total revenue, cost, profit and profit margin by region") before a single
+    # catalogue metric named inside it, which would answer one item of the list
+    p = metrics.multi_plan(message, df) or metrics.plan(message, df) or metrics.count_plan(message, df) \
         or metrics.formula_plan(message, df) or metrics.threshold_plan(message, df) or metrics.share_plan(message, df) \
         or metrics.event_rate_plan(message, df) or metrics.record_count_plan(message, df)
     if p is None:

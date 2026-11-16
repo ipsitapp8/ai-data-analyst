@@ -145,6 +145,8 @@ def op_select(s, results, data):
         ok, reasons = eligibility(base, [c for c in s["valid_for"] if c in sel.columns], historical=bool(s.get("historical")))
         excluded = reasons
         sel = sel[ok.values]
+        from app.analyst.scope import signed_negatives
+        excluded = excluded + signed_negatives(sel, [c for c in s["valid_for"] if c in sel.columns])
         if keep_dupes and dup[ok.values].any():
             excluded = excluded + [{"reason": "exact duplicate of an earlier record (kept, as recorded)",
                                     "records": int(dup[ok.values].sum()), "lines": _lines(df, dup[ok.values][dup[ok.values]].index),
