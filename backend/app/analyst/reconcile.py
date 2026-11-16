@@ -16,7 +16,8 @@ from app.analyst.data import business_roles, kind_of
 
 ASK = re.compile(r"\bprofit\b[^.?!]{0,60}\b(difference|differences|gap|discrepanc\w*|mismatch\w*|reconcil\w*|"
                  r"(?:does not|doesn't|do not|don't|not) (?:match|equal|add up))\b|\breconcil\w*\b[^.?!]{0,60}\bprofit\b|"
-                 r"\b(?:does|do|is|are)\b[^.?!]{0,40}\bprofit\b[^.?!]{0,30}\b(?:equal|match|add up)\b", re.I)
+                 r"\b(?:does|do|is|are|whether|if)\b[^.?!]{0,40}\bprofit\b[^.?!]{0,30}\b(?:equals?|match(?:es)?|adds? up)\b",
+                 re.I)
 _TOL = 0.005
 
 

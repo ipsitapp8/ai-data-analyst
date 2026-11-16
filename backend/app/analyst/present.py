@@ -387,7 +387,10 @@ def calc_headline(r: dict, question: str = "") -> str:
     aggs = list(r["aggregates"])
     if not aggs:
         return ""
-    key = (r.get("primary") if r.get("primary") in aggs else None) or \
+    ranked = (r.get("sort") or "").lstrip("-")
+    ranked = ranked if ranked in aggs and re.search(r"\b(?:rank|sort|order)(?:ed)?\b[^.?!]{0,20}\b(?:by|on)\b", question,
+                                                    re.I) else None
+    key = (r.get("primary") if r.get("primary") in aggs else None) or ranked or \
         next((a for a in aggs if a.replace("_", " ").lower() in question.lower()), None) or \
         next((n for n, e in r["aggregates"].items() if e.startswith("sum(")), aggs[0])
     est = "estimated " if r.get("answer_type") == "scenario" and not key.lower().startswith(("estimat", "predict", "project")) else ""

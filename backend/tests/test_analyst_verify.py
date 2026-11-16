@@ -103,8 +103,9 @@ def test_a_scenario_result_must_be_marked_hypothetical():
 
 def test_a_model_program_that_fails_verification_is_replaced_by_silts_own(monkeypatch):
     """End to end: the model's program passes every pre-execution check but quietly adds a filter nobody asked for
-    (visitors >= 100). Its restatement ('revenue per visitor by branch') is not evidence; the independent figure
-    differs, so it is not shown and the deterministic program built from the request answers instead."""
+    (refund != Yes -- an unasked numeric threshold such as visitors >= 100 is now refused before execution, see the
+    next test). Its restatement ('revenue per visitor by branch') is not evidence; the independent figure differs, so
+    it is not shown and the deterministic program built from the request answers instead."""
     df = shops()
     monkeypatch.setattr(planner, "model_available", lambda: True)
     monkeypatch.setattr(planner, "model_chat", lambda *a, **k: "no plan")
@@ -116,7 +117,7 @@ def test_a_model_program_that_fails_verification_is_replaced_by_silts_own(monkey
         return None if calls["n"] == 1 else real(*a, **k)    # the model is asked first, as for an ungrounded request
     monkeypatch.setattr(nl_planner, "rule_plan", rule_plan_once_missing)
     bad = {"action": "program", "objective": "revenue per visitor by branch", "answer": "r", "steps": [
-        {"id": "busy", "op": "select", "from": "data", "where": [{"column": "visitors", "op": ">=", "value": 100}]},
+        {"id": "busy", "op": "select", "from": "data", "where": [{"column": "refund", "op": "!=", "value": "Yes"}]},
         {"id": "a", "op": "aggregate", "from": "busy", "fn": "sum", "column": "revenue", "by": "branch"},
         {"id": "b", "op": "aggregate", "from": "busy", "fn": "sum", "column": "visitors", "by": "branch"},
         {"id": "r", "op": "ratio", "a": "a", "b": "b"}]}
@@ -129,6 +130,38 @@ def test_a_model_program_that_fails_verification_is_replaced_by_silts_own(monkey
     assert out["plan_source"] == "rule_program" and prog["results"][""]["per_unit"]["value"] == pytest.approx(want.to_dict())
     assert any("answer verification" in n for n in out["notes"]) and mem["_nl_last"]["status"] == "verify_failed"
     assert any(c["check"].startswith("independent recomputation") and c["ok"] for c in out["verification"])
+
+
+def test_a_model_program_with_an_unasked_numeric_filter_is_refused_before_it_runs(monkeypatch):
+    """The model may not invent its own exclusion rule: 'visitors >= 100' (or 'revenue >= 0') when the question sets
+    no such condition is refused by the program checks, and Silt's own program for the request answers on all the
+    records."""
+    df = shops()
+    monkeypatch.setattr(planner, "model_available", lambda: True)
+    monkeypatch.setattr(planner, "model_chat", lambda *a, **k: "no plan")
+    real = nl_planner.rule_plan
+    calls = {"n": 0}
+
+    def rule_plan_once_missing(*a, **k):
+        calls["n"] += 1
+        return None if calls["n"] == 1 else real(*a, **k)
+    monkeypatch.setattr(nl_planner, "rule_plan", rule_plan_once_missing)
+    import json
+    for cond in ({"column": "visitors", "op": ">=", "value": 100}, {"column": "revenue", "op": ">=", "value": 0}):
+        bad = {"action": "program", "objective": "revenue per visitor by branch", "answer": "r", "steps": [
+            {"id": "busy", "op": "select", "from": "data", "where": [cond]},
+            {"id": "a", "op": "aggregate", "from": "busy", "fn": "sum", "column": "revenue", "by": "branch"},
+            {"id": "b", "op": "aggregate", "from": "busy", "fn": "sum", "column": "visitors", "by": "branch"},
+            {"id": "r", "op": "ratio", "a": "a", "b": "b"}]}
+        monkeypatch.setattr(nl_planner, "model_chat", lambda *a, _b=bad, **k: json.dumps(_b))
+        calls["n"] = 0
+        mem = {}
+        out = orchestrator.ask("Which branch earns the least revenue per visitor, and why?", df, mem, use_model=True)
+        want = df.groupby("branch").revenue.sum() / df.groupby("branch").visitors.sum()
+        prog = next(c for c in out["calls"] if c["tool"] == "analysis_program")["result"]
+        assert out["plan_source"] == "rule_program"
+        assert prog["results"][""]["per_unit"]["value"] == pytest.approx(want.to_dict())
+        assert "must not filter records" in json.dumps(mem.get("_nl_last"), default=str)
 
 
 # ------------------------------------------------------------- every execution path --

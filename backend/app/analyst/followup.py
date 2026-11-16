@@ -34,6 +34,9 @@ _ADVICE = re.compile(
 _WHY_BAD = re.compile(r"\bwhy\b.*\b(badly|bad|poor\w*|worst|struggl\w*|underperform\w*|lowest|lagging|behind|weak\w*)\b",
                       re.I)
 _DATASET_WORDS = re.compile(r"\b(this|the|my) (data|dataset|file|table|spreadsheet)\b", re.I)
+# "break it down by region", "summarise it per month", "simplify this for each product": a new grouping is a new
+# calculation, not a rewording of the last answer
+_REGROUP = re.compile(r"\b(?:by|per|for (?:each|every)|across)\s+(?:the\s+|each\s+|every\s+)?[a-z]", re.I)
 
 
 def intent(message: str, memory: dict) -> str | None:
@@ -45,7 +48,7 @@ def intent(message: str, memory: dict) -> str | None:
         return "advice"
     if _WHY_BAD.search(low) and (memory.get("last_calc") or memory.get("last_focus")):
         return "why_group"
-    if _EXPLAIN_PREV.search(low) and has_prev and not _DATASET_WORDS.search(low):
+    if _EXPLAIN_PREV.search(low) and has_prev and not _DATASET_WORDS.search(low) and not _REGROUP.search(low):
         return "explain_previous"
     return None
 
@@ -907,6 +910,30 @@ def rank_request(message: str, df: pd.DataFrame) -> dict | None:
     measure = nums[0] if nums else roles.get("revenue")
     return {"group": cats[0], "measure": measure, "n": n, "low": m.group(1).lower() in ("bottom", "worst", "lowest"),
             "assumed_measure": not nums}
+
+
+_NEXT_TOP = re.compile(r"\s*,?\s*\b(?:and|as well as|plus)\s+(?=(?:also\s+)?(?:the\s+)?(?:top|bottom|best|worst|highest|lowest)\s+"
+                       r"(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b)", re.I)
+_BY_TAIL = re.compile(r"\s+\b(?:by|in terms of|based on)\s+[^,;?!.]+[?!.]?\s*$", re.I)
+
+
+def rank_requests(message: str, df: pd.DataFrame) -> list[dict]:
+    """Every "top N ..." the question asks for ("the top five cities and the top five customers by revenue"): one
+    request per list, a closing "by revenue" applying to each list that names no measure of its own. A single
+    request is a list of one; none, an empty list."""
+    parts = [x for x in _NEXT_TOP.split(message) if x.strip()]
+    if len(parts) < 2:
+        one = rank_request(message, df)
+        return [one] if one else []
+    tail = _BY_TAIL.search(parts[-1])
+    out = []
+    for i, part in enumerate(parts):
+        text = part if (i == len(parts) - 1 or not tail or _BY_TAIL.search(part)) else part.rstrip(" ?.!") + tail.group(0)
+        r = rank_request(text, df)
+        if r is None:
+            return [x for x in [rank_request(message, df)] if x]     # one list is not a ranking: answer as before
+        out.append(r)
+    return out
 
 
 def rank_groups(df: pd.DataFrame, group: str, measure: str, n: int, low: bool = False) -> dict:

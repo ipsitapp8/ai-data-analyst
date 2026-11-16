@@ -822,6 +822,7 @@ def run(spec: dict, df: pd.DataFrame, dry: bool = False, question: str = "") -> 
             "rows_total": int(len(frame)), "rows_excluded": int(excluded.sum()),
             "rows_valid": int(len(valid)), "formulas": formulas, "exclusions": rules, "excluded_rows": excluded_rows,
             "group_by": group, "aggregates": {n: (f"{f}({e})" if f != "expr" else e) for n, (f, e) in aggs.items()},
+            "sort": spec.get("sort"),
             "totals": totals,
             "groups": groups, "focus": focus, "why": why, "explain": spec.get("explain") or "",
             "overlap_note": ("Some rows meet more than one exclusion; each is excluded once."

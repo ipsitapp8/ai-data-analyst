@@ -1155,7 +1155,11 @@ def render(p, steps, res, labels, df, excluded) -> str:
     if dropped_dups:
         out.append(f"_Left out, as you asked: {dropped_dups[0]['records']} exact duplicate record(s) (lines "
                    f"{', '.join(map(str, dropped_dups[0].get('lines') or []))})._")
-    dup = [e for e in excluded if e.get("kept")]
+    for e in [e for e in excluded if e.get("kept") and e.get("negative")]:
+        out.append(f"_{e['records']} record(s) with a negative {e['negative']} were kept as recorded (lines "
+                   f"{', '.join(map(str, e['lines'][:10]))}{' …' if e['records'] > 10 else ''}) — a refund, credit or "
+                   f"loss is a real amount; ask to *exclude negative {e['negative']} values* if they should not count._")
+    dup = [e for e in excluded if e.get("kept") and not e.get("negative")]
     if dup:
         out.append(f"_{dup[0]['records']} exact duplicate record(s) were kept as recorded._")
     return "\n\n".join(x for x in out if x)
