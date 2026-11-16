@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from app.analyst import ml
-from app.analyst.data import business_roles, finite, kind_of
+from app.analyst.data import business_roles, file_lines, finite, kind_of
 
 MISSING_WARN_PCT = 5.0
 IQR_K = 1.5
@@ -105,7 +105,7 @@ def quality_issues(df: pd.DataFrame, cols: list[dict]) -> list[str]:
             neg = pd.to_numeric(df[c], errors="coerce") < 0
             if neg.any():
                 issues.append(f"'{c}' is negative in {int(neg.sum())} row{'s' if neg.sum() != 1 else ''} (line "
-                              + ", ".join(str(i + 2) for i in np.flatnonzero(neg.to_numpy())[:10])
+                              + ", ".join(str(file_lines(df)[i]) for i in neg[neg].index[:10])
                               + "), which is probably a data error.")
     times = _time_cols(df)
     if len(times) >= 2:
@@ -114,7 +114,7 @@ def quality_issues(df: pd.DataFrame, cols: list[dict]) -> list[str]:
         back = (b < a).fillna(False)
         if back.any():
             issues.append(f"'{times[1]}' is earlier than '{times[0]}' in {int(back.sum())} row"
-                          f"{'s' if back.sum() != 1 else ''} (line " + ", ".join(str(i + 2) for i in np.flatnonzero(back.to_numpy())[:10])
+                          f"{'s' if back.sum() != 1 else ''} (line " + ", ".join(str(file_lines(df)[i]) for i in back[back].index[:10])
                           + "): an overnight shift or an entry error.")
     out = outliers(df)
     for o in out["columns"][:3]:

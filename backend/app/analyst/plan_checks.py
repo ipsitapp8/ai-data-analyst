@@ -76,6 +76,18 @@ def metric_mismatch(message: str, calls: list[dict], df: pd.DataFrame) -> str | 
             return f"the question asks for an average, but the plan computed a {agg}"
         if _TOTAL_Q.search(message) and not _AVG_Q.search(message) and agg in ("avg", "mean", "median"):
             return f"the question asks for a total, but the plan computed an {agg}"
+        if col and agg in ("sum", "avg", "mean", "median", "max", "min") and re.search(
+                r"\b(highest|lowest|top|best|worst|largest|smallest|biggest|most|least|leading)\b", message, re.I):
+            # groups ranked by a measure: compared by the one aggregate the question and the measure fix
+            from app.analyst.intent import ranking_aggregate
+            from app.analyst.metrics import group_column
+            group = a.get("group_by") or group_column(message, df)[0]
+            want, got = ranking_aggregate(message, col), {"avg": "mean"}.get(agg, agg)
+            if group and want and got != want:
+                words = {"sum": "total", "mean": "average", "median": "median", "max": "single largest record",
+                         "min": "single smallest record"}
+                return (f"the question compares each {str(group).replace('_', ' ')} by its {words[want]} {col}, but "
+                        f"the plan computed its {words[got]}")
         if named and col and col not in named and agg != "count":
             return f"the question names {', '.join(named)}, but the plan computed {col}"
         if not a.get("group_by") and re.search(r"\bwhich\s+[a-z]+\s+(?:has|had|have|is|was|gets|got|made|shows?)\b", message,
