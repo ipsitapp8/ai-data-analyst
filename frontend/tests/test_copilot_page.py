@@ -124,12 +124,10 @@ def test_details_are_in_an_optional_section_not_raw_json(api, ws):
     assert not at.json, "the technical trace is hidden unless asked for"
 
 
-def test_theme_toggle_switches_to_dark(api, ws):
+def test_copilot_is_dark_only_on_the_indigo_palette(api, ws):
     at = healthy(page("12_Copilot.py", ws))
-    assert at.session_state["cp_theme"] == "light"
-    at.button(key="cp_theme_btn").click().run()
-    healthy(at)
     assert at.session_state["cp_theme"] == "dark"
+    assert not [b for b in at.button if b.key == "cp_theme_btn"], "no light mode on a dark site"
     assert any(ui.THEMES["dark"]["input_text"] in str(m.value) for m in at.markdown)
 
 

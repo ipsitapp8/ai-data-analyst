@@ -181,3 +181,9 @@ table th { background: rgba(60,44,140,.4) !important; color: #d8d0ff !important;
 .stApp [data-testid="stTextInputRootElement"] input::placeholder, .stApp [data-testid="stTextAreaRootElement"] textarea::placeholder, .stApp [data-testid="stChatInput"] textarea::placeholder {
   color: #7d77ad !important; -webkit-text-fill-color: #7d77ad !important; opacity: 1; }
 .stApp input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #140e3a inset !important; -webkit-text-fill-color: #ece8ff !important; }
+
+/* selected tab: a violet pill (the glass fill rendered as a dark olive blob) */
+.stApp .stTabs [data-baseweb="tab"][aria-selected="true"], .stApp .stTabs [aria-selected="true"] {
+  background: rgba(124,92,255,.30) !important; box-shadow: inset 0 0 0 1px rgba(196,181,253,.38) !important; color: #fff !important; }
+.stApp .stTabs [data-baseweb="tab"][aria-selected="true"] p { color: #fff !important; }
+.stApp .stTabs [data-baseweb="tab-highlight"] { background-color: #a78bfa !important; }
