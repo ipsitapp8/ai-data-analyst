@@ -83,34 +83,3 @@ def suggestions(datasets: list[dict[str, Any]], per_dataset: int = 2, limit: int
 def has_active_run(questions: list[dict[str, Any]]) -> bool:
     done = {"verified", "unverified", "failed", "rejected", "cancelled", "needs_clarification"}
     return any(str(q.get("status")) not in done for q in questions)
-
-
-# ------------------------------------------------------------- hero "data blob" --
-# Geometry for the hero animation: loose, unlabelled dots (raw data) that are sorted into
-# three groups (evaluation) and then merge into one smooth blob (a verified result).
-# All positions are percentages of the hero stage, so the CSS needs no pixel maths.
-_CLUSTER_CENTRES = [(27.0, 33.0), (73.0, 30.0), (50.0, 74.0)]
-
-
-def blob_dots(n: int = 38, seed: int = 7) -> list[dict[str, Any]]:
-    """Deterministic start (scattered), group and blob positions for `n` dots."""
-    import math
-    import random
-
-    rng = random.Random(seed)
-    golden = math.pi * (3 - math.sqrt(5))
-    dots = []
-    for i in range(n):
-        # sunflower spiral fills a disc of radius 30% evenly: the final blob
-        r = 30.0 * math.sqrt((i + 0.5) / n)
-        a = i * golden
-        cluster = i % len(_CLUSTER_CENTRES)
-        cx, cy = _CLUSTER_CENTRES[cluster]
-        dots.append({
-            "sx": round(rng.uniform(4, 96), 1), "sy": round(rng.uniform(4, 96), 1),
-            "cx": round(cx + rng.uniform(-9, 9), 1), "cy": round(cy + rng.uniform(-9, 9), 1),
-            "ex": round(50 + r * math.cos(a), 1), "ey": round(50 + r * math.sin(a), 1),
-            "cluster": cluster, "size": rng.choice([7, 9, 11, 13]), "lag": round(rng.uniform(0, 0.6), 2),
-            "wob": round(rng.uniform(1.1, 2.2), 2),
-        })
-    return dots
