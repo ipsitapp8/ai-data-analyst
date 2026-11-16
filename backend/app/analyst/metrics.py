@@ -677,16 +677,49 @@ def _unit_columns(noun: str, df: pd.DataFrame) -> list[str]:
     return [str(c) for c in df.columns if _numeric(df, c) and _tokens(str(c)) & forms]
 
 
+_COUNT_BY = re.compile(r"\b(?:([a-z]+)\s+)?counts?\s+(?:by|per|for each|in each|of each|across)\s", re.I)
+_DIST_OF = re.compile(r"\b(?:distribution|breakdown|split|mix)\s+of\s+(?:the\s+)?([a-z][a-z_]*(?:\s[a-z][a-z_]*)?)", re.I)
+_DIST_AFTER = re.compile(r"\b([a-z][a-z_]*)\s+(?:distribution|breakdown|mix)\b", re.I)
+
+
+def _count_by(message: str, df: pd.DataFrame) -> tuple[str | None, str] | None:
+    """'transaction counts by status', 'status distribution', 'breakdown of status': records counted per value of a
+    category the question names -- (column, counted noun), or None. A numeric column's distribution is a statistical
+    description, not this."""
+    m = _COUNT_BY.search(message)
+    if m:
+        noun = m.group(1) or "records"
+        if noun.lower() in ("the", "a", "record", "row", "total", "and", "show", "give", "get"):
+            noun = "records"
+        elif not noun.lower().endswith("s"):
+            noun += "s"                               # "transaction counts": a number of transactions
+        return group_column(message, df)[0], noun
+    for rx in (_DIST_OF, _DIST_AFTER):
+        for d in rx.finditer(message):
+            cols = [c for c in find_column(df, d.group(1)) if kind_of(df[c]) == "categorical"
+                    and not _time_like(df[c]) and df[c].nunique() <= 50]
+            if len(cols) == 1 and not [c for c in find_column(df, d.group(1)) if _numeric(df, c)]:
+                return cols[0], "records"
+    return None
+
+
 def count_plan(message: str, df: pd.DataFrame) -> Plan | None:
     """'Which department has the most shifts?' -- records counted per group. A record is one row; the answer says
     so, since a 'shift' or an 'order' is only a row when the data has one row per shift or order."""
-    m = _COUNT_Q.search(message)
-    if not m or df is None:
+    if df is None:
         return None
-    group, _ = group_column(message, df)
+    m = _COUNT_Q.search(message)
+    if m:
+        group, _ = group_column(message, df)
+        noun = next(g for g in m.groups()[1:] if g) if any(m.groups()[1:]) else "records"
+        fewest = (m.group(1) or "most").lower() in ("fewest", "least", "lowest number of", "smallest number of")
+    else:
+        hit = _count_by(message, df)
+        if hit is None:
+            return None
+        (group, noun), fewest = hit, False
     if group is None:
         return None
-    noun = next(g for g in m.groups()[1:] if g) if any(m.groups()[1:]) else "records"
     one = _singular(noun.lower())
     if re.search(r"\bin total\b|\btotal\b|\bsum\b|\bamount\b|\bvalue\b", message, re.I) and \
             not re.fullmatch(r"records?|rows?|entries", noun, re.I):
@@ -706,7 +739,7 @@ def count_plan(message: str, df: pd.DataFrame) -> Plan | None:
     ids.sort(key=lambda c: 0 if "id" in _tokens(c) else 1)
     name = "number_of_" + _ident(noun if not re.fullmatch(r"records?|rows?|entries", noun, re.I) else "records")
     expr = f"nunique({ids[0]})" if ids else "count(*)"
-    low = (m.group(1) or "most").lower() in ("fewest", "least", "lowest number of", "smallest number of")
+    low = fewest
     p = Plan(name, name.replace("_", " "))
     p.spec = {"type": "calc", "derive": {}, "exclude": [], "group_by": group, "aggregate": {name: expr},
               "sort": name if low else "-" + name}
@@ -717,6 +750,80 @@ def count_plan(message: str, df: pd.DataFrame) -> Plan | None:
         if not re.fullmatch(r"records?|rows?|entries", noun, re.I):
             p.notes.append(f"Each record (row) is counted as one {one}; if a {one} can span several rows, say how to "
                            "identify one.")
+    return p
+
+
+_RECORD_NOUNS = re.compile(r"records?|rows?|entries|entry", re.I)
+_HOW_MANY = re.compile(r"\bhow many\s+([a-z]+)\b|\bnumber of\s+([a-z]+)\b|\bcount (?:the |all )?([a-z]+)\b|"
+                       r"\b(?:show|list|find|give me|which are)\s+(?:me\s+)?(?:all\s+|the\s+)?([a-z]+)\s+"
+                       r"(?:belonging to|belong to|in|from|with|who|that|where|of)\b", re.I)
+
+
+def record_count_plan(message: str, df: pd.DataFrame) -> Plan | None:
+    """'How many customers are in the Business segment?', 'Show customers belonging to the Business segment': the
+    records in the question's scope, counted -- distinct identifiers when a column identifies the thing counted
+    (Customer ID for customers), else rows. Only for a noun that is records, the thing an ID column identifies, or
+    the name of the logical table being analysed; grouped counts are count_plan's."""
+    if df is None:
+        return None
+    m = _HOW_MANY.search(message)
+    if not m:
+        return None
+    noun = next(g for g in m.groups() if g)
+    one = _singular(noun.lower())
+    if _GROUP.search(message) and group_column(message, df)[0]:
+        return None
+    if [c for c in find_column(df, noun) if _numeric(df, c)] or _unit_columns(noun, df):
+        return None                                   # "how many hours": a measure, not a count of records
+    table = str((df.attrs.get("logical_table") or {}).get("table") or "")
+    ids = [c for c in map(str, df.columns) if kind_of(df[c]) == "categorical" and one in _tokens(c)
+           and _tokens(c) & {"id", "code", "number", "no"}]
+    if not (_RECORD_NOUNS.fullmatch(noun) or ids or (table and one in {_singular(t) for t in _tokens(table)})):
+        return None
+    name = "number_of_" + _ident("records" if _RECORD_NOUNS.fullmatch(noun) else noun)
+    p = Plan(name, name.replace("_", " "))
+    expr = f"nunique({ids[0]})" if ids else "count(*)"
+    p.spec = {"type": "calc", "derive": {}, "exclude": [], "group_by": None, "aggregate": {name: expr}}
+    p.definition = (f"number of distinct {_lab(ids[0])} values" if ids else "number of records (rows)") + \
+        " in the records the question selects"
+    return p
+
+
+_AGG_WORDS = (("total", "sum"), ("sum", "sum"), ("average", "mean"), ("avg", "mean"), ("mean", "mean"),
+              ("median", "median"), ("maximum", "max"), ("max", "max"), ("minimum", "min"), ("min", "min"))
+_AGG_RX = re.compile(r"\b(" + "|".join(w for w, _ in _AGG_WORDS) + r")s?\b", re.I)
+
+
+def multi_plan(message: str, df: pd.DataFrame) -> Plan | None:
+    """'Calculate total revenue, total cost, total profit and average transaction revenue': several aggregates of
+    named columns in one request, each computed by the calculator over the same records. An aggregate word carries
+    over to the measures listed after it ("total revenue, cost and profit"). Needs two or more different results;
+    a grouped or conditional request is left to the other planners."""
+    if df is None or not _AGG_RX.search(message) or _FORMULA.search(message):
+        return None
+    if re.search(r"\b(by|per|for each|in each|compare|versus|vs|correlat\w*|trend|over time|if|where|when)\b", message, re.I):
+        return None
+    fn = dict(_AGG_WORDS)
+    pairs, agg = [], None
+    for part in re.split(r",|;|\band\b|&|\bas well as\b|\bplus\b", message, flags=re.I):
+        a = _AGG_RX.search(part)
+        if a:
+            agg = fn[a.group(1).lower()]
+        cols = [c for c in find_column(df, part) if _numeric(df, c)]
+        if len(cols) > 1:
+            return None
+        if cols and agg:
+            if (agg, cols[0]) not in pairs:
+                pairs.append((agg, cols[0]))
+        elif cols and not agg:
+            return None                               # a measure before any aggregate word: not a list of aggregates
+    if len(pairs) < 2:
+        return None
+    word = {"sum": "total", "mean": "average", "median": "median", "max": "maximum", "min": "minimum"}
+    agg_map = {_ident(f"{word[a]} {c}"): f"{a}({c})" for a, c in pairs}
+    p = Plan("summary", "summary")
+    p.spec = {"type": "calc", "derive": {}, "exclude": [], "group_by": None, "aggregate": agg_map}
+    p.definition = "; ".join(f"{word[a]} of {_lab(c)}" for a, c in pairs)
     return p
 
 

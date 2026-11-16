@@ -96,7 +96,8 @@ def _scalar(results, ref, step) -> Result:
 
 
 def _lines(df: pd.DataFrame, idx) -> list[int]:
-    pos = {i: n + 2 for n, i in enumerate(df.index)}      # file lines: the header is line 1
+    from app.analyst.data import file_lines
+    pos = file_lines(df)      # file lines: the header is line 1
     return [pos[i] for i in idx if i in pos][:20]
 
 

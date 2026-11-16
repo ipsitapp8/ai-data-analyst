@@ -203,6 +203,41 @@ def check(message: str, df: pd.DataFrame, steps: list[dict], results: dict, scop
             implied = next(iter(bys))       # "day totals": a breakdown the question implies but intent did not read
             req.group = implied
     want, how = recompute(req, df, prof, scope, policy)
+    if want is None and req.quantity is None and req.extreme in ("max", "min", "either") and req.group \
+            and len(req.measures) == 1 and not req.per and not req.denominators:
+        # "the highest revenue region": the groups are compared by ONE aggregate, fixed by the question and the measure
+        # (intent.ranking_aggregate -- the same rule the planners follow); the figures must be exactly that aggregate.
+        # A question that leaves it open is not verified, whichever aggregate the answer happens to match.
+        agg = intent.ranking_aggregate(message, req.measures[0])
+        if agg in ("sum", "mean", "median"):
+            req.quantity = {"sum": "total", "mean": "average", "median": "median"}[agg]
+            w, h = recompute(req, df, prof, scope, policy)
+            got = [v for sid, r in results.items() if r.get("kind") == "series" and not str(sid).startswith(("_", "@"))
+                   for v in [r.get("value")]]
+            if w is not None and any(_same(w, v) for v in got):
+                want, how = w, h + " — how the question compares the groups"
+            else:
+                # not the aggregate the question implies: possibly a quantity Silt did not read from the question (a
+                # ratio, "for the clinicians it has") -- not verified, and not passed off as a ranking it is not
+                req.quantity = None
+                how = f"the figures are not the {h} by {req.group} that the question compares the groups by"
+        elif agg is None:
+            how = "the question does not say whether the groups are compared by their total or their average"
+        else:
+            how = "each group's single largest or smallest record is not recomputed here"
+    if want is None and len(req.measures) > 1 and req.group is None:
+        # "total revenue, total cost and average revenue": every figure the question lists, each read from its own
+        # part of the question and recomputed on its own; all of them must be among the results
+        parts = _recompute_parts(message, df, prof, scope, policy)
+        if parts:
+            got = [(sid, r.get("value")) for sid, r in results.items() if r.get("kind") == "scalar"
+                   and not str(sid).startswith(("_", "@"))]
+            miss = [(h, w) for w, h in parts if not any(_same(w, v) for _, v in got)]
+            checks.append({"check": "independent recomputation of each figure asked for (" + "; ".join(h for _, h in parts)
+                                    + ", computed with pandas from the request)", "ok": not miss,
+                           "detail": "every figure matches" if not miss else
+                           "; ".join(f"expected {h} = {w:,.6g}; no computed result matches" for h, w in miss)})
+            return {"status": "failed" if miss else "verified", "checks": checks}
     if want is None:
         checks.append({"check": "independent recomputation", "ok": True, "detail": f"not independently verified ({how})"})
         return {"status": "not independently verified", "checks": checks}
@@ -220,6 +255,30 @@ def check(message: str, df: pd.DataFrame, steps: list[dict], results: dict, scop
                        "independently)"})
         return {"status": "not independently verified", "checks": checks}
     return {"status": "verified" if match else "failed", "checks": checks}
+
+
+def _recompute_parts(message: str, df: pd.DataFrame, prof: dict, scope: dict | None, policy: dict | None):
+    """[(value, description)] for a question that lists several figures ("total revenue, total cost and average
+    revenue"): each comma / "and" part read by the intent reader on its own -- a quantity word carries over to the
+    measures after it -- and recomputed. None unless every part with a measure gives exactly one figure."""
+    import re
+    out, quantity = [], None
+    whole = intent.read(message, df, prof)
+    for part in re.split(r",|;|\band\b|&", message, flags=re.I):
+        r = intent.read(part, df, prof)
+        if r.quantity:
+            quantity = r.quantity
+        if not r.measures:
+            continue
+        if len(r.measures) != 1 or quantity not in ("total", "average", "median") or r.group:
+            return None
+        r.quantity = quantity
+        r.entities, r.excluded = whole.entities, whole.excluded
+        w, h = recompute(r, df, prof, scope, policy)
+        if w is None or isinstance(w, dict):
+            return None
+        out.append((w, h))
+    return out if len(out) >= 2 else None
 
 
 # ------------------------------------------------------------------ every execution path --
@@ -338,25 +397,29 @@ def _calc_claim(memory: dict) -> dict:
     prim = (lc.get("meta") or {}).get("primary")
     if prim and prim not in aggs:
         return {"unverifiable": f"a defined metric ({prim}) computed from several totals", "requirements": reqs}
-    if prim and not re.fullmatch(r"\s*(sum|mean|avg|median|count)\(\s*[A-Za-z_]?\w*\s*\)\s*", str(aggs[prim])):
+    if prim and not re.fullmatch(r"\s*(sum|mean|avg|median|count)\(\s*(?:[A-Za-z_]?\w*|\*)\s*\)\s*", str(aggs[prim])):
         return {"unverifiable": f"a defined metric ({prim}: {aggs[prim]})", "requirements": reqs}
     if prim:
         aggs = {prim: aggs[prim]}
     steps, res = [], {}
     by = spec.get("group_by")
     for name, expr in aggs.items():
-        m = re.fullmatch(r"\s*(sum|mean|avg|median|count)\(\s*([A-Za-z_][\w]*)?\s*\)\s*", str(expr))
+        m = re.fullmatch(r"\s*(sum|mean|avg|median|count)\(\s*([A-Za-z_][\w]*|\*)?\s*\)\s*", str(expr))
         if not m:
             continue
         fn = {"avg": "mean"}.get(m.group(1), m.group(1))
         steps.append({"id": name, "op": "aggregate", "from": "data", "fn": fn,
-                      **({"column": m.group(2)} if m.group(2) and fn != "count" else {}), **({"by": by} if by else {})})
+                      **({"column": m.group(2)} if m.group(2) and m.group(2) != "*" and fn != "count" else {}),
+                      **({"by": by} if by else {})})
         val = ({str(g.get("group")): g.get(name) for g in r.get("groups") or []} if by else (r.get("totals") or {}).get(name))
         res[name] = {"kind": "series" if by else "scalar", "value": val, "hypothetical": False}
     if not steps:
         return {"unverifiable": "an aggregate with no independent form", "requirements": reqs}
     dup = "drop" if any("duplicate()" in e.get("where", "") for e in spec.get("exclude") or []) else "keep"
-    return {"steps": steps, "results": res, "policy": {"valid": True, "duplicates": dup}}
+    # the calculator says which suspicious records it counted as recorded (negative amounts: refunds, returns); the
+    # recomputation counts the same records, or a correct figure would be judged against a different set of records
+    kept_negative = any(str(c.get("issue", "")).startswith("negative ") for c in r.get("data_checks") or [])
+    return {"steps": steps, "results": res, "policy": {"valid": not kept_negative, "duplicates": dup}}
 
 
 def objective_checks(o: dict, df: pd.DataFrame | None) -> list[dict]:
@@ -498,7 +561,8 @@ def duplicate_note(message: str, df: pd.DataFrame, scope: dict | None, out: dict
     dup = used.duplicated(keep="first")
     if not dup.any():
         return None
-    pos = {i: n + 2 for n, i in enumerate(df.index)}
+    from app.analyst.data import file_lines
+    pos = file_lines(df)
     lines = [pos[i] for i in dup[dup].index if i in pos][:10]
     return (f"_{int(dup.sum())} exact duplicate record(s) (line{'s' if len(lines) > 1 else ''} "
             f"{', '.join(map(str, lines))}) were counted as recorded. Ask to *exclude duplicates* if they should not "
@@ -518,7 +582,8 @@ def value_note(df: pd.DataFrame, scope: dict | None, out: dict) -> str | None:
     used = df[mask(df, scope)] if active(scope) else df
     if used.empty:
         return None
-    pos = {i: n + 2 for n, i in enumerate(df.index)}
+    from app.analyst.data import file_lines
+    pos = file_lines(df)
     parts = []
     for col in sorted(cols):
         v = pd.to_numeric(used[col], errors="coerce")

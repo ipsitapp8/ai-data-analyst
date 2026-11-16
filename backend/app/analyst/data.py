@@ -26,6 +26,14 @@ def load_table(path: str) -> pd.DataFrame:
     return df
 
 
+def file_lines(frame: pd.DataFrame) -> dict:
+    """{row label: its line in the uploaded file} (the header is line 1). A table cut from a file of several tables
+    (app/analyst/tables.py) keeps its rows' labels, so its lines are label + 2; any other frame is the file itself."""
+    if frame.attrs.get("file_lines"):
+        return {i: int(i) + 2 for i in frame.index}
+    return {i: n + 2 for n, i in enumerate(frame.index)}
+
+
 def kind_of(s: pd.Series) -> str:
     if pd.api.types.is_bool_dtype(s):
         return "categorical"

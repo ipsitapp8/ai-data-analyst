@@ -30,7 +30,7 @@ _RATE = re.compile(r"\b(rate|rates|share|proportion|percentage|percent of|fracti
 _MEDIAN = re.compile(r"\b(median|typical)\b", re.I)
 _AVG = re.compile(r"\b(average|averages|mean|avg|on average)\b", re.I)
 _TOTAL = re.compile(r"\b(total|totals|in all|altogether|how much|sum of)\b", re.I)
-_COUNT = re.compile(r"\b(how many|number of|count of)\s+(\w+)", re.I)
+_COUNT = re.compile(r"\b(how many|number of|count of|counts? (?:by|per|for each|in each))\s+(\w+)", re.I)
 _GROUP_WORDS = r"(?:by|per|each|every|across|between|among|which|what|for each|in each|of the|the)"
 _PER = [re.compile(p, re.I) for p in (
     r"\bper\s+(?:each\s+)?([a-z]+(?: on [a-z]+)?)\b",
@@ -50,10 +50,17 @@ _PEOPLE = {"person", "people", "driver", "drivers", "staff", "employee", "employ
            "operator", "operators", "courier", "couriers", "individual", "individuals", "team member"}
 _COMPARE = re.compile(r"\b(compare|compared|comparison|versus|vs\.?|than|difference between|differ|differs|different|"
                       r"stack up|against|relative to)\b", re.I)
-_EXTREME = re.compile(r"\b(which|what|who|where)\b[^?]{0,80}\b(most|highest|largest|biggest|best|top|longest|least|lowest|"
+_EXTREME = re.compile(r"\b(which|what|who|where|identify|find|name|determine)\b[^?]{0,80}\b(most|highest|largest|biggest|best|top|longest|least|lowest|"
                       r"smallest|fewest|worst|slowest|shortest|bottom|fastest|weakest|strongest|poorest)\b", re.I)
 _SINGLE = re.compile(r"\b(single|maximum|minimum|max|min|individual|one (?:order|sale|record|transaction|row)|"
                      r"per (?:order|sale|record|transaction|row)|largest one|biggest one)\b", re.I)
+# Ranking groups ("the highest revenue region"): what each group is compared by. A flow adds up over records (revenue,
+# cost, units sold) -- groups are compared by their total; a level describes each record (a price, a rate, a salary,
+# a duration) -- by their average. Words in the question decide first; the measure's name second; neither: ask.
+_FLOW_NAME = re.compile(r"revenue|sales|turnover|takings|income|gmv|spend|expense|cost|profit|budget|amount|qty|"
+                        r"quantity|units|volume|orders|visits|visitors|bookings|tickets|bill", re.I)
+_LEVEL_NAME = re.compile(r"rate|price|percent|pct|ratio|avg|average|score|rating|margin|\bage\b|tenure|temperature|"
+                         r"salary|wage|\bpay\b|fee|fare|duration|minutes|length|size|weight|discount|satisfaction", re.I)
 _LOW = re.compile(r"\b(least|lowest|smallest|fewest|bottom|shortest|weakest|poorest)\b", re.I)
 _WHY = re.compile(r"\bwhy\b|\b(associated|linked|related|link|goes with|go with|what drives|drivers of|explains?|"
                   r"factors?|because|what lies behind|what is behind|influences?)\b", re.I)
@@ -131,11 +138,13 @@ def read(message: str, df: pd.DataFrame, prof: dict | None = None) -> Request:
         _conversion(message, df, roles, r)
     # a year column named after a grouping word ("by season", "each year") breaks the result down too
     cats = [c for c in named if roles[c]["role"] in ("category", "flag", "person_name", "year") and c not in r.denominators]
-    # the grouping: a category named after a grouping word ("by depot", "each team", "which outlet", "between depots")
+    # the grouping: a category named after a grouping word ("by depot", "each team", "which outlet", "between depots");
+    # a quantity word does not count towards the words in between ("the highest average revenue region")
+    low_g = re.sub(r"\b(?:average|mean|median|total|overall)\s+", "", low)
     for c in cats:
         w = re.sub(r"[^a-z0-9]+", " ", str(c).lower()).strip()
         from app.analyst.scope import _negated
-        if re.search(rf"\b{_GROUP_WORDS}\s+(?:\w+\s+){{0,2}}?{re.escape(w)}s?\b", low) and c not in [
+        if re.search(rf"\b{_GROUP_WORDS}\s+(?:\w+\s+){{0,2}}?{re.escape(w)}s?\b", low_g) and c not in [
                 x for x, v in named_values(df, message) if not _negated(message, v)]:   # "excluding East" still groups
             yes_no = roles[c]["role"] == "flag" and roles[c].get("positive") and not roles[c].get("positive_is_minority")
             if yes_no and not re.search(rf"\b(?:by|between|across|versus|vs)\s+{re.escape(w)}", low):
@@ -331,7 +340,7 @@ def _rest(message, df, roles, r, named, low):
         # "the total number of votes for Joly" asks for a total of Joly
         ms = [c for c in ms if str(c).lower() not in _QUANTITY_NAMES] or ms
     cm2 = _COUNT.search(message)
-    if r.quantity == "count" and not ms and cm2:
+    if r.quantity == "count" and not ms and cm2 and not cm2.group(1).lower().startswith("count"):
         # "how many medals did each nation win" on a table of tallies: one count column, named as a count or after
         # the noun counted, holds the counts -- its sum is the answer, not the number of rows
         noun = semantics._forms(cm2.group(2).lower())  # noqa: SLF001
@@ -440,6 +449,24 @@ _TIME_WORDS = re.compile(r"\b(today|yesterday|since|until|till|before|after|duri
                         r"\b(?:month|year|quarter|week)[- ]end\b|\bbetween\b[^?]{0,30}\band\b[^?]{0,10}\d", re.I)
 
 
+def ranking_aggregate(message: str, measure) -> str | None:
+    """How a question that ranks groups by `measure` compares them: "max"/"min" (each group's single record --
+    "largest individual transaction"), "median", "mean" ("highest average revenue"), "sum" ("highest revenue region",
+    revenue being a flow), or None when neither the question nor the measure says (Silt asks)."""
+    if _SINGLE.search(message):
+        return "min" if _LOW.search(message) else "max"
+    if _MEDIAN.search(message):
+        return "median"
+    if _AVG.search(message):
+        return "mean"
+    if _TOTAL.search(message) or re.search(r"\boverall\b", message, re.I):
+        return "sum"
+    flow, level = bool(_FLOW_NAME.search(str(measure))), bool(_LEVEL_NAME.search(str(measure)))
+    if flow != level:
+        return "sum" if flow else "mean"
+    return None
+
+
 def check(steps: list[dict], req: Request, df: pd.DataFrame, message: str = "") -> list[str]:
     """Requirements of the request the program does not meet -- a valid program that computes something else."""
     by = {s["id"]: s for s in steps}
@@ -470,6 +497,13 @@ def check(steps: list[dict], req: Request, df: pd.DataFrame, message: str = "") 
     if req.quantity == "total" and not req.per and not ({"sum"} & fns or any(s["op"] in ("project", "compare")
                                                                               for s in steps)):
         problems.append(f"the request asks for a total, but the program computes {', '.join(sorted(fns)) or 'none'}")
+    if req.extreme in ("min", "max", "either") and req.group and req.quantity is None and len(req.measures) == 1 \
+            and not ratios and fns and fns <= {"sum", "mean", "median"}:
+        # "the highest revenue region" compares the regions' total revenue; "the highest unit price region" their average
+        want = ranking_aggregate(message, req.measures[0])
+        if want in ("sum", "mean", "median") and want not in fns:
+            problems.append(f"the request ranks each {req.group} by its {dict(sum='total', mean='average', median='median')[want]} "
+                            f"{req.measures[0]}; aggregate with fn {want}, not {', '.join(sorted(fns))}")
     if req.extreme in ("min", "max", "either") and req.group and req.quantity is None and fns and fns <= {"max", "min"} \
             and not _SINGLE.search(message):
         problems.append(f"the request ranks each {req.group} by its overall level of the measure; 'highest' and "
@@ -501,9 +535,12 @@ def check(steps: list[dict], req: Request, df: pd.DataFrame, message: str = "") 
     if req.group and not any(s.get("by") == req.group for s in aggs) and not (
             req.entities and any(c == req.group for c, _ in req.entities)):
         problems.append(f"the request breaks the result down by {req.group}; aggregate with by \"{req.group}\"")
+    grouped = {s.get("by") for s in aggs if s.get("by")}
+    named_all = {c for c in grouped if c in df.columns and {str(x).lower() for x in df[c].dropna().astype(str).unique()}
+                 <= {str(v).lower() for c2, v in req.entities if c2 == c}}
     for c, v in req.entities:
-        if c == req.group:
-            continue
+        if c == req.group or c in named_all:
+            continue                    # every value of a column the result is broken down by: shown, not selected
         hit = any(v.lower() in [str(x).lower() for x in vals] for s in steps
                   for key in ("entities", "except") for vals in (s.get(key) or {}).values()) or \
             any(str(w.get("value")).lower() == v.lower() for s in steps for w in s.get("where") or []) or \

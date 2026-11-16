@@ -96,6 +96,15 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         message = res["message"]
         if res.get("correction"):
             message = conversation.retarget(message, memory, df) or message
+    # A file of several tables stacked in one sheet: the question is answered on ONE of them, chosen before any
+    # measure, group or filter is read, so no other table's records or empty columns take part (app/analyst/tables.py)
+    df, message, table_note = _logical_table(message, df, memory)
+    if isinstance(table_note, dict):
+        out = _finish(_reply(table_note["clarify"], "tool", model_on, started,
+                             plan={"type": "clarify", "options": table_note.get("options") or []},
+                             notes=[table_note["why"]]), message, df, memory, None, started)
+        conversation.record(memory, message, out)
+        return out
     # everyday measure words the columns name differently ("trip length", "visitors", "spend"): one matching column
     # is read in their place, and the answer says so; several are asked about
     from app.analyst import semantics as _sem
@@ -126,12 +135,66 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         out["answer"] = "_" + "; ".join(read_as) + "._\n\n" + out["answer"]
         out["notes"].insert(0, "Measure words: " + "; ".join(read_as) + ".")
         out["understood_as"] = message
+    if table_note:
+        out["answer"] = table_note + "\n\n" + out["answer"]
+        out["notes"].insert(0, table_note.strip("_"))
+        out["logical_table"] = df.attrs.get("logical_table")
     if res:
         out["notes"].insert(0, res["note"] + (f" Run as: “{message}”." if message != said else ""))
         out["understood_as"] = message
         out["plan"] = {**out.get("plan", {}), "conversation": res["kind"]}
     conversation.record(memory, message, out)
     return out
+
+
+def _logical_table(message: str, df: pd.DataFrame, memory: dict):
+    """(frame, message, note) for a file of several stacked tables: the one table the question is about, with the
+    question's own mention of it ("... in Sales Transactions") taken out so its words are not read as columns, and a
+    line saying which table answered. The note is a dict {"clarify", "options", "why"} when Silt has to ask instead.
+    An ordinary file comes back unchanged with no note."""
+    from app.analyst import tables
+    pick = tables.select(message, df, memory)
+    if pick is None:
+        return df, message, None
+    if pick.get("clarify"):
+        return df, message, {"clarify": pick["clarify"], "options": pick.get("options"),
+                             "why": "This file holds several separate tables; Silt analyses one at a time and asks "
+                                    "rather than adding different kinds of records together. Nothing was calculated."}
+    table = pick.get("table")
+    if not table:
+        memory.pop("logical_table", None)
+        return df, message, None
+    named_out = [o for o in pick.get("outside") or [] if o["named"]]
+    if named_out:
+        o = named_out[0]
+        memory["logical_table"] = {"column": pick["column"], "table": table}
+        return df, message, {"clarify": f"**{o['column']}** is not recorded for **{table}** — it is empty in all of "
+                                        f"its records, so it can't be used to filter, group or measure them. "
+                                        f"{o['column']} is only filled in for **{', '.join(o['tables'])}**"
+                                        + (f" — for example, ask about {o['tables'][0]} in the "
+                                           f"{' or '.join(o['values'])} {o['column'].lower()}." if o["values"] else ".")
+                                        + " Nothing was filtered or calculated.",
+                             "options": [],
+                             "why": f"The question names {o['column']}, which belongs to another table of this file."}
+    sub = tables.subset(df, pick["column"], table)
+    memory["logical_table"] = {"column": pick["column"], "table": table}
+    how = {"named": "named in your question", "previous": "the table this conversation is on",
+           "columns": "the only table with every column your question uses"}[pick["how"]]
+    note = f"_Table: **{table}** ({len(sub):,} of {len(df):,} records in this file; {how})."
+    dropped = [o for o in pick.get("outside") or [] if not o["named"]]
+    if dropped:
+        note += " Not applied as filters: " + "; ".join(f"“{' or '.join(o['values'])}” ({o['column']} is empty for "
+                                                         f"{table})" for o in dropped) + "."
+    note += "_"
+    if pick["how"] == "named":
+        # "... in Sales Transactions": the table is chosen; its name is not a measure or a group ("sales")
+        forms = {table, table[:-1] if table.endswith("s") else table}       # "Sales Transactions" / "Sales Transaction"
+        name = "|".join(re.escape(f).replace(r"\ ", r"\s+") for f in sorted(forms, key=len, reverse=True))
+        stripped = re.sub(rf"[\s,]*\b(?:in|from|within|for|across|of|on)\s+(?:the\s+)?(?:{name})(?:\s+table)?\b", "",
+                          message, flags=re.I)
+        if stripped.strip(" ?.!") and stripped != message:
+            message = stripped
+    return sub, message, note
 
 
 _VERIFIED_LINE = {"verified": "_Verification: ✓ the headline figure was recomputed independently with pandas from your "
@@ -295,6 +358,16 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
         if followed is not None:
             return _reply(followed["answer"], "tool", model_on, started, plan=followed["plan"], calls=followed["calls"],
                           notes=followed["notes"], details=followed.get("details", ""))
+    # "Explain the profit difference", "does profit equal revenue minus cost?": the stored profit reconciled with
+    # revenue - cost record by record (app/analyst/reconcile.py), before it is read as a question about the last answer
+    from app.analyst import reconcile
+    if reconcile.ASK.search(message) and reconcile.columns(df):
+        rsc = scoping.establish(message, df, memory)        # "... for Returned orders": only those records
+        rec = reconcile.check(df[scoping.mask(df, rsc)] if scoping.active(rsc) and not rsc["clarify"] else df)
+        return _reply(reconcile.text(rec), "tool", model_on, started, plan={"type": "tools", "intent": "reconcile"},
+                      calls=[{"tool": "reconcile_profit", "status": "ok", "args": {}, "result": _jsonable(rec)}],
+                      notes=[f"Computed record by record with pandas: {rec['profit']} against {rec['revenue']} − "
+                             f"{rec['cost']} over {rec['records']:,} records."])
     # 1. conversation about the previous answer, recommendations, "why is X doing badly?"
     kind = followup.intent(message, memory)
     if kind == "explain_previous" and memory.get("investigation") and finding_ref(
@@ -322,8 +395,11 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
         sc = scoping.establish(message, df, memory)
         if sc["clarify"]:
             return _reply(sc["clarify"], "tool", model_on, started, plan={"type": "clarify", "scope": sc},
-                          notes=["The question names a value that occurs in more than one column; Silt asks rather "
-                                 "than guessing which records you mean."])
+                          notes=(["The filter names a column that is empty in the records selected, so it could only "
+                                  "return no records; Silt says so instead of reporting an empty result."]
+                                 if sc.get("unsupported_filter") else
+                                 ["The question names a value that occurs in more than one column; Silt asks rather "
+                                  "than guessing which records you mean."]))
     memory["_scope"] = sc
     dfs = df[scoping.mask(df, sc)] if scoping.active(sc) else df
     if scoping.active(sc) and dfs.empty:
@@ -494,15 +570,26 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
             nums = [c for c in df.columns if kind_of(df[c]) == "numeric"]
             return _reply(f"Top {rk['n']} {rk['group']} by which value? For example: " + ", ".join(
                 f"`{c}`" for c in nums[:8]) + ".", "tool", model_on, started, plan={"type": "clarify"})
+        within = None
+        lf = memory.get("last_focus") or {}
+        if re.search(r"\b(its|their)\b", message, re.I) and lf.get("group_column") in dfs.columns \
+                and lf["group_column"] != rk["group"] and not scoping.active(sc):
+            # "Show its top five cities" after "the highest revenue region is East": the cities of East
+            within = (lf["group_column"], lf["group"])
+            dfs = dfs[dfs[within[0]].astype(str) == str(within[1])]
         r = followup.rank_groups(dfs, rk["group"], rk["measure"], rk["n"], rk["low"])
         chart = {"type": "bar", "additive": r["additive"], "x": rk["group"], "y": rk["measure"], "title": f"{'Bottom' if rk['low'] else 'Top'} "
                  f"{rk['n']} {rk['group']} by {r['aggregation'] if r['aggregation'] == 'mean' else 'total'} {rk['measure']}",
                  "data": [{rk["group"]: x["group"], rk["measure"]: x["value"]} for x in r["rows"]]}
-        return _reply(followup.rank_text(r, rk["assumed_measure"]), "tool", model_on, started, charts=[chart],
+        text = followup.rank_text(r, rk["assumed_measure"])
+        if within:
+            text = (f"**Within {within[0]} = {within[1]}** (“its” — the leading {within[0]} of the previous answer; "
+                    f"{len(dfs):,} records):\n\n" + text)
+        return _reply(text, "tool", model_on, started, charts=[chart],
                       calls=[{"tool": "rank_groups", "status": "ok", "result": _jsonable(r)}],
                       notes=["Ranked by Silt's deterministic tools over "
                              + (f"the records in scope ({scoping.describe(sc, len(dfs), len(df))})." if scoping.active(sc)
-                                else "all records.")])
+                                else f"the {within[0]} = {within[1]} records." if within else "all records.")])
     out = _ask_next_record(message, df, memory, model_on, started, sc)
     if out is not None:
         return out
@@ -802,6 +889,9 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
             out["answer"] += "\n\n_" + " ".join(notes) + "_"
     sc = memory.pop("_scope", None)
     answered = any(c.get("status") == "ok" for c in out.get("calls", []))
+    if sc and sc.get("dropped") and out.get("plan_source") not in ("conversation", "conversation_rules", "input_check"):
+        out["answer"] = "_" + "; ".join(sc["dropped"]) + "._\n\n" + out["answer"]
+        out.setdefault("notes", []).insert(0, "Filters not applied: " + "; ".join(sc["dropped"]) + ".")
     if out.get("plan_source") not in ("conversation", "conversation_rules", "input_check"):
         checks = list(out.get("verification") or [])
         if scoping.active(sc) and out.get("plan_source") != "model_program":
@@ -1380,11 +1470,13 @@ def _per_record(last: dict, df: pd.DataFrame, sc: dict | None) -> dict | None:
     dates = [c for c in df.columns if kind_of(df[c]) == "datetime"]
     label = primary.replace("_", " ")
     rows = []
+    from app.analyst.data import file_lines
+    line_of = file_lines(df)
     for i in df.index[keep]:
         v = vals.get(i)
         if v is None or pd.isna(v):
             continue
-        key = str(pd.Timestamp(df.at[i, dates[0]]).date()) if dates and pd.notna(df.at[i, dates[0]]) else f"line {int(list(df.index).index(i)) + 2}"
+        key = str(pd.Timestamp(df.at[i, dates[0]]).date()) if dates and pd.notna(df.at[i, dates[0]]) else f"line {line_of[i]}"
         rows.append({(dates[0] if dates else "record"): key, label: float(v)})
     if dates:
         rows.sort(key=lambda r: r[dates[0]])
@@ -1972,8 +2064,9 @@ def _ask_metric(message: str, df: pd.DataFrame, memory: dict, model_on: bool, st
     """A recognised business metric that is not a column (labor cost, conversion rate, ROI, ...): its standard
     definition is resolved against this data's columns and run by the calculator. No language model is needed; when
     an input is missing or ambiguous the user is asked, and no other quantity is substituted."""
-    p = metrics.plan(message, df) or metrics.count_plan(message, df) or metrics.formula_plan(message, df) \
-        or metrics.threshold_plan(message, df) or metrics.share_plan(message, df) or metrics.event_rate_plan(message, df)
+    p = metrics.plan(message, df) or metrics.multi_plan(message, df) or metrics.count_plan(message, df) \
+        or metrics.formula_plan(message, df) or metrics.threshold_plan(message, df) or metrics.share_plan(message, df) \
+        or metrics.event_rate_plan(message, df) or metrics.record_count_plan(message, df)
     if p is None:
         return None
     if not p.clarify:
@@ -1994,6 +2087,13 @@ def _ask_metric(message: str, df: pd.DataFrame, memory: dict, model_on: bool, st
                       notes=[f"Silt recognised the metric **{p.label}** but could not resolve its inputs in this data "
                              "without guessing, so nothing was calculated."])
     spec = p.spec
+    g = spec.get("group_by")
+    if g and sc and g in (sc.get("entities") or {}) and {str(x).lower() for x in df[g].dropna().astype(str).unique()} \
+            <= {str(v).lower() for v in sc["entities"][g]}:
+        # "status distribution (Completed, Shipped, Cancelled or Returned)": every value of the breakdown column is
+        # listed -- the groups to show, not a filter
+        sc = {**sc, "entities": {k: v for k, v in sc["entities"].items() if k != g}}
+        memory["_scope"] = sc
     if p.event_col and sc and p.event_col in (sc.get("entities") or {}):
         # "share of visits at Clinic B": Clinic B is what is counted, not a filter on the records
         sc = {**sc, "entities": {k: v for k, v in sc["entities"].items() if k != p.event_col}}
@@ -2018,8 +2118,21 @@ def _ask_metric(message: str, df: pd.DataFrame, memory: dict, model_on: bool, st
         return _reply(f"**The calculation of {p.label} failed** ({type(e).__name__}: {e}). This is a tool error, not a "
                       "limitation of your data; nothing was estimated instead.", "tool", model_on, started,
                       plan={"type": "error"}, notes=notes)
-    return _calc_reply(message, spec, result, base, notes, memory, model_on, started,
-                       {"primary": p.name, "percent": p.percent, "metric_label": p.label, "definition": p.definition})
+    out = _calc_reply(message, spec, result, base, notes, memory, model_on, started,
+                      {"primary": None if p.name == "summary" else p.name, "percent": p.percent,
+                       "metric_label": p.label, "definition": p.definition})
+    if p.name == "summary":
+        # revenue, cost and profit all totalled: say whether the stored profit is revenue - cost in these records
+        from app.analyst import reconcile
+        cols = reconcile.columns(df)
+        summed = {re.sub(r"^sum\((.*)\)$", r"\1", e) for e in spec["aggregate"].values() if e.startswith("sum(")}
+        if cols and set(cols) <= summed:
+            keep = scoping.mask(df, sc) if scoping.active(sc) else pd.Series(True, index=df.index)
+            rec = reconcile.check(df[keep])
+            if rec is not None:
+                out["answer"] += "\n\n" + reconcile.text(rec)
+                out["calls"].append({"tool": "reconcile_profit", "status": "ok", "args": {}, "result": _jsonable(rec)})
+    return out
 
 
 _REF_DUPES_OUT = re.compile(r"^\W*(?:and |now |then |also |please )*(?:exclud\w*|remov\w*|drop\w*|ignor\w*|without|no|"

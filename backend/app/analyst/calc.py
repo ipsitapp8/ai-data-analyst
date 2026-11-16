@@ -29,6 +29,8 @@ import re
 import numpy as np
 import pandas as pd
 
+from app.analyst.data import file_lines as _file_lines
+
 from app.analyst.data import kind_of
 
 MAX_EXPR = 300
@@ -776,15 +778,18 @@ def run(spec: dict, df: pd.DataFrame, dry: bool = False, question: str = "") -> 
             for r in groups:
                 r["share_of_" + share_of] = (r[share_of] or 0) / totals[share_of]
     focus = [g for g in groups if any(val == g["group"] for col, val in named_values(df, question) if col == group)]
+    if len(groups) > 1 and len(focus) == len(groups):
+        focus = []                  # every group named ("Completed, Shipped, Cancelled or Returned"): the whole breakdown
     why = None
     if group and len(groups) > 1 and re.search(r"\bwhy\b|\breason|\bexplain why|\bdriv", question, re.I):
         named = [n for n in aggs if n.replace("_", " ").lower() in question.lower()]
         why = _why(groups, aggs, len(valid), named[0] if named else spec.get("sort"))
     shown_cols = list(map(str, df.columns)) + list(spec["derive"])
     excluded_rows = []
+    line_of = _file_lines(frame)
     for idx in frame.index[excluded][:MAX_EXCLUDED_SHOWN]:
         rec = {c: _cell(frame.at[idx, c]) for c in shown_cols}
-        rec["row"] = int(list(frame.index).index(idx)) + 2       # the line in the file (header is line 1)
+        rec["row"] = line_of[idx]       # the line in the file (header is line 1)
         rec["excluded_because"] = "; ".join(r["reason"] for i, r in enumerate(rules) if flags.at[idx, i])
         excluded_rows.append(rec)
     # The data values each result was built from, so a reader can see e.g. whether a historical rate was
@@ -799,8 +804,12 @@ def run(spec: dict, df: pd.DataFrame, dry: bool = False, question: str = "") -> 
                             "values": [{"value": float(k), "records": int(v)} for k, v in list(vc.items())[:8]]})
     incomplete = {k: int(frame.loc[~excluded, k].isna().sum()) for k in spec["derive"]
                   if k in frame and int(frame.loc[~excluded, k].isna().sum())}
+    # an expression that uses no column is an assumption -- except a count of the records ("count(*)") and a column
+    # whose name has spaces ("nunique(Customer ID)"), which use the records themselves
     scenario = bool(assumed) or any(_time_literals(e) for e in full.values()) or any(
-        not (_names_in(e) & set(map(str, frame.columns))) for e in full.values()) or bool(_HYPOTHETICAL.search(question))
+        not (_names_in(e) & set(map(str, frame.columns))) and not re.fullmatch(r"\s*count\(\s*\*?\s*\)\s*", e)
+        and not any(" " in str(c) and str(c) in e for c in frame.columns)
+        for e in full.values()) or bool(_HYPOTHETICAL.search(question))
     selected = bool(group) or any(val.lower() in e["where"].lower() for e in spec["exclude"]
                                   for _, val in named_values(df, question)) or any(
         re.search(r"(!=|==)\s*'[^']*[A-Za-z][^']*'", e["where"]) for e in spec["exclude"])
@@ -827,7 +836,7 @@ def data_checks(spec: dict, frame: pd.DataFrame, valid: pd.DataFrame, original: 
     """Suspicious records that were INCLUDED in the result as they are, so the answer can say so instead of
     silently presenting a number built on them: exact duplicates, clock-out before clock-in (a negative
     duration), negative amounts. Lines are file lines (the header is line 1)."""
-    pos = {idx: i + 2 for i, idx in enumerate(frame.index)}
+    pos = _file_lines(frame)
     out = []
     exprs = list(spec["derive"].values()) + [e["where"] for e in spec["exclude"]] + aggregates
     if not any("duplicate(" in e for e in exprs):

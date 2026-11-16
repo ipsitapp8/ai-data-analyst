@@ -47,6 +47,10 @@ def _named(df: pd.DataFrame, message: str) -> tuple[dict, list]:
     hits = named_values(df, message)
     as_cols = column_values(message, df, hits)
     hits = [h for h in hits if h not in as_cols]
+    # an ordinary lower-case word that only matches a capitalised value ("a business overview" against the Segment value
+    # "Business") is the word, not that value -- unless its column is named with it ("business segment",
+    # "segment = business"), which makes it the value
+    hits = [(c, v) for c, v in hits if not _lowercase_word_only(message, c, v)]
     by_value: dict[str, list[str]] = {}
     for col, val in hits:
         by_value.setdefault(val.lower(), []).append(col)
@@ -67,6 +71,42 @@ def _named(df: pd.DataFrame, message: str) -> tuple[dict, list]:
         if val not in entities[col]:
             entities[col].append(val)
     return entities, ambiguous
+
+
+def column_named(message: str, col: str) -> bool:
+    """The question names the column itself ("segment", "sales rep", "customer_id")."""
+    name = re.sub(r"[_\s]+", " ", str(col)).strip().lower()
+    return bool(name) and re.search(rf"\b{re.escape(name)}s?\b", re.sub(r"[_\s]+", " ", message.lower())) is not None
+
+
+def _lowercase_word_only(message: str, col: str, val: str) -> bool:
+    """`val` occurs in the question only in lower case while the data writes it with capitals, and the question does
+    not name `col` -- an everyday word, not a selection of records."""
+    v = str(val)
+    if v == v.lower():
+        return False
+    # the value, or one of its words as written ("Priya" for "Priya Singh"), appears with its capitals
+    if any(re.search(rf"(?<![\w-]){re.escape(w)}(?![\w-])", message) for w in [v] + re.findall(r"[A-Za-z][\w'-]{2,}", v)):
+        return False
+    return not column_named(message, col)
+
+
+def unpopulated_filters(df: pd.DataFrame, entities: dict) -> list[tuple[str, dict]]:
+    """Filter columns that hold no value at all in the records the question's OTHER filters select ("Segment =
+    Business" within Table = Sales Transactions, where Segment is empty): (column, {other column: [values where the
+    column is filled in]}) for each. Such a filter can only select nothing, whatever value it names."""
+    out = []
+    for col in entities:
+        others = {c: v for c, v in entities.items() if c != col}
+        if not others:
+            continue
+        keep = pd.Series(True, index=df.index)
+        for c, vals in others.items():
+            keep &= df[c].astype(str).str.lower().isin([str(x).lower() for x in vals])
+        if keep.any() and df.loc[keep, col].isna().all():
+            filled = {c: sorted(df.loc[df[col].notna(), c].dropna().astype(str).unique().tolist())[:5] for c in others}
+            out.append((col, filled))
+    return out
 
 
 def column_values(message: str, df: pd.DataFrame, hits) -> set:
@@ -147,6 +187,20 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
             entities[col] = [v for v in entities[col] if v not in out]
             if not entities[col]:
                 del entities[col]
+    # a filter on a column that is empty in the records the other filters select can only select nothing: named
+    # outright ("Sales Transactions by Segment = Business") it is explained; met only as a value, it is not applied
+    dropped, unsupported = [], None
+    for col, filled in unpopulated_filters(df, entities):
+        where = "; ".join(f"{c} = {' or '.join(v)}" for c, v in filled.items() if v)
+        inside = "; ".join(f"{c} = {' or '.join(entities[c])}" for c in filled)
+        text = (f"**{col}** has no values in the records where {inside}, so it can't be used to filter them"
+                + (f" — it is only filled in where {where}." if where else "."))
+        if column_named(message, col) and unsupported is None:
+            unsupported = text
+        else:
+            dropped.append(f"“{' or '.join(entities[col])}” was not applied as a {col} filter: {col} has no values "
+                           f"where {inside}")
+        del entities[col]
     time = _time(df, message)
     numeric_eq: dict[str, list] = {}
     if time is None and not _PREDICTIVE.search(message):
@@ -163,6 +217,12 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
         scope["excluded_entities"] = excluded
     if numeric_eq:
         scope["numeric_eq"] = numeric_eq
+    if dropped:
+        scope["dropped"] = dropped
+    if unsupported:
+        scope["clarify"] = unsupported + " Nothing was filtered or calculated."
+        scope["unsupported_filter"] = True
+        return scope
     if ambiguous:
         val, cols = ambiguous[0]
         scope["clarify"] = (f"'{val}' is a value of more than one column ({', '.join(cols)}). Which one do you mean — "

@@ -310,7 +310,9 @@ def why_group(message: str, df: pd.DataFrame, memory: dict, model_on: bool, note
     gcol = res.get("group_by")
     lines_in = []
     if gcol in df.columns:
-        mine = {i + 2 for i, v in enumerate(df[gcol].astype(str)) if v == target["group"]}
+        from app.analyst.data import file_lines
+        pos = file_lines(df)
+        mine = {pos[i] for i, v in df[gcol].astype(str).items() if v == target["group"]}
         for c in res.get("data_checks") or []:
             hit = sorted(mine & set(c["lines"]))
             if hit:

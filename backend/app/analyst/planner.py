@@ -197,12 +197,30 @@ def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
         return {"type": "tools", "intent": "comparison", "calls": [{"tool": "compare_groups", "args": {"outcome": outcome, "group": cat_cols[0]}}]}
     if re.search(r"standard deviation|variance|\bstd\b|confidence interval|describe|summary|distribution", low) and num_cols:
         return {"type": "tools", "intent": "statistics", "calls": [{"tool": "describe_column", "args": {"column": num_cols[0]}}]}
+    from app.analyst.intent import ranking_aggregate  # noqa: PLC0415
+    _AGG_ARG = {"sum": "sum", "mean": "avg", "median": "median", "max": "max", "min": "min"}
+
+    def _ask_how(group, measure):
+        return {"type": "clarify", "question": f"Should each {group} be compared by its total {measure} or its average "
+                                               f"{measure}?", "options": [f"total {measure}", f"average {measure}"]}
     if re.search(r"\bwhich\b.*\b(most|highest|least|lowest|best|worst|largest|smallest)\b", low) and cat_cols and num_cols:
         order = "asc" if re.search(r"least|lowest|worst|smallest", low) else "desc"
-        agg = "sum" if re.search(r"total|in all|overall", low) else "avg"
+        agg = _AGG_ARG.get(ranking_aggregate(m, num_cols[0]) or "")
+        if agg is None:
+            return _ask_how(cat_cols[0], num_cols[0])
         return {"type": "tools", "intent": "group_comparison", "calls": [
             {"tool": "compute_metric", "args": {"aggregation": agg, "column": num_cols[0], "group_by": cat_cols[0], "order": order}},
             {"tool": "compare_groups", "args": {"outcome": num_cols[0], "group": cat_cols[0]}}]}
+    # "Identify the highest revenue region": groups ranked by the aggregate the question and the measure fix (a total
+    # for a flow, an average for a level, a single record only when the question says so) -- or Silt asks
+    if re.search(r"\b(highest|lowest|top|best|worst|largest|smallest|biggest|leading)\b", low) and cat_cols and num_cols \
+            and not re.search(r"\b(by|per|for each|in each)\s", low):
+        order = "asc" if re.search(r"least|lowest|worst|smallest", low) else "desc"
+        agg = _AGG_ARG.get(ranking_aggregate(m, num_cols[0]) or "")
+        if agg is None:
+            return _ask_how(cat_cols[0], num_cols[0])
+        return {"type": "tools", "intent": "group_comparison", "calls": [
+            {"tool": "compute_metric", "args": {"aggregation": agg, "column": num_cols[0], "group_by": cat_cols[0], "order": order}}]}
     agg = next((a for pat, a in ((r"averages?|means?", "avg"), (r"medians?", "median"), (r"totals?|sums?", "sum"),
                                   (r"maximum|max|highest|largest", "max"), (r"minimum|min|lowest|smallest", "min"))
                 if re.search(rf"\b(?:{pat})\b", low)), None)
