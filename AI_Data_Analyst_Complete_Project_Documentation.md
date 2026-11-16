@@ -1459,8 +1459,8 @@ All configuration is via environment variables (see `.env.example`):
 | `GEMINI_API_KEY` | (required) | Planner / Executor / Dashboard |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Which Gemini model |
 | `LLAMA_API_KEY` | (optional) | Critic agent (cross-model verification) |
-| `LLAMA_MODEL` | `Llama-4-Maverick-17B-128E-Instruct-FP8` | Which Llama model |
-| `LLAMA_BASE_URL` | `https://api.llama.com/compat/v1/` | Llama endpoint |
+| `LLAMA_MODEL` | `openai/gpt-oss-20b` | Which model the Critic uses |
+| `LLAMA_BASE_URL` | `https://api.groq.com/openai/v1` | Critic endpoint (OpenAI-compatible) |
 
 ### Sandbox
 | Variable | Default | Purpose |

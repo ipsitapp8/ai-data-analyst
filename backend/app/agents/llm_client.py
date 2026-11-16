@@ -99,6 +99,9 @@ class MalformedOutput(RuntimeError):
 
 
 _FILTERED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE"}
+# Kinds of unusable reply that are worth one more try on the same model (see config.GEMINI_MALFORMED_RETRIES).
+MALFORMED_RETRYABLE = frozenset({"empty_response", "no_function_call", "prose_instead_of_function_call", "malformed_function_call"})
+_MALFORMED_RETRY_WAIT_SECONDS = 1.5
 
 
 def diagnose_response(response: Any, tool_name: str) -> dict:
@@ -380,6 +383,7 @@ def call_tool(
 
     if config.GEMINI_API_KEY:
         attempt = 0
+        malformed_retries = 0
         while True:
             started = time.monotonic()
             try:
@@ -424,8 +428,18 @@ def call_tool(
                                    elapsed_ms=_elapsed_ms(started))
                 break
             except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
-                # Includes MalformedOutput: the model answered without the required structured
-                # output. Not retried here (unchanged behaviour): the backup provider gets the step.
+                # MalformedOutput: the model answered without the required structured output. A transient
+                # kind (empty reply, prose, a malformed call) gets a bounded retry on Gemini first; anything
+                # else, or once that is used up, hands the step to the backup provider.
+                if (isinstance(e, MalformedOutput) and e.diagnosis.get("category") in MALFORMED_RETRYABLE
+                        and malformed_retries < config.GEMINI_MALFORMED_RETRIES):
+                    malformed_retries += 1
+                    wait_s = _MALFORMED_RETRY_WAIT_SECONDS * _jitter()
+                    log_provider_event("gemini", tool_name, classify_failure(e), attempt=malformed_retries,
+                                       max_attempts=config.GEMINI_MALFORMED_RETRIES + 1, action="retry", wait_s=wait_s,
+                                       error_type=type(e).__name__, model=config.GEMINI_MODEL, elapsed_ms=_elapsed_ms(started))
+                    time.sleep(wait_s)
+                    continue
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
                 reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
                 log_provider_event("gemini", tool_name, classify_failure(e), attempt=attempt + 1, max_attempts=tries,

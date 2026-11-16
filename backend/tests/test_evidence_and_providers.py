@@ -386,45 +386,79 @@ def test_rate_limiting_is_distinguished_from_overload(gemini, caplog):
 
 
 @pytest.mark.parametrize("response,category,finish", [
-    (prose(), "prose_instead_of_function_call", "STOP"),
-    (no_call("MALFORMED_FUNCTION_CALL"), "malformed_function_call", "MALFORMED_FUNCTION_CALL"),
     (no_call("MAX_TOKENS"), "output_truncated", "MAX_TOKENS"),
     (no_call("SAFETY"), "content_filtered", "SAFETY"),
     (reply("some_other_tool", {"x": 1}), "wrong_function", "STOP"),
-    (NS(candidates=[], prompt_feedback=None, usage_metadata=None), "empty_response", "-"),
     (NS(candidates=[], prompt_feedback=NS(block_reason=NS(name="SAFETY")), usage_metadata=None), "prompt_blocked", "-"),
 ])
-def test_missing_or_malformed_structured_output_is_diagnosed_and_not_retried(gemini, caplog, response, category, finish):
+def test_unfixable_structured_output_failures_are_diagnosed_and_not_retried(gemini, caplog, response, category, finish):
     fake = gemini(FakeGemini(faults={"submit_thing": [response]}))
     with caplog.at_level(logging.WARNING), pytest.raises(runtime.ProviderUnavailable) as e:
         call()
-    assert fake.calls == ["submit_thing"] and fake.sleeps == [], "a malformed answer is not retried on the same provider"
+    assert fake.calls == ["submit_thing"] and fake.sleeps == [], "asking again cannot change a truncated, filtered, blocked or wrong-function reply"
     assert events(caplog) == [f"provider_event provider=gemini tool=submit_thing kind=malformed_output category={category} "
                               f"status=None finish_reasons={finish} attempt=1/3 action=give_up_no_backup_provider"
                               + tail("UNSPECIFIED")]
     assert OUTPUT_MARKER not in str(e.value), "what the model wrote is not echoed into the error"
 
 
+TRANSIENT_MALFORMED = [
+    (prose(), "prose_instead_of_function_call", "STOP"),
+    (no_call("MALFORMED_FUNCTION_CALL"), "malformed_function_call", "MALFORMED_FUNCTION_CALL"),
+    (NS(candidates=[], prompt_feedback=None, usage_metadata=None), "empty_response", "-"),
+]
+
+
+@pytest.mark.parametrize("response,category,finish", TRANSIENT_MALFORMED)
+def test_a_transient_malformed_reply_gets_one_retry_and_then_the_backup(gemini, caplog, response, category, finish):
+    fake = gemini(FakeGemini(faults={"submit_thing": [response, response]}))
+    with caplog.at_level(logging.WARNING), pytest.raises(runtime.ProviderUnavailable) as e:
+        call()
+    assert fake.calls == ["submit_thing"] * 2 and fake.sleeps == [1.5], "exactly one retry, after a short wait"
+    lines = events(caplog)
+    assert len(lines) == 2 and f"category={category}" in lines[0] and "attempt=1/2 action=retry" in lines[0]
+    assert lines[1].startswith(f"provider_event provider=gemini tool=submit_thing kind=malformed_output category={category} ")
+    assert "action=give_up_no_backup_provider" in lines[1], "once the retry is used up the step goes to the backup"
+    assert OUTPUT_MARKER not in str(e.value), "what the model wrote is not echoed into the error"
+
+
+def test_a_malformed_reply_that_succeeds_on_the_retry_returns_the_answer(gemini, caplog):
+    fake = gemini(FakeGemini({"submit_thing": [{"x": "ok"}]}, faults={"submit_thing": [prose()]}))
+    with caplog.at_level(logging.WARNING):
+        assert call() == {"x": "ok"}
+    assert fake.calls == ["submit_thing"] * 2 and fake.sleeps == [1.5]
+    assert len(events(caplog)) == 1 and "action=retry" in events(caplog)[0]
+
+
+def test_the_malformed_retry_can_be_switched_off(gemini, monkeypatch):
+    monkeypatch.setattr(config, "GEMINI_MALFORMED_RETRIES", 0)
+    fake = gemini(FakeGemini(faults={"submit_thing": [prose()]}))
+    with pytest.raises(runtime.ProviderUnavailable):
+        call()
+    assert fake.calls == ["submit_thing"] and fake.sleeps == []
+
+
 def test_diagnostics_never_contain_keys_prompts_or_generated_text(gemini, caplog, client):
     ws = workspace(client)
     created = ask(client, ws, QUESTION)
     gemini(FakeGemini({"submit_understanding": [stat_fixtures.engine_fixtures.UNDERSTANDING]},
-                      faults={"submit_understanding": [overloaded()], "submit_hypotheses": [prose()], "submit_report": [rate_limited()] * 3}))
+                      faults={"submit_understanding": [overloaded()], "submit_hypotheses": [prose(), prose()], "submit_report": [rate_limited()] * 3}))
     with caplog.at_level(logging.DEBUG):
         assert jobs.run_inline(created["job_id"]) == "succeeded"
     logged = "\n".join(r.getMessage() for r in caplog.records)
     trace = client.get(f"/api/questions/{created['question_id']}/trace", headers=ws["h"]).json()
     provider_events = [e for e in trace["events"] if e["kind"] == "provider"]
-    assert [e["name"] for e in provider_events] == ["gemini:overloaded", "gemini:malformed_output"], \
+    assert [e["name"] for e in provider_events] == ["gemini:overloaded", "gemini:malformed_output", "gemini:malformed_output"], \
         "what failed, and how, is in the run trace as well as the server log"
-    assert provider_events[1]["detail"]["category"] == "prose_instead_of_function_call"
-    assert provider_events[1]["detail"]["finish_reasons"] == ["STOP"] and provider_events[1]["detail"]["tool"] == "submit_hypotheses"
+    assert provider_events[1]["detail"]["action"] == "retry", "the first malformed reply is retried"
+    assert provider_events[2]["detail"]["category"] == "prose_instead_of_function_call"
+    assert provider_events[2]["detail"]["finish_reasons"] == ["STOP"] and provider_events[2]["detail"]["tool"] == "submit_hypotheses"
     assert set(provider_events[0]["detail"]) == {"provider", "tool", "kind", "category", "status", "finish_reasons", "attempt",
                                                  "max_attempts", "action", "wait_s", "error_type",
                                                  "model", "provider_status", "elapsed_ms"}
     assert provider_events[0]["detail"]["model"] == config.GEMINI_MODEL and provider_events[0]["detail"]["provider_status"] == "UNAVAILABLE"
     assert isinstance(provider_events[0]["detail"]["elapsed_ms"], int) and provider_events[0]["detail"]["elapsed_ms"] >= 0
-    assert provider_events[1]["detail"]["provider_status"] == "UNSPECIFIED", "a malformed answer carries no provider status word"
+    assert provider_events[2]["detail"]["provider_status"] == "UNSPECIFIED", "a malformed answer carries no provider status word"
     for haystack in (logged, str(trace)):
         assert SECRET_KEY not in haystack and OUTPUT_MARKER not in haystack and "Authorization" not in haystack
     assert not any(str(r["revenue"]) in e for e in events(caplog) for r in stat_fixtures.ROWS[:5]), "no dataset values in diagnostics"

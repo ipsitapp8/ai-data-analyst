@@ -331,14 +331,14 @@ def _render_live_run(qid: int) -> None:
                 go.Pie(
                     values=[overall, max(100 - overall, 0)], hole=0.72, sort=False,
                     direction="clockwise", rotation=0,
-                    marker=dict(colors=[ring, "#f0f0f2"], line=dict(width=0)),
+                    marker=dict(colors=[ring, "rgba(167,139,250,0.16)"], line=dict(width=0)),
                     textinfo="none", hoverinfo="skip",
                 )
             )
             fig.add_annotation(text=f"<b>{overall}%</b>", x=0.5, y=0.55, showarrow=False,
-                               font=dict(size=25, color="#18181b", family="system-ui, sans-serif"))
+                               font=dict(size=25, color="#ece8ff", family="system-ui, sans-serif"))
             fig.add_annotation(text="Overall Progress", x=0.5, y=0.38, showarrow=False,
-                               font=dict(size=11, color="#71717a", family="system-ui, sans-serif"))
+                               font=dict(size=11, color="#a9a3d6", family="system-ui, sans-serif"))
             plot(fig, height=200)
 
             html(
