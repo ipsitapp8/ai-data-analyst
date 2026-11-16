@@ -50,11 +50,13 @@ GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_S
 # --- Llama (Critic only) ---
 # A second, different model family for the Critic's independent verification --
 # genuinely independent means a different model, not just a different prompt on
-# the same one. Defaults to Meta's official Llama API (OpenAI-compatible); point
-# LLAMA_BASE_URL at Groq/Together/OpenRouter/etc instead if that's what your key is for.
+# the same one. Defaults to Groq's OpenAI-compatible API with openai/gpt-oss-20b, the
+# setup this project runs on: a key that Groq issued is rejected with a 401 by any other
+# endpoint, so a model name set without LLAMA_BASE_URL must not silently point somewhere else.
+# Point LLAMA_BASE_URL (and LLAMA_MODEL) at Meta's Llama API, Together, OpenRouter, etc. if your key is for one of those.
 LLAMA_API_KEY = _secret("LLAMA_API_KEY")
-LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "Llama-4-Maverick-17B-128E-Instruct-FP8"
-LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.llama.com/compat/v1/"
+LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "openai/gpt-oss-20b"
+LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.groq.com/openai/v1"
 
 # --- Sandbox ---
 # "docker" (recommended, isolated) or "subprocess" (dev-only fallback, NOT isolated)
