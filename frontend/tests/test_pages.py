@@ -1424,7 +1424,7 @@ def test_home_shows_live_counts_animated_and_suggestions_that_prefill_the_questi
     at = healthy(_home(ws))
     page_html = " ".join(str(m.value) for m in at.markdown)
     assert 'class="num h-count" style="--n:1"' in page_html, "the verified count is a real number, animated by CSS"
-    assert "h-cycle" in page_html and "Try asking" in page_html
+    assert "h-dot" in page_html and "Try asking" in page_html
     chips = [b for b in at.button if b.key and b.key.startswith("chip_")]
     assert chips, "suggested questions are buttons"
     wanted = chips[0].label
