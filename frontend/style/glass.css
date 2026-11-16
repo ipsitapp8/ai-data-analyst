@@ -240,10 +240,14 @@ button:disabled { opacity: 0.55; }
 .stApp [class*="st-key-home_chips"] button > div, .stApp [class*="st-key-home_chips"] button p { justify-content: flex-start; text-align: left; width: 100%; }
 .stApp [class*="st-key-home_chips"] button:hover { transform: translateX(4px); color: var(--ink); border-color: #837ab6; }
 
-/* ---- home hero: canvas scene with glass cards floating over it ---- */
-.stApp [class*="st-key-home_stage"] { position: relative; min-height: 470px; border-radius: 28px;
-  box-shadow: 0 30px 80px rgba(70,30,140,.28), 0 0 0 1px rgba(255,255,255,.08) inset; }
-.stApp [class*="st-key-home_stage"] [data-testid="stIFrame"], .stApp [class*="st-key-home_stage"] iframe { border-radius: 28px; display: block; }
+/* ---- home hero: the particle scene is a transparent, fixed backdrop behind the whole page; glass cards float where the sphere forms ---- */
+.stApp [class*="st-key-home_stage"] { position: relative; min-height: 470px; background: none; border-radius: 0; box-shadow: none; }
+.stApp [class*="st-key-home_stage"] iframe, .stApp [class*="st-key-home_stage"] [data-testid="stIFrame"] {
+  position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: -1 !important;
+  pointer-events: none !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; display: block;
+  color-scheme: dark !important; }
+.stApp:has([class*="st-key-home_stage"]) .stMain [data-testid="stMainBlockContainer"] {
+  background: none !important; border: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 .stApp [class*="st-key-home_stage"] > [data-testid="stLayoutWrapper"] { position: absolute; top: 0; left: 0; right: 0; height: 470px; pointer-events: none; }
 .stApp [class*="st-key-home_stage"] > [data-testid="stLayoutWrapper"] * { pointer-events: none; }
 .stApp [class*="st-key-home_stage"] .h-stage { position: absolute; top: 0; left: 0; right: 0; height: 470px; min-height: 0; }

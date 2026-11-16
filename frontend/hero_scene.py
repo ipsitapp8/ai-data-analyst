@@ -10,9 +10,9 @@ the app is passed in, so there is nothing to escape). The mouse tilts the sphere
 points aside. `prefers-reduced-motion` shows a single still frame of the finished sphere.
 """
 
-SCENE_HTML = r"""<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;height:100%;background:transparent;overflow:hidden}
-canvas{display:block;width:100%;height:100%;border-radius:28px}
+SCENE_HTML = r"""<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark"><style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;color-scheme:dark}
+canvas{display:block;width:100%;height:100%}
 </style></head><body><canvas id="c"></canvas><script>
 (() => {
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
@@ -40,7 +40,7 @@ function sprite(rgb) {
 sprites = PAL.map(sprite); dimSprite = sprite(DIM);
 
 function build() {
-  N = Math.round(clamp(W * H / 105, 1100, 2600));
+  N = Math.round(clamp(W * H / 380, 1400, 3200));
   P = [];
   for (let i = 0; i < N; i++) P.push({
     x: rnd(0, W), y: rnd(0, H), vx: 0, vy: 0,
@@ -53,13 +53,22 @@ function resize() {
   W = cv.clientWidth; H = cv.clientHeight;
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  cx = W * .36; cy = H * .53; R = Math.min(W * .56, H) * .38;
-  build(); bg(1);
+  anchor();
+  build(); fade(1);
 }
-function bg(a) {
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .75);
-  g.addColorStop(0, `rgba(40,22,92,${a})`); g.addColorStop(.55, `rgba(20,13,52,${a})`); g.addColorStop(1, `rgba(10,7,28,${a})`);
-  ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+// the canvas is transparent and fixed behind the whole page: old frames fade out instead of being painted over
+function fade(a) {
+  ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+}
+// the sphere, captions and cards are anchored to the hero stage in the page (same-origin parent), so they scroll with it
+let sx = 0, sy = 0, sw = 0, sh = 0;
+function anchor() {
+  let r = null;
+  try { const el = window.parent.document.querySelector('[class*="st-key-home_stage"]'); if (el) r = el.getBoundingClientRect(); } catch (e) {}
+  if (r && r.width > 50) { sx = r.left; sy = r.top; sw = r.width; sh = r.height; }
+  else { sx = W * .55; sy = H * .14; sw = W * .38; sh = H * .6; }
+  cx = sx + sw * .36; cy = sy + sh * .53; R = Math.min(sw, sh) * .23;
 }
 
 // divergence-free (curl) flow: particles keep an even density instead of piling into filaments
@@ -100,9 +109,9 @@ function caption(t) {
   for (const [h, s, a] of items) {
     if (a < .01) continue;
     ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.font = '600 12px system-ui,Segoe UI,sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px'; ctx.fillText(h, 24, 34);
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px'; ctx.fillText(h, sx + 24, sy + 34);
     if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '400 11.5px system-ui,Segoe UI,sans-serif'; ctx.fillText(s, 24, 52);
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '400 11.5px system-ui,Segoe UI,sans-serif'; ctx.fillText(s, sx + 24, sy + 52);
   }
   ctx.globalAlpha = 1;
 }
@@ -121,7 +130,7 @@ function draw(t, dt) {
 
   // sphere weight, drives glow and wireframe
   const sw = t < 10 ? 0 : t < 14 ? ss(10, 14, t) : t < 16.5 ? 1 : 1 - ss(16.5, 18, t);
-  bg(REDUCE ? 1 : .3);
+  anchor(); fade(REDUCE ? 1 : .3);
 
   // advance the loose points every frame so every transition starts from where they are
   for (const p of P) {
@@ -212,8 +221,10 @@ function draw(t, dt) {
 }
 
 addEventListener('resize', resize);
-cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); mx = (e.clientX - r.left) / r.width; my = (e.clientY - r.top) / r.height; mouseIn = true; });
-cv.addEventListener('pointerleave', () => { mouseIn = false; mx = .5; my = .5; });
+try {
+  window.parent.addEventListener('mousemove', e => { mx = e.clientX / W; my = e.clientY / H; mouseIn = true; });
+  window.parent.document.addEventListener('mouseleave', () => { mouseIn = false; mx = .5; my = .5; });
+} catch (e) {}
 resize();
 if (REDUCE) { for (let k = 0; k < 4; k++) draw(15.2, .016); } else requestAnimationFrame(frame);
 })();

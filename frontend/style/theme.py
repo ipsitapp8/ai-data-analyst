@@ -38,9 +38,9 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 # Chart data gets real, distinct color even though the UI chrome around it
 # stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
 # do it): plain chrome, legible/vivid data encoding.
-CHART_COLORWAY = ["#837ab6", "#cc8db3", "#250e2c", "#f6a5c0", "#9d85b6", "#64748b"]
-ACCENT = "#250e2c"      # deep plum -- the one interactive/brand UI color
-ACCENT_2 = "#94a3b8"    # slate -- in-progress/secondary state
+CHART_COLORWAY = ["#a78bfa", "#f472b6", "#7dd3fc", "#fbbf24", "#6d5efc", "#4ade80"]
+ACCENT = "#a78bfa"      # violet -- the one interactive/brand UI color on the indigo skin
+ACCENT_2 = "#7dd3fc"    # sky -- in-progress/secondary state
 
 BASE_CSS = """
 <style>
@@ -498,39 +498,39 @@ hr { border-color: var(--border) !important; }
 # pages/4_Dashboards.py), and only to the main area, dialogs and popovers --
 # the sidebar and every other page keep the base tokens above.
 DASHBOARD_PALETTE: dict[str, str] = {
-    "orange": "#FF824D", "yellow": "#FFD166", "mint": "#83D8C5",
-    "coral": "#E87983", "lavender": "#A6A2E8", "blue": "#61BDE0",
+    "violet": "#A78BFA", "pink": "#F472B6", "sky": "#7DD3FC",
+    "amber": "#FBBF24", "indigo": "#6D5EFC", "mint": "#4ADE80",
 }
-# Orange leads; the pastels follow for further series. chart_studio's "Dashboard"
+# Violet leads; the pink, sky and amber follow for further series. chart_studio's "Dashboard"
 # palette is this same list (a test keeps the two in step).
 DASHBOARD_COLORWAY = list(DASHBOARD_PALETTE.values())
 DASHBOARD_TOKENS: dict[str, str] = {
-    "--bg-page": "#B8CECA",
-    "--bg-card": "#FFFFFF",
-    "--bg-card-hover": "#F6F9F8",
-    "--bg-inset": "#F4F7F6",
-    "--border": "#DCE3E0",
-    "--border-strong": "#C6D1CD",
-    "--text-primary": "#202522",
-    "--text-secondary": "#58615D",
-    "--text-muted": "#7C8581",
-    "--accent": DASHBOARD_PALETTE["orange"],
-    "--accent-dim": "#F26E36",
-    "--accent-ink": "#B4470F",        # orange dark enough to read as text on white
-    "--accent-bg": "#FFF1EA",
-    "--accent-border": "#FFD0BB",
+    "--bg-page": "#0B0820",
+    "--bg-card": "#1B1347",
+    "--bg-card-hover": "#261A5E",
+    "--bg-inset": "#120D33",
+    "--border": "#34296F",
+    "--border-strong": "#4C3D9A",
+    "--text-primary": "#ECE8FF",
+    "--text-secondary": "#B6B0E0",
+    "--text-muted": "#8A84BD",
+    "--accent": DASHBOARD_PALETTE["violet"],
+    "--accent-dim": "#8B5CF6",
+    "--accent-ink": "#C4B5FD",        # light violet that reads as text on the indigo surface
+    "--accent-bg": "rgba(139,92,246,0.18)",
+    "--accent-border": "rgba(167,139,250,0.38)",
     "--radius-lg": "16px",
     "--radius-md": "12px",
     "--radius-sm": "8px",
-    "--dash-surface": "#FFFFFF",
+    "--dash-surface": "#140E3A",
     "--dash-surface-radius": "28px",
     "--dash-gap": "20px",
-    "--dash-shadow": "0 1px 2px rgba(32,37,34,0.05), 0 18px 40px rgba(32,37,34,0.08)",
-    "--dash-card-shadow": "0 1px 2px rgba(32,37,34,0.04), 0 4px 12px rgba(32,37,34,0.03)",
+    "--dash-shadow": "0 1px 2px rgba(3,2,16,0.4), 0 18px 40px rgba(3,2,16,0.5)",
+    "--dash-card-shadow": "0 1px 2px rgba(3,2,16,0.4), 0 4px 12px rgba(3,2,16,0.3)",
     **{f"--dash-c{i}": colour for i, colour in enumerate(DASHBOARD_PALETTE.values(), start=1)},
 }
 # Plotly draws on a canvas that page CSS cannot reach, so the chart's own colours are set here.
-DASHBOARD_CHART = {"text": "#202522", "muted": "#7C8581", "grid": "#EDF1EF", "line": "#DCE3E0"}
+DASHBOARD_CHART = {"text": "#ece8ff", "muted": "#a9a3d6", "grid": "rgba(167,139,250,0.12)", "line": "rgba(167,139,250,0.28)"}
 
 # .stMain is the main scroll area (its data-testid varies with the page's content)
 _DASHBOARD_SCOPE = '.stMain, [data-testid="stDialog"], [data-baseweb="popover"]'
@@ -688,7 +688,8 @@ def inject_dashboard_theme() -> None:
     """Call after page_setup() on a page that should use the dashboard look."""
     st.markdown(dashboard_theme_css(), unsafe_allow_html=True)
     glass = (Path(__file__).with_name("dashboard_glass.css")).read_text(encoding="utf-8")
-    st.markdown("<style>" + " ".join(line.strip() for line in glass.splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
+    indigo = (Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8")   # re-assert after the dashboard sheet
+    st.markdown("<style>" + " ".join(line.strip() for line in (glass + chr(10) + indigo).splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
 
 
 def esc(value) -> str:
@@ -770,20 +771,19 @@ def _nav_icon_css() -> str:
 # elements, so nothing else on a page changes.
 _READABLE_TEXT_CSS = (
     "<style>"
-    "[data-testid='stChatMessage']{background:#ffffff;border:1px solid #e4e4ee;border-radius:10px;}"
-    "[data-testid='stChatMessage'] *,[data-testid='stExpander'] *{color:#1f2330;}"
-    "[data-testid='stChatMessage'] th,[data-testid='stChatMessage'] td{border:1px solid #e4e4ee;padding:2px 8px;}"
-    # The text colour above is dark, so code chips and code blocks need a light
-    # background too; a dark-mode browser otherwise gives them a dark one.
+    "[data-testid='stChatMessage']{background:rgba(24,17,60,.7);border:1px solid rgba(167,139,250,.22);border-radius:10px;}"
+    "[data-testid='stChatMessage'] *,[data-testid='stExpander'] *{color:#ece8ff;}"
+    "[data-testid='stChatMessage'] th,[data-testid='stChatMessage'] td{border:1px solid rgba(167,139,250,.22);padding:2px 8px;}"
+    # light text on the indigo surface: code chips and blocks get a deep, translucent background
     "[data-testid='stChatMessage'] code,[data-testid='stChatMessage'] pre,"
-    "[data-testid='stExpander'] code,[data-testid='stExpander'] pre{background:#eef0f5 !important;}"
+    "[data-testid='stExpander'] code,[data-testid='stExpander'] pre{background:rgba(8,5,26,.8) !important;}"
     "[data-testid='stExpander'] summary,[data-testid='stExpander'] [data-testid='stJson']"
-    "{background:#f6f7fb !important;}"
-    "[data-testid='stTabs'] [role='tab'][aria-selected='false'] p{color:#5b6070 !important;}"
+    "{background:rgba(24,17,60,.55) !important;}"
+    "[data-testid='stTabs'] [role='tab'][aria-selected='false'] p{color:#a9a3d6 !important;}"
     "[data-testid='stSelectbox'] input,[data-testid='stSelectbox'] p,[data-testid='stMultiSelect'] input,"
-    "[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,[data-testid='stNumberInput'] input,"
-    "[data-testid='stWidgetLabel'] p"
-    "{color:#1f2330 !important;-webkit-text-fill-color:#1f2330 !important;}"
+    "[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,[data-testid='stNumberInput'] input"
+    "{color:#ece8ff !important;-webkit-text-fill-color:#ece8ff !important;}"
+    "[data-testid='stWidgetLabel'] p{color:#b6b0e0 !important;-webkit-text-fill-color:#b6b0e0 !important;}"
     "</style>"
 )
 
@@ -791,7 +791,8 @@ _READABLE_TEXT_CSS = (
 def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
-        Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8")
+        Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8") + "\n" + (
+        Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8")
     # Flatten to one line: markdown ends an HTML block at the first blank line,
     # which would spill the rest of the stylesheet onto the page as text.
     skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())
@@ -1369,22 +1370,22 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#52525b", family="Inter, system-ui, sans-serif", size=12),
+        font=dict(color="#b6b0e0", family="Inter, system-ui, sans-serif", size=12),
         colorway=colorway,
         margin=dict(l=8, r=8, t=8, b=8),
         height=height,
         showlegend=showlegend,
-        legend=dict(font=dict(color="#52525b"), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d4d4d8",
-                        font=dict(color="#18181b", family="Inter, system-ui, sans-serif")),
+        legend=dict(font=dict(color="#b6b0e0"), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#1b1347", bordercolor="#4c3d9a",
+                        font=dict(color="#ece8ff", family="Inter, system-ui, sans-serif")),
         # empty string, not None -- None leaves the title node in place and
         # Plotly renders a literal "undefined" tspan above the plot
         title=dict(text=""),
     )
-    fig.update_xaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
-                     color="#71717a", showline=False, ticks="")
-    fig.update_yaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
-                     color="#71717a", showline=False, ticks="")
+    fig.update_xaxes(gridcolor="rgba(167,139,250,0.12)", zerolinecolor="rgba(167,139,250,0.28)",
+                     color="#a9a3d6", showline=False, ticks="")
+    fig.update_yaxes(gridcolor="rgba(167,139,250,0.12)", zerolinecolor="rgba(167,139,250,0.28)",
+                     color="#a9a3d6", showline=False, ticks="")
     if recolor:
         _recolor_traces(fig, colorway)
     return fig
@@ -1487,7 +1488,7 @@ def dashboard_chart(fig: go.Figure, own_traces: bool = False) -> go.Figure:
         font=dict(color=c["muted"], family=family, size=12),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     font=dict(color=c["muted"], size=12), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor=c["line"], font=dict(color=c["text"], family=family)),
+        hoverlabel=dict(bgcolor="#1b1347", bordercolor=c["line"], font=dict(color=c["text"], family=family)),
         margin=dict(l=8, r=8, t=40 if legend_shown else 12, b=8),
     )
     axis = dict(gridcolor=c["grid"], zerolinecolor=c["line"], linecolor=c["line"], color=c["muted"],

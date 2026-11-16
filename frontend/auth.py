@@ -16,6 +16,8 @@ import os
 from pathlib import Path
 
 import streamlit as st
+
+from landing_scene import LANDING_SCENE_HTML
 import streamlit.components.v1 as components
 
 _SESSION_KEY = "_auth_ok"
@@ -23,6 +25,8 @@ _SESSION_KEY = "_auth_ok"
 def _landing_css() -> str:
     """Landing/sign-in stylesheet (style/landing.css), flattened like _gate_css."""
     raw = (Path(__file__).parent / "style" / "landing.css").read_text(encoding="utf-8")
+    raw += chr(10) + (Path(__file__).parent / "style" / "landing_indigo.css").read_text(encoding="utf-8")
+    raw += chr(10) + (Path(__file__).parent / "style" / "landing_hero.css").read_text(encoding="utf-8")
     return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
 
 
@@ -267,22 +271,26 @@ def require_login() -> None:
             f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
             '<div class="lp-navpill"><a href="?" target="_self">Home</a><a class="off" href="?view=login" target="_self">Log in</a></div>'
             '<div class="lp-nav-r"><a class="lp-pill" href="?view=signup" target="_self">Get started &#8599;</a></div></div>'
-            '<div class="lp-hero"><div class="lp-glow"></div><div class="lp-grid"></div>'
-            '<div class="lp-float lp-c1"><div class="who"><span class="lp-av" style="background:#837ab6">Q</span><div>Which region grew fastest?'
-            '<small>Asked Wed 14 Oct, 2026</small></div></div><div class="wk">Step 3 of 4 &middot; Running analysis</div>'
-            '<div class="lp-bar"><i style="width:75%"></i></div></div>'
-            '<div class="lp-float lp-c2"><div class="who"><span class="lp-av" style="background:#16a34a">&#10003;</span><div>Independent check passed'
-            '<small>Critic model &middot; 0 issues</small></div></div><div class="wk">Verified &middot; 12 of 12 numbers</div>'
-            '<div class="lp-bar"><i style="width:100%"></i></div></div>'
-            '<div class="lp-float lp-c3"><small>Analysis by</small><b>Silt Agent</b><em>Sales</em><em>Growth</em>'
-            '<div class="t">Q3 &middot; 2,481 rows</div></div>'
-            '<div class="lp-dark"><span class="lp-av">&#9881;</span><div>Planner agent<small>Plans the analysis</small></div></div>'
-            '<div class="lp-purp"><span class="lp-av">&#10003;</span><div>Critic agent<small>Checks every number</small></div></div>'
-            '<h1 class="lp-title">Data Matters.<br>Ask Your Data<br><span class="fade">In Plain English</span><br>Trust Every Answer</h1>'
+            '<div class="lp-aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div><div class="lp-spot" aria-hidden="true"></div>'
+            '<div class="lp-hero2"><div class="lp-hcopy">'
+            '<div class="lp-kicker"><span class="dot"></span>Autonomous AI data analyst</div>'
+            '<h1 class="lp-title"><span class="l1">Data Matters.</span>Ask Your Data<br><span class="grad">In Plain English</span><br>Trust Every Answer</h1>'
             '<p class="lp-sub">An autonomous AI data analyst for teams. An agent plans, runs and explains the analysis, '
             'and an independent model checks it before it reaches you.</p>'
             '<div class="lp-ctas"><a class="lp-btn light" href="?view=login" target="_self">Log in</a>'
-            '<a class="lp-btn dark" href="?view=signup" target="_self">Get Started &rarr;</a></div></div>'
+            '<a class="lp-btn dark" href="?view=signup" target="_self">Get Started <span class="arr">&rarr;</span></a></div></div>'
+            '<div class="lp-core-stage" id="lp-core">'
+            '<div class="lp-panel lp-p1"><div class="lp-ptag"><i></i>PLANNER &middot; 01</div><div class="lp-ptitle">Plans the analysis</div>'
+            '<div class="lp-pline">&ldquo;Which region grew fastest?&rdquo;</div><div class="lp-pline lp-dim">3 steps &middot; group by region</div>'
+            '<div class="lp-pmeter"><b></b></div></div>'
+            '<div class="lp-panel lp-p2"><div class="lp-ptag"><i></i>ANALYST &middot; 02</div><div class="lp-ptitle">Runs it in a sandbox</div>'
+            '<div class="lp-pline">Q3 &middot; 2,481 rows</div><div class="lp-pline lp-dim">code, result and evidence logged</div>'
+            '<div class="lp-pmeter"><b></b></div></div>'
+            '<div class="lp-panel lp-p3"><div class="lp-ptag"><i></i>CRITIC &middot; 03</div><div class="lp-ptitle">Checks it independently</div>'
+            '<div class="lp-pline">12 of 12 numbers reproduced</div><div class="lp-pline lp-dim">a second model, a second method</div>'
+            '<div class="lp-pmeter"><b></b></div></div>'
+            '<div class="lp-core-cap">Illustrative demonstration &middot; sample question, not a live analysis</div>'
+            '</div></div>'
             '<div class="lp-strip"><span>CSV &amp; Excel</span><span>PostgreSQL</span><span>Sandboxed Python</span>'
             '<span>Audit trail</span><span>Scheduled reports</span></div>'
             '<div class="lp-sec"><div class="lp-eyebrow">Why Silt</div>'
@@ -309,6 +317,8 @@ def require_login() -> None:
             '<a class="lp-btn light" href="?view=signup" target="_self">Get Started &rarr;</a></div>',
             unsafe_allow_html=True,
         )
+        with st.container(key="lp_scene"):
+            st.iframe(LANDING_SCENE_HTML, height=200)
         st.stop()
 
     # ---- sign-in page ----

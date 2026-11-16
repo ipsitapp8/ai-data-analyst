@@ -974,7 +974,7 @@ def test_the_dashboard_look_is_applied_on_the_dashboard_page_only(api, ws):
     assert declared.startswith("<style>.stMain,") and ":root" not in sheet, "tokens are set on the main area, never globally"
     assert "stSidebar" not in sheet, "the sidebar keeps the base look"
     assert all(f"{name}: {value};" in declared for name, value in theme.DASHBOARD_TOKENS.items())
-    assert theme.ACCENT == "#250e2c" and "--accent: #250e2c" in theme.BASE_CSS, "the base tokens are untouched"
+    assert theme.ACCENT == "#a78bfa" and "--accent: #250e2c" in theme.BASE_CSS, "the base token block is untouched; indigo.css overrides it"
 
 
 def test_the_dashboard_shows_whatever_the_analysis_produced(api, ws):
@@ -1041,7 +1041,7 @@ def test_restyling_in_chart_studio_keeps_the_user_s_palette(api, ws):
     assert (colour if isinstance(colour, str) else colour[0]) == cs.rgba(first, cs.DEFAULT_STYLE["opacity"])
     saved = api.get(f"/api/questions/{out['question_id']}/dashboard", headers=ws["h"]).json()["view_overrides"]
     assert [v["chart_type"] for v in saved.values()] == ["hbar"], "the choice is saved for the team as before"
-    assert theme.CHART_COLORWAY[0] == "#837ab6", "other pages' chart colours are unchanged"
+    assert theme.CHART_COLORWAY[0] == "#a78bfa", "other pages' chart colours are the indigo-skin violet"
 
 
 def test_chart_helpers_keep_their_default_colours_unless_given_a_colorway():
@@ -1072,9 +1072,9 @@ def test_the_dashboard_tokens_and_palette_are_one_coherent_set():
 
     t = theme.DASHBOARD_TOKENS
     assert (t["--bg-page"], t["--dash-surface"], t["--accent"], t["--text-primary"], t["--text-muted"], t["--border"]) == (
-        "#B8CECA", "#FFFFFF", "#FF824D", "#202522", "#7C8581", "#DCE3E0")
-    assert theme.DASHBOARD_PALETTE == {"orange": "#FF824D", "yellow": "#FFD166", "mint": "#83D8C5",
-                                       "coral": "#E87983", "lavender": "#A6A2E8", "blue": "#61BDE0"}
+        "#0B0820", "#140E3A", "#A78BFA", "#ECE8FF", "#8A84BD", "#34296F")
+    assert theme.DASHBOARD_PALETTE == {"violet": "#A78BFA", "pink": "#F472B6", "sky": "#7DD3FC",
+                                       "amber": "#FBBF24", "indigo": "#6D5EFC", "mint": "#4ADE80"}
     assert theme.DASHBOARD_COLORWAY[0] == t["--accent"], "the accent leads the data colours"
     assert [t[f"--dash-c{i}"] for i in range(1, 7)] == theme.DASHBOARD_COLORWAY, "cards and charts draw from the same six colours"
     assert cs.PALETTES["Dashboard"] == theme.DASHBOARD_COLORWAY and cs.DEFAULT_STYLE["palette"] == "Dashboard", \
@@ -1113,7 +1113,7 @@ def test_the_dashboard_chart_finish_changes_presentation_only():
     assert after.layout.legend.orientation == "h" and after.layout.font.color == theme.DASHBOARD_CHART["muted"]
     assert after.layout.xaxis.gridcolor == after.layout.yaxis.gridcolor == theme.DASHBOARD_CHART["grid"]
     assert after.layout.barcornerradius == 6 and after.data[1].line.width == 2.5 and after.data[1].marker.size == 7
-    assert after.data[0].marker.color == "#FF824D" and after.data[1].line.color == "#FFD166"
+    assert after.data[0].marker.color == "#A78BFA" and after.data[1].line.color == "#F472B6"
     assert after.layout.paper_bgcolor == after.layout.plot_bgcolor == "rgba(0,0,0,0)", "the card behind the chart shows through"
 
     lone = theme.dashboard_chart(theme.style_chart(go.Figure([go.Bar(x=["a"], y=[1])]), showlegend=True))
@@ -1431,3 +1431,11 @@ def test_home_shows_live_counts_animated_and_suggestions_that_prefill_the_questi
     chips[0].click().run()
     assert at.session_state["prefill_question"] == wanted, "the Analyses page receives the chosen question"
     assert went == ["pages/3_Analyses.py"]
+
+
+def test_landing_page_labels_the_demo_and_keeps_every_auth_link(api):
+    page_html = " ".join(str(m.value) for m in _signed_out(None).markdown)
+    assert "Illustrative demonstration" in page_html and "not a live analysis" in page_html, "the animation is never passed off as a live run"
+    for needle in ('href="?view=login"', 'href="?view=signup"', "Data Matters.", "Ask Your Data", "In Plain English", "Trust Every Answer"):
+        assert needle in page_html, needle
+    assert page_html.count('class="lp-panel') == 3, "Planner, Analyst, Critic"
