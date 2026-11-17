@@ -179,6 +179,11 @@ def _as_datetime(s):
     return ts
 
 
+def _day(d):
+    v = _as_datetime(d)
+    return v.dt.normalize() if isinstance(v, pd.Series) else pd.Timestamp(v).normalize()
+
+
 def _date_part(d, part: str):
     v = _as_datetime(d)
     return getattr(v.dt, part) if isinstance(v, pd.Series) else getattr(v, part)
@@ -256,6 +261,10 @@ FUNCTIONS = {
     "abs": (1, lambda x: _num(x).abs() if isinstance(x, pd.Series) else abs(x)),
     "round": (2, lambda x, n: _num(x).round(int(n)) if isinstance(x, pd.Series) else round(x, int(n))),
     "isnull": (1, lambda x: x.isna()),
+    # a record's date against a written date ('YYYY-MM-DD'): how a period is held to in a calculation
+    # (compared as whole calendar days, like every other path: a time of day never moves a record out of its day)
+    "date_before": (2, lambda d, t: _day(d) < _day(t)),
+    "date_after": (2, lambda d, t: _day(d) > _day(t)),
     "lower": (1, lambda x: x.astype("string").str.lower()),
 }
 _CMP = {ast.Lt: "lt", ast.LtE: "le", ast.Gt: "gt", ast.GtE: "ge", ast.Eq: "eq", ast.NotEq: "ne"}
@@ -736,6 +745,11 @@ def run(spec: dict, df: pd.DataFrame, dry: bool = False, question: str = "") -> 
         m = _agg_match(a)
         simple = m and m.group(1).lower() in AGG_FUNCS and _balanced_inner(m.group(2))
         aggs[name] = (AGG_FUNCS[m.group(1).lower()], m.group(2).strip() or "1") if simple else ("expr", a)
+        if simple and aggs[name][1] in df.columns:
+            from app.analyst import semantics
+            why = semantics.aggregation_problem(df, aggs[name][1], aggs[name][0])
+            if why:
+                raise CalcError(why)
         full[name] = balance(a.strip())
     group = spec.get("group_by")
     if group and group not in frame.columns:

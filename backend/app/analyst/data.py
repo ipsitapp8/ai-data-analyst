@@ -23,7 +23,9 @@ def load_table(path: str) -> pd.DataFrame:
             parsed = pd.to_datetime(df[c], errors="coerce")
             if parsed.notna().mean() > 0.9:
                 df[c] = parsed
-    return df
+    # one shared reading of the columns (row index set aside, shifted rows realigned, "26.3k" counts read as numbers)
+    from app.analyst import schema_profile
+    return schema_profile.apply(df)
 
 
 def file_lines(frame: pd.DataFrame) -> dict:
@@ -133,6 +135,12 @@ def _token_matches(t: str, w: str) -> bool:
     'pop' / 'population'), or an in-order abbreviation with the same first letter ('dept' / 'department')."""
     if t == w or (t.endswith("s") and t[:-1] == w) or (w.endswith("s") and w[:-1] == t):
         return True
+    if len(t) >= 5 and len(w) >= 5 and t not in _STOP and w not in _STOP:
+        # "rated" / "rating", "reviewed" / "review": one stem once -ed, -ing, -s is taken off
+        def stem(x):
+            return re.sub(r"(?:ing|ed|es|s|d)$", "", x)
+        if stem(t) == stem(w) and len(stem(t)) >= 3:
+            return True
     if len(t) < 3 or t.isdigit():
         return False
     if w.startswith(t) and len(w) - len(t) <= 8:

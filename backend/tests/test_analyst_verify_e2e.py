@@ -65,7 +65,18 @@ def test_case_a_a_correct_figure_is_verified():
     assert any(c["check"].startswith("independent recomputation") and c["ok"] for c in out["verification"])
 
 
-@pytest.mark.parametrize("q", ["Is revenue correlated with visitors?", "Forecast revenue for next month"])
+def test_case_a_a_correlation_is_recomputed_and_verified():
+    from scipy import stats
+    df = shop()
+    out = ask("Is revenue correlated with visitors?", df)
+    want = stats.pearsonr(df.revenue, df.visitors).statistic
+    r = next(c for c in out["calls"] if c["tool"] == "correlation")["result"]
+    assert r["pearson_r"] == pytest.approx(want)
+    assert out["verify_status"] == "verified" and "✓" in status_line(out)
+    assert all(c["ok"] for c in out["verification"] if c["check"].startswith("independent recomputation"))
+
+
+@pytest.mark.parametrize("q", ["Forecast revenue for next month"])
 def test_case_b_what_cannot_be_recomputed_is_not_called_verified(q):
     out = ask(q, shop())
     assert out["verify_status"] == "not independently verified"

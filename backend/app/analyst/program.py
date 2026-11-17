@@ -119,11 +119,11 @@ def op_select(s, results, data):
         date = per.get("column") or _date_col(df)
         if not date:
             raise ProgramError(f"step '{s['id']}': a period needs exactly one date column")
-        d = pd.to_datetime(df[date], errors="coerce")
-        if per.get("start"):
-            keep &= d >= pd.Timestamp(per["start"])
+        d = pd.to_datetime(df[date], errors="coerce").dt.normalize()   # whole calendar days: a time of day never
+        if per.get("start"):                                              # drops a record from its own day
+            keep &= (d >= pd.Timestamp(per["start"]).normalize()).fillna(False)
         if per.get("end"):
-            keep &= d <= pd.Timestamp(per["end"])
+            keep &= (d <= pd.Timestamp(per["end"]).normalize()).fillna(False)
     for w in s.get("where") or []:
         col, op, val = w["column"], w["op"], w["value"]
         _need_col(df, col, s)
@@ -189,12 +189,12 @@ def op_aggregate(s, results, data):
 
     def agg(x):
         if fn == "count":
-            return float(len(x))
+            return int(len(x))          # counts are whole numbers (shown as 88, not 88.00)
         if fn == "sum" and len(x) == 0:
             return 0.0                  # no records selected: nothing completed yet, which is 0 -- not unknown
         v = x[col] if fn == "nunique" else pd.to_numeric(x[col], errors="coerce").dropna()
         if fn == "nunique":
-            return float(v.nunique())
+            return int(v.nunique())
         return float(getattr(v, fn)()) if len(v) else None
     if by or per:
         if by:
@@ -423,6 +423,14 @@ def op_ratio(s, results, data):
             raise ProgramError(f"step '{s['id']}': '{s['a']}' and '{s['b']}' have no groups in common")
         return Result("series", out, unit=unit, hypothetical=a.hypothetical or b.hypothetical,
                       provenance={"op": "ratio", "a": s["a"], "b": s["b"], "groups": len(out), "no_value": missing})
+    if a.kind == "series" and b.kind == "scalar" and s.get("broadcast"):
+        # each group's part of one whole ("each region's share of all revenue"): asked for explicitly by the step
+        bv = _value(b)
+        if not bv:
+            raise ProgramError(f"step '{s['id']}': the whole ('{s['b']}') is zero or missing, so no share can be given")
+        return Result("series", {k: (None if av is None else av / bv) for k, av in a.value.items()}, unit=unit,
+                      hypothetical=a.hypothetical or b.hypothetical,
+                      provenance={"op": "ratio", "a": s["a"], "b": s["b"], "groups": len(a.value), "of_whole": True})
     if a.kind == "series" or b.kind == "series":
         raise ProgramError(f"step '{s['id']}': cannot divide a per-group result by a single value; give both per group "
                            "or both as single values")
@@ -453,7 +461,13 @@ def validate(program: list[dict], known=()) -> None:
 def run(program: list[dict], data: pd.DataFrame, inputs: dict[str, Result] | None = None) -> dict[str, Result]:
     validate(program, known=inputs or {})
     results: dict[str, Result] = dict(inputs or {})
+    from app.analyst import semantics
     for s in program:
+        if s["op"] == "aggregate" and s.get("column") in data.columns:
+            # the same rule as every tool: an identifier is not averaged or summed, a per-record level is not summed
+            why = semantics.aggregation_problem(data, s["column"], s.get("fn"))
+            if why:
+                raise ProgramError(f"step '{s['id']}': {why}")
         r = RUN[s["op"]](s, results, data)
         # anything computed from a hypothetical result is hypothetical too: a total over a scenario table is not an
         # observed total

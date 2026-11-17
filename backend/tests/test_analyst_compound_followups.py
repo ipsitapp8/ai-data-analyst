@@ -285,7 +285,9 @@ def test_negative_never_negative_columns_are_still_left_out_in_every_path():
     from app.analyst import metrics, scope as sc
     d = pd.DataFrame({"Qty": [2.0, -1.0, 3.0], "Revenue": [10.0, -5.0, 7.0]})
     ok, why = sc.eligibility(d, ["Qty", "Revenue"], historical=False)
-    assert list(ok) == [True, False, True] and why[0]["reason"] == "negative Qty"
+    # (Stage 5: the reason now says why the value is impossible -- "negative Qty (a count or quantity cannot be negative)")
+    assert list(ok) == [True, False, True] and why[0]["reason"].startswith("negative Qty")
+    assert "cannot be negative" in why[0]["reason"]
     ok, why = sc.eligibility(d, ["Revenue"], historical=False)
     assert ok.all() and not why
     assert sc.signed_negatives(d, ["Revenue"])[0]["records"] == 1

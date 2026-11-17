@@ -19,11 +19,48 @@ def f(x: Any, pct: bool = False, digits: int = 2) -> str:
         return "n/a"
     if pct:
         return f"{x * 100:.1f}%"
-    if isinstance(x, (int,)) or (isinstance(x, float) and x.is_integer() and abs(x) >= 100):
-        return f"{x:,.0f}"
+    if isinstance(x, bool):
+        return str(x)
+    if isinstance(x, int) or type(x).__name__.startswith(("int", "uint")) or \
+            (isinstance(x, float) and x.is_integer() and abs(x) >= 100):
+        return f"{int(x):,}"            # a count is a whole number: 88, not 88.00 (decimals keep their digits)
     if isinstance(x, float) and 0 < abs(x) < 0.5 * 10 ** -digits:
         return f"{x:.3g}"               # 0.000123 is not "0.00": a small per-unit rate keeps its significant digits
     return f"{x:,.{digits}f}"
+
+
+def tied_extreme(values: dict, low: bool = False) -> tuple[Any, list]:
+    """(the highest -- or lowest -- value, every key that has it). Ties are never broken silently: two groups sharing
+    the top value are both the highest. Missing values are ignored."""
+    v = {k: x for k, x in values.items() if x is not None and not (isinstance(x, float) and math.isnan(x))}
+    if not v:
+        return None, []
+    best = min(v.values()) if low else max(v.values())
+    tol = 1e-9 * max(1.0, abs(best))
+    return best, [k for k, x in v.items() if abs(x - best) <= tol]
+
+
+def extreme_text(values: dict, fmt=None, lead_low: bool = False, bold: bool = True) -> str | None:
+    """'Highest: North and South (138 each); lowest: East (99).' -- every tied group named, both ends."""
+    fmt = fmt or f
+    hi, his = tied_extreme(values)
+    lo, los = tied_extreme(values, low=True)
+    if hi is None or len({k for k, x in values.items() if x is not None}) < 2:
+        return None
+
+    def names(ks):
+        ks = [str(k) for k in ks]
+        shown = ks[:6] + ([f"{len(ks) - 6} more"] if len(ks) > 6 else [])
+        return shown[0] if len(shown) == 1 else ", ".join(shown[:-1]) + " and " + shown[-1]
+
+    def part(word, val, ks, b):
+        each = " each, tied" if len(ks) > 1 else ""
+        w = f"**{word}: {names(ks)}**" if b else f"{word.lower()}: {names(ks)}"
+        return f"{w} ({fmt(val)}{each})"
+    if hi == lo:
+        return f"**All {len(values)} groups are equal** ({fmt(hi)})."
+    first, second = (("Lowest", lo, los), ("highest", hi, his)) if lead_low else (("Highest", hi, his), ("lowest", lo, los))
+    return f"{part(first[0], first[1], first[2], bold)}; {part(second[0], second[1], second[2], False)}."
 
 
 def p(x: Any) -> str:
@@ -107,23 +144,41 @@ def ungrounded(text: str, evidence: Any, question: str = "") -> list[str]:
 
 def render(tool: str, r: dict) -> str:
     fn = _RENDER.get(tool)
-    return fn(r) if fn else "```json\n" + json.dumps(r, indent=1, default=str)[:3000] + "\n```"
+    text = fn(r) if fn else "```json\n" + json.dumps(r, indent=1, default=str)[:3000] + "\n```"
+    if isinstance(r, dict) and r.get("excluded"):
+        from app.analyst.scope import describe_exclusions
+        note = describe_exclusions(r["excluded"])
+        if note:
+            text += "\n\n" + note
+    return text
 
 
 def _metric(r):
     agg = {"sum": "total", "avg": "average", "count_distinct": "number of distinct", "std": "standard deviation", "var": "variance"}.get(
         r["aggregation"], r["aggregation"])
-    what = f"{agg} {r['column']}" if r.get("column") else "number of rows"
+    what = (f"number of distinct {r['column']} values" if r["aggregation"] == "count_distinct" and r.get("column")
+            else f"{agg} {r['column']}" if r.get("column") else "number of rows")
     filt = "" if not r.get("filters") else " where " + " and ".join(f"{x['column']} {x['op']} {x['value']}" for x in r["filters"])
     if "groups" in r:
         lines = [f"**{what.capitalize()} by {r['group_by']}**{filt}:", ""]
         lines += [f"| {r['group_by']} | {what} | rows |", "|---|---:|---:|"]
         lines += [f"| {g['group']} | {f(g['value'])} | {g['rows']} |" for g in r["groups"][:25]]
+        if r.get("no_group_value"):
+            lines.append(f"\n_{r['no_group_value']:,} record(s) with no {r['group_by']} were left out of the breakdown._")
+        total = r.get("groups_total") or len(r["groups"])
+        if total > 25:
+            lines[0] = lines[0].rstrip(":") + f" — the first 25 of {total:,} {r['group_by']} values:"
         if r.get("top"):
             vals = [g["value"] for g in r["groups"] if g.get("value") is not None]
             word = "Lowest" if vals and r["top"]["value"] == min(vals) and r["top"]["value"] != max(vals) else "Highest"
-            lines += ["", f"{word}: **{r['top']['group']}** ({f(r['top']['value'])})." if r["groups"] and
-                      r["groups"][0] is r["top"] else ""]
+            tied = [g["group"] for g in r["groups"] if g.get("value") is not None and g["value"] == r["top"]["value"]]
+            if len(tied) > 1:
+                # several groups share the top value: none of them is "the" highest
+                lines += ["", f"{word}: **{len(tied)} {r['group_by']} values tie** at {f(r['top']['value'])}: "
+                          + ", ".join(f"**{t}**" for t in tied[:10]) + (" …" if len(tied) > 10 else "") + "."]
+            else:
+                lines += ["", f"{word}: **{r['top']['group']}** ({f(r['top']['value'])})." if r["groups"] and
+                          r["groups"][0] is r["top"] else ""]
         return "\n".join(lines)
     return f"The {what}{filt} is **{f(r['value'])}** (computed over {r['rows']} rows)."
 
@@ -132,10 +187,14 @@ def _describe_column(r):
     if not r.get("n"):
         return f"'{r['column']}' has no numeric values."
     ci = r.get("mean_ci95")
+    mode = (", mode " + " and ".join(f(m) for m in r["mode"][:3]) + f" ({r['mode_count']} records)") if r.get("mode") else \
+        (", no mode (every value occurs once)" if "mode" in r else "")
     return (f"**{r['column']}** (n = {r['n']}): mean {f(r['mean'])}"
             + (f" (95% CI {f(ci[0])} to {f(ci[1])})" if ci else "")
-            + f", median {f(r['median'])}, standard deviation {f(r['sd'])}, variance {f(r['variance'])}, "
-              f"range {f(r['min'])} to {f(r['max'])}.\n\nMethod: {r['method']}.")
+            + f", median {f(r['median'])}{mode}, standard deviation {f(r['sd'])}, variance {f(r['variance'])}, "
+              f"minimum {f(r['min'])}, maximum {f(r['max'])}."
+            + (f" {r['missing']} record(s) with no value were left out." if r.get("missing") else "")
+            + f"\n\nMethod: {r['method']}.")
 
 
 def _compare(r):

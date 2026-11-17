@@ -58,6 +58,38 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         filename: str | None = None, document: dict | None = None) -> dict:
     started = time.monotonic()
     model_on = planner.model_available() if use_model is None else use_model
+    before = memory.get("_turn")
+    out = _ask_turn(message, df, memory, use_model, model_on, filename, document, started)
+    if out.get("plan_source") == "input_check":
+        # unreadable input leaves the conversation exactly as it was -- not even the turn counter moves
+        if before is None:
+            memory.pop("_turn", None)
+        else:
+            memory["_turn"] = before
+        return out
+    _stamp(memory)
+    return out
+
+
+def _stamp(memory: dict) -> None:
+    """Every conversation record carries the turn it was written in, so a later handler can tell whether it is still
+    the latest result (memory["last_result"]) or an older one that a newer answer superseded."""
+    t = memory.get("_turn", 0)
+    for k in ("last_calc", "last_breakdown", "last_charts", "last_result"):
+        v = memory.get(k)
+        if isinstance(v, dict) and "turn" not in v:
+            v["turn"] = t
+
+
+def _superseded(memory: dict, key: str) -> bool:
+    """`key` holds an older result than the latest answer: a follow-up must not refine or redraw it."""
+    lr, v = memory.get("last_result"), memory.get(key)
+    return bool(lr and isinstance(v, dict) and v.get("turn") is not None and lr.get("turn") is not None
+                and v["turn"] < lr["turn"])
+
+
+def _ask_turn(message, df, memory, use_model, model_on, filename, document, started) -> dict:
+    memory["_turn"] = memory.get("_turn", 0) + 1
     # Before anything is planned, computed or predicted: is this a question at all? Unreadable input gets a request to
     # rephrase; a question built around a non-word that is not in the data is told so. Conversation memory is untouched.
     unclear = intake.check(message, df)
@@ -135,17 +167,76 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
     read_as = []
     for w, c in mw["rewrite"]:
         message = re.sub(rf"\b{re.escape(w)}\b", str(c), message, count=1, flags=re.I)
-        read_as.append(f"“{w}” read as `{c}` (the only column measuring it)")
+        read_as.append(f"“{w}” read as `{c}` (the only column measuring it)" if w not in _sem.MONEY_IN_WORDS else
+                       f"“{w}” read as `{c}` — {_sem.money_in_columns(df)[1]}; say if you mean something else")
     chart_kind = followup.chart_request(message)
+    stopped = _stated_gate(message, df, memory, model_on, started)
+    if stopped is not None:
+        out = _finish(stopped, message, df, memory, None, started)
+        if read_as:
+            out["notes"].insert(0, "Measure words: " + "; ".join(read_as) + ".")
+        if table_note:
+            out["answer"] = table_note + "\n\n" + out["answer"]
+        conversation.record(memory, message, out)
+        return out
     try:
         out = _dispatch(message, df, memory, model_on, filename, started, chart_kind)
+    except tools.RoleRefusal as e:
+        # the aggregation asked for has no meaning for what the column is (an identifier averaged or ranked on, a
+        # price or rate added up): said plainly, by whichever path met it -- never computed with a warning
+        out = _reply("**I can't compute that.** " + str(e), "tool", model_on, started,
+                     plan={"type": "decline", "role_refusal": True},
+                     notes=["Refused by Silt's column-role rule (one rule for every tool and program step); nothing "
+                            "was calculated."])
     except Exception as e:  # noqa: BLE001 - one failed path must not lose the conversation
         logger.exception("analyst turn failed")
         out = _reply(f"Something went wrong while answering that ({type(e).__name__}). Your conversation is kept; "
                      "try rephrasing, or ask a narrower question.", "rules", model_on, started,
                      notes=[f"Internal error: {type(e).__name__}: {e}"[:300]])
+    if _dead_end(out) or (len(_intent_clauses(message)) >= 2 and _role_failure(out)):
+        # No path turned the question into an analysis. The structured reading (app/analyst/intent.py) may still
+        # define one exactly: a count, a distinct count, a rate, a combined total, a relation between two measures,
+        # or a question in several clauses. Its program runs only if it passes the same verification as any answer.
+        routed = _followup_from_last(message, df, memory, model_on, started) or \
+            _spec_route(message, df, memory, model_on, started)
+        if routed is not None:
+            out = routed
+    if (out.get("plan") or {}).get("type") == "clarify" and (out["plan"].get("options") or []) and \
+            not any(c.get("status") == "ok" for c in out.get("calls", [])):
+        miss = _missing_terms(message, df)
+        if miss and f"**{miss[0][1]}**" not in out["answer"]:
+            out["answer"] = (f"This data has no column called **{miss[0][1]}**, so I haven't used one in its place. "
+                             + out["answer"])
     out = _verify_answer(out, message, df, memory, model_on, started)
+    if out.get("parts_status"):
+        # a question in several parts: its status is never more than its weakest part, and each part is named
+        ps = out["parts_status"]
+        line = "; ".join(f"part {i}: " + {"verified": "✓ recomputed independently with pandas",
+                                           "not independently verified": "not independently verified",
+                                           "refused": "not computed (refused)",
+                                           "needs your answer": "not computed (needs your answer)"}[st] for i, st in ps)
+        sts = {st for _, st in ps}
+        if out.get("verify_status") not in ("withheld",):
+            out["verify_status"] = ("verified" if sts == {"verified"} else
+                                    "partially verified" if "verified" in sts else
+                                    "not independently verified")
+        for old_line in (_VERIFIED_LINE["verified"],):
+            out["answer"] = out["answer"].replace(old_line, "")
+        out["answer"] = re.sub(r"\n*_Verification: not independently verified — [^\n]*_\s*$", "", out["answer"]).rstrip()
+        out["answer"] += f"\n\n_Verification by part — {line}._"
+        if out.get("incomplete"):
+            out["answer"] += " _This question is not fully answered yet._"
     out = _finish(out, message, df, memory, chart_kind, started)
+    # completeness: every statistic or profile item the question names must be in the answer; anything missing is
+    # said, so a partial answer is never presented as the whole one (app/analyst/requirements.py)
+    if any(c.get("status") == "ok" for c in out.get("calls", [])) and out.get("plan_source") not in (
+            "conversation", "conversation_rules", "input_check", "withheld"):
+        from app.analyst import requirements
+        gaps = requirements.missing_items(said, out.get("answer", ""))
+        if gaps:
+            out["answer"] += "\n\n" + requirements.note(gaps)
+            out["incomplete"] = gaps
+            out["notes"].insert(0, "Not answered: " + ", ".join(gaps) + ".")
     if read_as:
         out["answer"] = "_" + "; ".join(read_as) + "._\n\n" + out["answer"]
         out["notes"].insert(0, "Measure words: " + "; ".join(read_as) + ".")
@@ -160,6 +251,538 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         out["plan"] = {**out.get("plan", {}), "conversation": res["kind"]}
     conversation.record(memory, message, out)
     return out
+
+
+def _intent_clauses(message: str) -> list[str]:
+    from app.analyst import intent
+    return intent.clauses(message)
+
+
+def _role_failure(out: dict) -> bool:
+    """A refusal of the whole message because one part aggregates an identifier or totals a level."""
+    if any(c.get("status") == "ok" for c in out.get("calls", [])):
+        return False
+    return bool((out.get("plan") or {}).get("role_refusal")) or "identifies records" in out.get("answer", "") \
+        or "per-record level" in out.get("answer", "")
+
+
+# ----------------------------------------------------------- the latest result --
+def _answered_request(out: dict, message: str, df):
+    """The structured reading the answer actually computed: the reading it was built for (a follow-up), else the
+    message's own, completed from what was executed (the measure, aggregate and grouping of the tool call)."""
+    from app.analyst import intent
+    if out.get("_request") is not None:
+        return out["_request"]
+    try:
+        req = intent.read(message, df)
+    except Exception:  # noqa: BLE001
+        return None
+    ok = [c for c in out.get("calls", []) if c.get("status") == "ok"]
+    if len(ok) == 1 and ok[0].get("tool") in ("compute_metric", "rank_groups"):
+        a, r = ok[0].get("args") or {}, ok[0].get("result") or {}
+        col = a.get("column") or r.get("measure")
+        fn = a.get("aggregation") or r.get("aggregation")
+        q = {"avg": "average", "mean": "average", "sum": "total", "median": "median", "count": "count"}.get(fn)
+        if col and q:
+            req.measures, req.quantity = [col], q
+            req.counted = None
+        elif fn == "count_distinct" and col:
+            req.quantity, req.counted, req.measures = "count", col, []
+        g = a.get("group_by") or r.get("group")
+        if g:
+            req.group = g
+    return req
+
+
+def _record_last_result(out: dict, message: str, df, memory: dict, sc: dict | None) -> None:
+    """One record of the latest computed answer, written for every path: the reading it answered, the records it used,
+    its headline values and charts, and the turn. Follow-ups ("what about ...", "compare it with ...", "why?", "show
+    that as a chart") read only this record, so an older result can never stand in for the latest one."""
+    from app.analyst import intent
+    req = _answered_request(out, message, df)
+    values, measure, group = None, None, None
+    for c in out.get("calls", []):
+        if c.get("status") != "ok":
+            continue
+        r = c.get("result") or {}
+        if c.get("tool") == "analysis_program":
+            res = (r.get("results") or {}).get("") or {}
+            head = res.get("per_unit") or res.get("result")
+            values = head.get("value") if head else None
+        elif c.get("tool") == "compute_metric":
+            values = {str(g["group"]): g["value"] for g in r["groups"]} if "groups" in r else r.get("value")
+        elif c.get("tool") == "rank_groups":
+            values = {str(x["group"]): x["value"] for x in r.get("rows") or []}
+        elif c.get("tool") == "calculator" and memory.get("last_calc"):
+            lc = memory["last_calc"]["result"]
+            prim = (memory["last_calc"].get("meta") or {}).get("primary") or next(iter(lc.get("aggregates") or []), None)
+            values = ({str(g["group"]): g.get(prim) for g in lc.get("groups") or []} if lc.get("groups") else
+                      (lc.get("totals") or {}).get(prim))
+        break
+    if req is not None:
+        measure = req.measures[0] if req.measures else (req.counted or (req.event[0] if req.event else None))
+        group = req.group
+    memory["last_result"] = {"turn": memory.get("_turn", 0), "question": message,
+                             "request": intent.request_to_dict(req) if req is not None else None,
+                             "scope": sc if scoping.active(sc) else None, "values": _jsonable(values),
+                             "measure": measure, "group": group, "source": out.get("plan_source"),
+                             "charts": out.get("charts") or [],
+                             "verify_status": out.get("verify_status"),
+                             "shape": [int(len(df)), [str(c) for c in df.columns]] if df is not None else None}
+
+
+_WHAT_ABOUT = re.compile(r"^\W*(?:and\s+|now\s+|ok(?:ay)?,?\s+|so\s+)*(?:what|how)\s+about\b|^\W*(?:and\s+|now\s+)?"
+                         r"(?:same|the same)\s+(?:for|but)\b|^\W*(?:and|now|then)\s+(?:for|in|only|just)\b|"
+                         r"^\W*(?:only|just)\b", re.I)
+_BACKREF = re.compile(r"\b(it|that|this|them|those|these|the same|same|previous|last one|the result|"
+                      r"that figure|that number|instead)\b", re.I)
+
+
+def _last_result(memory: dict, df):
+    """The latest result, if it was computed on this table as it is now (same columns and number of records). A result
+    restored after a restart for a dataset that has since changed is not used -- follow-ups then start fresh."""
+    lr = memory.get("last_result")
+    if not lr or df is None:
+        return None
+    shape = lr.get("shape")
+    if shape and (shape[0] != len(df) or list(shape[1]) != [str(c) for c in df.columns]):
+        return None
+    return lr
+
+
+def _followup_from_last(message: str, df, memory: dict, model_on: bool, started: float,
+                        early: bool = False) -> dict | None:
+    """A follow-up to the latest result -- "What about Ben Cole?", "What about only completed orders?", "Compare it
+    with Chen Wei", "Now the average instead", "Why?" -- applied to that result's structured reading: only what the
+    follow-up changes is changed, the rest is kept and said, and the new program passes the same verification. None
+    when there is no latest result, or the message asks something of its own (a new question)."""
+    from app.analyst import intent
+    import copy
+    lr = _last_result(memory, df)
+    if not lr or not lr.get("request") or df is None:
+        return None
+    try:
+        f = intent.read(message, df)
+        base = intent.request_from_dict(lr["request"])
+    except Exception:  # noqa: BLE001
+        logger.exception("follow-up could not be read")
+        return None
+    prof_ = _sem_profile(df)
+    if f.measures and all(prof_["roles"][c]["role"] == "flag" for c in f.measures) and _WHAT_ABOUT.search(message) \
+            and not re.search(r"\b(rate|share|percent\w*|proportion|fraction|how often|likel\w*)\b", message, re.I):
+        # "what about only overtime shifts?": the yes/no column says which records -- it is not the new measure
+        for c in f.measures:
+            w = re.escape(re.sub(r"[^a-z0-9]+", " ", str(c).lower()).strip()).replace(r"\ ", r"[\s_-]+")
+            neg = re.search(rf"\b(?:not|non|never|no|un)[\s-]*{w}|n't\s+(?:been\s+)?{w}", message, re.I)
+            (f.restrict_not if neg else f.restrict).append(c)
+        f.measures, f.quantity = [], None
+    if f.measures or f.counted or f.event or f.relation or f.share_of or f.record_noun or f.unmatched:
+        return None                     # it names its own measure or count: a new question, answered as one
+    words = len(re.findall(r"[A-Za-z]+", message))
+    elliptic = bool(_WHAT_ABOUT.search(message) or _BACKREF.search(message) or words <= 3
+                    or re.match(r"^\W*(?:now|then|and|also|ok(?:ay)?,?\s+now)\b", message, re.I))
+    named_metric = metrics.recognise(message)
+    if not elliptic or (named_metric is not None and not metrics.physical(named_metric, df)):
+        return None                     # (a defined metric -- "labor cost by department" -- is a question of its own;
+                                        # one that is simply a column here, like an overtime flag, is not)
+    if not (f.restrict or f.restrict_not):
+        # "what about only overtime shifts?" / "and the non-escalated ones?": a yes/no column named in a follow-up
+        # selects records (the follow-up has no measure of its own for it to be)
+        prof = _sem_profile(df)
+        for c in followup_cols(df, message):
+            if prof["roles"][c]["role"] != "flag" or intent.flag_values(df, c, prof["roles"][c]) is None or c == base.group:
+                continue
+            w = re.escape(re.sub(r"[^a-z0-9]+", " ", str(c).lower()).strip()).replace(r"\ ", r"[\s_-]+")
+            if re.search(rf"\b(?:not|non|never|no|un)[\s-]*{w}|n't\s+(?:been\s+)?{w}", message, re.I):
+                f.restrict_not.append(c)
+            else:
+                f.restrict.append(c)
+    if f.why and not (f.entities or f.excluded or f.restrict or f.restrict_not or f.conditions or f.period):
+        if early or lr.get("source") in ("model",) or "random_forest" in json.dumps(lr.get("request") or {}):
+            return None                 # "why" is answered by its own handlers first (a model's feature importance ...)
+        return _why_last(message, df, memory, lr, base, model_on, started)
+    new = copy.deepcopy(base)
+    changed = []
+    if f.compare and f.entities:
+        col = f.entities[0][0]
+        prev = [v for c, v in base.entities if c == col]
+        add = [v for c, v in f.entities if c == col and v not in prev]
+        if not prev:
+            prev = [v for c, v in (lr.get("scope") or {}).get("entities", {}).items() for v in v if c == col]
+        vals = list(dict.fromkeys(prev + add))
+        if len(vals) < 2:
+            if col == base.group and isinstance(lr.get("values"), dict):
+                others = [k for k in lr["values"] if str(k).lower() not in {str(v).lower() for v in add}]
+                return _reply(f"The latest result (*{lr['question'][:120]}*) already shows every {col}. Compare "
+                              f"**{', '.join(map(str, add))}** with which {col}? Options: "
+                              + ", ".join(f"`{o}`" for o in others[:8]), "tool", model_on, started,
+                              plan={"type": "clarify", "options": others[:8]},
+                              notes=["A comparison needs two sides; the follow-up named one and the latest result "
+                                     "already shows them all, so Silt asks which one."])
+            return None
+        new.entities = [(c, v) for c, v in base.entities if c != col] + [(col, v) for v in vals]
+        new.group, new.compared = col, True
+        changed.append(f"compared across {col} = {', '.join(map(str, vals))}")
+    else:
+        sel = False
+        for col in dict.fromkeys(c for c, _ in f.entities):
+            vals = [v for c, v in f.entities if c == col]
+            if col == base.group and not re.search(r"\b(only|just|limit|restrict|nothing but)\b", message, re.I):
+                continue                # "what about East" on a breakdown by region: shown, not filtered
+                                        # ("only East" narrows the breakdown to it)
+            new.entities = [(c, v) for c, v in new.entities if c != col] + [(col, v) for v in vals]
+            changed.append(f"{col} = {' or '.join(map(str, vals))}")
+            sel = True
+        for c, v in f.excluded:
+            if (c, v) not in new.excluded:
+                new.excluded.append((c, v))
+                changed.append(f"excluding {c} = {v}")
+                sel = True
+        for c in f.restrict:
+            new.restrict_not = [x for x in new.restrict_not if x != c]
+            if c not in new.restrict:
+                new.restrict.append(c)
+            changed.append(f"only records where {c} applies")
+            sel = True
+        for c in f.restrict_not:
+            new.restrict = [x for x in new.restrict if x != c]
+            if c not in new.restrict_not:
+                new.restrict_not.append(c)
+            changed.append(f"only records where {c} does not apply")
+            sel = True
+        for cd in f.conditions:
+            new.conditions = [x for x in new.conditions if x["column"] != cd["column"]] + [cd]
+            changed.append(f"{cd['column']} {cd['op']} {cd['value']:g}")
+            sel = True
+        if f.period:
+            new.period = f.period
+            changed.append(f.period.get("label") or "the period named")
+            sel = True
+        if f.quantity and f.quantity != base.quantity and f.quantity in ("average", "median", "total") and \
+                base.measures:
+            new.quantity = f.quantity
+            changed.append(f"{f.quantity} instead of {base.quantity or 'the previous figure'}")
+            sel = True
+        if f.group and f.group != base.group:
+            new.group, new.compared = f.group, False
+            changed.append(f"broken down by {f.group}")
+            sel = True
+        if not sel:
+            return None
+    plan = nl_planner.plan_for_request(new, df, message)
+    if plan is None:
+        return None
+    prior_scope = memory.get("_scope")
+    memory["_scope"] = scoping.from_request(new, df)
+    kept = []
+    if new.measures:
+        kept.append(", ".join(map(str, new.measures)) if new.quantity != base.quantity else
+                    f"{new.quantity or 'the figure'} of {', '.join(map(str, new.measures))}")
+    elif new.event:
+        kept.append(f"the rate of {new.event[0]} = {new.event[1]}")
+    elif new.counted:
+        kept.append(f"the count of distinct {new.counted}")
+    if new.group and not new.compared:
+        kept.append(f"by {new.group}")
+    out = _run_program(plan, message, df, memory, model_on, started, "rule_program", {"status": "followup"},
+                       [f"Follow-up to *{lr['question'][:120]}*: changed {'; '.join(changed)}; kept "
+                        f"{', '.join(kept) or 'the rest'}."], request=new)
+    if out is None:
+        memory["_scope"] = prior_scope      # nothing answered: the turn's own scope stands, no follow-up scope leaks
+        return None
+    out["answer"] = (f"_Follow-up to *{lr['question'][:120]}* — changed: {'; '.join(changed)}; kept: "
+                     f"{', '.join(kept) or 'the rest'}._\n\n" + out["answer"])
+    out["understood_as"] = f"{lr['question']} → {'; '.join(changed)}"
+    return out
+
+
+def _why_last(message, df, memory, lr, base, model_on, started) -> dict | None:
+    """'Why?' after a result: what the data shows alongside it -- for a named person or group, how its records differ
+    from the others'; otherwise which columns are associated with the measure. Associations, never causes."""
+    from app.analyst import associations
+    m = base.measures[0] if base.measures else None
+    one = [(c, v) for c, v in base.entities if c != base.group]
+    sc = scoping.from_request(base, df)
+
+    def records(without: str | None = None):
+        """The records the latest result used -- minus the selection of the group being explained, which is
+        compared with the rest of the same records."""
+        s_ = {**sc, "entities": {c: v for c, v in (sc.get("entities") or {}).items() if c != without}}
+        return df[scoping.mask(df, s_)] if scoping.active(s_) else df
+    if base.compared and base.group:
+        vals = lr.get("values") if isinstance(lr.get("values"), dict) else {}
+        if vals:
+            top = max(vals, key=lambda k: vals[k] if vals[k] is not None else float("-inf"))
+            one = [(base.group, top)]
+    if len(one) == 1 and m and m in df.columns:
+        col, val = one[0]
+        d = records(without=col)
+        try:
+            r = router.run({"type": "router", "tool": "drivers", "args": {"group_column": col, "group": val,
+                                                                           "outcome": m}}, d, memory, None)
+        except (ml.Unsuitable, business.Insufficient) as e:
+            return _reply(f"**I can't explain that from this data.** {e}", "tool", model_on, started,
+                          plan={"type": "decline"})
+        text = (f"_“Why?” — about *{lr['question'][:120]}*: how the {val} records differ from the other {col} "
+                "records. These are differences that go along with the result, not proven causes._\n\n"
+                + _ROUTED_RENDER["drivers"](r))
+        return _reply(text, "tool", model_on, started, plan={"type": "tools", "intent": "why_previous"},
+                      calls=[{"tool": "drivers", "status": "ok", "args": {"group_column": col, "group": val,
+                                                                          "outcome": m}, "result": _jsonable(r)}],
+                      notes=["Answered from the latest result's reading; associations, not causes."])
+    if m and m in df.columns:
+        prof = _sem_profile(df)
+        d = records()
+        try:
+            res = P.run([{"id": "why", "op": "associate", "from": "data", "target": m,
+                          "exclude": [c for c in prof["nonfactors"] if c != m]}], d)
+        except P.ProgramError as e:
+            return _reply(f"**I can't explain that from this data.** {e}", "tool", model_on, started,
+                          plan={"type": "decline"})
+        text = (f"_“Why?” — about *{lr['question'][:120]}*: the columns associated with {m}, over the same "
+                f"{len(d):,} records the result used. Associations, not causes._\n\n" + associations.text(res["why"].value))
+        return _reply(text, "tool", model_on, started, plan={"type": "tools", "intent": "why_previous"},
+                      calls=[{"tool": "associations", "status": "ok", "result": _jsonable(res["why"].value)}],
+                      notes=["Answered from the latest result's reading; associations, not causes."])
+    return None
+
+
+def _sem_profile(df):
+    from app.analyst import semantics
+    return semantics.profile(df)
+
+
+def _chart_from_last_result(message, df, memory, kind, model_on, started) -> dict | None:
+    """'Show that as a chart' redraws the LATEST result (memory["last_result"]) -- after "average instead", the
+    averages, never the totals computed before them. Only when the message refers back and names nothing new."""
+    lr = _last_result(memory, df)
+    if not lr or not re.search(r"\b(that|it|this|these|those|them|same|the (result|answer|previous))\b", message, re.I):
+        return None
+    if not isinstance(lr.get("values"), dict) or len(lr["values"]) < 2:
+        if lr.get("values") is None or isinstance(lr.get("values"), dict):
+            return None
+        # the latest result is one number: there is nothing to compare in a chart -- said about THAT result
+        return _reply(f"The latest result (*{lr['question'][:120]}*) is **a single value**, so there is nothing to "
+                      "compare in a chart. Ask for it **by** a group — for example by "
+                      + next((c.replace("_", " ") for c in df.columns if df[c].dtype == object
+                              and 2 <= df[c].nunique() <= 30), "category") + " — and then for the chart.",
+                      "tool", model_on, started, chart_requested=True,
+                      notes=["No chart was drawn: the latest result has no breakdown to show."])
+    from app.analyst.data import find_column
+    if calc.named_values(df, message) or [x for x in calc._STRONG.finditer(message)] or [  # noqa: SLF001
+            c for c in find_column(df, message) if c not in (lr.get("measure"), lr.get("group"))]:
+        return None
+    req = lr.get("request") or {}
+    q = req.get("quantity")
+    x = lr.get("group") or "group"
+    y = lr.get("measure") or "value"
+    label = {"total": "total", "average": "average", "median": "median", "rate": "share", "count": "count"}.get(q, "")
+    base = {"type": "bar", "x": x, "y": y, "additive": q in ("total", "count"),
+            "title": f"{label + ' ' if label else ''}{y} by {x}".strip(),
+            "data": [{x: k, y: v} for k, v in lr["values"].items() if v is not None]}
+    charts, notes = followup.restyle([base], kind if kind != "auto" else None, message)
+    return _reply(f"Here is the latest result (*{lr['question'][:120]}*) as a chart — {label + ' ' if label else ''}{y} "
+                  f"by {x}, the same computed values; nothing recalculated.", "tool", model_on, started, charts=charts,
+                  chart_requested=True, notes=notes + ["Redrawn from the latest result's computed values."],
+                  calls=[{"tool": "chart_of_previous_result", "status": "ok",
+                          "result": {"values": lr["values"], "from_turn": lr.get("turn")}}])
+
+
+def _dead_end(out: dict) -> bool:
+    """An answer that computed nothing and is no deliberate clarification or refusal: a placeholder reply."""
+    if any(c.get("status") == "ok" for c in out.get("calls", [])):
+        return False
+    t = (out.get("plan") or {}).get("type")
+    return (t == "chat" and out.get("plan_source") in ("conversation", "rules")) or "I couldn't turn" in out.get("answer", "")
+
+
+def _spec_route(message: str, df: pd.DataFrame, memory: dict, model_on: bool, started: float) -> dict | None:
+    """The program the structured reading defines, for a question no other path answered. None when the reading
+    is not complete enough to compute without guessing -- the placeholder reply then stands."""
+    from app.analyst import intent
+    try:
+        req = intent.read(message, df)
+    except Exception:  # noqa: BLE001
+        logger.exception("could not read the message for routing")
+        return None
+    if req.relation:
+        return _relation_answer(message, df, memory, req, model_on, started)
+    parts = intent.clauses(message)
+    if len(parts) >= 2:
+        return _clause_answers(message, parts, df, memory, model_on, started)
+    try:
+        rp = nl_planner.rule_plan(message, df, memory)
+    except Exception:  # noqa: BLE001
+        logger.exception("rule program could not be built")
+        rp = None
+    if not rp:
+        return None
+    return _run_program(rp, message, df, memory, model_on, started, "rule_program", {"status": "rule"},
+                        ["Built from the question's structured reading (measure, count, rate, grouping and filters) "
+                         "and run by Silt's program engine; no model was used."])
+
+
+def _relation_answer(message, df, memory, req, model_on, started) -> dict | None:
+    """'Does X correlate with / cause Y': the association between two measures, from the correlation tool, over the
+    records in the question's scope. Asked as cause and effect, the answer says plainly what the data cannot show."""
+    sc = scoping.establish(message, df, memory)
+    if sc.get("clarify"):
+        return None
+    d = df[scoping.mask(df, sc)] if scoping.active(sc) else df
+    x, y = req.relation
+    tool, args = (("compare_groups", {"outcome": y, "group": x}) if req.relation_kind == "groups"
+                  else ("correlation", {"x": x, "y": y}))
+    try:
+        call = tools.validate_call({"tool": tool, "args": args}, d, message)
+    except tools.InvalidCall as e:
+        return _reply(f"**I can't compute that.** {e}", "tool", model_on, started, plan={"type": "decline"})
+    r = tools.run(call, d, memory)
+    text = explain.render(tool, r)
+    if req.causal:
+        what = (f"whether {y} differs between the {x} groups, not whether {x} causes the difference"
+                if req.relation_kind == "groups" else f"whether {x} and {y} move together, not whether one causes the other")
+        text = (f"**This data can show {what}.** "
+                "An association can come from a third factor, from the direction running the other way, or from how "
+                "the records were collected; testing a cause needs an experiment or a design that rules those out.\n\n"
+                + text)
+    memory["_scope"] = sc
+    return _reply(text, "tool", model_on, started, plan={"type": "tools", "intent": tool},
+                  calls=[{**call, "status": "ok", "result": _jsonable(r)}],
+                  notes=[f"Read as an association between {x} and {y} (the structured reading of the question)"
+                         + ("; asked as cause and effect, which correlation cannot establish." if req.causal else ".")])
+
+
+def _clause_answers(message, parts, df, memory, model_on, started) -> dict | None:
+    """A question in several clauses: each clause read and answered on its own; a clause whose reading is not
+    complete (no column for 'order size') is asked about, and the answer says it is not complete."""
+    from app.analyst import intent
+    from app.analyst import semantics as _sem
+    blocks, calls, checks, charts, missing, status = [], [], [], [], [], []
+    for i, part in enumerate(parts, 1):
+        rp = None
+        try:
+            rp = nl_planner.rule_plan(part, df, memory, plain=True)     # one clause may be a plain whole-table figure
+        except Exception:  # noqa: BLE001
+            rp = None
+        sub = _run_program(rp, part, df, memory, model_on, started, "rule_program", {"status": "rule"}, []) if rp else None
+        if sub is not None:
+            own = sub.get("verification") or []
+            done = [c for c in own if str(c.get("check", "")).startswith("independent recomputation")]
+            st = "not independently verified" if not done or any("not independently verified" in str(c.get("detail"))
+                                                                  for c in done) else "verified"
+            status.append((i, st))
+            tag = "✓ answered — recomputed independently with pandas" if st == "verified" else \
+                "answered — not independently verified"
+            blocks.append(f"**{i}. {part[:1].upper() + part[1:]}?** _({tag})_\n\n{sub['answer']}")
+            calls += sub["calls"]
+            checks += own
+            charts += sub.get("charts") or []
+            continue
+        r = intent.read(part, df)
+        prof = _sem.profile(df)
+        fn = {"average": "mean", "median": "median", "total": "sum"}.get(r.quantity or "", "mean")
+        refused = next((_sem.aggregation_problem(df, c, fn) for c in followup_cols(df, part)
+                        if _sem.aggregation_problem(df, c, fn)), None)
+        if refused:
+            blocks.append(f"**{i}. {part[:1].upper() + part[1:]}?** _(not computed — refused)_\n\n"
+                          f"**I can't compute that.** {refused}")
+            missing.append(part)
+            status.append((i, "refused"))
+            continue
+        opts = [c for c in prof["measures"] if prof["roles"][c]["role"] in ("amount", "count", "measurement")
+                and (r.quantity not in ("total",) or _sem.additive(df, c, prof["roles"][c]))]
+        if r.quantity in ("median", "average", "total") and len(parts) >= 2:
+            # a "size" / "value" of a record: quantities that add up per record, not per-record levels (a price)
+            opts = [c for c in opts if _sem.additive(df, c, prof["roles"][c])] or opts
+        opts = opts[:6]
+        if r.quantity and not r.measures and opts:
+            ask_ = (f"Which column measures this? Options: " + ", ".join(f"`{c}`" for c in opts) + ". I haven't picked "
+                    "one for you.")
+        else:
+            ask_ = "I couldn't read this part as a calculation on this data; please rephrase it on its own."
+        blocks.append(f"**{i}. {part[:1].upper() + part[1:]}?** _(not computed — needs your answer)_\n\n{ask_}")
+        missing.append(part)
+        status.append((i, "needs your answer"))
+    if not calls:
+        return None
+    out = _reply("\n\n".join(blocks), "rule_program", model_on, started, calls=calls, charts=charts,
+                 verification=checks, plan={"type": "program", "objective": "rule_planned", "parts": len(parts)},
+                 notes=[f"Answered clause by clause ({len(parts)} parts); "
+                        + (f"{len(missing)} part(s) need your answer before they can be computed." if missing else
+                           "every part was computed.")])
+    out["parts_status"] = status
+    if missing:
+        out["incomplete"] = missing
+    return out
+
+
+def _stated_gate(message: str, df: pd.DataFrame, memory: dict, model_on: bool, started: float) -> dict | None:
+    """Before any path computes: a question about something the data does not contain is answered by saying so --
+    never by analysing all the records instead. One gate, read from the structured request (app/analyst/intent.py):
+      - a name that occurs nowhere in the data ("for Zed Zorro");
+      - a share of a measure no column is named after ("percentage of revenue" with amount and unit_price);
+      - a threshold whose column cannot be found ("orders over 500")."""
+    from app.analyst import intent, semantics
+    from app.analyst.data import kind_of
+    try:
+        req = intent.read(message, df)
+    except Exception:  # noqa: BLE001 - the gate never blocks a question it cannot read
+        logger.exception("stated-requirements gate could not read the message")
+        return None
+    if req.unmatched:
+        import difflib
+        text_cols = [c for c in df.columns if kind_of(df[c]) == "categorical" and df[c].nunique() <= 5000]
+        near = []
+        for name in req.unmatched:
+            for c in text_cols:
+                vals = df[c].dropna().astype(str).unique().tolist()
+                close = difflib.get_close_matches(name, vals, n=2, cutoff=0.72)
+                if not close and len(vals) <= 5000:
+                    # ... or values that share one of its words ("Rahul Sharma": there is a Rahul Mehta)
+                    words = [w for w in re.findall(r"[A-Za-z][\w'-]{2,}", name)]
+                    close = [v for v in vals if any(re.search(rf"(?<![\w-]){re.escape(w)}(?![\w-])", v, re.I)
+                                                    for w in words)][:3]
+                near += [f"{v} ({c})" for v in close]
+        names = ", ".join(f"**{n}**" for n in req.unmatched)
+        ans = (f"No records match {names} — {'it does' if len(req.unmatched) == 1 else 'they do'} not occur in any "
+               f"column of this dataset, so I haven't analysed the other records instead.")
+        if near:
+            ans += " Did you mean " + " or ".join(dict.fromkeys(near)) + "?"
+        elif text_cols:
+            ans += " Columns I searched: " + ", ".join(f"`{c}`" for c in text_cols[:8]) + "."
+        return _reply(ans, "tool", model_on, started, plan={"type": "clarify", "unmatched": req.unmatched},
+                      notes=["The question names something that is not in the data; nothing was calculated, and the "
+                             "full dataset was not used in its place."])
+    if (req.period or {}).get("unreadable"):
+        return _reply(f"**Which dates do you mean?** {req.period['unreadable'][:1].upper() + req.period['unreadable'][1:]}"
+                      " — write it as, for example, *1 August 2026* or *2026-08-01*. I haven't computed anything over "
+                      "all the dates instead.", "tool", model_on, started, plan={"type": "clarify"},
+                      notes=["The question names a period Silt cannot read without guessing; nothing was calculated."])
+    if req.ambiguous_names:
+        name, cands = req.ambiguous_names[0]
+        return _reply(f"**{name}** matches more than one record name: " + ", ".join(f"`{c}`" for c in cands)
+                      + ". Which one do you mean? I haven't analysed all the records instead.", "tool", model_on,
+                      started, plan={"type": "clarify", "options": cands},
+                      notes=["The name is part of several values; Silt asks rather than picking one or ignoring it."])
+    if req.share_word:
+        prof = semantics.profile(df)
+        opts = [c for c in prof["measures"] if prof["roles"][c]["role"] in ("amount", "count", "measurement")
+                and semantics.additive(df, c, prof["roles"][c])][:6]
+        if opts:
+            return _reply(f"Which column measures **{req.share_word}**? A share of {req.share_word} is a part of that "
+                          f"column's total — not a share of the records. Options: " + ", ".join(f"`{c}`" for c in opts),
+                          "tool", model_on, started, plan={"type": "clarify", "options": opts},
+                          notes=[f"'{req.share_word}' names no column; Silt asks rather than reporting the share of "
+                                 "records instead."])
+    if req.unresolved:
+        prof = semantics.profile(df)
+        opts = [c for c in prof["measures"]][:8]
+        return _reply(f"Which column does **{req.unresolved[0]}** apply to? I haven't computed anything without that "
+                      "limit." + (" Options: " + ", ".join(f"`{c}`" for c in opts) if opts else ""), "tool", model_on,
+                      started, plan={"type": "clarify", "options": opts},
+                      notes=["The question states a threshold with no column Silt could tie it to; nothing was "
+                             "calculated over all the records instead."])
+    return None
 
 
 def _logical_table(message: str, df: pd.DataFrame, memory: dict):
@@ -381,6 +1004,27 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                           notes=followed["notes"], details=followed.get("details", ""))
     # "Explain the profit difference", "does profit equal revenue minus cost?": the stored profit reconciled with
     # revenue - cost record by record (app/analyst/reconcile.py), before it is read as a question about the last answer
+    # "how many records, what columns, how many missing values": a description of the table itself
+    from app.analyst import requirements
+    if requirements.profile_request(message, df):
+        ov = router.run({"type": "router", "tool": "understand", "args": {}, "reason": "dataset overview"}, df, memory,
+                        filename)
+        return _reply(_ROUTED_RENDER["understand"](ov), "router", model_on, started,
+                      plan={"type": "router", "tool": "understand", "reason": "dataset profile"},
+                      calls=[{"tool": "understand", "args": {}, "status": "ok", "result": _jsonable(ov)}],
+                      notes=["The question asks for a description of the table (records, columns, missing values, "
+                             "duplicates); answered by Silt's dataset profile."])
+    # "how many companies are rated below 3, between 3 and 4, and 4 or above": counts per stated value band
+    from app.analyst import bands
+    bspec = bands.parse(message, df)
+    if bspec is not None:
+        bsc = scoping.establish(message, df, memory)
+        bdf = df[scoping.mask(df, bsc)] if scoping.active(bsc) and not bsc.get("clarify") else df
+        br = bands.run(bspec, bdf)
+        return _reply(bands.text(br), "tool", model_on, started, plan={"type": "tools", "intent": "bands"},
+                      calls=[{"tool": "bands", "status": "ok", "args": {"column": bspec["column"]},
+                              "result": _jsonable(br)}],
+                      notes=["Counted per value band by Silt's deterministic tools."])
     from app.analyst import reconcile
     if reconcile.ASK.search(message) and reconcile.columns(df):
         rsc = scoping.establish(message, df, memory)        # "... for Returned orders": only those records
@@ -397,7 +1041,27 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                       notes=[f"Computed record by record with pandas: {rec['profit']} against {rec['revenue']} − "
                              f"{rec['cost']} over {rec['records']:,} records."])
     # 1. conversation about the previous answer, recommendations, "why is X doing badly?"
+    if not memory.get("investigation") and finding_ref(message, 0) is not None and re.search(
+            r"\b(finding|findings|found|point|item|issue|insight|observation)\b", message, re.I):
+        # "tell me more about finding 2" with no investigation in this conversation: nothing to refer to -- never a
+        # different analysis run in its place
+        return _reply("There are no numbered findings in this conversation yet, so I can't tell you more about one. "
+                      "Ask me to *analyse this dataset* first; I'll list what I find, and you can then ask about any of "
+                      "them by number.", "tool", model_on, started, plan={"type": "chat", "reference": "unresolved"},
+                      notes=["The message refers to a finding, and this conversation has no investigation; nothing was "
+                             "calculated."])
+    if model_on and _last_result(memory, df) is not None:
+        # A follow-up to the latest result ("what about ...", "only ...", "compare it with ...", "the average instead",
+        # "why?") is resolved deterministically from that result's reading BEFORE any model is consulted: the model's
+        # planner was found (Stage 6, model ON) to answer such messages as new, different questions.
+        legacy_now = any(memory.get(k) and not _superseded(memory, k) for k in ("last_calc", "last_breakdown"))
+        out = _followup_from_last(message, df, memory, model_on, started, early=legacy_now)
+        if out is not None:
+            return out
     kind = followup.intent(message, memory)
+    if kind == "advice" and followup_cols(df, message) and re.search(
+            r"\b(compare\w*|across|between|by|per|versus|vs\.?|each|related|differ\w*)\b", message, re.I):
+        kind = None             # "compare csat across priorities": an analysis of named columns, not a request for advice
     if kind == "explain_previous" and memory.get("investigation") and finding_ref(
             message, len(memory["investigation"]["findings"])) is not None:
         kind = None                     # "explain the last thing you found": a stored finding, not the last answer
@@ -412,7 +1076,10 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
         if out is not None:
             return out
     if chart_kind in ("bar", "line", "pie", "auto"):
-        out = _chart_from_last(message, df, memory, model_on, started)
+        # the calculator's own redraw when its calculation is still the latest result (it knows the metric's label
+        # and records); otherwise the latest result itself -- never an older one
+        out = _chart_from_last(message, df, memory, model_on, started) or \
+            _chart_from_last_result(message, df, memory, chart_kind, model_on, started)
         if out is not None:
             return out
     # The question's scope -- named people/categories/periods, or the previous question's when a follow-up names
@@ -474,6 +1141,14 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                       model_on, started, plan={"type": "clarify", "options": cs},
                       notes=[f"'{w}' could mean any of {', '.join(cs)}; Silt asks rather than choosing one. Nothing was "
                              "calculated."])
+    # Two questions about different records in one message ("total amount for East and the average units for West"):
+    # each clause is computed on its own records -- never all of them on the union
+    from app.analyst import intent as _intent_mod
+    sep = _intent_mod.separate_scopes(message, df)
+    if sep:
+        out = _clause_answers(message, sep, df, memory, model_on, started)
+        if out is not None:
+            return out
     # "compare that with the previous result", "set that next to the original ask": earlier answers of this
     # conversation, resolved from its ordered result register (app/analyst/register.py); two target/scenario
     # objectives are compared as scenarios, anything else side by side
@@ -545,6 +1220,16 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                               notes=[f"The request asks for a figure per {den} but names no column to divide; Silt asks "
                                      "rather than reporting the denominator itself."])
         lost = nl_planner.unapplied(message, df)
+        if lost and memory.get("last_result"):
+            out = _followup_from_last(message, df, memory, model_on, started, early=True)
+            if out is not None:
+                return out
+        if lost and metrics.recognise(message) is not None and scoping.active(sc) and sc.get("period"):
+            # a defined metric (labour cost, profit ...) over a period: the calculator holds it to the question's
+            # scope, which carries the dates -- and the verifier checks the dates were applied
+            out = _ask_metric(message, df, memory, model_on, started, sc)
+            if out is not None and any(c.get("status") == "ok" for c in out.get("calls", [])):
+                return out
         if lost:
             # the request is limited (a relative period, "only escalated") and no program could apply it: an answer
             # over all the records would look right and be wrong
@@ -554,6 +1239,13 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                           plan={"type": "clarify"},
                           notes=["The request states a restriction that only an analysis program can apply; none could "
                                  "be built, so nothing was calculated."])
+    legacy_current = any(memory.get(k) and not _superseded(memory, k) for k in ("last_calc", "last_breakdown"))
+    if memory.get("last_result") and not legacy_current:
+        # the latest answer is newer than what the older refinement handlers hold ("what about only completed
+        # orders?" then "now the average instead"): the follow-up applies to the latest result's reading
+        out = _followup_from_last(message, df, memory, model_on, started, early=True)
+        if out is not None:
+            return out
     out = _refine_last(message, df, memory, model_on, started, sc)
     if out is not None:
         return out
@@ -591,13 +1283,19 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     out = _ask_compare_columns(message, dfs, model_on, started)
     if out is not None:
         return out
+    out = _ask_refinement(message, df, memory, model_on, started, sc)
+    if out is not None:
+        return out
     rks = followup.rank_requests(message, dfs)
     rk = rks[0] if rks else None
+    if rks:
+        memory["last_breakdown"] = {"kind": "rank", "rks": [dict(x) for x in rks],
+                                    "entities": dict((sc or {}).get("entities") or {})}
     if rk is not None and not (model_on and calc.wanted(message, df, memory)):
         missing = next((x for x in rks if x["measure"] is None), None)
         if missing:
-            from app.analyst.data import kind_of
-            nums = [c for c in df.columns if kind_of(df[c]) == "numeric"]
+            from app.analyst.semantics import measure_options
+            nums = measure_options(df)
             return _reply(f"Top {missing['n']} {missing['group']} by which value? For example: " + ", ".join(
                 f"`{c}`" for c in nums[:8]) + ".", "tool", model_on, started, plan={"type": "clarify"})
         within = None
@@ -609,7 +1307,7 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
             dfs = dfs[dfs[within[0]].astype(str) == str(within[1])]
         texts, charts, calls = [], [], []
         for x in rks:
-            r = followup.rank_groups(dfs, x["group"], x["measure"], x["n"], x["low"])
+            r = followup.rank_groups(dfs, x["group"], x["measure"], x["n"], x["low"], x.get("agg"), x.get("extras"))
             charts.append({"type": "bar", "additive": r["additive"], "x": x["group"], "y": x["measure"],
                            "title": f"{'Bottom' if x['low'] else 'Top'} {x['n']} {x['group']} by "
                                     f"{r['aggregation'] if r['aggregation'] == 'mean' else 'total'} {x['measure']}",
@@ -839,7 +1537,9 @@ differences appear appears associated association factors factor identify import
 issue business days day weeks week months month years year hours hour time target targets goal goals risk risks
 missing team workload capacity absent absence explain explains why happen happens happened would will could
 increase increased decrease decreased costs cost operating trend trends pattern patterns unusual investigate possible
-explanations explanation recommend option options feasible better best worse worst others other next""".split())
+explanations explanation recommend option options feasible better best worse worst others other next highest lowest
+largest smallest biggest top bottom something anything everything stuff interesting info information insight insights
+have has had there typical distinct unique different separate rate rates share percentage proportion""".split())
 _STOPWORDS = set("""a an the and or but if then than that this these those it its he she him her his they them their we
 our you your i me my to of in on at by for with from as is are was were be been being do does did can could should would
 will may might must shall what which who whom whose when where why how all any each every some no not only just also very
@@ -883,11 +1583,33 @@ def _dataset_reply(message, df, memory, model_on, started, previous) -> dict:
         offer = _concept_offer(unknown, df)
         parts.append(f"This data has nothing called **{offer[0]}**, but " + " or ".join(f"`{c}`" for c in offer[1])
                      + " may mean the same thing. Ask again using that column, for example with *" + offer[1][0] + "*.")
-    elif unknown and not refers:
-        parts.append("This data has nothing called " + ", ".join(f"**{w}**" for w in unknown[:3])
-                     + " (columns: " + ", ".join(f"`{c}`" for c in df.columns[:10]) + ").")
-    last = memory.get("last_calc")
-    if _REFER.search(message) and last:
+    elif not refers and _ranks_without_measure(message, df):
+        g = _ranks_without_measure(message, df)
+        from app.analyst import semantics as _s
+        parts.append(f"Highest or lowest **{g}** by which value? This question names none. Options: "
+                     + ", ".join(f"`{c}`" for c in _s.measure_options(df, limit=6)) + ".")
+    elif not refers:
+        missing = _missing_terms(message, df)
+        if missing:
+            kind, term = missing[0]
+            parts.append(f"This data has nothing called **{term}** — no column or value by that name"
+                         + (", so there is nothing to count by it." if kind == "count" else
+                            ", so I can't tell which values to use for it.")
+                         + " I haven't substituted another column.")
+        elif unknown:
+            parts.append("This data has nothing called " + ", ".join(f"**{w}**" for w in unknown[:3])
+                         + " — no column or value by that name.")
+    lr, last = memory.get("last_result"), memory.get("last_calc")
+    if _REFER.search(message) and last and not _superseded(memory, "last_calc"):
+        res = last["result"]
+        parts.append(f"The current result is from *{last['question']}*: {present.calc_headline(res, last['question'])} "
+                     "You can narrow it (*only <name>*), break it down (*by <column>*), exclude duplicates, chart it or "
+                     "ask me to explain it.")
+    elif _REFER.search(message) and lr:
+        parts.append(f"The latest result is from *{lr['question'][:120]}*. You can narrow it (*what about <name>?*, "
+                     "*only <value>*), compare it (*compare it with <name>*), change the figure (*the average "
+                     "instead*), break it down (*by <column>*), chart it, or ask *why?*.")
+    elif _REFER.search(message) and last:
         res = last["result"]
         parts.append(f"The current result is from *{last['question']}*: {present.calc_headline(res, last['question'])} "
                      "You can narrow it (*only <name>*), break it down (*by <column>*), exclude duplicates, chart it or "
@@ -896,12 +1618,69 @@ def _dataset_reply(message, df, memory, model_on, started, previous) -> dict:
         parts.append(f"The last answer was for *{memory['last_answer']['question'][:100]}*; I couldn't tell how your "
                      "message relates to it. Say what to change, or ask me to explain it.")
     else:
-        from app.analyst import overview
-        sugg = overview.understand(df)["suggested_questions"][:3]
-        parts.append("Which value and which groups or period? For example:\n\n" + "\n".join(f"- {q}" for q in sugg))
+        parts.append(_what_is_available(df))
     return _reply("\n\n".join(parts), "conversation", model_on, started, plan={"type": "chat", "fallback": True},
                   notes=previous.get("notes", []) + ["Nothing could compute this message; Silt said what it could not "
                                                      "connect instead of guessing."])
+
+
+_ASKED_FOR = re.compile(r"\b(average|mean|median|typical|total|sum of|number of|how many|count of|highest|lowest|most|"
+                        r"least|maximum|minimum|forecast|predict|trend of|share of|percentage of|rate of)\s+(?:the\s+|our\s+|"
+                        r"all\s+|different\s+|distinct\s+|unique\s+)?([a-z][a-z_]*(?:\s+[a-z][a-z_]*)?)", re.I)
+
+
+def _missing_terms(message: str, df) -> list[tuple[str, str]]:
+    """The thing a question asks about -- the noun after its quantity word ("the typical blorp", "how many unicorns")
+    -- when nothing in the data is called that: [(kind, term)], kind "count" or "measure"."""
+    from app.analyst import intent
+    from app.analyst.data import find_column
+    vocab, _ = intent._vocabulary(df)  # noqa: SLF001
+    out = []
+    for m in _ASKED_FOR.finditer(message):
+        words = [w for w in m.group(2).lower().split() if w not in _STOPWORDS and w not in _ANALYSIS_WORDS
+                 and w not in ("per", "by", "each", "in", "for")]
+        if not words:
+            continue
+        w = words[0]
+        if w in vocab or w.rstrip("s") in vocab or find_column(df, w) or intent.lemma(w) in {intent.lemma(v) for v in vocab
+                                                                                           if len(v) > 4}:
+            continue
+        out.append(("count" if m.group(1).lower() in ("how many", "number of", "count of") else "measure", w))
+    return out
+
+
+def _ranks_without_measure(message: str, df) -> str | None:
+    """'Which region has the highest?': a ranking of groups that names nothing to rank them by -- the group."""
+    from app.analyst import intent
+    try:
+        r = intent.read(message, df)
+    except Exception:  # noqa: BLE001
+        return None
+    return r.group if r.extreme and r.group and not r.measures and not r.event and not r.counted else None
+
+
+def _what_is_available(df) -> str:
+    """What this data can answer, from its own columns: the measures (never identifiers), the groups, the dates, and
+    three questions built from them."""
+    from app.analyst import overview, semantics
+    prof = semantics.profile(df)
+    meas = semantics.measure_options(df, limit=6)
+    groups = [c for c in prof["groups"] if prof["roles"][c]["role"] == "category"][:5]
+    flags = [c for c in prof["flags"]][:3]
+    lines = ["Here is what this data can answer:"]
+    if meas:
+        lines.append("- **Measures** (totals, averages, rankings, trends): " + ", ".join(f"`{c}`" for c in meas))
+    if groups:
+        lines.append("- **Groups** to break results down by: " + ", ".join(f"`{c}`" for c in groups))
+    if flags:
+        lines.append("- **Yes/no columns** (rates, filters such as *only …*): " + ", ".join(f"`{c}`" for c in flags))
+    if prof["dates"]:
+        lines.append(f"- **Dates** for periods and trends: `{prof['dates'][0]}`")
+    lines.append(f"- **Counts**: the {len(df):,} records, or the distinct values of any column")
+    sugg = overview.understand(df)["suggested_questions"][:3]
+    if sugg:
+        lines += ["", "For example:"] + [f"- {q}" for q in sugg]
+    return "\n".join(lines)
 
 
 def _whole_sentences(text: str) -> str:
@@ -966,7 +1745,8 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
                                    + ", so I haven't shown its numbers. Try naming the measure and the person or group "
                                      "again."), charts=[], plan_source="tool")
                 answered = False
-            if answered and "**Scope:**" not in out["answer"] and out.get("plan_source") not in ("model_calc",):
+            if answered and "**Scope:**" not in out["answer"] and out.get("plan_source") not in ("model_calc",) \
+                    and not (out.get("plan") or {}).get("parts"):        # each clause states its own records
                 out["answer"] = f"**Scope:** {checks[-1]['detail']}.\n\n" + out["answer"]
         checks += out.pop("_post_checks", [])     # answer verification (verify.py), after the path's own checks
         if checks:
@@ -981,6 +1761,9 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
                                   for c in out.get("calls", []) if c.get("status") == "ok")
         # an analysis-program turn that names nobody ("change the target to 320") works on the same people as before
         keep_scope = out.get("plan_source") == "program" and not scoping.active(sc)
+        explains = (out.get("plan") or {}).get("intent") == "why_previous"   # explains the latest result; not a new one
+        if answered and not redraw and not explains:
+            _record_last_result(out, message, df, memory, sc)
         if answered and not redraw and not keep_scope:
             memory["scope"] = sc if scoping.active(sc) else None
             memory["last_analysis"] = "calc" if out.get("plan_source") in ("model_calc", "metric", "refine") else "other"
@@ -1072,7 +1855,7 @@ def _chart_from_last(message, df, memory, model_on, started) -> dict | None:
     """'Show that as a pie chart', 'chart of labor cost by department' right after computing it: draw the result
     already computed (same records, same exclusions) instead of planning it again."""
     last = memory.get("last_calc")
-    if not last:
+    if not last or _superseded(memory, "last_calc"):
         return None
     if len(last["result"].get("groups") or []) < 2:
         if memory.get("last_analysis") == "calc" and re.search(r"\b(this|that|it|the result|same|previous)\b", message, re.I):
@@ -1254,6 +2037,121 @@ _PERFORM = re.compile(r"\b(perform\w*|underperform\w*|doing (?:best|worst|badly|
                       r"(?:best|worst|weakest|strongest) (?:performer|performing|results?))\b|\b(?:best|worst)\b", re.I)
 
 
+_AGG_SWITCH = re.compile(r"\b(median|mean|average|total|sum|maximum|max|minimum|min)\b(?:[^.?!]{0,30}\binstead\b)|"
+                         r"\b(?:use|show|give|try)\s+(?:me\s+)?(?:the\s+)?(median|mean|average|total|sum|maximum|minimum)\b",
+                         re.I)
+_RERANK = re.compile(r"\b(?:rank|sort|order|re-?rank)\w*\s+(?:them|these|those|it|the list|the companies|the results)?\s*"
+                     r"(?:by|on)\s+([^.?!]+)|\bby\s+([^.?!]+?)\s+instead\b", re.I)
+_DIRECTION = re.compile(r"\b(?:show\s+(?:me\s+)?)?(?:the\s+)?(bottom|lowest|worst|top|highest|best)\s*(\d{1,2})?\b"
+                        r"(?=[^.?!]{0,20}\binstead\b)|\bshow\s+(?:me\s+)?the\s+(bottom|top)\s*(\d{1,2})\b", re.I)
+_ONLY = re.compile(r"^\s*(?:(?:now|and|ok|okay|then)\s*,?\s*)?(?:only|just|but only|limit (?:it|that|this) to|restrict (?:it|that) to|"
+                   r"what about|now for|for)\b", re.I)
+
+
+def _ask_refinement(message, df, memory, model_on, started, sc) -> dict | None:
+    """A follow-up that changes one thing about the last ranking or grouped figure -- "rank them by reviews instead",
+    "now the median", "the bottom 5 instead", "only Private companies" -- re-run with that one change. The grouping,
+    measure, aggregation, size and earlier filters are kept unless the follow-up changes them, and the answer says
+    what changed and what was kept. Nothing else is reused."""
+    last = memory.get("last_breakdown")
+    if not last or followup.rank_requests(message, df) or _superseded(memory, "last_breakdown"):
+        return None
+    from app.analyst.data import find_column, kind_of
+    from app.analyst.intent import ranking_aggregate
+    new_ents = dict((sc or {}).get("entities") or {}) if scoping.active(sc) else {}
+    agg_m, rr, dm = _AGG_SWITCH.search(message), _RERANK.search(message), _DIRECTION.search(message)
+    only = bool(new_ents) and (bool(_ONLY.search(message)) or (len(message.split()) <= 4 and not re.search(
+        r"\b(why|what|how|which|who|when|is|are|does|do|explain|compare|versus|vs)\b", message, re.I)))
+    if not (agg_m or rr or dm or only):
+        return None
+    changed = []
+    ents = {**(last.get("entities") or {}), **new_ents}
+    if new_ents:
+        changed.append("records limited to " + "; ".join(f"{c} = {' or '.join(map(str, v))}" for c, v in new_ents.items()))
+    d = df
+    for c, vals in ents.items():
+        if c in df.columns:
+            d = d[d[c].astype(str).str.lower().isin([str(v).lower() for v in vals])]
+    if d.empty:
+        return _reply("No records match " + "; ".join(f"{c} = {' or '.join(map(str, v))}" for c, v in ents.items())
+                      + ", so there is nothing to rank.", "tool", model_on, started, plan={"type": "clarify"})
+    agg_word = None
+    if agg_m:
+        agg_word = (agg_m.group(1) or agg_m.group(2)).lower()
+    to_agg = {"median": "median", "mean": "mean", "average": "mean", "total": "sum", "sum": "sum", "maximum": "max",
+              "max": "max", "minimum": "min", "min": "min"}
+    new_measure = None
+    if rr:
+        txt = rr.group(1) or rr.group(2)
+        nums = [c for c in find_column(df, txt) if kind_of(df[c]) == "numeric"]
+        if not nums:
+            from app.analyst.followup import _stem_column
+            nums = [c for c in (_stem_column(w, df) for w in re.findall(r"[a-z]+", txt.lower())) if c]
+        if not nums:
+            return None
+        new_measure = nums[0]
+    if last["kind"] == "rank":
+        rks = [dict(x) for x in last["rks"]]
+        for x in rks:
+            if new_measure and new_measure != x["measure"]:
+                changed.append(f"ranked by {new_measure} instead of {x['measure']}")
+                x["measure"], x["agg"], x["extras"] = new_measure, ranking_aggregate(message, new_measure), []
+            if agg_word:
+                changed.append(f"{agg_word} instead of {x.get('agg') or 'the earlier aggregate'}")
+                x["agg"] = to_agg[agg_word]
+            if dm:
+                word = (dm.group(1) or dm.group(3) or "").lower()
+                num = dm.group(2) or dm.group(4)
+                low = word in ("bottom", "lowest", "worst")
+                if low != x["low"]:
+                    changed.append("bottom instead of top" if low else "top instead of bottom")
+                x["low"] = low
+                if num:
+                    x["n"] = int(num)
+        memory["last_breakdown"] = {"kind": "rank", "rks": rks, "entities": ents}
+        texts, calls = [], []
+        for x in rks:
+            r = followup.rank_groups(d, x["group"], x["measure"], x["n"], x["low"], x.get("agg"), x.get("extras"))
+            texts.append(followup.rank_text(r, False))
+            calls.append({"tool": "rank_groups", "status": "ok", "args": {k: x.get(k) for k in ("group", "measure", "n",
+                          "low", "agg")}, "result": _jsonable(r)})
+        kept = f"kept: grouping by {rks[0]['group']}" + (", earlier filters " + "; ".join(
+            f"{c} = {' or '.join(map(str, v))}" for c, v in (last.get("entities") or {}).items()) if last.get("entities") else "")
+        head = f"_Changed from the previous answer: {'; '.join(dict.fromkeys(changed)) or 'nothing'} ({kept})._\n\n"
+        if ents and not new_ents:          # a new filter is already stated in the answer's scope line
+            head += f"**Records:** {'; '.join(f'{c} = ' + ' or '.join(map(str, v)) for c, v in ents.items())} — {len(d):,} of {len(df):,}.\n\n"
+        return _reply(head + "\n\n".join(texts), "tool", model_on, started, calls=calls,
+                      plan={"type": "tools", "intent": "refinement"},
+                      notes=["A follow-up to the previous ranking: re-run by Silt's deterministic tools with the change "
+                             "named in the question."])
+    args = dict(last["args"])
+    if new_measure:
+        changed.append(f"{new_measure} instead of {args.get('column')}")
+        args["column"] = new_measure
+        args["aggregation"] = {"sum": "sum", "mean": "avg", "median": "median"}.get(ranking_aggregate(message, new_measure)
+                                                                                   or "", args["aggregation"])
+    if agg_word:
+        changed.append(f"{agg_word} instead of {args['aggregation']}")
+        args["aggregation"] = {"mean": "avg"}.get(to_agg[agg_word], to_agg[agg_word])
+    if dm:
+        args["order"] = "asc" if (dm.group(1) or dm.group(3) or "").lower() in ("bottom", "lowest", "worst") else "desc"
+    memory["last_breakdown"] = {"kind": "metric", "args": args, "entities": ents}
+    try:
+        call = tools.validate_call({"tool": "compute_metric", "args": args}, d, message)
+    except tools.RoleRefusal as e:
+        memory["last_breakdown"] = last                 # the refused change is not kept
+        return _reply("**I can't compute that.** " + str(e), "tool", model_on, started,
+                      plan={"type": "decline", "role_refusal": True})
+    r = tools.run(call, d, memory)
+    head = f"_Changed from the previous answer: {'; '.join(dict.fromkeys(changed)) or 'nothing'} (kept: grouping by " \
+           f"{args.get('group_by')})._\n\n"
+    if ents and not new_ents:
+        head += f"**Records:** {'; '.join(f'{c} = ' + ' or '.join(map(str, v)) for c, v in ents.items())} — {len(d):,} of {len(df):,}.\n\n"
+    return _reply(head + explain.render("compute_metric", r), "tool", model_on, started,
+                  calls=[{**call, "status": "ok", "result": _jsonable(r)}], plan={"type": "tools", "intent": "refinement"},
+                  notes=["A follow-up to the previous breakdown: re-run with the change named in the question."])
+
+
 def _undefined_performance(message, df) -> dict | None:
     """{group, options} when the request ranks groups by an undefined notion of performance and names no measure."""
     from app.analyst import intent, semantics
@@ -1350,8 +2248,9 @@ def _ask_nl_program(message, df, memory, model_on, started, filename, late) -> d
     return out
 
 
-def _run_program(p, message, df, memory, model_on, started, source, trace, notes) -> dict | None:
-    """Run a checked program (planned by the model, or built from the request) and present it."""
+def _run_program(p, message, df, memory, model_on, started, source, trace, notes, request=None) -> dict | None:
+    """Run a checked program (planned by the model, or built from the request) and present it. `request` is the
+    reading the program was built for when it is not the message's own (a follow-up applied to the last result)."""
     if not p:
         return None
     try:
@@ -1362,7 +2261,7 @@ def _run_program(p, message, df, memory, model_on, started, source, trace, notes
     from app.analyst import verify
     # the question's scope (a named value, a year column value, a month) is part of what the figure must be computed
     # over: a program that leaves it out does not answer the question
-    v = verify.check(message, df, r["steps"], r["results"], scope=memory.get("_scope"))
+    v = verify.check(message, df, r["steps"], r["results"], scope=memory.get("_scope"), request=request)
     if v["status"] == "failed":
         # the program ran but does not answer the request, or its figure differs from an independent recomputation:
         # not shown; the next path (Silt's own program, or its other handlers) answers instead
@@ -1374,6 +2273,7 @@ def _run_program(p, message, df, memory, model_on, started, source, trace, notes
         notes = ["Built by Silt from the request's parts (measure, grouping, comparison, why) without a model; every "
                  "step was validated and computed from the records."]
     return _reply(r["answer"], source, model_on, started, verification=v["checks"],
+                  **({"_request": request} if request is not None else {}),
                   plan={"type": "program", "objective": "model_planned" if source == "model_program" else "rule_planned",
                         "planner": trace},
                   calls=[{"tool": "analysis_program", "status": "ok",
@@ -1390,7 +2290,11 @@ def followup_cols(df, message):
     out = []
     for c in df.columns:
         w = re.sub(r"[^a-z0-9]+", " ", _words(str(c))).strip()
-        if w and re.search(rf" {re.escape(w)}s? ", low):
+        forms = [w]
+        if w and " " not in w and len(w) >= 5:
+            # one-word columns also in their -ed form: "rated" for rating, "reviewed" for review
+            forms += [re.sub(r"ing$", "ed", w), w + "ed", w + "d"]
+        if w and any(re.search(rf" {re.escape(f)}s? ", low) for f in dict.fromkeys(forms)):
             out.append(c)
     return out
 
@@ -1494,8 +2398,13 @@ def _ask_compare_columns(message, df, model_on, started) -> dict | None:
     order = sorted(vals.items(), key=lambda kv: kv[1], reverse=not low)
     word = {"mean": "average", "sum": "total", "median": "median", "max": "maximum"}[agg]
     from app.analyst.explain import f
-    lines = [f"**{order[0][0]}** has the {'lowest' if low else 'highest'} {word} value: **{f(order[0][1])}** "
-             f"({order[-1][0]} has the {'highest' if low else 'lowest'}: {f(order[-1][1])}).", "",
+    from app.analyst.explain import tied_extreme
+    bv, bks = tied_extreme(vals, low=low)
+    ov, oks = tied_extreme(vals, low=not low)
+    who = " and ".join(f"**{k}**" for k in bks)
+    lines = [f"{who} {'have' if len(bks) > 1 else 'has'} the {'lowest' if low else 'highest'} {word} value: "
+             f"**{f(bv)}**{' each — tied' if len(bks) > 1 else ''} ({' and '.join(oks)} "
+             f"{'have' if len(oks) > 1 else 'has'} the {'highest' if low else 'lowest'}: {f(ov)}).", "",
              f"| {noun} (column) | {word} | records |", "|---|---:|---:|"]
     lines += [f"| {c} | {f(v)} | {int(pd.to_numeric(df[c], errors='coerce').notna().sum())} |" for c, v in order]
     lines += ["", f"_No column names the {noun}s, so each numeric column was treated as one {noun} ("
@@ -1591,6 +2500,8 @@ def _chart_from_previous_answer(message, df, memory, kind, model_on, started) ->
     """'Show that as a pie chart' after any answer that had a chart (a comparison, a trend, a ranking): redraw the same
     computed values as the requested type. Only when the question refers back and names nothing new."""
     prev = memory.get("last_charts")
+    if prev and _superseded(memory, "last_charts"):
+        prev = None                     # the latest answer is newer than these charts: never redraw a stale result
     if not prev or not re.search(r"\b(that|it|this|these|those|them|same|the (result|answer|previous|difference|"
                                  r"differences|comparison|gap|change|changes))\b", message, re.I):
         return None
@@ -1617,8 +2528,8 @@ def _ask_forecast(message, df, memory, model_on, started, sc=None) -> dict | Non
                       "should I forecast?", "tool", model_on, started, plan={"type": "clarify", "target": t},
                       notes=["Several columns fit the requested target; Silt asks rather than picking one."])
     if t["kind"] == "unknown":
-        from app.analyst.data import kind_of
-        nums = [c for c in df.columns if kind_of(df[c]) == "numeric"]
+        from app.analyst.semantics import measure_options
+        nums = measure_options(df)
         return _reply("Which value should I forecast? Name it — for example " + ", ".join(f"`{c}`" for c in nums[:6])
                       + " — or a metric built from them.", "tool", model_on, started, plan={"type": "clarify"})
     if t["kind"] == "derived":
@@ -1723,12 +2634,20 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
 
     calls_out, answer, results = [], "", []
     if plan["type"] == "tools":
-        validated, errors = [], []
+        validated, errors, refused = [], [], []
         for c in plan["calls"][:4]:
             try:
                 validated.append(tools.validate_call(c, df, message))
+            except tools.RoleRefusal as e:
+                refused.append(str(e))
             except tools.InvalidCall as e:
                 errors.append(str(e))
+        if refused and not any(c["tool"] in ("compute_metric", "describe_column") for c in validated):
+            # the aggregation asked for has no meaning for what the column is: said, never computed with a warning
+            return _reply("**I can't compute that.** " + " ".join(dict.fromkeys(refused)), "tool", model_on, started,
+                          plan={"type": "decline", "role_refusal": True},
+                          notes=notes + ["Refused by Silt's column-role rule (one rule for every tool and program "
+                                         "step); nothing was calculated."])
         if errors and first_pass is not None and first_pass.get("valid"):
             first_pass.update(valid=False, error="invalid tool call: " + "; ".join(errors))
         if errors and source in ("model", "model_retry"):
@@ -1739,6 +2658,10 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
                 for c in plan["calls"]:
                     try:
                         validated.append(tools.validate_call(c, df, message))
+                    except tools.RoleRefusal as e:
+                        return _reply("**I can't compute that.** " + str(e), "tool", model_on, started,
+                                      plan={"type": "decline", "role_refusal": True},
+                                      notes=notes + ["Refused by Silt's column-role rule; nothing was calculated."])
                     except tools.InvalidCall as e:
                         errors.append(str(e))
         if plan["type"] == "tools":
@@ -1750,6 +2673,10 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
                     r = tools.run(call, df, memory)
                     calls_out.append({**call, "status": "ok", "result": _jsonable(r)})
                     results.append((call["tool"], r))
+                    if call["tool"] == "compute_metric" and (call.get("args") or {}).get("group_by"):
+                        sc_ = memory.get("_scope") or {}
+                        memory["last_breakdown"] = {"kind": "metric", "args": dict(call["args"]),
+                                                    "entities": dict(sc_.get("entities") or {})}
                 except (ml.Unsuitable, business.Insufficient) as e:
                     calls_out.append({**call, "status": "refused", "reason": str(e)})
                     answer += ("\n\n" if answer else "") + f"**I can't responsibly do that with this data.** {e}"
@@ -1769,7 +2696,8 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
         opts = plan.get("options") or []
         answer = plan.get("question", "Could you clarify?") + ("\n\nOptions: " + ", ".join(f"`{o}`" for o in opts) if opts else "")
     elif plan["type"] == "decline":
-        answer = "**The available data is not sufficient for this.** " + plan.get("reason", "")
+        answer = ("**I can't compute that.** " if plan.get("role_refusal") else
+                  "**The available data is not sufficient for this.** ") + plan.get("reason", "")
     elif plan["type"] == "explain_previous":
         if memory.get("last_recommendation"):
             answer = explain.why(memory["last_recommendation"], message)
@@ -1901,6 +2829,8 @@ def _ask_routed(message, df, memory, routed, model_on, filename, started) -> dic
         except (ml.Unsuitable, business.Insufficient) as e:
             calls.append({**call, "status": "refused", "reason": str(e)})
             answer = f"**I can't do that with this data.** {e}"
+        except tools.RoleRefusal:
+            raise                       # one wording for every path: handled in ask()
         except Exception as e:  # noqa: BLE001
             logger.exception("routed tool failed")
             calls.append({**call, "status": "error", "reason": f"{type(e).__name__}: {e}"})
@@ -2241,7 +3171,8 @@ def _refine_last(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
     department.", "Treat them as overnight shifts." -- re-runs that same calculation with the change, deterministically.
     Only when the latest analysis was a calculation, and the message asks for nothing else."""
     last = memory.get("last_calc")
-    if not last or memory.get("last_analysis") != "calc" or len(message.split()) > 12 or metrics.recognise(message) \
+    if not last or _superseded(memory, "last_calc") or memory.get("last_analysis") != "calc" or len(message.split()) > 12 \
+            or metrics.recognise(message) \
             or _SCENARIO_Q.search(message) or followup.wants_forecast(message) or re.search(r"\bpredict\w*|%", message, re.I) \
             or router._numeric_named(df, message.lower()):  # noqa: SLF001 - a new measure is a new question
         return None

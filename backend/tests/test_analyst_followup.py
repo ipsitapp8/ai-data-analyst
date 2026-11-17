@@ -378,7 +378,8 @@ def test_scatter_and_histogram_data_are_computed_from_the_records():
 def test_top_n_ranks_groups_by_the_main_measure():
     df = pd.DataFrame({"product": list("AABBBCD"), "revenue": [5, 5, 1, 1, 1, 20, 2.0]})
     rk = followup.rank_request("Show the top two products", df)
-    assert rk == {"group": "product", "measure": "revenue", "n": 2, "low": False, "assumed_measure": True}
+    assert rk == {"group": "product", "measure": "revenue", "n": 2, "low": False, "assumed_measure": True,
+                  "agg": None, "extras": []}        # no aggregate named: the measure's kind decides (revenue: total)
     r = followup.rank_groups(df, "product", "revenue", 2)
     assert [(x["group"], x["value"]) for x in r["rows"]] == [("C", 20.0), ("A", 10.0)]
 

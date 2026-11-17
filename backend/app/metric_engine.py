@@ -304,7 +304,7 @@ def _key(value: Any) -> Any:
 
 
 def evaluate(df: pd.DataFrame, formula: Formula | str, filters: list[dict] | None = None,
-             group_by: list[str] | None = None) -> dict:
+             group_by: list[str] | None = None, order: str | None = None) -> dict:
     """Evaluate a formula. Returns
         {"value": float|None, "rows": n}                       without group_by
         {"groups": [{"key": {...}, "value": ...}], "rows": n}  with group_by
@@ -338,9 +338,12 @@ def evaluate(df: pd.DataFrame, formula: Formula | str, filters: list[dict] | Non
             "value": _clean(value),
             "rows": int(counts.get(key, 0)),
         })
+    if order in ("asc", "desc"):
+        # a ranking keeps the highest (or lowest) groups when there are more than MAX_GROUPS, not the first ones
+        groups.sort(key=lambda g: (g["value"] is None, -(g["value"] or 0) if order == "desc" else (g["value"] or 0)))
     truncated = len(groups) > MAX_GROUPS
     return {"groups": groups[:MAX_GROUPS], "rows": int(len(data)), "truncated": truncated,
-            "coerced_non_numeric": coerced}
+            "groups_total": len(groups), "coerced_non_numeric": coerced}
 
 
 def _coercion_report(data: pd.DataFrame, formula: Formula) -> dict[str, int]:

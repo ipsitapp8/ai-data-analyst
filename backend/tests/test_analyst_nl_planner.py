@@ -105,7 +105,7 @@ def test_numbers_and_labels_in_the_answer_come_from_silt_not_the_model(monkeypat
     use(monkeypatch, plan)
     out = ask(COMPOSITE_Q, df, {})
     assert "99%" not in out["answer"] and "readmission risk" not in out["answer"] and "42%" not in out["answer"]
-    assert "(sum of consult_minutes by ward) ÷ (distinct clinician by ward)" in out["answer"]
+    assert "(sum of consult_minutes by ward) ÷ (number of distinct clinician values by ward)" in out["answer"]
     assert "per_head" not in out["answer"], "step ids written by the model are not labels"
 
 

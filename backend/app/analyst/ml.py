@@ -46,11 +46,19 @@ def infer_task(target: pd.Series) -> str:
 
 
 def _is_identifier(name: str, s: pd.Series) -> bool:
+    """One definition of "identifier" for the whole analyst (suggestions, associations, forecasts, model features):
+    unique labels, or whole numbers named as an id or code (customer_id, zip_code, order_no) even when they repeat --
+    a customer number is a label, not a quantity, however often it occurs."""
     n = s.notna().sum()
     if n == 0:
         return False
     if re.search(r"(?:^|_)(?:id|uuid|key|code)$|^id", name.lower()) and s.nunique() > 0.9 * n:
         return True
+    from app.analyst.semantics import _code_named  # noqa: PLC0415
+    if _code_named(name) and kind_of(s) == "numeric":
+        x = pd.to_numeric(s, errors="coerce").dropna()
+        if len(x) and bool((x == x.round()).all()):
+            return True
     return kind_of(s) == "categorical" and s.nunique() == n and n > 20
 
 

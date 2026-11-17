@@ -1,6 +1,8 @@
-"""Persistence of a conversation's analytical memory across restarts: the ordered result register and the open
-target/scenario objective (app/analyst/register.py, objectives.py). Nothing else -- trained models, scopes and
-per-turn state stay in process.
+"""Persistence of a conversation's analytical memory across restarts: the ordered result register, the open
+target/scenario objective (app/analyst/register.py, objectives.py), and the latest result a follow-up refers to
+(memory["last_result"]: its structured reading, records, values and charts -- plain data) with the turn counter.
+Nothing else -- trained models, data frames and per-turn state stay in process. A restored latest result is used
+only while the dataset still has the same columns and number of records (orchestrator._last_result).
 
 Isolation: one file per full memory key (team : user : dataset : document : conversation), stored under the team's
 and user's own directory as the SHA-256 of the key, and loaded only when the key stored inside the file equals the
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 RETENTION_DAYS = 30
 VERSION = 1
-KEYS = ("register", "objective", "objectives")
+KEYS = ("register", "objective", "objectives", "last_result", "_turn")
 
 
 def root() -> Path:
@@ -111,6 +113,13 @@ def _valid(data: dict) -> dict:
     if isinstance(objs, list) and all(isinstance(o, dict) and isinstance(o.get("params"), dict) and "type" in o
                                       for o in objs):
         out["objectives"] = objs
+    lr = data.get("last_result")
+    if isinstance(lr, dict) and isinstance(lr.get("turn"), int) and isinstance(lr.get("question"), str) \
+            and isinstance(lr.get("request"), dict) and isinstance(lr.get("shape"), list) \
+            and (lr.get("scope") is None or isinstance(lr.get("scope"), dict)):
+        out["last_result"] = lr
+    if isinstance(data.get("_turn"), int) and data["_turn"] >= 0:
+        out["_turn"] = data["_turn"]
     return out
 
 

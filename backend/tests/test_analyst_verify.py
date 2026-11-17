@@ -208,9 +208,15 @@ def test_a_tool_answer_that_does_not_match_is_withheld_and_replaced():
 
 def test_paths_with_no_independent_form_are_labelled_not_passed():
     df = ballots()
+    # a correlation now has an independent form: Pearson r, Spearman rho, their p-values and n are recomputed
     out = orchestrator.ask("Is Ash correlated with Birch?", df, {}, use_model=False)
     if any(c.get("status") == "ok" for c in out["calls"]):
-        assert out["verify_status"] == "not independently verified" and "not independently verified" in out["answer"]
+        assert out["verify_status"] == "verified"
+        assert {c["check"] for c in out["verification"]} >= {"independent recomputation: Pearson r",
+                                                            "independent recomputation: Spearman rho",
+                                                            "independent recomputation: n"}
+        assert all(c["ok"] for c in out["verification"] if c["check"].startswith("independent recomputation"))
+    # a result that names no columns has no independent form: never called verified
     v = verify.check_answer("Total votes", df, {"plan_source": "rules", "plan": {}, "calls": [
         {"tool": "correlation", "status": "ok", "result": {"r": 0.1}}]}, None, {})
     assert v["status"] == "not independently verified"
@@ -233,7 +239,11 @@ def test_a_table_of_tallies_is_summed_not_counted_and_a_lone_option_is_not_a_que
     tallies = pd.DataFrame({"club": ["Rovers", "Rovers", "City", "City", "Town"], "result": ["win", "draw"] * 2 + ["win"],
                             "count": [7, 3, 5, 6, 2]})
     out = orchestrator.ask("How many games did each club play in total?", tallies, {}, use_model=False)
-    prog = next(c for c in out["calls"] if c["tool"] == "analysis_program")["result"]["results"][""]["result"]["value"]
+    # (Stage 2: the deterministic planner now reads the grouping from the shared request and answers first; the
+    # figure must be the same whichever deterministic path computed it)
+    call = next(c for c in out["calls"] if c["tool"] in ("analysis_program", "compute_metric"))
+    prog = (call["result"]["results"][""]["result"]["value"] if call["tool"] == "analysis_program"
+            else {g["group"]: g["value"] for g in call["result"]["groups"]})
     assert prog == pytest.approx(tallies.groupby("club")["count"].sum().astype(float).to_dict())
     assert out["verify_status"] == "verified"
     out = orchestrator.ask("If Rovers were removed, how many games would remain in total?", tallies, {}, use_model=False)

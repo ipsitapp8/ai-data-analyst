@@ -82,6 +82,8 @@ def understand(r: dict) -> str:
         if c["identifier"]:
             summ = "identifier (unique per row)"
         lines.append(f"| {c['name']} | {'time of day' if c.get('time_of_day') else c['kind']} | {c['missing']} | {summ} |")
+    if r.get("read_notes"):
+        lines += ["", "**How the file was read**"] + [f"- {x}" for x in r["read_notes"]]
     if r["quality_issues"]:
         lines += ["", "**Data quality**"] + [f"- {x}" for x in r["quality_issues"]]
     else:
@@ -121,13 +123,16 @@ def missing_values(r: dict) -> str:
 def outliers(r: dict) -> str:
     if not r["columns"]:
         return f"No unusual values found in {', '.join(r['checked'][:8]) or 'the numeric columns'} ({r['method']})."
-    lines = [f"### Unusual values ({r['method']})", "", "| column | unusual values | share | normal range | most extreme |",
-             "|---|---:|---:|---|---|"]
+    lines = [f"### Unusual values ({r['method']}; and the z-score rule, abs(z) > 3)", "",
+             "| column | IQR rule: unusual values | share | IQR normal range | z-score rule: abs(z) > 3 | z normal range "
+             "| most extreme |", "|---|---:|---:|---|---:|---|---|"]
     for o in r["columns"]:
         ex = ", ".join(f"{f(e['value'])} (row {e['row']})" for e in o["examples"][:3])
-        lines.append(f"| {o['column']} | {o['count']} | {pct(o['pct'])} | {f(o['low'])} to {f(o['high'])} | {ex} |")
-    lines += ["", "Unusual is not the same as wrong: check whether these are entry errors or genuine extremes before "
-                  "removing them."]
+        lines.append(f"| {o['column']} | {o['count']} | {pct(o['pct'])} | {f(o['low'])} to {f(o['high'])} | "
+                     f"{o.get('z_count', 0)} | {f(o.get('z_low'))} to {f(o.get('z_high'))} | {ex} |")
+    lines += ["", "IQR rule: outside Q1 − 1.5 × IQR to Q3 + 1.5 × IQR. z-score rule: more than 3 standard deviations "
+                  "from the mean. Unusual is not the same as wrong: check whether these are entry errors or genuine "
+                  "extremes before removing them."]
     return "\n".join(lines)
 
 
@@ -146,13 +151,19 @@ def patterns(r: dict) -> str:
 
 
 def trend(r: dict) -> str:
+    from app.analyst.explain import extreme_text
     ch = r["change_pct"]
     return "\n".join([
         f"### {('Average' if r['aggregation'] == 'avg' else 'Total')} {r['value']} by {r['frequency']}",
         f"From **{f(r['first']['value'])}** in {r['first']['period']} to **{f(r['last']['value'])}** in "
         f"{r['last']['period']}: a change of {f(r['change'])}" + (f" ({ch:+.1f}%)" if ch is not None else "") + ".",
-        f"Highest: {r['peak']['period']} ({f(r['peak']['value'])}); lowest: {r['low']['period']} ({f(r['low']['value'])}). "
-        f"Average change per {r['frequency']} (straight-line fit): {f(r['slope_per_period'])}.", "", r["note"]])
+        ((extreme_text({p_["period"]: p_["value"] for p_ in (r.get("whole_points") or r.get("points") or [])}, bold=False)
+          or "")[:1].upper() + (extreme_text({p_["period"]: p_["value"] for p_ in (r.get("whole_points") or r.get("points")
+                                                                                   or [])}, bold=False) or "")[1:] or
+         f"Highest: {r['peak']['period']} ({f(r['peak']['value'])}); lowest: {r['low']['period']} ({f(r['low']['value'])}).")
+        + " "
+        f"Average change per {r['frequency']} (straight-line fit): {f(r['slope_per_period'])}.", "",
+        *([f"**Incomplete period:** {r['partial_note']}.", ""] if r.get("partial_note") else []), r["note"]])
 
 
 def drivers(r: dict) -> str:
@@ -400,13 +411,21 @@ def calc_headline(r: dict, question: str = "") -> str:
     groups = [g for g in r.get("groups") or [] if g.get(key) is not None]
     if r.get("group_by") and len(groups) > 1:
         low = bool(re.search(r"\b(lowest|least|smallest|worst|bottom|fewest)\b", question, re.I))
-        ordered = sorted(groups, key=lambda g: g[key], reverse=not low)
-        best, other = ordered[0], ordered[-1]
+        from app.analyst.explain import tied_extreme
+        vals = {g["group"]: g[key] for g in groups}
+        bv, bks = tied_extreme(vals, low=low)
+        ov, oks = tied_extreme(vals, low=not low)
+        best = next(g for g in groups if g["group"] == bks[0])
         share = best.get("share_of_" + key)
         total = r["totals"].get(key)
-        return (f"**{best['group']}** has the {'lowest' if low else 'highest'} {_label(key)}: **{_aval(r, key, best[key])}**"
-                + (f" ({pct(share * 100)} of the total {_aval(r, key, total)})" if share is not None and total else "")
-                + f". {other['group']} has the {'highest' if low else 'lowest'} ({_aval(r, key, other[key])}).")
+        who = " and ".join(f"**{k}**" for k in bks[:6]) + (f" (and {len(bks) - 6} more)" if len(bks) > 6 else "")
+        tie = " — tied" if len(bks) > 1 else ""
+        return (f"{who} {'have' if len(bks) > 1 else 'has'} the {'lowest' if low else 'highest'} {_label(key)}: "
+                f"**{_aval(r, key, bv)}**{' each' if len(bks) > 1 else ''}{tie}"
+                + (f" ({pct(share * 100)} of the total {_aval(r, key, total)})" if share is not None and total
+                   and len(bks) == 1 else "")
+                + f". {' and '.join(map(str, oks[:6]))} {'have' if len(oks) > 1 else 'has'} the "
+                f"{'highest' if low else 'lowest'} ({_aval(r, key, ov)}{' each' if len(oks) > 1 else ''}).")
     parts = [f"{est}{_label(n)} **{_aval(r, n, v)}**" for n, v in r["totals"].items()]
     who = ""
     sel = [m.group(1) for e in r["exclusions"] for m in [re.search(r"!=\s*'([^']*[A-Za-z][^']*)'", e["where"])] if m]

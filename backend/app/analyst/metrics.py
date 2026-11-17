@@ -84,6 +84,11 @@ def _role_columns(df: pd.DataFrame, role: str) -> list[str]:
         out = [c for c in map(str, df.columns) if _numeric(df, c) and "rate" in _tokens(c)
                and not _tokens(c) & {"conversion", "churn", "attrition", "growth", "tax", "interest", "exchange",
                                      "discount", "error", "success", "response", "click"}] if timed else []
+    if role == "revenue" and not out:
+        # no column is named revenue / sales: the one money total whose name says nothing else (shared rule,
+        # semantics.money_in_columns) -- the answer's definition names the column used
+        from app.analyst.semantics import money_in_columns
+        out = [str(c) for c in money_in_columns(df)[0]]
     if role == "base" and len(out) > 1:
         out.sort(key=lambda c: min([_BASE_PREFERENCE.index(t) for t in _tokens(c) if t in _BASE_PREFERENCE] or [99]))
     return out
@@ -272,6 +277,10 @@ def group_column(message: str, df: pd.DataFrame, skip: set[str] = frozenset()) -
                                                          "the", "a", "an", "of", "hour", "hours", "order", "orders"):
                 continue
             for w in (words if len(words) == 1 else [words[0], words[-1]]):
+                from app.analyst.schema_profile import entity_column     # "which company": the column naming companies,
+                ent = entity_column(df, w)                               # not company_type or Company_Age
+                if ent in cats:
+                    return ent, phrase
                 s = _singular(w)
                 hits = [c for c in cats if s in _tokens(c) or w in _tokens(c)]
                 if not hits:            # abbreviated names: "dept" for department, "emp" for employee, "cat" ...
@@ -326,8 +335,9 @@ def _clar(p: Plan, text: str) -> Plan:
     return p
 
 
-def _nonneg(cols: list[str], why: str = "not a possible value") -> list[dict]:
-    return [{"reason": f"negative {c.replace('_', ' ')} ({why})", "where": f"{c} < 0"} for c in cols]
+def _nonneg(cols: list[str], why: str | None = None) -> list[dict]:
+    return [{"reason": f"negative {c.replace('_', ' ')} ({why or never_negative_reason(c)})", "where": f"{c} < 0"}
+            for c in cols]
 
 
 def _hours(message: str, df: pd.DataFrame, p: Plan) -> tuple[str | None, dict, list[dict], str | None]:
@@ -529,14 +539,17 @@ def _b_aov(message, df, p):
     if orders:
         den, what = f"sum({orders})", f"total {_lab(orders)}"
     else:
-        ids = [c for c in map(str, df.columns) if kind_of(df[c]) == "categorical"
+        ids = [c for c in map(str, df.columns) if kind_of(df[c]) in ("categorical", "numeric")
                and _tokens(c) & {"order", "transaction", "invoice", "receipt", "basket"} and _tokens(c) & {"id", "no", "number", "ref", "code"}]
         if len(ids) != 1:
             return _clar(p, "**Average order value** = revenue ÷ number of orders, but this data has no order count or "
                             "order ID column, so the number of orders is unknown. If each record is one order, ask for "
                             f"*average {_lab(rv)} per record* instead; I won't treat records as orders without that.")
         den, what = f"nunique({ids[0]})", f"number of distinct {_lab(ids[0])} values"
-    return _ratio(p, f"sum({rv})", den, {rv: f"sum({rv})"}, f"average order value = total {_lab(rv)} ÷ {what}",
+    named_rev = bool(_tokens(rv) & ROLE_WORDS["revenue"][0])
+    return _ratio(p, f"sum({rv})", den, {rv: f"sum({rv})"}, f"average order value = total {_lab(rv)} ÷ {what}"
+                  + ("" if named_rev else f" (`{rv}` is read as the revenue: the only money total in this data whose "
+                                          "name says nothing else)"),
                   percent=False)
 
 
@@ -796,7 +809,8 @@ _AGG_RX = re.compile(r"\b(" + "|".join(w for w, _ in _AGG_WORDS) + r")s?\b", re.
 
 _RANKED = re.compile(r"[,;]?\s*\b(?:and\s+)?(?:ranked|sorted|ordered|rank|sort|order)\s+(?:them\s+|it\s+|the\s+\w+\s+)?"
                      r"(?:by|on)\s+([^,;.?!]+)", re.I)
-_COUNT_OF = re.compile(r"\b(?:number|count|no\.?|#)\s+of\s+([a-z][a-z_]*)|\bhow many\s+([a-z][a-z_]*)|"
+_COUNT_OF = re.compile(r"\b(?:number|count|no\.?|#)\s+of\s+(?:distinct\s+|unique\s+|different\s+)?([a-z][a-z_]*)|"
+                       r"\bhow many\s+(?:distinct\s+|unique\s+|different\s+|separate\s+)?([a-z][a-z_]*)|"
                        r"\b([a-z][a-z_]*?)\s+counts?\b", re.I)
 
 
@@ -809,8 +823,8 @@ def multi_plan(message: str, df: pd.DataFrame) -> Plan | None:
     ("ranked by revenue"); an item may be a record count ("number of transactions") or a catalogue metric that is
     not a column ("profit margin"), computed with its standard definition. Comparisons, correlations, trends and
     conditional requests are left to the other planners."""
-    if df is None or not _AGG_RX.search(message) or _FORMULA.search(message):
-        return None
+    if df is None or (not _AGG_RX.search(message) and len(_COUNT_OF.findall(message)) < 2) or _FORMULA.search(message):
+        return None            # a list of results: an aggregate word, or two or more counts ("how many X and how many Y")
     if re.search(r"\b(compare|versus|vs|correlat\w*|trend|over time|if|where|when)\b", message, re.I):
         return None
     text, sort_on = message, None
@@ -846,8 +860,15 @@ def multi_plan(message: str, df: pd.DataFrame) -> Plan | None:
         cnt = _COUNT_OF.search(part)
         if cnt and not cols:
             noun = (cnt.group(1) or cnt.group(2) or cnt.group(3)).lower()
-            extra[_ident(f"number of {noun}")] = "count(*)"
-            defs.append(f"number of {noun} = count of records")
+            from app.analyst.schema_profile import entity_column
+            ent = entity_column(df, noun)
+            if ent is not None and ent != group:
+                # "number of companies": the distinct companies (a name repeated in several records counts once)
+                extra[_ident(f"number of {noun}")] = f"nunique({ent})"
+                defs.append(f"number of {noun} = distinct values of {_lab(ent)}")
+            else:
+                extra[_ident(f"number of {noun}")] = "count(*)"
+                defs.append(f"number of {noun} = count of records")
             continue
         if len(cols) > 1:
             return None
@@ -856,7 +877,7 @@ def multi_plan(message: str, df: pd.DataFrame) -> Plan | None:
                 pairs.append((agg, cols[0]))
         elif cols and not agg:
             return None                               # a measure before any aggregate word: not a list of aggregates
-    if len(pairs) + len(extra) < 2 or not pairs:
+    if len(pairs) + len(extra) < 2 or (not pairs and len(extra) < 2):
         return None
     word = {"sum": "total", "mean": "average", "median": "median", "max": "maximum", "min": "minimum"}
     agg_map = {_ident(f"{word[a]} {c}"): f"{a}({c})" for a, c in pairs}
@@ -971,7 +992,29 @@ def event_rate_plan(message: str, df: pd.DataFrame) -> Plan | None:
 # ------------------------------------------------- one record-validity policy --
 _NEVER_NEGATIVE = {"rate", "hourly", "wage", "wages", "hours", "hrs", "duration", "price", "qty", "quantity", "units",
                    "count", "visitors", "visits", "sessions", "clicks", "leads", "conversions", "orders", "stock",
-                   "headcount", "age", "tenure"}
+                   "headcount", "age", "tenure",
+                   # durations and physical sizes (a wait, a stay, minutes, days, a distance) cannot be negative
+                   "minutes", "mins", "seconds", "secs", "days", "wait", "stay", "distance", "km", "miles", "weight",
+                   "height"}
+
+
+def never_negative_reason(col) -> str:
+    """Why a negative value of `col` is impossible, from what the column measures (its name): stated with every
+    record left out for it."""
+    t = _tokens(str(col))
+    for words, why in (({"rate", "rates", "hourly", "wage", "wages"}, "a rate cannot be negative"),
+                       ({"price", "prices", "fee", "fare"}, "a price cannot be negative"),
+                       ({"hours", "hour", "hrs", "minutes", "mins", "duration", "days", "seconds", "secs", "wait",
+                         "stay"},
+                        "a duration cannot be negative"),
+                       ({"qty", "quantity", "units", "count", "counts", "number", "items", "visits", "orders"},
+                        "a count or quantity cannot be negative"),
+                       ({"age", "tenure"}, "an age or tenure cannot be negative"),
+                       ({"km", "miles", "distance", "weight", "height", "length", "size"},
+                        "a physical measurement cannot be negative")):
+        if t & words:
+            return why
+    return "this kind of value cannot be negative"
 
 
 def never_negative(col) -> bool:
@@ -981,7 +1024,8 @@ def never_negative(col) -> bool:
     (refunds, credits, losses): those records are kept as recorded and flagged, never silently dropped."""
     t = _tokens(str(col))
     return bool(t & _NEVER_NEGATIVE) and not t & {"change", "diff", "difference", "delta", "growth", "variance", "net",
-                                                     "pct"}
+                                                     "pct", "until", "remaining", "overdue", "late", "early", "balance",
+                                                     "offset", "lead", "lag", "deviation", "error"}
 
 
 def validity_rules(spec: dict, df: pd.DataFrame) -> list[dict]:
@@ -995,7 +1039,7 @@ def validity_rules(spec: dict, df: pd.DataFrame) -> list[dict]:
     for c in map(str, df.columns):
         if _numeric(df, c) and re.search(rf"\b{re.escape(c)}\b", used) and never_negative(c) \
                 and (pd.to_numeric(df[c], errors="coerce") < 0).any():
-            rule = {"reason": f"negative {_lab(c)} (not a possible value)", "where": f"{c} < 0"}
+            rule = {"reason": f"negative {_lab(c)} ({never_negative_reason(c)})", "where": f"{c} < 0"}
             if rule["where"].replace(" ", "") not in have and not any(f"{c}<0" in h for h in have):
                 out.append(rule)
     for a, b in re.findall(r"(?<!overnight_)hours_between\(\s*(\w+)\s*,\s*(\w+)\s*\)", used):

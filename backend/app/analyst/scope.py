@@ -146,6 +146,9 @@ def _time(df: pd.DataFrame, message: str) -> dict | None:
     col = _date_col(df)
     if col is None:
         return None
+    from app.analyst.intent import _OPEN, _RANGE  # noqa: PLC0415
+    if _RANGE.search(message) or _OPEN.search(message):
+        return None                     # "between 1 and 15 August": a date range (intent.explicit_period), not August
     m = _MONTH_RE.search(message)
     if m and not re.search(r"\b(by|per|each|every|monthly)\s+month", message, re.I):
         name = m.group(1).lower()
@@ -228,6 +231,45 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
         if len(cols) == 1:
             pos, negv = yes_no(df, cols[0])
             entities[cols[0]] = [negv if neg else pos]
+    # The structured request (app/analyst/intent.py) is the one reading of the question; the scope carries its record
+    # selection to every path: names found in long text columns (company names), thresholds ("csat below 3"), yes/no
+    # filters ("only escalated", "not gift wrapped"), and -- taken OUT of the selection -- the event a rate is about.
+    where: list[dict] = []
+    try:
+        from app.analyst import intent as _intent  # noqa: PLC0415
+        req = _intent.read(message, df)
+    except Exception:  # noqa: BLE001 - the scope never fails because the reader could not read a message
+        req = None
+    if req is not None:
+        for c, v in req.entities:
+            if c in df.columns and df[c].nunique() > 50 and c not in entities:
+                entities.setdefault(c, [])
+                if v not in entities[c]:
+                    entities[c].append(v)
+        if req.event and req.event[0] in entities:
+            entities[req.event[0]] = [v for v in entities[req.event[0]] if str(v).lower() != str(req.event[1]).lower()]
+            if not entities[req.event[0]]:
+                del entities[req.event[0]]
+        roles = None
+        for c, yes in [(c, True) for c in req.restrict] + [(c, False) for c in req.restrict_not]:
+            if c in entities:
+                continue                                    # already selected by its value
+            roles = roles or __import__("app.analyst.semantics", fromlist=["profile"]).profile(df)["roles"]
+            pair = _intent.flag_values(df, c, roles[c])
+            if pair is not None:
+                where.append({"column": c, "op": "==", "value": pair[0] if yes else pair[1],
+                              "text": f"{c.replace('_', ' ')} = {pair[0] if yes else pair[1]}"})
+        for cd in req.conditions:
+            where.append({"column": cd["column"], "op": cd["op"], "value": cd["value"],
+                          "text": f"{cd['column'].replace('_', ' ')} {cd['op']} {cd['value']:g}"})
+        dcol = _date_col(df)
+        if req.period and not req.period.get("unreadable") and dcol is not None and not _PREDICTIVE.search(message) \
+                and not re.search(r"\b(targets?|goals?|quotas?|on track|what if|reach)\b", message, re.I):
+            # "the last 7 days", "between 1 and 15 August": the same dates for every path (a target or forecast
+            # question uses its period as the horizon, not as a selection)
+            period = {"column": dcol, "start": req.period.get("start"), "end": req.period.get("end"),
+                      "label": req.period.get("label") or "the period named"}
+    period = locals().get("period")
     excluded: dict[str, list[str]] = {}
     for col in list(entities):
         out = [v for v in entities[col] if _negated(message, v)]
@@ -266,6 +308,10 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
         scope["excluded_entities"] = excluded
     if numeric_eq:
         scope["numeric_eq"] = numeric_eq
+    if where:
+        scope["where"] = where
+    if period:
+        scope["period"] = period
     if dropped:
         scope["dropped"] = dropped
     if unsupported:
@@ -283,6 +329,46 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
         scope.update(entities={k: list(v) for k, v in (prev.get("entities") or {}).items() if k in df.columns},
                      time=prev.get("time"), inherited=True)
     return scope
+
+
+def from_request(req, df: pd.DataFrame) -> dict:
+    """The record selection of a structured reading as a scope (what the answer to a follow-up is computed over):
+    named values, exclusions, yes/no filters, thresholds and a date range -- the same shape establish() returns."""
+    from app.analyst import intent as _intent  # noqa: PLC0415
+    from app.analyst import semantics  # noqa: PLC0415
+    entities: dict = {}
+    for c, v in req.entities:
+        if c != req.group or not req.compared:
+            entities.setdefault(c, []).append(v)
+    excluded: dict = {}
+    for c, v in req.excluded:
+        excluded.setdefault(c, []).append(v)
+    where = []
+    roles = semantics.profile(df)["roles"] if (req.restrict or req.restrict_not) else {}
+    for c, yes in [(c, True) for c in req.restrict] + [(c, False) for c in req.restrict_not]:
+        pair = _intent.flag_values(df, c, roles[c]) if c in roles else None
+        if pair is not None:
+            where.append({"column": c, "op": "==", "value": pair[0] if yes else pair[1],
+                          "text": f"{c.replace('_', ' ')} = {pair[0] if yes else pair[1]}"})
+    for cd in req.conditions:
+        where.append({"column": cd["column"], "op": cd["op"], "value": cd["value"],
+                      "text": f"{cd['column'].replace('_', ' ')} {cd['op']} {cd['value']:g}"})
+    sc = {"entities": entities, "time": None, "inherited": False, "clarify": None, "target_period": None}
+    if req.compared and req.group:
+        named = [v for c, v in req.entities if c == req.group]
+        if named:
+            sc["entities"][req.group] = named                    # the values compared are the records used
+    if excluded:
+        sc["excluded_entities"] = excluded
+    if where:
+        sc["where"] = where
+    dcol = _date_col(df)
+    if req.period and not req.period.get("unreadable") and dcol:
+        sc["period"] = {"column": dcol, "start": req.period.get("start"), "end": req.period.get("end"),
+                        "label": req.period.get("label") or "the period named"}
+    if req.calendar:
+        sc["time"] = dict(req.calendar)
+    return sc
 
 
 def year_column(df: pd.DataFrame) -> str | None:
@@ -303,7 +389,23 @@ def year_column(df: pd.DataFrame) -> str | None:
 
 def active(scope: dict | None) -> bool:
     return bool(scope and (scope.get("entities") or scope.get("time") or scope.get("excluded_entities")
-                           or scope.get("numeric_eq")))
+                           or scope.get("numeric_eq") or scope.get("where") or scope.get("period")))
+
+
+def where_mask(df: pd.DataFrame, where: list[dict]) -> pd.Series:
+    """Records meeting every condition: a number compared ("csat < 3"; a missing value meets none), or a yes/no value."""
+    keep = pd.Series(True, index=df.index)
+    for w in where or []:
+        c, op, v = w["column"], w["op"], w["value"]
+        if c not in df.columns:
+            continue
+        if isinstance(v, str):
+            x = df[c].astype(str).str.strip().str.lower()
+            v = v.lower()
+        else:
+            x = pd.to_numeric(df[c], errors="coerce")
+        keep &= {"==": x == v, "!=": x != v, ">": x > v, ">=": x >= v, "<": x < v, "<=": x <= v}[op].fillna(False)
+    return keep
 
 
 def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
@@ -319,6 +421,15 @@ def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
     for col, vals in (scope.get("numeric_eq") or {}).items():
         if col in df.columns:
             keep &= pd.to_numeric(df[col], errors="coerce").isin(vals)
+    if scope.get("where"):
+        keep &= where_mask(df, scope["where"])
+    p = scope.get("period")
+    if p and p["column"] in df.columns:
+        d = pd.to_datetime(df[p["column"]], errors="coerce").dt.normalize()
+        if p.get("start"):
+            keep &= (d >= pd.Timestamp(p["start"]).normalize()).fillna(False)
+        if p.get("end"):
+            keep &= (d <= pd.Timestamp(p["end"]).normalize()).fillna(False)
     t = scope.get("time")
     if t and t["column"] in df.columns:
         d = pd.to_datetime(df[t["column"]], errors="coerce")
@@ -332,9 +443,12 @@ def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
 def describe(scope: dict | None, n_in: int | None = None, n_all: int | None = None) -> str:
     if not active(scope):
         return ""
-    parts = [f"{c.replace('_', ' ')} = {' or '.join(v)}" for c, v in scope["entities"].items()]
+    parts = [f"{c.replace('_', ' ')} = {' or '.join(v)}" for c, v in (scope.get("entities") or {}).items()]
     parts += [f"{c.replace('_', ' ')} not {' or '.join(v)}" for c, v in (scope.get("excluded_entities") or {}).items()]
     parts += [f"{c.replace('_', ' ')} = {' or '.join(map(str, v))}" for c, v in (scope.get("numeric_eq") or {}).items()]
+    parts += [w["text"] for w in scope.get("where") or []]
+    if scope.get("period"):
+        parts.append(f"{scope['period']['column'].replace('_', ' ')}: {scope['period']['label']}")
     t = scope.get("time")
     if t:
         parts.append(f"{t['column'].replace('_', ' ')} in "
@@ -361,6 +475,18 @@ def as_exclusions(scope: dict) -> list[dict]:
     for col, vals in (scope.get("excluded_entities") or {}).items():
         out.append({"reason": "excluding " + " and ".join(vals),
                     "where": f"{col} == '{vals[0]}'" if len(vals) == 1 else f"{col} in [" + ", ".join(f"'{v}'" for v in vals) + "]"})
+    _flip = {">": "<=", ">=": "<", "<": ">=", "<=": ">", "==": "!=", "!=": "=="}
+    for w in scope.get("where") or []:
+        v = f"'{w['value']}'" if isinstance(w["value"], str) else f"{w['value']:g}"
+        out.append({"reason": f"only {w['text']}", "where": f"{w['column']} {_flip[w['op']]} {v} or isnull({w['column']})"})
+    p = scope.get("period")
+    if p:
+        cond = [f"isnull({p['column']})"]
+        if p.get("start"):
+            cond.append(f"date_before({p['column']}, '{p['start']}')")
+        if p.get("end"):
+            cond.append(f"date_after({p['column']}, '{p['end']}')")
+        out.append({"reason": f"outside {p['label']}", "where": " or ".join(cond)})
     t = scope.get("time")
     if t:
         cond = []
@@ -390,7 +516,7 @@ def eligibility(df: pd.DataFrame, columns: list[str], historical: bool) -> tuple
       dated after today, for historical analysis (trends, forecasts) -> a planned or future record, not history
     Unusual-but-possible values (outliers) are NOT excluded."""
     from app.analyst.calc import _looks_like_time, _to_hours  # noqa: PLC0415
-    from app.analyst.metrics import never_negative  # noqa: PLC0415 - the one rule for negative values
+    from app.analyst.metrics import never_negative, never_negative_reason  # noqa: PLC0415 - the one rule
     keep = pd.Series(True, index=df.index)
     reasons: list[dict] = []
 
@@ -405,7 +531,8 @@ def eligibility(df: pd.DataFrame, columns: list[str], historical: bool) -> tuple
     cols = [c for c in columns if c in df.columns]
     for c in cols:
         if kind_of(df[c]) == "numeric" and never_negative(c):
-            drop(pd.to_numeric(df[c], errors="coerce") < 0, f"negative {c.replace('_', ' ')}")
+            drop(pd.to_numeric(df[c], errors="coerce") < 0,
+                 f"negative {c.replace('_', ' ')} ({never_negative_reason(c)})")
     times = [c for c in cols if kind_of(df[c]) == "categorical" and len(df[c].dropna()) and _looks_like_time(df[c].dropna())]
     if len(times) >= 2:
         drop(_to_hours(df[times[1]]) < _to_hours(df[times[0]]),
@@ -468,3 +595,44 @@ def replace_conflicting(exclusions: list[dict], sc: dict | None) -> list[dict]:
             continue
         out.append(e)
     return out
+
+
+def valid_records(df: pd.DataFrame, columns: list[str]) -> tuple[pd.DataFrame, list[dict]]:
+    """THE record-validity policy for a descriptive answer, the same on every path (the tool catalogue, rankings,
+    column summaries, the calculator, analysis programs and the verifier):
+      * a negative value of a column that can never be negative (a rate, price, duration, count ...) is impossible:
+        the record is left out, and listed with the reason;
+      * a negative amount that can be negative (revenue, cost, profit, salary: a refund, credit or loss) is kept as
+        recorded, and flagged;
+      * a missing value is unusable for that column only, and counted;
+      * exact duplicates are kept as recorded and flagged (unless the question asks to exclude them);
+      * unusual-but-possible values (outliers) are never removed.
+    Returns (the records used, what was left out or flagged)."""
+    cols = [c for c in columns if c in df.columns]
+    base = df.drop(columns=[c for c in df.columns if str(c).startswith("__")], errors="ignore")
+    ok, reasons = eligibility(base.assign(__row=range(len(base))), cols, historical=False)
+    reasons = [r for r in reasons if not r["reason"].startswith("missing ")]  # counted by the aggregate itself
+    kept = df[ok.values]
+    flags = signed_negatives(kept, cols)
+    dup = base.duplicated(keep="first")
+    if dup[ok.values].any():
+        flags.append({"reason": "exact duplicate of an earlier record (kept, as recorded)",
+                      "records": int(dup[ok.values].sum()), "kept": True,
+                      "lines": [int(i) + 2 for i in dup[ok.values][dup[ok.values]].index][:20]})
+    return kept, reasons + flags
+
+
+def describe_exclusions(items: list[dict]) -> str | None:
+    """'Left out: 1 record — negative hourly rate (a rate cannot be negative), line 7.' and what was kept and flagged."""
+    out_ = [x for x in items if not x.get("kept")]
+    kept = [x for x in items if x.get("kept") and "duplicate" not in x["reason"]]
+    parts = []
+    if out_:
+        parts.append("Left out: " + "; ".join(
+            f"{x['records']} record{'s' if x['records'] != 1 else ''} — {x['reason']}"
+            + (f", line{'s' if len(x.get('lines') or []) > 1 else ''} {', '.join(map(str, x['lines'][:10]))}"
+               if x.get("lines") else "") for x in out_))
+    if kept:
+        parts.append("Kept and flagged: " + "; ".join(
+            f"{x['records']} record{'s' if x['records'] != 1 else ''} — {x['reason']}" for x in kept))
+    return ("_" + ". ".join(parts) + "._") if parts else None

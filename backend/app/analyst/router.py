@@ -257,6 +257,11 @@ def route(message: str, df: pd.DataFrame, memory: dict | None = None) -> dict | 
 
 def run(plan: dict, df: pd.DataFrame, memory: dict, filename: str | None = None) -> dict:
     t, a = plan["tool"], plan["args"]
+    from app.analyst import tools as _tools
+    if t == "trend":
+        _tools.role_check(df, a.get("value"), a.get("agg", "sum"))
+    elif t in ("outliers", "column_change", "rate_change") and a.get("column"):
+        _tools.role_check(df, a["column"], "mean")      # an identifier has no distribution, total or level to change
     if t == "understand":
         return overview.understand(df, filename)
     if t == "missing_values":
