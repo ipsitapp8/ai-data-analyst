@@ -510,6 +510,24 @@ def _chown_tree(root: Path) -> None:
             pass
 
 
+def _make_traversable(exec_dir: Path, ws: Path) -> None:
+    """Let the unprivileged child walk down to its run directory and read the dataset copy.
+
+    The app creates the workspace directories itself, so their mode comes from its umask. Under a strict
+    umask (077 is common in hosted containers) `q<id>` and `runs` end up root-only, and the child, which runs
+    as another user, fails to even open its own script ("[Errno 13] Permission denied"). Only the execute
+    (search) bit is added, on the directories between the workspace root and the run directory and on `data`;
+    nothing is made listable or writable."""
+    if os.name == "nt":
+        return
+    wanted = [ws / "data", *[p for p in (exec_dir, *exec_dir.parents) if p == ws or ws in p.parents or p == config.WORKSPACES_DIR]]
+    for path in wanted:
+        try:
+            os.chmod(path, (path.stat().st_mode & 0o7777) | 0o111)
+        except OSError:
+            pass
+
+
 def _kill_process_group(proc: subprocess.Popen) -> None:
     """SIGKILL the child's whole session; fall back to the bare child."""
     try:
@@ -552,6 +570,7 @@ class SubprocessSandboxRunner(SandboxRunner):
         script_path = exec_dir / "main.py"
         script_path.write_text(host_code, encoding="utf-8")
         _chown_tree(exec_dir)
+        _make_traversable(exec_dir, ws)
 
         popen_kwargs = {
             "stdout": subprocess.PIPE,
