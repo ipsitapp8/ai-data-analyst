@@ -42,37 +42,36 @@ with st.expander("New investigation", expanded=not listing["investigations"]):
             if not categorical:
                 st.info("This dataset has no categorical column (region, product, channel). The change can be measured and "
                         "tested, but not located in any segment.")
-            html('<div class="ds-section-title">Ask why</div>')
-            why = st.text_area("Question", key="inv_question", height=70,
-                               placeholder="Why did revenue drop in the last two months?", label_visibility="collapsed")
-            st.caption("Name a numeric column and, if you like, a period: “last month”, “the last 14 days”, “in March”. "
+            why = st.text_area("Ask why", key="inv_question", height=84,
+                               placeholder="Why did revenue drop in the last two months?")
+            st.caption("Name a numeric column and, if you like, a period such as “last month”, “the last 14 days” or “in March”. "
                        "Periods are read against the dataset's own dates.")
             too_short = len((why or "").strip()) < 8
-            if st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short):
+            b_ask, b_hyp, _gap = st.columns([1, 1.6, 3])
+            with b_ask:
+                ask_clicked = st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short, use_container_width=True)
+            with b_hyp:
+                hyp_clicked = st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short, use_container_width=True)
+            st.caption("Investigate uses no AI model: every figure is computed from your data. “With hypotheses” also has a model "
+                       "propose competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
+            if ask_clicked or hyp_clicked:
                 try:
-                    out = ask_investigation(ds["id"], why.strip())
+                    start = ask_investigation if ask_clicked else create_hypothesis_investigation
+                    out = start(ds["id"], why.strip())
                     st.session_state["active_question_id"] = out["question_id"]
                     st.session_state["investigation_id"] = out["investigation_id"]
                     st.switch_page("pages/3_Analyses.py")
                 except ApiError as e:
                     st.error(str(e))
-            st.caption("The button above uses no AI model: every figure is computed from your data. The one below also has a "
-                       "model propose competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
-            if st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short):
-                try:
-                    out = create_hypothesis_investigation(ds["id"], why.strip())
-                    st.session_state["active_question_id"] = out["question_id"]
-                    st.session_state["investigation_id"] = out["investigation_id"]
-                    st.switch_page("pages/3_Analyses.py")
-                except ApiError as e:
-                    st.error(str(e))
-            html('<div class="ds-section-title" style="margin-top:14px;">Or specify the metric yourself (no model)</div>')
+            st.divider()
+            html('<div class="ds-section-title">Or define the metric yourself <span style="font-weight:400;color:var(--p-text-3);">(no model)</span></div>')
             usable = [m for m in metrics if m.get("dataset_id") in (None, ds["id"])]
             source = st.radio("Metric", ["A column", "An approved metric", "A formula"], horizontal=True, key="inv_src")
             formula, label = "", ""
             if source == "A column" and numeric:
-                agg = st.selectbox("Aggregation", ["sum", "avg", "count", "median"], key="inv_agg")
-                col = st.selectbox("Column", numeric, key="inv_col")
+                ca, cc = st.columns(2)
+                agg = ca.selectbox("Aggregation", ["sum", "avg", "count", "median"], key="inv_agg")
+                col = cc.selectbox("Column", numeric, key="inv_col")
                 formula, label = f'{agg}("{col}")', f"{agg.title()} of {col}"
             elif source == "An approved metric":
                 if usable:

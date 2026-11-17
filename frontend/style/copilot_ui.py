@@ -23,13 +23,13 @@ THEMES = {
     },
     "dark": {
         "bg": "transparent",
-        "surface": "rgba(24,17,60,0.66)", "surface_solid": "#1b1347", "page": "transparent", "border": "rgba(167,139,250,0.26)",
-        "text": "#ece8ff", "muted": "#b3abd6", "accent": "#a78bfa", "accent_soft": "rgba(167,139,250,0.16)",
-        "user_bg": "linear-gradient(135deg,#6d5efc 0%,#a855f7 100%)", "user_text": "#ffffff",
-        "input_bg": "#140e3a", "input_text": "#f4f2ff", "placeholder": "#8a84bd", "caret": "#c4b5fd",
-        "code_bg": "rgba(8,5,26,0.85)", "table_head": "#261a5e", "table_border": "#34296f", "grid": "#2c2262",
-        "palette": ["#a78bfa", "#f472b6", "#7dd3fc", "#fbbf24", "#6d5efc"],
-        "shadow": "0 6px 24px rgba(0,0,0,0.35)", "warn_bg": "rgba(251,191,36,0.14)", "warn_text": "#fbbf24",
+        "surface": "#111113", "surface_solid": "#111113", "page": "transparent", "border": "#26262b",
+        "text": "#ececef", "muted": "#a1a1aa", "accent": "#6366f1", "accent_soft": "rgba(99,102,241,0.14)",
+        "user_bg": "#1b1b1f", "user_text": "#ececef",
+        "input_bg": "#0d0d0f", "input_text": "#ececef", "placeholder": "#71717a", "caret": "#a5b4fc",
+        "code_bg": "#0d0d0f", "table_head": "#17171a", "table_border": "#26262b", "grid": "#26262b",
+        "palette": ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#38bdf8"],
+        "shadow": "none", "warn_bg": "rgba(245,185,66,0.10)", "warn_text": "#f5b942",
     },
 }
 
@@ -44,24 +44,23 @@ def css(theme: str = "dark") -> str:
 .block-container {{ max-width:1180px !important; }}
 .cp-shell {{ max-width:880px; margin:0 auto; }}
 .cp-title {{ font-size:1.6rem; font-weight:700; margin:0; color:{t['text']}; letter-spacing:-0.01em; }}
-.cp-title span {{ background:linear-gradient(90deg,{t['accent']},#c084fc); -webkit-background-clip:text;
-  background-clip:text; color:transparent; }}
+.cp-title span {{ color:inherit; }}
 .cp-sub {{ color:{t['muted']}; margin:2px 0 10px 0; font-size:.92rem; }}
-.cp-pill {{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:.78rem; font-weight:600;
+.cp-pill {{ display:inline-block; padding:3px 10px; border-radius:6px; font-size:.78rem; font-weight:500;
   background:{t['accent_soft']}; color:{t['accent']}; border:1px solid {t['border']}; }}
 .cp-pill.off {{ background:{t['warn_bg']}; color:{t['warn_text']}; }}
 .cp-src {{ color:{t['muted']}; font-size:.78rem; margin-top:8px; }}
-.cp-ctx {{ background:{t['surface']}; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
-  border:1px solid {t['border']}; border-radius:14px; padding:8px 14px; margin:4px 0 12px 0; color:{t['text']};
+.cp-ctx {{ background:{t['surface']}; 
+  border:1px solid {t['border']}; border-radius:8px; padding:8px 14px; margin:4px 0 12px 0; color:{t['text']};
   font-size:.88rem; }}
-.cp-empty {{ background:{t['surface']}; backdrop-filter:blur(8px); border:1px solid {t['border']}; border-radius:16px;
+.cp-empty {{ background:{t['surface']};  border:1px solid {t['border']}; border-radius:10px;
   padding:18px 20px; margin:8px 0 14px 0; color:{t['text']}; box-shadow:{t['shadow']}; }}
 .cp-file {{ font-size:.82rem; color:{t['muted']}; }}
 .cp-file b {{ color:{t['text']}; }}
 
 /* chat bubbles */
-{msg} {{ background:{t['surface']} !important; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-  border:1px solid {t['border']} !important; border-radius:18px !important; padding:14px 16px !important;
+{msg} {{ background:{t['surface']} !important; 
+  border:1px solid {t['border']} !important; border-radius:10px !important; padding:14px 16px !important;
   box-shadow:{t['shadow']}; max-width:880px; margin-left:auto; margin-right:auto; }}
 {msg} *, [data-testid='stExpander'] * {{ color:{t['text']} !important; }}
 {msg}:has([data-testid='stChatMessageAvatarUser']) {{ background:{t['user_bg']} !important; border:none !important; }}
@@ -95,7 +94,7 @@ def css(theme: str = "dark") -> str:
 [data-testid='stBottom'], [data-testid='stBottom'] > div, [data-testid='stBottomBlockContainer'] {{
   background:{t['page']} !important; }}
 [data-testid='stChatInput'] {{ background:{t['input_bg']} !important; border:1px solid {t['border']} !important;
-  border-radius:16px !important; box-shadow:{t['shadow']}; max-width:880px; margin:0 auto; }}
+  border-radius:10px !important; box-shadow:{t['shadow']}; max-width:880px; margin:0 auto; }}
 [data-testid='stChatInput'] > div {{ background:{t['input_bg']} !important; border:none !important;
   box-shadow:none !important; }}
 [data-testid='stChatInput'] textarea, [data-testid='stChatInputTextArea'] {{ color:{t['input_text']} !important;
@@ -114,7 +113,7 @@ def css(theme: str = "dark") -> str:
 
 /* buttons and selectors on this page (main area only: the app's sidebar keeps its own look) */
 .stMain .stButton button, .stMain [data-testid='stPopover'] button {{
-  border-radius:12px !important; border:1px solid {t['border']} !important;
+  border-radius:8px !important; border:1px solid {t['border']} !important;
   background:{t['surface_solid']} !important; color:{t['text']} !important; }}
 .stMain .stButton button *, .stMain [data-testid='stPopover'] button * {{ color:{t['text']} !important; }}
 .stMain .stButton button:hover {{ border-color:{t['accent']} !important; }}

@@ -688,7 +688,8 @@ def inject_dashboard_theme() -> None:
     """Call after page_setup() on a page that should use the dashboard look."""
     st.markdown(dashboard_theme_css(), unsafe_allow_html=True)
     glass = (Path(__file__).with_name("dashboard_glass.css")).read_text(encoding="utf-8")
-    indigo = (Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8")   # re-assert after the dashboard sheet
+    indigo = (Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8") + chr(10) + (
+        Path(__file__).with_name("product.css")).read_text(encoding="utf-8")   # re-assert after the dashboard sheet
     st.markdown("<style>" + " ".join(line.strip() for line in (glass + chr(10) + indigo).splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
 
 
@@ -792,7 +793,8 @@ def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8") + "\n" + (
-        Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8")
+        Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8") + "\n" + (
+        Path(__file__).with_name("product.css")).read_text(encoding="utf-8")
     # Flatten to one line: markdown ends an HTML block at the first blank line,
     # which would spill the rest of the stylesheet onto the page as text.
     skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())

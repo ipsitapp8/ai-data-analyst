@@ -1,0 +1,189 @@
+/* Product skin: loaded last, after every other stylesheet.
+   A restrained, flat, neutral interface of the kind used by working SaaS tools: near-black neutral surfaces,
+   hairline borders, one accent colour, Inter, 8px corners. No glass, glow, gradients, blur or pill buttons. */
+:root, .stApp, .stApp .stMain {
+  --p-bg: #0b0b0d; --p-surface: #111113; --p-raised: #17171a; --p-hover: #1b1b1f; --p-inset: #0d0d0f;
+  --p-line: #26262b; --p-line-2: #34343b;
+  --p-text: #ececef; --p-text-2: #a1a1aa; --p-text-3: #8b8b96;
+  --p-accent: #6366f1; --p-accent-hover: #7a7df5; --p-accent-soft: rgba(99,102,241,.14); --p-accent-ink: #a5b4fc;
+  --p-r: 8px;
+
+  --ink: var(--p-text) !important; --ink-soft: var(--p-text-2) !important;
+  --line: var(--p-line) !important; --line-strong: var(--p-line-2) !important;
+  --surface: var(--p-surface) !important; --page: var(--p-bg) !important;
+  --shadow-sm: none !important; --shadow-md: none !important; --shadow-lg: none !important;
+  --liquid: var(--p-accent) !important; --plum-glass: var(--p-accent) !important;
+  --glass-fill: var(--p-surface) !important; --glass-edge: var(--p-line) !important; --glass-shadow: none !important; --glass-gloss: none !important;
+  --glass-bg: var(--p-surface) !important; --glass-line: var(--p-line) !important; --glass-sh: none !important;
+  --bg-base: var(--p-bg) !important; --bg-page: transparent !important; --bg-card: var(--p-surface) !important;
+  --bg-card-hover: var(--p-hover) !important; --bg-inset: var(--p-inset) !important;
+  --border: var(--p-line) !important; --border-strong: var(--p-line-2) !important;
+  --text-primary: var(--p-text) !important; --text-secondary: var(--p-text-2) !important; --text-muted: var(--p-text-3) !important;
+  --accent: var(--p-accent) !important; --accent-dim: var(--p-accent) !important; --accent-bg: var(--p-accent-soft) !important;
+  --accent-border: rgba(99,102,241,.4) !important; --accent-ink: var(--p-accent-ink) !important;
+  --purple: var(--p-accent) !important; --violet: var(--p-accent);
+  --ok: #4ade80; --ok-bg: rgba(74,222,128,.10) !important; --ok-border: rgba(74,222,128,.28) !important;
+  --warn: #f5b942; --warn-bg: rgba(245,185,66,.10) !important; --warn-border: rgba(245,185,66,.28) !important;
+  --error: #f87171; --error-bg: rgba(248,113,113,.10) !important; --error-border: rgba(248,113,113,.30) !important;
+  color-scheme: dark;
+}
+
+/* page: one flat colour, no backdrop effects */
+html, body, .stApp, [data-testid="stAppViewContainer"], .stMain { background: var(--p-bg) !important; color: var(--p-text) !important; }
+.stApp::before, .stApp::after { display: none !important; content: none !important; background: none !important; }
+.stApp, .stApp * { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.stApp .material-symbols-rounded, .stApp [class*="material-symbols"], .stApp [data-testid="stIconMaterial"] { font-family: "Material Symbols Rounded" !important; }
+.stApp { font-size: 14px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+
+/* the content area is the page itself, not a glass panel */
+.stApp .stMain [data-testid="stMainBlockContainer"] {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  max-width: 1120px !important; padding: 72px 40px 80px !important; margin: 0 auto !important; }
+
+/* type */
+.stApp .ds-page-title, .stApp h1 { font: 600 24px/1.25 "Inter", sans-serif !important; letter-spacing: -.02em !important; color: var(--p-text) !important; }
+.stApp .ds-page-sub { font: 400 14px/1.5 "Inter", sans-serif !important; color: var(--p-text-2) !important; margin-top: 4px !important; }
+.stApp h2, .stApp .ds-section-title { font: 600 15px/1.4 "Inter", sans-serif !important; letter-spacing: -.005em !important; color: var(--p-text) !important; }
+.stApp h3, .stApp h4 { font: 600 14px/1.4 "Inter", sans-serif !important; letter-spacing: 0 !important; color: var(--p-text) !important; }
+.stApp p, .stApp li { color: var(--p-text-2); }
+.stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stCaptionContainer"] p, .stApp small { color: var(--p-text-3) !important; font-size: 12.5px !important; line-height: 1.5 !important; }
+.stApp a { color: var(--p-accent-ink) !important; text-decoration: none; } .stApp a:hover { text-decoration: underline; }
+.stApp hr { border-color: var(--p-line) !important; margin: 20px 0 !important; }
+.stApp [data-testid="stWidgetLabel"], .stApp [data-testid="stWidgetLabel"] *, .stApp label, .stApp label p {
+  color: var(--p-text) !important; -webkit-text-fill-color: var(--p-text) !important; font: 500 13px/1.4 "Inter", sans-serif !important; }
+.stApp [data-testid="stCheckbox"] label, .stApp [data-testid="stRadio"] label, .stApp [data-testid="stToggle"] label,
+.stApp [data-testid="stRadio"] label p { color: var(--p-text-2) !important; -webkit-text-fill-color: var(--p-text-2) !important; font-weight: 400 !important; }
+
+/* top bar: plain status row, no floating pill */
+.stApp .silt-topbar, .stApp [class*="silt-tb"], .stApp .st-key-topbar {
+  background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: var(--p-text-2) !important; }
+.stApp .silt-tb-avatar { background: var(--p-raised) !important; color: var(--p-text) !important; border: 1px solid var(--p-line-2) !important; }
+.stApp .silt-topbar * { font-size: 13px !important; }
+
+/* buttons: solid accent for the main action, outlined for the rest */
+.stApp button[kind="primary"], .stApp .stFormSubmitButton > button, .stApp button[kind="primaryFormSubmit"],
+.stApp .stMain button[kind="primary"], .stApp .stMain button[kind="primary"]:hover, .stApp [data-baseweb="popover"] button[kind="primary"] {
+  background: var(--p-accent) !important; background-image: none !important; color: #fff !important; border: 1px solid var(--p-accent) !important;
+  border-radius: var(--p-r) !important; box-shadow: none !important; filter: none !important; min-height: 36px !important;
+  font: 500 13.5px/1 "Inter", sans-serif !important; padding: 0 16px !important; transition: background .12s, border-color .12s; }
+.stApp button[kind="primary"]:hover, .stApp .stFormSubmitButton > button:hover { background: var(--p-accent-hover) !important; border-color: var(--p-accent-hover) !important; filter: none !important; box-shadow: none !important; }
+.stApp button[kind="primary"]:disabled, .stApp .stFormSubmitButton > button:disabled { background: var(--p-raised) !important; border-color: var(--p-line) !important; color: var(--p-text-3) !important; opacity: 1 !important; }
+.stApp button[kind="primary"] p, .stApp .stFormSubmitButton > button p { color: inherit !important; font: inherit !important; }
+.stApp button[kind="secondary"], .stApp .stButton > button:not([kind="primary"]), .stApp .stDownloadButton > button {
+  background: transparent !important; color: var(--p-text) !important; border: 1px solid var(--p-line-2) !important; border-radius: var(--p-r) !important;
+  box-shadow: none !important; min-height: 36px !important; font: 500 13.5px/1 "Inter", sans-serif !important; padding: 0 14px !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp button[kind="secondary"]:hover, .stApp .stButton > button:not([kind="primary"]):hover, .stApp .stDownloadButton > button:hover {
+  background: var(--p-hover) !important; border-color: #4a4a54 !important; color: var(--p-text) !important; box-shadow: none !important; }
+.stApp button[kind="secondary"]:disabled, .stApp .stButton > button:not([kind="primary"]):disabled { color: var(--p-text-3) !important; border-color: var(--p-line) !important; background: transparent !important; opacity: 1 !important; }
+.stApp button[kind="secondary"] p, .stApp .stButton > button:not([kind="primary"]) p, .stApp .stDownloadButton > button p { color: inherit !important; font: inherit !important; }
+
+/* sidebar: a flat full-height panel */
+.stApp [data-testid="stSidebar"], .stApp section[data-testid="stSidebar"] > div, .stApp [data-testid="stSidebarContent"] {
+  background: var(--p-surface) !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp [data-testid="stSidebar"] { border-right: 1px solid var(--p-line) !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button, .stApp [data-testid="stSidebar"] .stButton > button {
+  background: transparent !important; border: 0 !important; border-radius: 6px !important; box-shadow: none !important;
+  color: var(--p-text-2) !important; font: 500 13.5px/1.2 "Inter", sans-serif !important; min-height: 34px !important; padding: 0 10px !important; filter: none !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button p { color: inherit !important; font: inherit !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:hover:not(:disabled) { background: var(--p-hover) !important; color: var(--p-text) !important; border: 0 !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled, .stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled:hover {
+  background: var(--p-raised) !important; color: var(--p-text) !important; border: 0 !important; box-shadow: none !important; opacity: 1 !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled p, .stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled * { color: var(--p-text) !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button::before { filter: brightness(0) invert(.62) !important; opacity: 1; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled::before { filter: brightness(0) invert(.95) !important; opacity: 1; }
+
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"], .stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] .stButton { width: 100% !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button { width: 100% !important; justify-content: flex-start !important; text-align: left !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button:not(:disabled):hover { background: var(--p-hover) !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button > div, .stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button [data-testid="stMarkdownContainer"] { justify-content: flex-start !important; text-align: left !important; width: 100% !important; margin: 0 !important; }
+.stApp section[data-testid="stSidebar"] [class*="st-key-nav_"] button p { text-align: left !important; }
+/* surfaces: cards, forms, expanders, bordered containers */
+.stApp .ds-card, .stApp [class*="st-key-card"], .stApp [class*="st-key-flat"], .stApp [class*="st-key-chartcard_"], .stApp [data-testid="stMetric"],
+.stApp [data-testid="stExpander"], .stApp [data-testid="stForm"], .stApp .h-snap, .stApp .h-strip, .stApp .h-tile,
+.stApp [data-testid="stVerticalBlockBorderWrapper"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]) {
+  background: var(--p-surface) !important; border: 1px solid var(--p-line) !important; border-radius: 10px !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: var(--p-text); }
+.stApp .ds-card:hover, .stApp [class*="st-key-card"]:hover, .stApp [class*="st-key-chartcard_"]:hover, .stApp [data-testid="stMetric"]:hover { box-shadow: none !important; border-color: var(--p-line-2) !important; }
+.stApp [data-testid="stVerticalBlockBorderWrapper"] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp [data-testid="stExpander"] { overflow: hidden; }
+.stApp [data-testid="stExpander"] details, .stApp [data-testid="stExpander"] [data-testid="stExpanderDetails"] { background: transparent !important; padding-top: 4px; }
+.stApp [data-testid="stExpander"] summary { background: transparent !important; padding: 12px 16px !important; font: 500 14px/1.4 "Inter", sans-serif !important; color: var(--p-text) !important; }
+.stApp [data-testid="stExpander"] summary:hover { background: var(--p-hover) !important; }
+.stApp [data-testid="stExpander"] summary p { font: 500 14px/1.4 "Inter", sans-serif !important; color: var(--p-text) !important; }
+.stApp [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 4px 16px 16px !important; }
+.stApp .stMain .st-key-card_narr { border-left: 1px solid var(--p-line) !important; }
+
+/* tabs: underline style */
+.stApp .stTabs [data-baseweb="tab-list"] { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--p-line) !important; border-radius: 0 !important; gap: 4px; padding: 0 !important; }
+.stApp .stTabs [data-baseweb="tab"] { background: transparent !important; border-radius: 0 !important; box-shadow: none !important; color: var(--p-text-2) !important; padding: 8px 12px !important; font: 500 13.5px/1.2 "Inter", sans-serif !important; height: auto !important; }
+.stApp .stTabs [data-baseweb="tab"] p { color: inherit !important; font: inherit !important; }
+.stApp .stTabs [data-baseweb="tab"]:hover { color: var(--p-text) !important; background: transparent !important; }
+.stApp .stTabs [data-baseweb="tab"][aria-selected="true"], .stApp .stTabs [aria-selected="true"] { background: transparent !important; box-shadow: none !important; color: var(--p-text) !important; }
+.stApp .stTabs [data-baseweb="tab"][aria-selected="true"] p { color: var(--p-text) !important; }
+.stApp .stTabs [data-baseweb="tab-highlight"] { background-color: var(--p-accent) !important; height: 2px !important; }
+.stApp .stTabs [data-baseweb="tab-border"] { background: transparent !important; }
+
+/* inputs */
+.stApp [data-testid="stTextInputRootElement"], .stApp [data-testid="stTextAreaRootElement"], .stApp [data-testid="stNumberInputRootElement"],
+.stApp [data-baseweb="select"] > div, .stApp [data-testid="stChatInput"] > div, .stApp [data-testid="stDateInputField"], .stApp [data-baseweb="input"], .stApp [data-baseweb="textarea"] {
+  background: var(--p-inset) !important; border: 1px solid var(--p-line-2) !important; border-radius: var(--p-r) !important; box-shadow: none !important; color: var(--p-text) !important; }
+.stApp [data-baseweb="select"] > div { min-height: 38px !important; }
+.stApp [data-testid="stTextInputRootElement"] input, .stApp [data-testid="stTextAreaRootElement"] textarea, .stApp [data-testid="stNumberInputRootElement"] input, .stApp [data-testid="stChatInput"] textarea,
+.stApp .stTextInput input, .stApp .stTextArea textarea, .stApp .stSelectbox input {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--p-text) !important; -webkit-text-fill-color: var(--p-text) !important; font: 400 14px/1.5 "Inter", sans-serif !important; caret-color: var(--p-accent-ink); }
+.stApp input::placeholder, .stApp textarea::placeholder, .stApp [data-testid="stTextInputRootElement"] input::placeholder, .stApp [data-testid="stTextAreaRootElement"] textarea::placeholder, .stApp [data-testid="stChatInput"] textarea::placeholder { color: var(--p-text-3) !important; -webkit-text-fill-color: var(--p-text-3) !important; opacity: 1; }
+.stApp [data-testid="stTextInputRootElement"]:focus-within, .stApp [data-testid="stTextAreaRootElement"]:focus-within, .stApp [data-testid="stNumberInputRootElement"]:focus-within,
+.stApp [data-baseweb="select"]:focus-within > div, .stApp [data-baseweb="input"]:focus-within, .stApp [data-baseweb="textarea"]:focus-within {
+  border-color: var(--p-accent) !important; box-shadow: 0 0 0 3px var(--p-accent-soft) !important; }
+.stApp [data-baseweb="select"] svg { color: var(--p-text-3) !important; fill: var(--p-text-3) !important; }
+.stApp [data-baseweb="select"] span, .stApp [data-baseweb="select"] div { color: var(--p-text) !important; }
+.stApp [data-testid="stFileUploaderDropzone"] { background: var(--p-inset) !important; border: 1px dashed var(--p-line-2) !important; border-radius: 10px !important; color: var(--p-text-2) !important; }
+.stApp [data-testid="stFileUploaderDropzone"]:hover { border-color: var(--p-accent) !important; }
+.stApp [data-testid="stSlider"] [role="slider"] { background: var(--p-accent) !important; box-shadow: none !important; }
+.stApp [data-testid="stProgress"] > div > div > div { background: var(--p-accent) !important; }
+.stApp [data-baseweb="radio"] > div:first-child, .stApp [data-baseweb="checkbox"] > span { box-shadow: none !important; }
+
+/* menus, dialogs, tooltips */
+[data-baseweb="popover"] > div, [data-baseweb="menu"], [role="listbox"], [data-baseweb="calendar"] { background: var(--p-raised) !important; color: var(--p-text) !important; border: 1px solid var(--p-line-2) !important; border-radius: 8px !important; box-shadow: 0 8px 24px rgba(0,0,0,.4) !important; }
+[role="option"], [data-baseweb="menu"] li { color: var(--p-text) !important; background: transparent !important; }
+[role="option"]:hover, [role="option"][aria-selected="true"], [data-baseweb="menu"] li:hover { background: var(--p-hover) !important; }
+[data-testid="stDialog"] > div, [data-testid="stDialog"] [role="dialog"] { background: var(--p-surface) !important; color: var(--p-text) !important; border: 1px solid var(--p-line-2) !important; border-radius: 12px !important; box-shadow: 0 16px 48px rgba(0,0,0,.5) !important; }
+[data-testid="stTooltipContent"], [data-baseweb="tooltip"] > div { background: var(--p-raised) !important; color: var(--p-text) !important; border: 1px solid var(--p-line-2) !important; }
+
+/* tables, code, alerts, badges */
+.stApp [data-testid="stDataFrame"] { border: 1px solid var(--p-line) !important; border-radius: 10px !important; overflow: hidden;
+  --gdg-bg-cell: #111113; --gdg-bg-cell-medium: #111113; --gdg-bg-header: #17171a; --gdg-bg-header-hovered: #1b1b1f; --gdg-text-dark: #ececef; --gdg-text-header: #a1a1aa; --gdg-border-color: #26262b; --gdg-accent-color: #6366f1; }
+.stApp table th { background: var(--p-raised) !important; color: var(--p-text-2) !important; font-weight: 500 !important; } .stApp table td { border-color: var(--p-line) !important; }
+.stApp [data-testid="stCode"], .stApp pre, .stApp code { background: var(--p-inset) !important; color: #dcdce2 !important; border-color: var(--p-line) !important; border-radius: 6px; }
+.stApp [data-testid="stAlert"] { background: var(--p-surface) !important; border: 1px solid var(--p-line-2) !important; border-radius: 8px !important; color: var(--p-text) !important; }
+.stApp [data-testid="stAlert"] p, .stApp [data-testid="stAlert"] div { color: var(--p-text-2) !important; }
+.stApp [data-testid="stMetricValue"] { font-weight: 600 !important; letter-spacing: -.02em; } .stApp [data-testid="stMetricLabel"] { color: var(--p-text-2) !important; }
+.stApp .ds-badge { background: var(--p-raised) !important; color: var(--p-text-2) !important; border: 1px solid var(--p-line-2) !important; border-radius: 6px !important; font-weight: 500; }
+.stApp .ds-badge-ok, .stApp .ds-badge-verified { background: var(--ok-bg) !important; color: var(--ok) !important; border-color: var(--ok-border) !important; }
+.stApp .ds-badge-warn, .stApp .ds-badge-caveats { background: var(--warn-bg) !important; color: var(--warn) !important; border-color: var(--warn-border) !important; }
+.stApp .ds-badge-error, .stApp .ds-badge-unverified { background: var(--error-bg) !important; color: var(--error) !important; border-color: var(--error-border) !important; }
+.stApp .ds-badge-neutral { background: var(--p-raised) !important; color: var(--p-text-2) !important; }
+.stApp [data-testid="stChatMessage"] { background: var(--p-surface) !important; border: 1px solid var(--p-line) !important; border-radius: 10px !important; }
+.stApp .ds-row:hover, .stApp .ds-table tr:hover, .stApp tbody tr:hover { background: var(--p-hover) !important; }
+.stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stCaptionContainer"] * { opacity: 1 !important; }
+/* Streamlit pulls the last markdown child up by 1rem; inside table cards that clipped the last padded row */
+.stApp [class*="st-key-flat"] [data-testid="stMarkdownContainer"], .stApp [class*="st-key-flat"] [data-testid="stMarkdownContainer"] > *, .stApp [class*="st-key-flat"] [data-testid="stMarkdownContainer"] > * > * { margin-bottom: 0 !important; }
+
+/* Home: same restraint as the rest of the app, no gradient headline or glowing tags */
+.stApp .h-hero { font-family: "Inter", sans-serif !important; font-weight: 650 !important; letter-spacing: -.035em !important; color: var(--p-text) !important; }
+.stApp .h-hero span { background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; -webkit-text-fill-color: var(--p-accent-ink) !important; color: var(--p-accent-ink) !important; }
+.stApp .h-lede { color: var(--p-text-2) !important; font-weight: 400 !important; }
+.stApp .h-badge { background: var(--p-surface) !important; border: 1px solid var(--p-line) !important; border-radius: 6px !important; box-shadow: none !important; }
+.stApp .h-badge .tag { background: var(--p-accent) !important; border-radius: 4px !important; box-shadow: none !important; }
+.stApp .h-ask-ico, .stApp .h-step-ico { background: var(--p-accent-soft) !important; color: var(--p-accent-ink) !important; box-shadow: none !important; }
+.stApp .st-key-home_ctas button::after, .stApp .st-key-home_ctas button[kind="primary"]::after { display: none !important; }
+.stApp .st-key-home_ctas button { border-radius: var(--p-r) !important; }
+.stApp [class*="st-key-home_chips"] button { background: var(--p-surface) !important; border: 1px solid var(--p-line) !important; border-radius: var(--p-r) !important; color: var(--p-text-2) !important; box-shadow: none !important; }
+.stApp [class*="st-key-home_chips"] button:hover { color: var(--p-text) !important; border-color: var(--p-line-2) !important; background: var(--p-hover) !important; }
+.stApp .h-float { background: var(--p-surface) !important; border: 1px solid var(--p-line) !important; border-radius: 10px !important; box-shadow: none !important; }
+html body .stApp .stTabs [role="tab"][aria-selected="false"] p { color: var(--p-text-2) !important; }
+html body .stApp .stTabs [role="tab"][aria-selected="true"] p { color: var(--p-text) !important; }
