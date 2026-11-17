@@ -214,6 +214,12 @@ def run_question_graph(question_id: int) -> str:
                 question.dataset_version_id = version.id
                 db.commit()
         csv_path = version.filepath if version else dataset.filepath
+        from app import stored_files
+        if not stored_files.ensure(csv_path):
+            mark_terminal(question_id, "failed",
+                          "This dataset's file is no longer on the server (the server's disk is cleared on "
+                          "restart and no saved copy exists). Please upload the file again.")
+            return "failed"
         profile = version.profile_json if version else dataset.profile_json
 
         initial_state: AgentState = {

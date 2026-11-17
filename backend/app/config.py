@@ -119,6 +119,9 @@ CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "")
 # read into memory/disk -- otherwise an arbitrarily large upload can exhaust
 # either.
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))  # 200 MB
+# Uploaded files up to this size are also kept in the database, so a host with a
+# throw-away disk (Render's free tier) can put them back after a restart. 0 turns it off.
+STORE_UPLOAD_BYTES = int(os.getenv("STORE_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25 MB
 
 # --- Outbound email (team invites) ---
 # Gmail SMTP by default: SMTP_USER is the full Gmail address, SMTP_PASSWORD is

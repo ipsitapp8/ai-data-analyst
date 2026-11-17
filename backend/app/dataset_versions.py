@@ -35,6 +35,8 @@ def add_version(
     db.commit()
     db.refresh(version)
     db.refresh(dataset)
+    from app import stored_files
+    stored_files.save(db, filepath)
     return version
 
 
