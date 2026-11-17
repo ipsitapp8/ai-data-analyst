@@ -29,8 +29,12 @@ def _holm(ps: list[float]) -> list[float]:
     return adj
 
 
-def _id_like(s: pd.Series) -> bool:
+def _id_like(s: pd.Series, name: str = "") -> bool:
+    """Identifiers are never tested as factors (the analyst's one definition, ml._is_identifier, plus unique text)."""
+    from app.analyst.ml import _is_identifier  # noqa: PLC0415
     v = s.dropna()
+    if name and _is_identifier(str(name), s):
+        return True
     return len(v) > 20 and v.nunique() > 0.9 * len(v) and kind_of(s) == "categorical"
 
 
@@ -39,7 +43,7 @@ def compute(df: pd.DataFrame, target: str, exclude: list | None = None) -> dict:
     num_target = kind_of(y) == "numeric" and y.nunique() > 2
     rows = []
     for c in df.columns:
-        if c == target or c in (exclude or []) or kind_of(df[c]) == "datetime" or _id_like(df[c]):
+        if c == target or c in (exclude or []) or kind_of(df[c]) == "datetime" or _id_like(df[c], c):
             continue
         x = df[c]
         d = pd.DataFrame({"x": x, "y": y}).dropna()

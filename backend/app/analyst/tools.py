@@ -65,6 +65,42 @@ class InvalidCall(ValueError):
     pass
 
 
+class RoleRefusal(InvalidCall):
+    """The call is well-formed, but the aggregation has no meaning for what the column is (the average of an
+    identifier, the total of a price). The message is written for the user and shown as the answer."""
+
+
+_ROLE_FN = {"avg": "mean"}
+
+
+def role_check(df: pd.DataFrame, col, fn: str) -> None:
+    """Raise RoleRefusal when `fn` of `col` is not a quantity (see semantics.aggregation_problem). The one guard
+    every computing path calls before it aggregates a column of the data."""
+    from app.analyst import semantics
+    why = semantics.aggregation_problem(df, col, _ROLE_FN.get(fn, fn))
+    if why:
+        raise RoleRefusal(why)
+
+
+def _role_guard(name: str, clean: dict, df: pd.DataFrame) -> None:
+    from app.analyst import semantics
+    checks = []
+    if name == "compute_metric" and clean.get("column"):
+        checks.append((clean["column"], _ROLE_FN.get(clean["aggregation"], clean["aggregation"])))
+    elif name == "describe_column":
+        checks.append((clean["column"], "mean"))
+    elif name == "compare_groups":
+        checks.append((clean["outcome"], "mean"))
+    elif name == "correlation":
+        checks += [(clean["x"], "mean"), (clean["y"], "mean")]
+    elif name == "linear_regression":
+        checks += [(clean["target"], "mean")] + [(c, "mean") for c in clean.get("features", [])]
+    for col, fn in checks:
+        why = semantics.aggregation_problem(df, col, fn)
+        if why:
+            raise RoleRefusal(why)
+
+
 def catalogue() -> str:
     lines = []
     for name, args in TOOLS.items():
@@ -137,6 +173,7 @@ def validate_call(call: Any, df: pd.DataFrame, message: str | None = None) -> di
             raise InvalidCall(f"compute_metric: '{agg}' needs a column")
         if agg in ("sum", "avg", "median", "std", "var") and kind_of(df[clean["column"]]) != "numeric":
             raise InvalidCall(f"compute_metric: '{clean['column']}' is not numeric, so {agg} does not apply")
+    _role_guard(name, clean, df)
     if name == "predict":
         for row in clean["rows"]:
             unknown = [c for c in row if c not in df.columns]
@@ -222,34 +259,71 @@ def _filtered(df, filters):
 
 def _compute_metric(df, a, memory):
     agg, col, filters, group = a["aggregation"], a.get("column"), a.get("filters"), a.get("group_by")
+    from app.analyst.scope import valid_records
+    excluded = []
+    if col and agg not in ("count", "count_distinct") and col in df.columns:
+        # one record-validity policy for every path (scope.valid_records): impossible values left out and listed
+        df, excluded = valid_records(df, [col])
+        excluded = [x for x in excluded if not x.get("kept")]
     data = _filtered(df, filters)
+    no_group = 0
+    if group and group in df.columns:
+        # records with no value of the breakdown column belong to no group: left out, and counted
+        no_group = int(data[group].isna().sum())
+        data = data[data[group].notna()]
+        df = data
     if agg in ("std", "var"):
         def f(s):
             x = finite(s)
             return float(np.std(x, ddof=1) if agg == "std" else np.var(x, ddof=1)) if len(x) > 1 else None
         if group:
             groups = [{"group": str(k), "value": f(g[col]), "rows": int(len(g))} for k, g in data.groupby(group)]
+            total_groups = len(groups)
         else:
             return {"aggregation": agg, "column": col, "value": f(data[col]), "rows": int(len(data)), "filters": filters or []}
     else:
         formula = "count()" if agg == "count" and not col else f'{agg}("{col}")'
-        r = me.evaluate(df, formula, filters or [], [group] if group else None)
+        r = me.evaluate(df, formula, filters or [], [group] if group else None, order=a.get("order", "desc"))
+        if agg in ("count", "count_distinct"):
+            # a count is a whole number, kept as one so it is shown as 5, not 5.00
+            r["value"] = None if r.get("value") is None else int(round(r["value"]))
+            for g_ in r.get("groups") or []:
+                g_["value"] = None if g_.get("value") is None else int(round(g_["value"]))
         if not group:
-            return {"aggregation": agg, "column": col, "value": r["value"], "rows": r["rows"], "filters": filters or []}
+            return {"aggregation": agg, "column": col, "value": r["value"], "rows": r["rows"], "filters": filters or [],
+                    "excluded": excluded}
         groups = [{"group": str(g["key"][group]), "value": g["value"], "rows": g["rows"]} for g in r["groups"]]
+        total_groups = r.get("groups_total", len(groups))
     rev = a.get("order", "desc") == "desc"
     groups.sort(key=lambda g: (g["value"] is None, -(g["value"] or 0) if rev else (g["value"] or 0)))
+    lead = groups[0]["value"] if groups else None
+    ties = sum(1 for g in groups if g["value"] is not None and lead is not None and g["value"] == lead)
     return {"aggregation": agg, "column": col, "group_by": group, "groups": groups, "filters": filters or [],
-            "top": groups[0] if groups else None}
+            "excluded": excluded,
+            "top": groups[0] if groups else None, "groups_total": total_groups, "tied_at_top": ties,
+            "no_group_value": no_group}
 
 
 def _describe_column(df, a, memory):
+    from app.analyst.scope import valid_records
+    df, excluded = valid_records(df, [a["column"]])
+    excluded = [e for e in excluded if not e.get("kept")]
+    out = _describe_column_on(df, a, memory)
+    out["excluded"] = excluded
+    return out
+
+
+def _describe_column_on(df, a, memory):
     x = finite(_filtered(df, a.get("filters"))[a["column"]])
     if len(x) == 0:
         return {"column": a["column"], "n": 0, "note": "no numeric values"}
     d = sm.describe(x)
     ci = sm.mean_interval(x, LEVEL)
-    return {"column": a["column"], "n": d["n"], "mean": d["mean"], "median": d["median"], "sd": d["sd"],
+    vc = pd.Series(x).value_counts()
+    modes = sorted(float(v) for v in vc[vc == vc.max()].index) if len(vc) and vc.max() > 1 else []
+    col_all = _filtered(df, a.get("filters"))[a["column"]]
+    return {"column": a["column"], "n": d["n"], "missing": int(col_all.isna().sum()), "mode": modes,
+            "mode_count": int(vc.max()) if len(vc) else 0, "mean": d["mean"], "median": d["median"], "sd": d["sd"],
             "variance": d["sd"] ** 2 if d["sd"] is not None else None, "min": d["min"], "max": d["max"],
             "skewness": d["skewness"], "mean_ci95": list(ci) if ci else None,
             "method": "t interval for the mean" + ("; the distribution is skewed, so the median may summarise it better"
@@ -257,6 +331,18 @@ def _describe_column(df, a, memory):
 
 
 def _compare_groups(df, a, memory):
+    from app.analyst.scope import valid_records
+    excluded = []
+    if kind_of(df[a["outcome"]]) == "numeric":
+        df, excluded = valid_records(df, [a["outcome"]])          # the one record-validity policy
+        excluded = [e for e in excluded if not e.get("kept")]
+    out = _compare_groups_on(df, a, memory)
+    if isinstance(out, dict) and excluded:
+        out["excluded"] = excluded
+    return out
+
+
+def _compare_groups_on(df, a, memory):
     data = _filtered(df, a.get("filters"))
     y, g = a["outcome"], a["group"]
     data = data[[y, g]].dropna()

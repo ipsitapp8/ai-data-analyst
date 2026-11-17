@@ -187,10 +187,44 @@ def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
     cols = find_column(df, low)
     num_cols = [c for c in cols if kind_of(df[c]) == "numeric"]
     cat_cols = [c for c in cols if kind_of(df[c]) == "categorical"]
+    # The structured request (app/analyst/intent.py) is the one reading of the question: the measure and grouping it
+    # found ("time to resolve" -> resolution_hours) are used when the column names alone did not show them, and a
+    # condition column ("csat below 3") is never taken for the measure
+    from app.analyst.intent import read as _read_request
+    try:
+        _req = _read_request(m, df)
+    except Exception:  # noqa: BLE001
+        _req = None
+    if _req is not None:
+        cond_cols = {cd["column"] for cd in _req.conditions} | set(_req.restrict) | set(_req.restrict_not)
+        num_cols = [c for c in num_cols if c not in cond_cols] if [c for c in num_cols if c not in cond_cols] else num_cols
+        if _req.measures and not num_cols and _req.quantity != "count":
+            num_cols = [c for c in _req.measures if c in df.columns and kind_of(df[c]) == "numeric"]
+        if _req.group and _req.group in df.columns and kind_of(df[_req.group]) == "categorical" and _req.group not in cat_cols:
+            cat_cols = [_req.group] + cat_cols
+    # an identifier or code written in digits (customer_id, zip_code) is not a measure: another number the question
+    # names is; when it is the only one and the question aggregates or ranks on it, that is said, not computed
+    from app.analyst import semantics as _sem
+    id_cols = [c for c in num_cols if _sem.aggregation_problem(df, c, "mean")]
+    if id_cols and len(id_cols) < len(num_cols) and not re.search(r"correlat|relationship|related|associated", low):
+        num_cols = [c for c in num_cols if c not in id_cols]
+    elif id_cols and re.search(r"\b(average|mean|avg|median|total|sum|highest|lowest|largest|smallest|top|bottom|best|"
+                               r"worst|max|maximum|min|minimum|correlat\w*|describe|distribution|variance|deviation|"
+                               r"compare|difference)\b", low) and not re.search(
+            r"\b(how many|number of|count|distinct|unique)\b", low):
+        return {"type": "decline", "reason": _sem.aggregation_problem(df, id_cols[0], "mean"), "role_refusal": True}
+    if not cat_cols:
+        # "which company", "each company": the entity's name column, found by the shared group resolution
+        from app.analyst.metrics import group_column
+        g, _ = group_column(m, df, skip=set(num_cols))
+        if g is not None and kind_of(df[g]) == "categorical":
+            cat_cols = [g]
     if re.search(r"\bpay|paid|earn|wage", low) and not num_cols:
         num_cols = [c for c in df.columns if re.search(r"salary|pay|wage|income|compensation", c.lower())
                     and kind_of(df[c]) == "numeric"][:1]
-    if re.search(r"correlat|relationship between|associated with", low) and len(num_cols) >= 2:
+    if re.search(r"correlat|relationship between|associated with|relat(?:ed|es) to|linked (?:to|with)|go(?:es)? (?:along )?with|"
+                 r"tends? to (?:go|rise|fall|move)|move together|higher .{1,40}\bhigher\b|more .{1,40}\bhigher\b", low) \
+            and len(num_cols) >= 2:
         return {"type": "tools", "intent": "correlation", "calls": [{"tool": "correlation", "args": {"x": num_cols[0], "y": num_cols[1]}}]}
     if re.search(r"significant|difference|differ|compare|test", low) and cat_cols and (num_cols or len(cat_cols) >= 2):
         outcome = num_cols[0] if num_cols else cat_cols[1]
@@ -208,9 +242,11 @@ def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
         agg = _AGG_ARG.get(ranking_aggregate(m, num_cols[0]) or "")
         if agg is None:
             return _ask_how(cat_cols[0], num_cols[0])
-        return {"type": "tools", "intent": "group_comparison", "calls": [
-            {"tool": "compute_metric", "args": {"aggregation": agg, "column": num_cols[0], "group_by": cat_cols[0], "order": order}},
-            {"tool": "compare_groups", "args": {"outcome": num_cols[0], "group": cat_cols[0]}}]}
+        calls = [{"tool": "compute_metric", "args": {"aggregation": agg, "column": num_cols[0], "group_by": cat_cols[0],
+                                                     "order": order}}]
+        if df[cat_cols[0]].nunique() <= 30:      # a test across thousands of names compares nothing
+            calls.append({"tool": "compare_groups", "args": {"outcome": num_cols[0], "group": cat_cols[0]}})
+        return {"type": "tools", "intent": "group_comparison", "calls": calls}
     # "Identify the highest revenue region": groups ranked by the aggregate the question and the measure fix (a total
     # for a flow, an average for a level, a single record only when the question says so) -- or Silt asks
     if re.search(r"\b(highest|lowest|top|best|worst|largest|smallest|biggest|leading)\b", low) and cat_cols and num_cols \
@@ -254,12 +290,44 @@ def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
         args = {"aggregation": agg, "column": num_cols[0]}
         if by and cat_cols:
             args["group_by"] = cat_cols[0]
+            from app.analyst.intent import read as _read_request
+            order = _read_request(m, df).sort         # "sorted from lowest to highest": the request's own order
+            if order:
+                args["order"] = order
         return {"type": "tools", "intent": "metric", "calls": [{"tool": "compute_metric", "args": args}]}
+    # "how many reviews", "number of reviews", "total reviews" with a column that holds counts: the sum of that
+    # column (not the number of rows); "number of companies": the distinct names of the companies
+    hm = re.search(r"\b(?:how many|number of|count of|total(?: number of)?)\s+([a-z][a-z_]*)", low)
+    if hm and not re.search(r"how many (rows|records)|number of (rows|records)", low):
+        noun = hm.group(1)
+        counted = [c for c in find_column(df, noun) if kind_of(df[c]) == "numeric"]
+        from app.analyst.intent import ranking_aggregate
+        from app.analyst.schema_profile import entity_column
+        by_m = re.search(r"\b(?:by|per|for each|in each|each|across)\s+(?:the\s+)?([a-z][a-z_ ]*)", low)
+        grp = None
+        if by_m:
+            from app.analyst.metrics import group_column
+            grp, _ = group_column(by_m.group(0), df)
+        if counted and ranking_aggregate(noun, counted[0]) == "sum" and not re.search(
+                r"\d|\b(above|below|over|under|more than|less than|at least|at most|where|whose|only|excluding|except)\b",
+                low):
+            args = {"aggregation": "sum", "column": counted[0]}
+            if grp:
+                args["group_by"] = grp
+            return {"type": "tools", "intent": "metric", "calls": [{"tool": "compute_metric", "args": args}]}
+        ent = entity_column(df, noun)
+        conditioned = re.search(r"\d|\b(above|below|over|under|more than|less than|at least|at most|where|whose|who|"
+                                r"that|with|without|having|rated|only|excluding|except)\b", low)
+        if ent is not None and ent != grp and not conditioned:   # "how many companies are rated above 4.5": a filter
+            args = {"aggregation": "count_distinct", "column": ent}
+            if grp:
+                args["group_by"] = grp
+            return {"type": "tools", "intent": "metric", "calls": [{"tool": "compute_metric", "args": args}]}
     if re.search(r"how many (rows|records)|number of (rows|records)", low):
         return {"type": "tools", "intent": "metric", "calls": [{"tool": "compute_metric", "args": {"aggregation": "count"}}]}
     if re.search(r"\b(average|mean|median|total|sum|maximum|minimum)\b", low) and not num_cols:
-        return {"type": "clarify", "question": "Which numeric column do you mean?",
-                "options": [c for c in df.columns if kind_of(df[c]) == "numeric"][:8]}
+        from app.analyst.semantics import measure_options
+        return {"type": "clarify", "question": "Which numeric column do you mean?", "options": measure_options(df)}
     return {"type": "chat", "reply": "I'm not sure what to compute. You can ask, for example: 'What is the average "
                                      "<column>?', 'Which <group> has the highest <column>?', 'Predict <column>', or "
                                      "'Which area should receive our next advertising campaign?'"}

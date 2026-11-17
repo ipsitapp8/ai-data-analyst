@@ -386,7 +386,8 @@ def auto_freq(dates: pd.Series) -> str:
     return "W" if d.dt.to_period("W").nunique() >= 6 and d.dt.normalize().nunique() > 20 else "D"
 
 
-RATE_LIKE = re.compile(r"rate|price|percent|pct|ratio|avg|average|score|per_|margin|age|tenure|temperature", re.I)
+RATE_LIKE = re.compile(r"rate|price|percent|pct|ratio|avg|average|score|per_|margin|age|tenure|temperature|rating|"
+                       r"satisfaction|stars", re.I)
 
 
 def series(frame: pd.DataFrame, value_col: str, date_col: str, freq: str, agg: str) -> list[dict]:
@@ -540,7 +541,14 @@ def forecast(df: pd.DataFrame, memory: dict, value: str | None = None, sc: dict 
     pts = series(frame, "__measure__", dates[0], freq, agg)
     coverage = None
     last_recorded = pd.Period(pts[-1]["period"], freq=freq) if pts else None
+    partial = {}
     if agg == "sum" and len(pts) >= 2:
+        # a total over part of a calendar period (the current month so far) is not a month's total: never history
+        partial = {p: x for p, x in partial_periods(df[dates[0]], freq).items() if any(q["period"] == p for q in pts)}
+        if partial and len(pts) - len(partial) >= 2:
+            pts = [q for q in pts if q["period"] not in partial]
+        else:
+            partial = {}
         pts, coverage = _drop_incomplete_periods(df, frame, pts, dates[0], freq, sc)
     period_note = None
     if period and len(pts) < 2:
@@ -553,7 +561,8 @@ def forecast(df: pd.DataFrame, memory: dict, value: str | None = None, sc: dict 
     out = {"label": out_label, "frequency": _FREQ[freq], "points": pts, "aggregation": agg, "source": source,
            "periods": len(pts), "excluded": frame.attrs.get("silt_excluded", []), "scope": frame.attrs.get("silt_scope", ""),
            "records_used": int(len(frame)), "definition": describe_definition(derived) if derived else None,
-           "period_note": period_note, "coverage": coverage}
+           "period_note": period_note, "coverage": coverage,
+           "partial": partial, "partial_note": _partial_note(partial, freq, used=False) if partial else None}
     if len(pts) < 2:
         raise ValueError(f"Only {len(pts)} {_FREQ[freq]} of eligible history, so nothing can be projected.")
     per = pd.PeriodIndex([p["period"] for p in pts], freq=freq)
@@ -638,6 +647,42 @@ def unit_column(df: pd.DataFrame, date: str) -> str | None:
     return best
 
 
+def partial_periods(all_dates: pd.Series, freq: str) -> dict:
+    """Calendar periods at the edges of the data that it covers only in part: {period: {"covered", "length",
+    "edge"}}. The last period is partial when the data ends before the period does (the current month so far, or an
+    extract that stops mid-month); the first, when the data starts after the period starts. A partial period's TOTAL
+    is not comparable with a whole period's -- forecasts leave it out of the history, trends do not use it for change
+    or peaks -- and the answer says so. Day-level periods are always whole."""
+    d = pd.to_datetime(all_dates, errors="coerce").dropna()
+    if d.empty or freq in ("D",):
+        return {}
+    first, last = d.min().normalize(), d.max().normalize()
+    # how often the data records: data kept once a month (on the 1st) or once a week covers its periods fully,
+    # however few its dates -- a period is partial only when the days missing at its edge are many more than the
+    # usual gap between recording dates
+    days = pd.Series(sorted(d.dt.normalize().unique()))
+    gap = float(days.diff().dt.days.median()) if len(days) > 1 else 1.0
+    out = {}
+    for edge, day in (("end", last), ("start", first)):
+        p = day.to_period(freq)
+        start, end = p.start_time.normalize(), p.end_time.normalize()
+        length = int((end - start).days) + 1
+        covered = int((min(end, last) - max(start, first)).days) + 1
+        missing = int((end - last).days) if edge == "end" else int((first - start).days)
+        if covered < length and missing > 1.5 * max(gap, 1.0):
+            out.setdefault(str(p), {"covered": covered, "length": length, "edge": edge,
+                                    "from": str(max(start, first).date()), "to": str(min(end, last).date())})
+    return out
+
+
+def _partial_note(partial: dict, freq: str, used: bool) -> str:
+    many = len(partial) > 1
+    return "; ".join(f"{p} is covered only from {x['from']} to {x['to']} ({x['covered']} of {x['length']} days)"
+                     for p, x in partial.items()) + (
+        f" — {'their totals are' if many else 'its total is'} not comparable with a whole {_FREQ[freq]}, so "
+        f"{'they were' if many else 'it was'} {'shown but not used for the change or the highest and lowest' if used else 'left out of the history'}")
+
+
 def _drop_incomplete_periods(df, frame, pts, date, freq, sc):
     """For a total over many units (all employees, all stores), a period where many units have no VALID record is not
     a comparable total: it is left out of the history and reported. Coverage = distinct units with a valid record in
@@ -690,6 +735,8 @@ def forecast_text(f: dict) -> str:
             lines += ["**Left out as incomplete periods** (too few valid records to be a comparable total): " + "; ".join(
                 f"{x['period']} — {x['units']} of the usual {x['usual']:g} {cov['unit'].replace('_', ' ')} values had a "
                 f"valid record (recorded total {_cellv(x['total_recorded'])})" for x in cov["incomplete"]) + ".", ""]
+    if f.get("partial_note"):
+        lines += [f"**Incomplete period:** {f['partial_note']}.", ""]
     if f.get("period_note"):
         lines += [f"_Note: {f['period_note']}._", ""]
     if f.get("horizon_note"):
@@ -798,6 +845,10 @@ def chart_request(message: str) -> str | None:
         return "scatter"
     if not CHART_WORDS.search(low) and not re.search(r"\b(actual|real) (vs\.?|versus|against) predicted\b", low):
         return None
+    from app.analyst.requirements import asked
+    stats = set(asked(message)) & {"mean", "median", "mode", "standard deviation", "variance", "minimum", "maximum"}
+    if len(stats) >= 2 and not re.search(r"\b(chart|plot|graph|histogram|visuali[sz]e|draw|bars?)\b", low):
+        return None          # "the rating distribution: mean, median, mode ...": statistics asked for, not a chart
     if re.search(r"\b(actual|real)\b.*\b(vs\.?|versus|against|and)\b.*\bpredicted\b|\bpredicted\b.*\b(vs\.?|versus|"
                  r"against)\b.*\bactual\b", low):
         return "avp"
@@ -882,34 +933,87 @@ def histogram(df: pd.DataFrame, col: str) -> dict:
 # ---------------------------------------------------------------- rankings --
 _TOP = re.compile(r"\b(top|bottom|best|worst|highest|lowest)\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b",
                   re.I)
+_NUM = r"(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)"
+_SUPER = r"(highest|lowest|most|fewest|least|best|worst|largest|smallest|top|bottom)"
+# "which 5 companies have the lowest rating", "the 3 cities with the most revenue"
+_N_HAVE = re.compile(rf"\b{_NUM}\s+([a-z][a-z ]{{1,30}}?)\s+(?:have|has|had|with|that have|got|get)\s+(?:the\s+)?{_SUPER}\b", re.I)
+# "the 5 most reviewed companies", "10 highest-rated firms", "5 least expensive products"
+_N_MOST = re.compile(rf"\b{_NUM}\s+{_SUPER}[- ]+([a-z]+(?:ed|d))?\s*([a-z][a-z ]{{1,30}}?)\b(?=\s+(?:by|in|with|of|for|from)\b|[?.!,]|$)",
+                     re.I)
+_LOW_WORDS = ("bottom", "worst", "lowest", "fewest", "least", "smallest")
+_WITH_EXTRA = re.compile(r"\b(?:with|along with|including|plus|and)\s+(?:their|its|the|each one's|each company's)?\s*"
+                         r"([a-z][a-z %_-]{1,40})", re.I)
+
+
+def _n_of(w: str) -> int:
+    w = w.lower()
+    return int(w) if w.isdigit() else ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+                                       "ten"].index(w) + 1
+
+
+def _stem_column(word: str, df: pd.DataFrame) -> str | None:
+    """"reviewed" -> review, "rated" -> rating: the one numeric column whose name starts with the word's stem."""
+    from app.analyst.data import kind_of as _k
+    stem = re.sub(r"(?:ed|d)$", "", word.lower())
+    if len(stem) < 3:
+        return None
+    hits = [c for c in df.columns if _k(df[c]) == "numeric" and str(c).lower().startswith(stem)]
+    return hits[0] if len(hits) == 1 else None
 
 
 def rank_request(message: str, df: pd.DataFrame) -> dict | None:
-    """'Show the top five products' -> rank the product column by the dataset's main measure."""
+    """'Show the top five products', 'which 5 companies have the lowest rating', 'the 5 most reviewed companies':
+    rank the groups the noun names by one measure. Extra columns asked for ("with their review counts") are listed
+    beside the ranked one."""
     from app.analyst.data import business_roles, find_column
     m = _TOP.search(message)
-    if not m:
-        return None
-    w = m.group(2).lower()
-    n = int(w) if w.isdigit() else ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"].index(w) + 1
-    rest = message[m.end():]
+    stem_measure = None
+    if m:
+        n, low, rest = _n_of(m.group(2)), m.group(1).lower() in _LOW_WORDS, message[m.end():]
+        noun_text = rest
+    else:
+        m2 = _N_HAVE.search(message)
+        m3 = None if m2 else _N_MOST.search(message)
+        if m2:
+            n, low, noun_text = _n_of(m2.group(1)), m2.group(3).lower() in _LOW_WORDS, m2.group(2)
+            rest = message[m2.start(2):]
+        elif m3:
+            n, low, noun_text = _n_of(m3.group(1)), m3.group(2).lower() in _LOW_WORDS, m3.group(4)
+            rest = message[m3.start(4):]
+            stem_measure = _stem_column(m3.group(3), df) if m3.group(3) else None
+        else:
+            return None
     # the thing ranked is what follows "top N" ("top 2 doctors by fee in Clinic A"), never a column the question only
     # uses to pick records (Clinic A names a value of `clinic`: that is a filter, not what is ranked)
     from app.analyst.calc import named_values
     filters = {c for c, _ in named_values(df, message)}
-    cats = mentioned_order([c for c in find_column(df, rest) if kind_of(df[c]) == "categorical" and c not in filters],
-                           rest)
+    head = re.split(r"\b(?:by|per|for|in|with|have|has|had|that)\b", noun_text, maxsplit=1)[0]
+    cats = mentioned_order([c for c in find_column(df, head) if kind_of(df[c]) == "categorical" and c not in filters],
+                           head)
     if not cats:
         from app.analyst.metrics import group_column       # "top 2 staff", "top 3 depts": a column the noun names
-        g, _ = group_column("each " + re.split(r"\b(?:by|per|for|in|with)\b", rest, maxsplit=1)[0].strip(), df, skip=filters)
+        g, _ = group_column("each " + head.strip(), df, skip=filters)
         cats = [g] if g else []
     if not cats:
         return None
-    nums = [c for c in find_column(df, message) if kind_of(df[c]) == "numeric"]
+    ex = _WITH_EXTRA.search(message)
+    extra_text = ex.group(1) if ex else ""
+    main_text = message[:ex.start()] if ex else message
+    nums = [c for c in find_column(df, main_text) if kind_of(df[c]) == "numeric"]
+    if not nums:
+        words = re.findall(r"[a-z]+(?:ed|d)\b", main_text.lower())
+        nums = [c for c in (_stem_column(w, df) for w in words) if c]
+    if stem_measure:
+        nums = [stem_measure] + [c for c in nums if c != stem_measure]
     roles = business_roles(df)["roles"]
     measure = nums[0] if nums else roles.get("revenue")
-    return {"group": cats[0], "measure": measure, "n": n, "low": m.group(1).lower() in ("bottom", "worst", "lowest"),
-            "assumed_measure": not nums}
+    extras = [c for c in find_column(df, extra_text) if kind_of(df[c]) == "numeric" and c != measure] if extra_text else []
+    # an aggregate the question names ("average", "total", "median", "single largest") decides; otherwise the measure
+    # does (rank_groups: an average for a rate, score or rating, a total for anything else)
+    from app.analyst.intent import _AVG, _MEDIAN, _SINGLE, _TOTAL, ranking_aggregate
+    explicit = any(rx.search(main_text) for rx in (_AVG, _MEDIAN, _SINGLE, _TOTAL))
+    return {"group": cats[0], "measure": measure, "n": n, "low": low, "extras": extras,
+            "assumed_measure": not nums, "agg": ranking_aggregate(main_text, measure) if measure and explicit else None}
 
 
 _NEXT_TOP = re.compile(r"\s*,?\s*\b(?:and|as well as|plus)\s+(?=(?:also\s+)?(?:the\s+)?(?:top|bottom|best|worst|highest|lowest)\s+"
@@ -936,32 +1040,91 @@ def rank_requests(message: str, df: pd.DataFrame) -> list[dict]:
     return out
 
 
-def rank_groups(df: pd.DataFrame, group: str, measure: str, n: int, low: bool = False) -> dict:
+def rank_groups(df: pd.DataFrame, group: str, measure: str, n: int, low: bool = False, agg: str | None = None,
+                extras: list[str] | None = None) -> dict:
+    """Groups ranked by one aggregate of `measure` -- the one the question asks for (app/analyst/intent.
+    ranking_aggregate: a total for a flow such as revenue or reviews, an average for a level such as a rating);
+    the ranking and the values shown use the same aggregate. Records with no value of the measure are left out and
+    counted. For an average, each group's difference from the overall average is given too."""
+    from app.analyst.scope import valid_records
+    df, excluded = valid_records(df, [measure])
+    excluded = [e for e in excluded if not e.get("kept")]
     v = pd.to_numeric(df[measure], errors="coerce")
-    agg = "mean" if RATE_LIKE.search(measure) else "sum"
+    assumed_agg = False                 # the aggregate is the question's, or the measure's own kind (a rating: average)
+    agg = agg if agg in ("sum", "mean", "median", "max", "min") else ("mean" if RATE_LIKE.search(measure) else "sum")
+    from app.analyst import tools as _tools
+    _tools.role_check(df, measure, agg)     # an identifier is never ranked on; a per-record level is never totalled
     g = v.groupby(df[group].astype(str)).agg([agg, "count"]).rename(columns={agg: "value", "count": "records"})
-    g = g.sort_values("value", ascending=low)
+    g = g.dropna(subset=["value"]).sort_values("value", ascending=low, kind="mergesort")
     total = float(v.sum()) if agg == "sum" else None
+    overall = float(v.mean()) if agg == "mean" and v.notna().any() else None
     rows = [{"group": k, "value": float(r["value"]), "records": int(r["records"]),
-             "share": (float(r["value"]) / total if total else None)} for k, r in g.iterrows()]
+             "share": (float(r["value"]) / total if total else None),
+             "vs_overall": (float(r["value"]) - overall if overall is not None else None)} for k, r in g.iterrows()]
+    cut = rows[n - 1]["value"] if len(rows) >= n else None
+    tied_beyond = sum(1 for x in rows[n:] if cut is not None and x["value"] == cut)
+    from app.analyst.intent import ranking_aggregate
+    extra_aggs = {}
+    for c in extras or []:
+        ea = ranking_aggregate(c, c) or "mean"
+        extra_aggs[c] = ea
+        ev = pd.to_numeric(df[c], errors="coerce").groupby(df[group].astype(str)).agg(ea)
+        for x in rows[:n]:
+            x.setdefault("extras", {})[c] = None if pd.isna(ev.get(x["group"])) else float(ev.get(x["group"]))
     return {"group": group, "measure": measure, "aggregation": agg, "n": n, "low": low, "rows": rows[:n],
-            "additive": agg == "sum",
+            "extras": extra_aggs,
+            "additive": agg == "sum", "assumed_aggregation": assumed_agg, "overall_mean": overall,
+            "missing": int(v.isna().sum()), "tied_beyond_cut": tied_beyond, "excluded": excluded,
             "groups_total": len(rows), "total": total}
 
 
 def rank_text(r: dict, assumed: bool) -> str:
     from app.analyst.present import _cellv, pct
     lab, g = r["measure"].replace("_", " "), r["group"].replace("_", " ")
-    word = "average" if r["aggregation"] == "mean" else "total"
+    word = {"mean": "average", "sum": "total", "median": "median", "max": "largest single", "min": "smallest single"}.get(
+        r["aggregation"], r["aggregation"])
     first = r["rows"][0]
-    lines = [f"The {'bottom' if r['low'] else 'top'} {len(r['rows'])} of {r['groups_total']} {g} values by {word} {lab}: "
-             f"**{first['group']}** {'is lowest' if r['low'] else 'leads'} with **{_cellv(first['value'])}**"
-             + (f" ({pct(first['share'] * 100)} of the total)" if first.get("share") is not None else "") + ".", "",
-             f"| rank | {g} | {word} {lab} | records |" + (" share |" if r["total"] else ""),
-             "|---:|---|---:|---:|" + ("---:|" if r["total"] else "")]
+    ov = r.get("overall_mean")
+    lead = [x["group"] for x in r["rows"] if x["value"] == first["value"]]
+    who = (f"**{first['group']}** {'is lowest' if r['low'] else 'leads'}" if len(lead) == 1 else
+           " and ".join(f"**{x}**" for x in lead[:6]) + f" tie for {'lowest' if r['low'] else 'first'}")
+    lines = [f"The {'bottom' if r['low'] else 'top'} {len(r['rows'])} of {r['groups_total']:,} {g} values by {word} {lab}: "
+             f"{who} with **{_cellv(first['value'])}**{' each' if len(lead) > 1 else ''}"
+             + (f" ({pct(first['share'] * 100)} of the total)" if first.get("share") is not None and len(lead) == 1 else "")
+             + "."
+             + (f" ({r['tied_beyond_cut']} more {g} value(s) tie at the cut-off and are not listed.)"
+                if r.get("tied_beyond_cut") else "")
+             + (f" The overall average {lab} is **{_cellv(ov)}**." if ov is not None else ""), "",
+             f"| rank | {g} | {word} {lab} | records |" + (" share |" if r["total"] else "")
+             + (" vs overall average |" if ov is not None else ""),
+             "|---:|---|---:|---:|" + ("---:|" if r["total"] else "") + ("---:|" if ov is not None else "")]
+    ex = r.get("extras") or {}
+    ew = {"mean": "average", "sum": "total", "median": "median", "max": "largest", "min": "smallest"}
+    if ex:
+        lines[-2] += "".join(f" {ew.get(a, a)} {c.replace('_', ' ')} |" for c, a in ex.items())
+        lines[-1] += "---:|" * len(ex)
     for i, x in enumerate(r["rows"], 1):
         lines.append(f"| {i} | {x['group']} | {_cellv(x['value'])} | {x['records']} |"
-                     + (f" {pct(x['share'] * 100)} |" if r["total"] else ""))
+                     + (f" {pct(x['share'] * 100)} |" if r["total"] else "")
+                     + (f" {x['vs_overall']:+.2f} |" if ov is not None else "")
+                     + "".join(f" {_cellv((x.get('extras') or {}).get(c))} |" for c in ex))
+    if r.get("excluded"):
+        from app.analyst.scope import describe_exclusions
+        note = describe_exclusions(r["excluded"])
+        if note:
+            lines += ["", note]
+    multi = [x["group"] for x in r["rows"] if x["records"] > 1]
+    if multi:
+        lines.append(f"\n_{', '.join(multi[:5])}{' …' if len(multi) > 5 else ''} appear{'s' if len(multi) == 1 else ''} "
+                     f"in more than one record; each {g}'s figures combine all its records ({word} {lab}"
+                     + "".join(f", {ew.get(a, a)} {c.replace('_', ' ')}" for c, a in ex.items()) + ")._")
+    if r.get("tied_beyond_cut"):
+        lines.append(f"\n_{r['tied_beyond_cut']} more {g} value(s) share the last value shown "
+                     f"({_cellv(r['rows'][-1]['value'])}); the order among tied values is alphabetical._")
+    if r.get("missing"):
+        lines.append(f"\n_{r['missing']} record(s) with no {lab} were left out._")
+    if r.get("assumed_aggregation"):
+        lines.append(f"\n_Each {g} is compared by its {word} {lab}; ask for the total or the average to change it._")
     if assumed:
         lines.append(f"\n_Ranked by {word} **{lab}**, this dataset's main business measure; name another column to "
                      "rank by it instead._")
@@ -1109,6 +1272,12 @@ def forecast_target(message: str, df: pd.DataFrame, memory: dict, sc: dict | Non
         sums = [n for n, a in last["spec"]["aggregate"].items() if _SINGLE_TOTAL.fullmatch(a.strip()) and a.strip().startswith("sum")]
         measure = sums[0] if sums else None
     if not want:
+        # a column named exactly ("forecast next month's amount"), even when its name is also a generic word
+        from app.analyst.semantics import measure_options
+        raw = set(re.findall(r"[a-z_]+", message.lower()))
+        exact = [c for c in measure_options(df, limit=100) if str(c).lower() in raw]
+        if len(exact) == 1:
+            return {"kind": "column", "column": exact[0], "phrase": str(exact[0])}
         return {"kind": "measure", "phrase": measure} if measure else {"kind": "unknown", "phrase": ""}
     nums = [c for c in df.columns if kind_of(df[c]) == "numeric"]
     fits = [c for c in nums if want <= _name_words(c)]

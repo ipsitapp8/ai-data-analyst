@@ -53,7 +53,7 @@ OP_ARGS = {
     "select": ({"from"}, {"entities", "except", "period", "where"}),
     "derive": ({"name", "formula"}, {"from", "unit"}),
     "aggregate": ({"fn"}, {"from", "column", "by", "per"}),
-    "ratio": ({"a", "b"}, set()),
+    "ratio": ({"a", "b"}, {"broadcast"}),
     "rank": ({"from"}, {"n", "order"}),
     "project": ({"column", "days"}, {"from", "history_start", "history_end"}),
     "compare": ({"a"}, {"b", "target", "base", "days", "a_label", "b_label"}),
@@ -542,7 +542,7 @@ def check(plan: dict, df: pd.DataFrame, inputs: dict, message: str, prof: dict, 
             elif fn in ("count",):
                 s["unit"] = "records"
             elif fn == "nunique":
-                s["unit"] = f"distinct {col}"
+                s["unit"] = "count"      # (the label already says what was counted: "number of distinct agent values")
             elif "unit" not in s:
                 s["unit"] = unit_of(df, col, prof) if col in cols else None
             kinds[sid] = "series" if (by or per) else "scalar"
@@ -552,7 +552,12 @@ def check(plan: dict, df: pd.DataFrame, inputs: dict, message: str, prof: dict, 
             for k in ("a", "b"):
                 if s[k] not in kinds or kinds[s[k]] not in ("scalar", "series", "projection"):
                     problems.append(f"step '{sid}': '{s[k]}' must be an earlier value or per-group result")
-            if s["a"] in kinds and s["b"] in kinds and {kinds[s["a"]], kinds[s["b"]]} == {"series", "scalar"}:
+            # each group's part of one whole (series ÷ a single total) only when the step says so and both are totals
+            # of the same column: a share of that column's total
+            of_whole = bool(s.get("broadcast")) and kinds.get(s["a"]) == "series" and kinds.get(s["b"]) == "scalar" \
+                and fns.get(s["a"]) == fns.get(s["b"]) == "sum"
+            if s["a"] in kinds and s["b"] in kinds and {kinds[s["a"]], kinds[s["b"]]} == {"series", "scalar"} \
+                    and not of_whole:
                 problems.append(f"step '{sid}': divide two per-group results or two values, not one of each")
             for k in ("a", "b"):
                 fn = fns.get(s[k])
@@ -888,12 +893,12 @@ def plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
             "trace": trace}
 
 
-def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict | None:
+def rule_plan(message: str, df: pd.DataFrame, memory: dict, plain: bool = False) -> dict | None:
     """The deterministic program for a composite request whose parts are all grounded (app/analyst/intent.py), checked
     exactly like a model's plan. None when any part would be a guess."""
     prof = semantics.profile(df)
     req = intent.read(message, df, prof)
-    steps = intent.rule_program(req, df, prof)
+    steps = intent.rule_program(req, df, prof, plain=plain)
     if not steps:
         return None
     try:
@@ -903,6 +908,22 @@ def rule_plan(message: str, df: pd.DataFrame, memory: dict) -> dict | None:
         return None
     return {"status": "ok", "objective": None, "steps": steps, "request": req, "repaired": [], "inputs": {},
             "answer": next(s["id"] for s in steps if s["id"] in ("per_unit", "result")), "trace": [], "rule": True}
+
+
+def plan_for_request(req, df: pd.DataFrame, message: str) -> dict | None:
+    """The deterministic program for an already-built reading (a follow-up applied to the previous answer's reading),
+    checked exactly like rule_plan's. None when any part would be a guess."""
+    prof = semantics.profile(df)
+    steps = intent.rule_program(req, df, prof, plain=True)
+    if not steps:
+        return None
+    ans = next(s["id"] for s in steps if s["id"] in ("per_unit", "result"))
+    try:
+        steps = check({"action": "program", "steps": steps, "answer": ans}, df, {}, message, prof, trusted=True)
+    except (PlanRejected, Ambiguous):
+        return None
+    return {"status": "ok", "objective": None, "steps": steps, "request": req, "repaired": [], "inputs": {},
+            "answer": ans, "trace": [], "rule": True}
 
 
 def _clean(text, message: str) -> str | None:
@@ -1072,7 +1093,8 @@ def _label(s: dict, steps: list[dict], depth: int = 0) -> str:
     sc = _scope_of(s["id"], steps)
     sc = f" ({sc})" if sc else ""
     if op == "aggregate":
-        what = "number of records" if s["fn"] == "count" else (f"distinct {s['column']}" if s["fn"] == "nunique"
+        what = "number of records" if s["fn"] == "count" else (f"number of distinct {s['column']} values"
+                                                               if s["fn"] == "nunique"
                                                                else f"{s['fn']} of {s['column']}")
         return what + (f" by {s['by']}" if s.get("by") else f" per {s['per']}" if s.get("per") else "") + sc
     if op == "ratio":
@@ -1169,11 +1191,8 @@ def _extremes(r: P.Result, req, fmt) -> str | None:
     v = {k: x for k, x in r.value.items() if x is not None}
     if len(v) < 2 or r.provenance.get("op") in ("associate", "anomalies", "profile"):
         return None
-    hi, lo = max(v, key=v.get), min(v, key=v.get)
-    fmt = _fmtv(r, fmt)
-    if req is not None and req.extreme == "min":
-        return f"**Lowest: {lo}** ({fmt(v[lo])}); highest: {hi} ({fmt(v[hi])})."
-    return f"**Highest: {hi}** ({fmt(v[hi])}); lowest: {lo} ({fmt(v[lo])})."
+    from app.analyst.explain import extreme_text
+    return extreme_text(v, _fmtv(r, fmt), lead_low=req is not None and req.extreme == "min")
 
 
 def _checklist(req, steps, res, labels, ans_id) -> str:
@@ -1323,16 +1342,20 @@ def unapplied(message: str, df: pd.DataFrame) -> list[str]:
         r = intent.read(message, df)
     except Exception:  # noqa: BLE001
         return []
-    out = [r.period["label"]] if r.period else []
-    out += [f"only records where {c} applies" for c in r.restrict]
-    return out
+    out = [r.period.get("label") or "the period named"] if r.period and not r.period.get("unreadable") else []
+    out += intent.stated_filters_text(r)
+    if r.share_of:
+        out.append(f"a share of {r.share_of}'s total")
+    return list(dict.fromkeys(out))
 
 
 def composite(message: str, df: pd.DataFrame | None = None) -> bool:
     if df is not None:
         try:
             r = intent.read(message, df)
-            if r.per or r.restrict or r.period or (r.compared and r.measures):
+            # (a stated threshold alone does not route here: the calculator applies thresholds already, and the
+            # verifier sends anything that ignored one to Silt's own program)
+            if r.per or r.restrict or r.period or (r.compared and r.measures) or r.restrict_not or r.share_of:
                 return True             # a per-unit figure, a restricted subset or a relative period: single-purpose
                                         # paths miss these
             roles = semantics.profile(df)["roles"]

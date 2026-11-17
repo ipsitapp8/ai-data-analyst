@@ -75,8 +75,13 @@ def column_role(df: pd.DataFrame, c) -> dict:
             return {"column": c, "role": "year", "confidence": 0.9 if t & {"year", "yr"} else 0.6,
                     "evidence": ["integers within 1800–2100"]}
         countish = bool(t & {"n", "num", "count", "qty", "quantity", "items", "units", "total", "visits", "calls"})
+        if integral and not countish and _code_named(c):
+            # customer_id, zip_code, order_no: a label written in digits. It repeats (many orders per customer), so it
+            # is not unique per row, but its values are still names -- never quantities to add or average
+            return {"column": c, "role": "identifier", "confidence": 0.8,
+                    "evidence": ["named like an identifier or code; whole numbers"], "repeats": bool(nu < 0.95 * n)}
         if integral and nu > 0.95 * n and not countish and (t & {"id", "code", "no", "number", "ref", "key"}
-                                                            or x.is_monotonic_increasing):
+                                                            or (x.is_monotonic_increasing and not t & _AMOUNT_WORDS)):
             return {"column": c, "role": "identifier", "confidence": 0.85, "evidence": ["unique per row"]}
         if nu == 2 and integral:         # two integer codes (0/1, 1/2) are a flag, not a quantity
             vals = sorted(x.unique())
@@ -126,6 +131,78 @@ def column_role(df: pd.DataFrame, c) -> dict:
         return {"column": c, "role": "free_text", "confidence": 0.7, "evidence": ["long text"]}
     return {"column": c, "role": "category", "confidence": 0.8 if nu <= 30 else 0.5,
             "evidence": [f"{nu} repeated labels"]}
+
+
+_CODE_TOKENS = {"id", "ids", "code", "codes", "zip", "zipcode", "postcode", "postal", "pincode", "pin", "sku", "ref",
+                "key", "uuid", "guid", "phone", "mobile", "ssn", "isbn", "barcode"}
+_NUMBER_TOKENS = {"no", "number", "num", "nbr"}
+
+
+def _code_named(c) -> bool:
+    """customer_id, zip_code, sku -- or order_no / invoice_number (a number-word that ends a longer name; "number_of_
+    orders" and a bare "number" are quantities)."""
+    parts = [x for x in re.split(r"[^a-z0-9]+", _words(str(c)).lower()) if x]
+    if set(parts) & _CODE_TOKENS:
+        return True
+    return len(parts) >= 2 and parts[-1] in _NUMBER_TOKENS
+
+
+# Per-record levels: adding them up over records gives no quantity ("total unit price", "total rating"). Money and
+# durations (salary, fee, hours) do add up, so they are not here.
+_LEVEL_TOKENS = {"rate", "rates", "pct", "percent", "percentage", "ratio", "share", "margin", "score", "scores",
+                 "rating", "ratings", "price", "avg", "average", "mean", "median", "age", "temperature", "temp", "csat",
+                 "nps", "satisfaction", "grade", "rank", "ranking", "latitude", "longitude", "lat", "lon", "lng",
+                 "index", "probability", "likelihood", "proportion"}
+_FN_WORD = {"sum": "total", "mean": "average", "avg": "average", "median": "median", "min": "minimum", "max": "maximum",
+            "std": "standard deviation", "var": "variance"}
+
+
+def additive(df: pd.DataFrame, c, role: dict | None = None) -> bool:
+    """Can the column's values be added up over records into a meaningful total?"""
+    role = role or column_role(df, c)
+    if role["role"] == "flag":
+        return True                                     # a 0/1 flag adds up to a count of records
+    if role["role"] == "year" or (role["role"] == "identifier" and _code_named(c)):
+        return False
+    # judged from the name: values alone (numbers between 0 and 1, a column unique per row) do not make a total
+    # meaningless
+    return not (_tokens(c) & _LEVEL_TOKENS)
+
+
+def aggregation_problem(df: pd.DataFrame, c, fn: str, role: dict | None = None) -> str | None:
+    """Why `fn` of column `c` is not a quantity -- or None when it is. One rule for every tool, program step and
+    calculation: an identifier or code is counted, counted distinctly, filtered on or shown, never added or averaged;
+    a per-record level (a price, a rate, a rating, a percentage) is averaged, never summed."""
+    if c is None or c not in df.columns or fn in ("count", "count_distinct", "nunique"):
+        return None
+    role = role or column_role(df, c)
+    word = _FN_WORD.get(fn, fn)
+    # refused only on evidence from the name AND the values (customer_id, zip_code: whole numbers named as a code);
+    # a column that merely happens to be unique per row in a small table is not refused
+    if role["role"] == "identifier" and kind_of(df[c]) == "numeric" and _code_named(c):
+        return (f"`{c}` identifies records (an identifier or code written in digits), so its {word} is not a quantity. "
+                f"I can count its distinct values ({int(df[c].nunique()):,}), count records, or filter and group by it.")
+    if fn == "sum" and role["role"] != "flag" and kind_of(df[c]) == "numeric" and not additive(df, c, role):
+        return (f"`{c}` is a per-record level (a rate, price, score or percentage), so adding it up over records gives "
+                f"no meaningful total. I can give its average, median, minimum or maximum instead"
+                + (" — or a total of an amount built from it (for example price × quantity)."
+                   if _tokens(c) & {"price", "rate"} else "."))
+    return None
+
+
+def measure_options(df: pd.DataFrame, limit: int = 8) -> list:
+    """Columns to offer when Silt asks "which value?": numbers that measure something -- never an identifier or code,
+    a year, a yes/no flag, a constant or a clock time. (Identifiers stay available for counting and grouping.)"""
+    from app.analyst.ml import _is_identifier  # noqa: PLC0415
+    out = []
+    for c in df.columns:
+        if kind_of(df[c]) != "numeric":
+            continue
+        r = column_role(df, c)
+        if r["role"] in ("identifier", "year", "flag", "constant", "time_of_day") or _is_identifier(str(c), df[c]):
+            continue
+        out.append(c)
+    return out[:limit]
 
 
 def profile(df: pd.DataFrame) -> dict:
@@ -219,6 +296,42 @@ def _flag_words(message: str, df: pd.DataFrame, named: set, out: dict) -> None:
         (out["rewrite"].append((hit, cands[0])) if len(cands) == 1 else out["ambiguous"].append((hit, cands)))
 
 
+# Everyday words for the money a business takes in. They name a column only when the data has exactly one money
+# total that can carry that meaning -- a column named after one of these words, or else a generically named money
+# total (amount, value, total, gross ...) whose name says nothing different. A column named for another kind of money
+# (cost, price, discount, salary, tax ...) is never read as revenue.
+MONEY_IN_WORDS = {"revenue", "revenues", "sales", "turnover", "takings", "income", "gmv", "money", "earnings"}
+_MONEY_IN_TOKENS = {"revenue", "revenues", "sales", "sale", "turnover", "takings", "income", "gmv"}
+_MONEY_GENERIC = {"amount", "amt", "value", "total", "gross", "net", "subtotal", "sum", "paid", "payment", "billed",
+                  "invoiced", "bill", "spend", "spent", "price"}
+_MONEY_OTHER = {"cost", "costs", "expense", "expenses", "discount", "discounts", "tax", "taxes", "fee", "fees", "salary",
+                "salaries", "wage", "wages", "pay", "budget", "refund", "refunds", "profit", "margin", "commission",
+                "shipping", "freight", "target", "quota", "forecast", "units", "unit", "qty", "quantity", "count",
+                "rate", "pct", "percent", "tip", "tips", "deposit", "balance", "credit", "debt", "loan", "rent"}
+
+
+def money_in_columns(df: pd.DataFrame) -> tuple[list, str]:
+    """(candidate columns for "revenue / sales / money", how they were chosen). One candidate: the reading is used
+    and stated. Several: Silt asks. None: the data has no such measure."""
+    roles = {c: column_role(df, c) for c in df.columns if kind_of(df[c]) == "numeric"}
+    usable = [c for c, r in roles.items() if r["role"] in ("amount", "measurement", "count")
+              and not (_tokens(c) & _MONEY_OTHER) and not (_tokens(c) & {"id", "code", "no", "zip"})]
+    named = [c for c in usable if _tokens(c) & _MONEY_IN_TOKENS]
+    if named:
+        return named, "named after it"
+    generic = [c for c in usable if _tokens(c) & _MONEY_GENERIC and roles[c]["role"] in ("amount", "measurement")]
+    return generic, "the only money total in this data whose name says nothing else"
+
+
+def _is_value_word(df: pd.DataFrame, w: str) -> bool:
+    """`w` is a value of a text column ("Sales" the department): a selection of records, not a measure."""
+    for c in df.columns:
+        if kind_of(df[c]) == "categorical" and df[c].nunique() <= 5000:
+            if df[c].dropna().astype(str).str.strip().str.lower().isin({w, w.rstrip("s")}).any():
+                return True
+    return False
+
+
 def measure_words(message: str, df: pd.DataFrame) -> dict:
     """Measure words in a message that no column is named after, mapped through MEASURE_WORDS to the numeric columns
     that measure it: {"rewrite": [(word, column)], "ambiguous": [(word, [columns])]}. One candidate is used (and the
@@ -238,5 +351,29 @@ def measure_words(message: str, df: pd.DataFrame) -> dict:
                 break
             (out["rewrite"].append((w, cands[0])) if len(cands) == 1 else out["ambiguous"].append((w, cands)))
             break
+    _money_words(message, df, named, out)
     _flag_words(message, df, named, out)
     return out
+
+
+def _money_words(message: str, df: pd.DataFrame, named: set, out: dict) -> None:
+    from app.analyst import metrics
+    from app.analyst.data import find_column
+    low = message.lower()
+    if metrics.recognise(message) is not None:
+        return                          # "revenue per order", "profit": a defined metric reads its own inputs
+    for w in sorted(MONEY_IN_WORDS, key=len, reverse=True):
+        if not re.search(rf"\b{w}\b", low):
+            continue
+        if find_column(df, w) or any(_forms(w) & _tokens(c) for c in df.columns) or _is_value_word(df, w):
+            return                      # a column is named after it, or it is a value ("the Sales department")
+        cands, _ = money_in_columns(df)
+        if set(cands) & named:
+            return                      # the column is named in the question too
+        if len(cands) == 1:
+            out["rewrite"].append((w, cands[0]))
+        elif len(cands) > 1:
+            out["ambiguous"].append((w, cands))
+        # none: no column is read as it -- the word is left for a defined metric (revenue = units x price) or a
+        # clarification; it is never mapped to an unrelated measure
+        return

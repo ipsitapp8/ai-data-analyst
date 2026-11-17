@@ -20,7 +20,10 @@ MAX_TREND_POINTS = 60
 
 
 def _id_like(name: str, s: pd.Series) -> bool:
-    return ml._is_identifier(name, s)  # noqa: SLF001 - one definition of "identifier" for the whole analyst
+    if ml._is_identifier(name, s):  # noqa: SLF001 - one definition of "identifier" for the whole analyst
+        return True
+    from app.analyst.semantics import column_role  # noqa: PLC0415
+    return kind_of(s) == "numeric" and column_role(s.to_frame(name), name)["role"] == "identifier"
 
 
 def column_summary(df: pd.DataFrame, c: str) -> dict:
@@ -171,6 +174,10 @@ def understand(df: pd.DataFrame, filename: str | None = None) -> dict:
         "missing_cells": int(df.isna().sum().sum()),
         "column_details": cols, "quality_issues": quality_issues(df, cols),
         "business_roles": roles["roles"], "possible_targets": targets, "suggested_questions": suggestions(df, targets),
+        # how the file was read: row index set aside, rows realigned, numbers written as text (app/analyst/
+        # schema_profile.py, app/ingest.py) -- stated with the overview, never applied silently
+        "read_notes": [n for n in ((df.attrs.get("ingestion") or {}).get("notes") or [])
+                       if not re.match(r"Column \d+ had no name", n)],
     }
 
 
@@ -200,10 +207,13 @@ def outliers(df: pd.DataFrame, column: str | None = None) -> dict:
         lo, hi = q1 - IQR_K * iqr, q3 + IQR_K * iqr
         mask = (s < lo) | (s > hi)
         n = int(mask.sum())
-        if n:
+        sd = float(x.std(ddof=1)) if len(x) > 1 else 0.0
+        z_n = int(((s - x.mean()).abs() > 3 * sd).sum()) if sd > 0 else 0       # |z| > 3, the z-score rule
+        if n or z_n:
             ex = s[mask].sort_values(key=lambda v: (v - x.median()).abs(), ascending=False).head(5)
             found.append({"column": c, "count": n, "pct": float(n / len(x) * 100), "low": lo, "high": hi,
-                          "median": float(x.median()),
+                          "median": float(x.median()), "z_count": z_n, "z_low": float(x.mean() - 3 * sd),
+                          "z_high": float(x.mean() + 3 * sd),
                           "examples": [{"row": int(i) + 1, "value": float(v)} for i, v in ex.items()]})
     found.sort(key=lambda o: -o["pct"])
     return {"method": "1.5 × interquartile range (IQR) rule", "checked": cols, "columns": found}
@@ -229,14 +239,25 @@ def trend(df: pd.DataFrame, value: str, date: str | None = None, agg: str = "sum
     points = [{"period": str(k), "value": float(v)} for k, v in g.items()][-MAX_TREND_POINTS:]
     if len(points) < 2:
         raise ml.Unsuitable("Fewer than two time periods have data, so there is no trend to show.")
-    first, last = points[0]["value"], points[-1]["value"]
-    peak = max(points, key=lambda p: p["value"])
-    low = min(points, key=lambda p: p["value"])
-    x = np.arange(len(points), dtype=float)
-    y = np.array([p["value"] for p in points])
+    from app.analyst.followup import _partial_note, partial_periods
+    partial = {}
+    if agg != "avg" and freq != "Y" or (agg != "avg" and freq == "Y"):
+        partial = {p: x for p, x in partial_periods(df[date], freq).items() if any(q["period"] == p for q in points)}
+    for q in points:
+        if q["period"] in partial:
+            q["partial"] = True
+    whole = [q for q in points if not q.get("partial")]
+    if len(whole) < 2:
+        whole, partial = points, {}
+    first, last = whole[0]["value"], whole[-1]["value"]
+    peak = max(whole, key=lambda p: p["value"])
+    low = min(whole, key=lambda p: p["value"])
+    x = np.array([points.index(q) for q in whole], dtype=float)
+    y = np.array([p["value"] for p in whole])
     slope = float(np.polyfit(x, y, 1)[0])
     return {"value": value, "date": date, "aggregation": agg, "frequency": {"M": "month", "Q": "quarter", "W": "week", "D": "day", "Y": "year"}[freq],
-            "points": points, "first": points[0], "last": points[-1], "change": last - first,
+            "points": points, "whole_points": whole, "partial_note": _partial_note(partial, freq, used=True) if partial else None,
+            "first": whole[0], "last": whole[-1], "change": last - first,
             "change_pct": float((last - first) / abs(first) * 100) if first else None,
             "peak": peak, "low": low, "slope_per_period": slope,
             "note": "A trend describes what happened; it does not by itself predict what will happen next."}
