@@ -118,6 +118,8 @@ app.include_router(analyst_router)
 def on_startup() -> None:
     setup_logging()
     init_db()
+    from app import stored_files
+    stored_files.restore_missing()
     # Recovery first, then workers: jobs cut off by the last shutdown are back
     # in the queue (or failed, if out of attempts) before anything new starts.
     jobs.start_workers()

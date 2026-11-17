@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import (
+    LargeBinary,
     JSON,
     BigInteger,
     Boolean,
@@ -916,4 +917,17 @@ class InvestigationAnalysis(Base):
     hypothesis_keys_json = Column(JSONVariant, default=list)
     requested_by = Column(String, nullable=False, default="baseline")  # baseline|hypothesis|follow_up
     duration_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class StoredFile(Base):
+    """A copy of an uploaded file's bytes, keyed by the path the dataset row points at.
+    The disk copy is what the analysis reads; this is only what puts it back when the disk
+    was wiped (a redeploy or restart on a host without a persistent disk)."""
+
+    __tablename__ = "stored_files"
+
+    filepath = Column(String, primary_key=True)
+    content = Column(LargeBinary, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=utcnow)
