@@ -85,3 +85,37 @@ def test_landing_core_is_a_shader_with_a_graceful_fallback_and_layered_orbits():
     assert html.count('<canvas id=') == 3, "back orbits, the shader, then front orbits: beads pass behind and in front of the form"
     assert "if (glOK) drawGL(" in html and "else {" in html, "without WebGL a soft 2D orb is drawn instead"
     assert "glScale *= .85" in html, "the shader's resolution steps down if frames run long"
+
+
+def test_signing_in_lands_on_home_whichever_page_the_tab_was_on(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    import auth
+
+    moves, state = [], {}
+    monkeypatch.setattr(auth.st, "session_state", state, raising=False)
+    monkeypatch.setattr(auth.st, "switch_page", lambda target: moves.append(target))
+
+    def at(url):
+        monkeypatch.setattr(auth.st, "context", NS(url=url), raising=False)
+
+    at("http://x.test/Analyses")
+    auth.go_home_if_asked()
+    assert moves == [], "no explicit sign-in step, so a refresh or a deep link stays where it is"
+
+    state["_go_home"] = True
+    auth.go_home_if_asked()
+    assert moves == ["Home.py"] and "_go_home" not in state, "moved once, and the flag is used up"
+
+    auth.go_home_if_asked()
+    assert moves == ["Home.py"], "not again on the next run"
+
+    state["_go_home"] = True
+    at("http://x.test/")
+    auth.go_home_if_asked()
+    assert moves == ["Home.py"], "a tab already on Home stays put"
+
+    state["_go_home"] = True
+    monkeypatch.setattr(auth.st, "context", None, raising=False)
+    auth.go_home_if_asked()
+    assert moves == ["Home.py"], "if the address cannot be read, nothing moves"

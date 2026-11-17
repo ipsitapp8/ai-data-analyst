@@ -953,6 +953,7 @@ def _require_team_onboarding() -> None:
                         try:
                             accept_invite(inv["team_id"])
                             invalidate_workspaces_cache()
+                            st.session_state["_go_home"] = True
                             st.rerun()
                         except ApiError as e:
                             st.error(f"Could not accept: {e}")
@@ -974,6 +975,7 @@ def _require_team_onboarding() -> None:
                     st.session_state["active_community_id"] = community["id"]
                     st.session_state["active_team_id"] = team["id"]
                     invalidate_workspaces_cache()
+                    st.session_state["_go_home"] = True
                     st.rerun()
                 except ApiError as e:
                     st.error(f"Could not create workspace: {e}")
@@ -989,6 +991,7 @@ def _require_team_onboarding() -> None:
                 invalidate_workspaces_cache()
                 st.session_state["active_team_id"] = result["team_id"]
                 st.session_state["active_community_id"] = result["community_id"]
+                st.session_state["_go_home"] = True
                 st.rerun()
             except ApiError as e:
                 st.error(f"Could not use that invitation: {e}")

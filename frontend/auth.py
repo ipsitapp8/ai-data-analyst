@@ -216,6 +216,7 @@ def _sign_in_with_google_if_ready() -> bool:
     st.session_state[_USER_SESSION_KEY] = result["user"]
     st.session_state["auth_token"] = result["access_token"]
     st.session_state["_set_cookie"] = result["access_token"]
+    st.session_state["_go_home"] = True
     return True
 
 
@@ -232,6 +233,23 @@ def logout() -> None:
     st.session_state["_clear_cookie"] = True
 
 
+def go_home_if_asked() -> None:
+    """After an explicit sign-in or workspace step, land on Home whichever page the browser tab was on.
+
+    Signing in re-runs the page the tab already had open, so someone who logged out from Analyses came back
+    to Analyses. The flag is set only by those explicit steps (never by a page refresh or a deep link), is
+    used once, and is ignored when the tab is already on Home."""
+    if not st.session_state.pop("_go_home", None):
+        return
+    try:
+        from urllib.parse import urlparse
+        path = urlparse(str(getattr(st.context, "url", "") or "")).path.strip("/")
+    except Exception:  # noqa: BLE001 - if the address cannot be read, stay where we are
+        return
+    if path:
+        st.switch_page("Home.py")
+
+
 def require_login() -> None:
     """Per-user login/signup, layered on top of require_password()'s shared
     deployment gate. Halts rendering with a Login/Sign up form until the
@@ -245,6 +263,7 @@ def require_login() -> None:
         pending = st.session_state.pop("_set_cookie", None)
         if pending:
             _write_cookie(pending)
+        go_home_if_asked()
         return
 
     if _restore_session_from_cookie():
@@ -358,6 +377,7 @@ def require_login() -> None:
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
                     st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state["_go_home"] = True
                     st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:
@@ -379,6 +399,7 @@ def require_login() -> None:
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
                     st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state["_go_home"] = True
                     st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:
