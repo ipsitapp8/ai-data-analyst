@@ -18,7 +18,7 @@ import pytest
 from app.analyst import explain, orchestrator, scope, semantics
 from app.analyst.data import load_table
 
-from test_analyst_stage1_guards import TODAY, _creators, _orders, _shifts, _tickets  # noqa: F401
+from test_analyst_stage1_guards import TODAY, _creators, _orders, _shifts, _tickets, pinned_clock  # noqa: F401
 
 
 @pytest.fixture(scope="module")

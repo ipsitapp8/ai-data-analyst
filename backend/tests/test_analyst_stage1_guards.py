@@ -26,6 +26,14 @@ from app.analyst import intent, orchestrator, semantics
 from app.analyst.data import load_table
 
 TODAY = pd.Timestamp("2026-11-17")
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock(monkeypatch):
+    """The seeded data is dated around TODAY, so the code under test must see that day as today. Without this
+    the 'last 7 days' style questions drift with the real clock and start failing the day after TODAY."""
+    monkeypatch.setattr("app.analyst.scope.today", lambda: TODAY)
+
 AMBITION = os.path.join(os.path.dirname(__file__), "..", "..", "Ambition Box.csv")
 
 

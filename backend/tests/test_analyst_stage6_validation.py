@@ -21,7 +21,7 @@ from scipy import stats
 from app.analyst import followup, intent, nl_planner, orchestrator, persist, planner, scope, tools, verify
 from app.analyst.data import load_table
 
-from test_analyst_stage1_guards import TODAY, _creators, _orders, _shifts, _tickets  # noqa: F401
+from test_analyst_stage1_guards import TODAY, _creators, _orders, _shifts, _tickets, pinned_clock  # noqa: F401
 
 
 @pytest.fixture(scope="module")
