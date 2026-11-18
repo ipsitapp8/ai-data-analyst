@@ -79,7 +79,7 @@ with main_col:
                        "Periods are read against the dataset's own dates.")
             first, second = numeric[0].replace("_", " "), (numeric[1] if len(numeric) > 1 else numeric[0]).replace("_", " ")
             examples = [f"Why did {first} drop in the last two months?", f"What changed in {first} last month?",
-                        f"Why did {second} move in the last 14 days?"]
+                        f"Why did {second} move recently?"]
             for i, (box, text) in enumerate(zip(st.columns(3), examples)):
                 box.button(text, key=f"iv_ex_{i}", on_click=_use_example, args=(text,), use_container_width=True)
             too_short = len((why or "").strip()) < 8

@@ -42,9 +42,9 @@
 .stApp .stMain:has(.iv-scope) [data-baseweb="select"]:focus-within > div { border-color: var(--iv-amber) !important; box-shadow: 0 0 0 3px var(--iv-amber-soft) !important; }
 
 /* example prompts: quiet chips */
-.stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button {
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button, .stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button[kind="secondary"] {
   background: transparent !important; border: 1px solid var(--iv-line-2) !important; border-radius: 4px !important; box-shadow: none !important; color: var(--iv-ink-2) !important;
-  font: 400 12.5px/1.3 var(--iv-sans) !important; min-height: 0 !important; padding: 6px 10px !important; text-align: left !important; }
+  font: 400 12.5px/1.35 var(--iv-sans) !important; min-height: 0 !important; height: auto !important; padding: 9px 12px !important; text-align: left !important; justify-content: flex-start !important; }
 .stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button p { font: inherit !important; color: inherit !important; }
 .stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button:hover { border-color: var(--iv-amber) !important; color: var(--iv-ink) !important; background: var(--iv-amber-soft) !important; }
 
@@ -63,7 +63,7 @@
 .stApp .stMain:has(.iv-scope) button[kind="primary"]:hover { background: var(--iv-amber-hi) !important; border-color: var(--iv-amber-hi) !important; }
 .stApp .stMain:has(.iv-scope) button[kind="primary"]:disabled { background: transparent !important; color: var(--iv-ink-3) !important; border-color: var(--iv-line-2) !important; opacity: 1 !important; }
 .stApp .stMain:has(.iv-scope) button[kind="primary"] p { color: inherit !important; font: inherit !important; }
-.stApp .stMain:has(.iv-scope) button[kind="secondary"]:not([class*="iv_ex"]), .stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button[kind="secondary"] {
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button[kind="secondary"] {
   background: transparent !important; color: var(--iv-ink) !important; border: 1px solid rgba(242,239,231,.38) !important; border-radius: 4px !important; box-shadow: none !important;
   font: 600 13.5px/1 var(--iv-sans) !important; min-height: 40px !important; padding: 0 18px !important; }
 .stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button[kind="secondary"]:hover { border-color: var(--iv-amber) !important; color: var(--iv-amber-hi) !important; background: transparent !important; }
@@ -89,3 +89,15 @@
 /* tabs and alerts inside the results keep the site look but pick up the warm accent */
 .stApp .stMain:has(.iv-scope) .stTabs [data-baseweb="tab-highlight"] { background-color: var(--iv-amber) !important; }
 .stApp .stMain:has(.iv-scope) [data-testid="stAlert"] { border-radius: 6px !important; }
+
+.stApp .stMain:has(.iv-scope) h1.iv-title, .stApp .stMain:has(.iv-scope) h1.iv-title * { font-family: var(--iv-serif) !important; font-weight: 500 !important; -webkit-text-fill-color: currentColor !important; background: none !important; }
+.stApp .stMain:has(.iv-scope) h1.iv-title em { font-style: italic !important; color: var(--iv-amber-hi) !important; -webkit-text-fill-color: var(--iv-amber-hi) !important; }
+
+/* 4. no site glow behind this page: one plain deep-ink background */
+.stApp:has(.iv-scope)::before, .stApp:has(.iv-scope)::after { display: none !important; content: none !important; background: none !important; }
+html:has(.iv-scope), body:has(.iv-scope), .stApp:has(.iv-scope), .stApp:has(.iv-scope) [data-testid="stAppViewContainer"] { background: #0a0918 !important; }
+
+/* 3. method-card buttons stay on one line */
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button { white-space: nowrap !important; padding: 0 14px !important; font-size: 13px !important; width: auto !important; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button p { white-space: nowrap !important; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button, .stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button[kind="secondary"] { min-height: 66px !important; align-items: flex-start !important; }
