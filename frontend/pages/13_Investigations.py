@@ -2,18 +2,31 @@
 price versus volume, tested hypotheses, and what could not be established."""
 from __future__ import annotations
 
+from pathlib import Path as _Path
+
 import pandas as pd
 import streamlit as st
 
 from api_client import (ApiError, ask_investigation, create_hypothesis_investigation, create_investigation, get_investigation,
                         get_investigation_statistics, list_datasets, list_investigations, list_metrics)
-from style.theme import (DASHBOARD_TOKENS, badge, esc, figure_from_json, html, page_header, page_setup, plot, render_sidebar,
+from style.theme import (DASHBOARD_TOKENS, badge, esc, figure_from_json, html, page_setup, plot, render_sidebar,
                          require_active_team)
 
 page_setup("Root cause")
 render_sidebar("investigations")
 require_active_team("Root-cause investigations")
-page_header("Root-cause investigations", "Locate where a metric changed. Descriptive evidence, clearly separated from cause.")
+_FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+          '<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500'
+          '&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">')
+_css = (_Path(__file__).resolve().parents[1] / "style" / "investigations.css").read_text(encoding="utf-8")
+# one line, because markdown ends an HTML block at the first blank line
+st.markdown(_FONTS + "<style>" + " ".join(line.strip() for line in _css.splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
+html('<div class="iv-scope"></div>'
+     '<div class="iv-eyebrow">Root cause</div>'
+     '<h1 class="iv-title">Where did the number <em>move</em>?</h1>'
+     '<p class="iv-lede">Locate where a metric changed between two periods. The evidence is descriptive and is kept clearly '
+     'separate from cause.</p>'
+     '<div class="iv-rule"></div>')
 
 try:
     datasets = list_datasets()
@@ -23,7 +36,25 @@ except ApiError as e:
     st.error(f"Backend unreachable: {e}")
     st.stop()
 
-with st.expander("New investigation", expanded=not listing["investigations"]):
+
+def _use_example(text: str) -> None:
+    st.session_state["inv_question"] = text
+
+
+main_col, aside_col = st.columns([1.75, 1], gap="large")
+
+with aside_col:
+    html('<div class="iv-aside"><h4>How an investigation works</h4>'
+         '<div class="iv-step"><b>1</b><div><span>Split the time range</span>'
+         '<p>The metric is compared between an earlier and a later period, taken like for like.</p></div></div>'
+         '<div class="iv-step"><b>2</b><div><span>Find where it moved</span>'
+         '<p>Segments such as region, product or channel are ranked by how much of the change they carry.</p></div></div>'
+         '<div class="iv-step"><b>3</b><div><span>Test the explanations</span>'
+         '<p>Each candidate is checked against the data, and what could not be established is said plainly.</p></div></div>'
+         '<div class="iv-note"><b>Descriptive, not causal.</b> An investigation shows where a change happened. '
+         'It never claims why.</div></div>')
+
+with main_col:
     if not datasets:
         st.info("Upload a dataset first.")
     else:
@@ -42,71 +73,82 @@ with st.expander("New investigation", expanded=not listing["investigations"]):
             if not categorical:
                 st.info("This dataset has no categorical column (region, product, channel). The change can be measured and "
                         "tested, but not located in any segment.")
-            html('<div class="ds-section-title">Ask why</div>')
-            why = st.text_area("Question", key="inv_question", height=70,
-                               placeholder="Why did revenue drop in the last two months?", label_visibility="collapsed")
+            why = st.text_area("What do you want to understand?", key="inv_question", height=110,
+                               placeholder="Why did revenue drop in the last two months?")
             st.caption("Name a numeric column and, if you like, a period: “last month”, “the last 14 days”, “in March”. "
                        "Periods are read against the dataset's own dates.")
+            first, second = numeric[0].replace("_", " "), (numeric[1] if len(numeric) > 1 else numeric[0]).replace("_", " ")
+            examples = [f"Why did {first} drop in the last two months?", f"What changed in {first} last month?",
+                        f"Why did {second} move recently?"]
+            for i, (box, text) in enumerate(zip(st.columns(3), examples)):
+                box.button(text, key=f"iv_ex_{i}", on_click=_use_example, args=(text,), use_container_width=True)
             too_short = len((why or "").strip()) < 8
-            if st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short):
+
+            st.write("")
+            card_a, card_b = st.columns(2, gap="medium")
+            with card_a:
+                with st.container(key="iv_card_a"):
+                    html('<div class="iv-k">01 · From the data</div><div class="iv-t">Compute it directly</div>')
+                    st.caption("Investigate uses no AI model: every figure is computed from your data.")
+                    ask_clicked = st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short)
+            with card_b:
+                with st.container(key="iv_card_b"):
+                    html('<div class="iv-k">02 · With hypotheses</div><div class="iv-t">Test competing explanations</div>')
+                    st.caption("A model proposes competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
+                    hyp_clicked = st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short)
+            if ask_clicked or hyp_clicked:
                 try:
-                    out = ask_investigation(ds["id"], why.strip())
+                    start = ask_investigation if ask_clicked else create_hypothesis_investigation
+                    out = start(ds["id"], why.strip())
                     st.session_state["active_question_id"] = out["question_id"]
                     st.session_state["investigation_id"] = out["investigation_id"]
                     st.switch_page("pages/3_Analyses.py")
                 except ApiError as e:
                     st.error(str(e))
-            st.caption("The button above uses no AI model: every figure is computed from your data. The one below also has a "
-                       "model propose competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
-            if st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short):
-                try:
-                    out = create_hypothesis_investigation(ds["id"], why.strip())
-                    st.session_state["active_question_id"] = out["question_id"]
-                    st.session_state["investigation_id"] = out["investigation_id"]
-                    st.switch_page("pages/3_Analyses.py")
-                except ApiError as e:
-                    st.error(str(e))
-            html('<div class="ds-section-title" style="margin-top:14px;">Or specify the metric yourself (no model)</div>')
-            usable = [m for m in metrics if m.get("dataset_id") in (None, ds["id"])]
-            source = st.radio("Metric", ["A column", "An approved metric", "A formula"], horizontal=True, key="inv_src")
-            formula, label = "", ""
-            if source == "A column" and numeric:
-                agg = st.selectbox("Aggregation", ["sum", "avg", "count", "median"], key="inv_agg")
-                col = st.selectbox("Column", numeric, key="inv_col")
-                formula, label = f'{agg}("{col}")', f"{agg.title()} of {col}"
-            elif source == "An approved metric":
-                if usable:
-                    m = st.selectbox("Approved metric", usable, format_func=lambda m: f"{m['name']} = {m['formula']}", key="inv_metric")
-                    formula, label = m["formula"], m["name"]
+
+            st.write("")
+            with st.expander("Or define the metric yourself (no model)"):
+                usable = [m for m in metrics if m.get("dataset_id") in (None, ds["id"])]
+                source = st.radio("Metric", ["A column", "An approved metric", "A formula"], horizontal=True, key="inv_src")
+                formula, label = "", ""
+                if source == "A column" and numeric:
+                    ca, cc = st.columns(2)
+                    agg = ca.selectbox("Aggregation", ["sum", "avg", "count", "median"], key="inv_agg")
+                    col = cc.selectbox("Column", numeric, key="inv_col")
+                    formula, label = f'{agg}("{col}")', f"{agg.title()} of {col}"
+                elif source == "An approved metric":
+                    if usable:
+                        m = st.selectbox("Approved metric", usable, format_func=lambda m: f"{m['name']} = {m['formula']}", key="inv_metric")
+                        formula, label = m["formula"], m["name"]
+                    else:
+                        st.caption("No approved metric applies to this dataset. Define one on the Semantic layer page.")
                 else:
-                    st.caption("No approved metric applies to this dataset. Define one on the Semantic layer page.")
-            else:
-                formula = st.text_input("Formula", placeholder="sum(revenue) / sum(units)", key="inv_formula")
-                label = st.text_input("Label", key="inv_label")
-            c1, c2 = st.columns(2)
-            with c1:
-                time_col = st.selectbox("Date column", time_cols, key="inv_time")
-            with c2:
-                dims = st.multiselect("Dimensions to examine (empty = automatic)", categorical, key="inv_dims")
-            manual = st.checkbox("Choose the two periods myself (otherwise the time range is split at its midpoint)", key="inv_manual")
-            pa = pb = None
-            if manual:
-                p1, p2, p3, p4 = st.columns(4)
-                a0 = p1.date_input("Earlier period: from", key="inv_a0")
-                a1 = p2.date_input("Earlier period: before", key="inv_a1")
-                b0 = p3.date_input("Later period: from", key="inv_b0")
-                b1 = p4.date_input("Later period: to", key="inv_b1")
-                pa, pb = [a0.isoformat(), a1.isoformat()], [b0.isoformat(), b1.isoformat()]
-            if st.button("Investigate  →", type="primary", key="inv_go", disabled=not formula):
-                try:
-                    out = create_investigation({"dataset_id": ds["id"], "formula": formula, "label": label,
-                                                "time_column": time_col, "dimensions": dims or None,
-                                                "period_a": pa, "period_b": pb})
-                    st.session_state["active_question_id"] = out["question_id"]
-                    st.session_state["investigation_id"] = out["investigation_id"]
-                    st.switch_page("pages/3_Analyses.py")
-                except ApiError as e:
-                    st.error(str(e))
+                    formula = st.text_input("Formula", placeholder="sum(revenue) / sum(units)", key="inv_formula")
+                    label = st.text_input("Label", key="inv_label")
+                c1, c2 = st.columns(2)
+                with c1:
+                    time_col = st.selectbox("Date column", time_cols, key="inv_time")
+                with c2:
+                    dims = st.multiselect("Dimensions to examine (empty = automatic)", categorical, key="inv_dims")
+                manual = st.checkbox("Choose the two periods myself (otherwise the time range is split at its midpoint)", key="inv_manual")
+                pa = pb = None
+                if manual:
+                    p1, p2, p3, p4 = st.columns(4)
+                    a0 = p1.date_input("Earlier period: from", key="inv_a0")
+                    a1 = p2.date_input("Earlier period: before", key="inv_a1")
+                    b0 = p3.date_input("Later period: from", key="inv_b0")
+                    b1 = p4.date_input("Later period: to", key="inv_b1")
+                    pa, pb = [a0.isoformat(), a1.isoformat()], [b0.isoformat(), b1.isoformat()]
+                if st.button("Investigate  →", type="primary", key="inv_go", disabled=not formula):
+                    try:
+                        out = create_investigation({"dataset_id": ds["id"], "formula": formula, "label": label,
+                                                    "time_column": time_col, "dimensions": dims or None,
+                                                    "period_a": pa, "period_b": pb})
+                        st.session_state["active_question_id"] = out["question_id"]
+                        st.session_state["investigation_id"] = out["investigation_id"]
+                        st.switch_page("pages/3_Analyses.py")
+                    except ApiError as e:
+                        st.error(str(e))
     st.caption("Asking a “why did … change?” question on the Analyses page starts an investigation automatically.")
 
 rows = listing["investigations"]

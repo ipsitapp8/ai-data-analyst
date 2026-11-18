@@ -14,7 +14,7 @@ import pytest
 from app.analyst import orchestrator
 from app.analyst.data import load_table
 
-from test_analyst_stage1_guards import TODAY, _creators, _orders, _shifts, _tickets  # noqa: F401 - same seeded data
+from test_analyst_stage1_guards import TODAY, _creators, _orders, _shifts, _tickets, pinned_clock  # noqa: F401 - same seeded data
 
 
 @pytest.fixture(scope="module")
