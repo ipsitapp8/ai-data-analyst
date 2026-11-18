@@ -1,0 +1,91 @@
+/* Root-cause page only. Every rule is scoped to a main area that contains .iv-scope, so no other page changes.
+   Direction: an analyst's workbench. Deep ink background from the site, warm off-white text, one amber accent,
+   a serif headline, mono labels, hairline rules, sharp 4-6px corners. No gradients, glow or glass. */
+.stApp .stMain:has(.iv-scope) {
+  --iv-ink: #f2efe7; --iv-ink-2: #bdb9cc; --iv-ink-3: #8c88a3;
+  --iv-line: rgba(242,239,231,.11); --iv-line-2: rgba(242,239,231,.22);
+  --iv-panel: rgba(255,255,255,.028); --iv-field: rgba(4,3,14,.55);
+  --iv-amber: #f3b24f; --iv-amber-hi: #ffc66e; --iv-amber-ink: #1d1406; --iv-amber-soft: rgba(243,178,79,.14);
+  --iv-serif: "Newsreader", "Source Serif 4", Georgia, serif; --iv-sans: "Inter", system-ui, sans-serif; --iv-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+/* the page itself, not a glass panel */
+.stApp .stMain:has(.iv-scope) [data-testid="stMainBlockContainer"] {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; max-width: 1180px !important; padding-top: 4.2rem !important; }
+
+/* header */
+.stApp .stMain:has(.iv-scope) .iv-eyebrow { font: 500 11px/1 var(--iv-mono) !important; letter-spacing: .16em !important; text-transform: uppercase !important; color: var(--iv-amber) !important; margin: 0 0 14px !important; display: flex !important; align-items: center !important; gap: 10px !important; }
+.stApp .stMain:has(.iv-scope) .iv-eyebrow::before { content: "" !important; width: 22px !important; height: 1px !important; background: var(--iv-amber) !important; }
+.stApp .stMain:has(.iv-scope) .iv-title { font: 500 46px/1.04 var(--iv-serif) !important; letter-spacing: -.022em !important; color: var(--iv-ink) !important; margin: 0 !important; }
+.stApp .stMain:has(.iv-scope) .iv-title em { font-style: italic !important; color: var(--iv-amber-hi) !important; }
+.stApp .stMain:has(.iv-scope) .iv-lede { font: 400 15.5px/1.6 var(--iv-sans) !important; color: var(--iv-ink-2) !important; max-width: 60ch !important; margin: 14px 0 0 !important; }
+.stApp .stMain:has(.iv-scope) .iv-rule { height: 1px !important; background: var(--iv-line) !important; margin: 30px 0 30px !important; }
+
+/* labels, captions, body text */
+.stApp .stMain:has(.iv-scope) [data-testid="stWidgetLabel"], .stApp .stMain:has(.iv-scope) [data-testid="stWidgetLabel"] *, .stApp .stMain:has(.iv-scope) label p {
+  font: 500 11px/1.3 var(--iv-mono) !important; letter-spacing: .09em !important; text-transform: uppercase !important; color: var(--iv-ink-3) !important; -webkit-text-fill-color: var(--iv-ink-3) !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stRadio"] label p, .stApp .stMain:has(.iv-scope) [data-testid="stCheckbox"] label p {
+  font: 400 14px/1.4 var(--iv-sans) !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--iv-ink-2) !important; -webkit-text-fill-color: var(--iv-ink-2) !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stCaptionContainer"], .stApp .stMain:has(.iv-scope) [data-testid="stCaptionContainer"] p {
+  font: 400 13px/1.55 var(--iv-sans) !important; color: var(--iv-ink-3) !important; opacity: 1 !important; }
+.stApp .stMain:has(.iv-scope) .ds-section-title { font: 500 21px/1.25 var(--iv-serif) !important; letter-spacing: -.01em !important; color: var(--iv-ink) !important; }
+
+/* fields */
+.stApp .stMain:has(.iv-scope) [data-testid="stTextAreaRootElement"], .stApp .stMain:has(.iv-scope) [data-testid="stTextInputRootElement"],
+.stApp .stMain:has(.iv-scope) [data-baseweb="select"] > div, .stApp .stMain:has(.iv-scope) [data-testid="stNumberInputRootElement"], .stApp .stMain:has(.iv-scope) [data-testid="stDateInputField"] {
+  background: var(--iv-field) !important; border: 1px solid var(--iv-line-2) !important; border-radius: 4px !important; box-shadow: none !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stTextAreaRootElement"] textarea { font: 400 18px/1.5 var(--iv-serif) !important; color: var(--iv-ink) !important; -webkit-text-fill-color: var(--iv-ink) !important; padding: 14px 16px !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stTextAreaRootElement"] textarea::placeholder { color: var(--iv-ink-3) !important; -webkit-text-fill-color: var(--iv-ink-3) !important; font-style: italic; }
+.stApp .stMain:has(.iv-scope) [data-baseweb="select"] > div, .stApp .stMain:has(.iv-scope) [data-baseweb="select"] div { font-family: var(--iv-sans) !important; font-size: 14.5px !important; color: var(--iv-ink) !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stTextAreaRootElement"]:focus-within, .stApp .stMain:has(.iv-scope) [data-testid="stTextInputRootElement"]:focus-within,
+.stApp .stMain:has(.iv-scope) [data-baseweb="select"]:focus-within > div { border-color: var(--iv-amber) !important; box-shadow: 0 0 0 3px var(--iv-amber-soft) !important; }
+
+/* example prompts: quiet chips */
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button {
+  background: transparent !important; border: 1px solid var(--iv-line-2) !important; border-radius: 4px !important; box-shadow: none !important; color: var(--iv-ink-2) !important;
+  font: 400 12.5px/1.3 var(--iv-sans) !important; min-height: 0 !important; padding: 6px 10px !important; text-align: left !important; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button p { font: inherit !important; color: inherit !important; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button:hover { border-color: var(--iv-amber) !important; color: var(--iv-ink) !important; background: var(--iv-amber-soft) !important; }
+
+/* the two methods */
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] {
+  background: var(--iv-panel) !important; border: 1px solid var(--iv-line) !important; border-radius: 6px !important; box-shadow: none !important; padding: 22px 22px 20px !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; height: 100%; min-height: 262px; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"]:hover { border-color: var(--iv-line-2) !important; }
+.stApp .stMain:has(.iv-scope) .iv-k { font: 500 10.5px/1 var(--iv-mono) !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--iv-amber) !important; margin-bottom: 10px !important; }
+.stApp .stMain:has(.iv-scope) .iv-t { font: 500 23px/1.15 var(--iv-serif) !important; letter-spacing: -.01em !important; color: var(--iv-ink) !important; margin-bottom: 6px !important; }
+
+/* buttons */
+.stApp .stMain:has(.iv-scope) button[kind="primary"], .stApp .stMain:has(.iv-scope) button[kind="primary"]:hover {
+  background: var(--iv-amber) !important; background-image: none !important; color: var(--iv-amber-ink) !important; border: 1px solid var(--iv-amber) !important; border-radius: 4px !important;
+  box-shadow: none !important; filter: none !important; font: 600 13.5px/1 var(--iv-sans) !important; min-height: 40px !important; padding: 0 18px !important; }
+.stApp .stMain:has(.iv-scope) button[kind="primary"]:hover { background: var(--iv-amber-hi) !important; border-color: var(--iv-amber-hi) !important; }
+.stApp .stMain:has(.iv-scope) button[kind="primary"]:disabled { background: transparent !important; color: var(--iv-ink-3) !important; border-color: var(--iv-line-2) !important; opacity: 1 !important; }
+.stApp .stMain:has(.iv-scope) button[kind="primary"] p { color: inherit !important; font: inherit !important; }
+.stApp .stMain:has(.iv-scope) button[kind="secondary"]:not([class*="iv_ex"]), .stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button[kind="secondary"] {
+  background: transparent !important; color: var(--iv-ink) !important; border: 1px solid rgba(242,239,231,.38) !important; border-radius: 4px !important; box-shadow: none !important;
+  font: 600 13.5px/1 var(--iv-sans) !important; min-height: 40px !important; padding: 0 18px !important; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button[kind="secondary"]:hover { border-color: var(--iv-amber) !important; color: var(--iv-amber-hi) !important; background: transparent !important; }
+.stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button[kind="secondary"]:disabled { color: var(--iv-ink-3) !important; border-color: var(--iv-line-2) !important; opacity: 1 !important; }
+.stApp .stMain:has(.iv-scope) button[kind="secondary"] p { color: inherit !important; font: inherit !important; }
+
+/* aside: how it works */
+.stApp .stMain:has(.iv-scope) .iv-aside { border-left: 1px solid var(--iv-line) !important; padding: 2px 0 2px 30px !important; }
+.stApp .stMain:has(.iv-scope) .iv-aside h4 { font: 500 11px/1 var(--iv-mono) !important; letter-spacing: .16em !important; text-transform: uppercase !important; color: var(--iv-ink-3) !important; margin: 0 0 22px !important; }
+.stApp .stMain:has(.iv-scope) .iv-step { display: grid !important; grid-template-columns: 34px 1fr !important; gap: 6px !important; padding: 0 0 22px !important; }
+.stApp .stMain:has(.iv-scope) .iv-step b { font: 500 26px/1 var(--iv-serif) !important; font-style: italic !important; color: var(--iv-amber) !important; }
+.stApp .stMain:has(.iv-scope) .iv-step span { font: 600 14px/1.35 var(--iv-sans) !important; color: var(--iv-ink) !important; display: block !important; margin-bottom: 3px !important; }
+.stApp .stMain:has(.iv-scope) .iv-step p { font: 400 13px/1.55 var(--iv-sans) !important; color: var(--iv-ink-3) !important; margin: 0 !important; }
+.stApp .stMain:has(.iv-scope) .iv-note { border-top: 1px solid var(--iv-line) !important; padding-top: 16px !important; font: 400 12.5px/1.6 var(--iv-sans) !important; color: var(--iv-ink-3) !important; }
+.stApp .stMain:has(.iv-scope) .iv-note b { color: var(--iv-ink-2) !important; font-weight: 500 !important; }
+
+/* advanced: define the metric yourself */
+.stApp .stMain:has(.iv-scope) [data-testid="stExpander"] { background: transparent !important; border: 1px solid var(--iv-line) !important; border-radius: 6px !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stExpander"] summary p { font: 500 11.5px/1.3 var(--iv-mono) !important; letter-spacing: .1em !important; text-transform: uppercase !important; color: var(--iv-ink-2) !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stExpander"] summary:hover { background: var(--iv-panel) !important; }
+
+/* tabs and alerts inside the results keep the site look but pick up the warm accent */
+.stApp .stMain:has(.iv-scope) .stTabs [data-baseweb="tab-highlight"] { background-color: var(--iv-amber) !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stAlert"] { border-radius: 6px !important; }
