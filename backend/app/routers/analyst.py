@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app import stored_files
 from app.analyst import documents, model_info, orchestrator, planner
 from app.analyst.data import load_table, schema
 from app.database import get_db
@@ -33,7 +34,7 @@ def _frame(db: Session, team: Team, dataset_id: int):
     version = latest_version(db, dataset)
     path = version.filepath if version is not None else dataset.filepath
     try:
-        return dataset, load_table(path)
+        return dataset, load_table(stored_files.resolve(path) or path)  # restores the file if the disk was wiped
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"The dataset could not be read ({type(e).__name__}).") from e
 
