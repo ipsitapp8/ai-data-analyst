@@ -1439,3 +1439,79 @@ def test_landing_page_labels_the_demo_and_keeps_every_auth_link(api):
     for needle in ('href="?view=login"', 'href="?view=signup"', "Data Matters.", "Ask Your Data", "In Plain English", "Trust Every Answer"):
         assert needle in page_html, needle
     assert page_html.count('class="lp-panel') == 3, "Planner, Analyst, Critic"
+
+
+# ------------------------------------------------- what-if, any domain (new tab) --
+
+def _students_ws(api):
+    import io
+    import numpy as np
+    import pandas as pd
+    rng = np.random.default_rng(1)
+    n = 60
+    df = pd.DataFrame({"Student ID": range(1, n + 1), "Attendance": rng.integers(50, 100, n), "Marks": rng.integers(20, 95, n)})
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    return workspace(api, buf.getvalue().encode(), "students.csv")
+
+
+def _explore(at):
+    return healthy(at)
+
+
+def test_universal_tab_detects_the_domain_and_lists_classified_questions(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    assert at.session_state["wxu_domain"] == "auto" and "What would you like to explore?" in text_of(at)
+    at.selectbox(key="wxu_ds").select_index(1).run()
+    text = text_of(_explore(at))
+    assert "Looks like Education" in text, "the detection is explained"
+    assert "Ready to simulate" in text and "Needs assumptions" in text and "Needs external data" in text
+    assert "What if the passing marks change" in text
+
+
+def test_universal_tab_runs_a_scenario_shows_results_and_saves_it(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    at.selectbox(key="wxu_ds").select_index(1).run()
+    use = [b for b in at.button if b.key and b.key.startswith("wxu_use_education:edu_pass_marks")][0]
+    use.click().run()
+    at = _explore(at)
+    sid = at.session_state["wxu_sel"]["id"]
+    at.number_input(key=f"wxu_in_{sid}_current_threshold").set_value(40.0).run()
+    at.number_input(key=f"wxu_in_{sid}_new_threshold").set_value(50.0).run()
+    at.button(key=f"wxu_run_{sid}").click().run()
+    text = text_of(_explore(at))
+    assert "Exact calculation" in text
+    assert "What this cannot tell you" in text
+    at.text_input(key="wxu_save_name").set_value("Pass mark 50").run()
+    at.button(key="wxu_save").click().run()
+    saved = api.get("/api/whatif/scenarios", headers=ws["h"]).json()["scenarios"]
+    assert [s["name"] for s in saved] == ["Pass mark 50"] and saved[0]["domain"] == "education"
+
+
+def test_universal_tab_asks_for_missing_values_instead_of_running(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    at.selectbox(key="wxu_ds").select_index(1).run()
+    [b for b in at.button if b.key and b.key.startswith("wxu_use_education:edu_enrolment_capacity")][0].click().run()
+    at = _explore(at)
+    sid = at.session_state["wxu_sel"]["id"]
+    at.button(key=f"wxu_run_{sid}").click().run()
+    at = _explore(at)
+    assert any("Silt needs a few more things" in str(w.value) for w in at.warning)
+    assert api.get("/api/whatif/scenarios", headers=ws["h"]).json()["total"] == 0
+
+
+def test_universal_tab_works_without_a_dataset_for_travel(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    at.radio(key="wxu_pick_domain").set_value("travel").run()
+    at.radio(key="wxu_pick_start").set_value("Build a scenario manually").run()
+    at = _explore(at)
+    assert "Needs assumptions" in text_of(at) and "Extend the trip" not in at.session_state["wxu_domain"]
+    assert any("extend my trip" in str(m.value) for m in at.markdown)

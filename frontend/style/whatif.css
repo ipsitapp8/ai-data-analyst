@@ -1,0 +1,193 @@
+/* What-if page only. Every rule hangs off a main area that contains .wx-scope, so no other page changes.
+   Direction: restrained product UI. One flat dark surface, hairline separators, a single sans family, small type steps,
+   and violet reserved for the selected state, focus and the primary action. No gradients, glow, glass or pills. */
+.stApp .stMain:has(.wx-scope) {
+  --wx-ink: #ece9fb; --wx-ink-2: #b4b0cc; --wx-ink-3: #7e7a99;
+  --wx-line: rgba(236,233,251,.09); --wx-line-2: rgba(236,233,251,.17);
+  --wx-panel: rgba(255,255,255,.025); --wx-hover: rgba(255,255,255,.04); --wx-field: rgba(6,5,18,.6);
+  --wx-accent: #a78bfa; --wx-accent-solid: #7c5ce6; --wx-accent-soft: rgba(167,139,250,.12);
+  --wx-ok: #5fd08f; --wx-warn: #e3b04b; --wx-ext: #9aa4d6; --wx-bad: #ef7d7d;
+  --wx-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+html:has(.wx-scope), body:has(.wx-scope), .stApp:has(.wx-scope), .stApp:has(.wx-scope) [data-testid="stAppViewContainer"] { background: #0a0918 !important; }
+.stApp:has(.wx-scope)::before, .stApp:has(.wx-scope)::after { display: none !important; content: none !important; background: none !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stMainBlockContainer"] {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; max-width: 1120px !important; padding-top: 3.6rem !important; }
+.stApp .stMain:has(.wx-scope), .stApp .stMain:has(.wx-scope) p, .stApp .stMain:has(.wx-scope) li { font-family: var(--wx-font); }
+
+/* ---- header ---- */
+.stApp .stMain:has(.wx-scope) .wx-eyebrow { font: 500 12px/1 var(--wx-font) !important; letter-spacing: .06em !important; text-transform: uppercase !important; color: var(--wx-ink-3) !important; margin: 0 0 12px !important; }
+.stApp .stMain:has(.wx-scope) h1.wx-title, .stApp .stMain:has(.wx-scope) h1.wx-title * {
+  font: 600 26px/1.2 var(--wx-font) !important; letter-spacing: -.015em !important; color: var(--wx-ink) !important; margin: 0 !important; padding: 0 !important;
+  -webkit-text-fill-color: currentColor !important; background: none !important; }
+.stApp .stMain:has(.wx-scope) .wx-lede { font: 400 14.5px/1.6 var(--wx-font) !important; color: var(--wx-ink-2) !important; max-width: 62ch !important; margin: 8px 0 0 !important; }
+.stApp .stMain:has(.wx-scope) .wx-note { font: 400 12.5px/1.5 var(--wx-font) !important; color: var(--wx-ink-3) !important; margin: 14px 0 22px !important; }
+
+/* ---- tabs: text with an underline, no pill ---- */
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-list"] { background: transparent !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; gap: 22px !important; width: 100% !important; box-shadow: none !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab"] { background: transparent !important; border-radius: 0 !important; box-shadow: none !important; padding: 10px 0 !important; height: auto !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab"] p { font: 500 13.5px/1 var(--wx-font) !important; color: var(--wx-ink-3) !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab"]:hover p { color: var(--wx-ink-2) !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [aria-selected="true"] { background: transparent !important; box-shadow: none !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [aria-selected="true"] p { color: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-highlight"] { display: block !important; background-color: var(--wx-accent) !important; height: 2px !important; border-radius: 0 !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-border"] { display: block !important; background-color: var(--wx-line) !important; height: 1px !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab"]:focus-visible { outline: 2px solid var(--wx-accent) !important; outline-offset: 2px !important; }
+
+/* ---- section labels ---- */
+.stApp .stMain:has(.wx-scope) .wx-label { font: 500 11.5px/1 var(--wx-font) !important; letter-spacing: .06em !important; text-transform: uppercase !important; color: var(--wx-ink-3) !important; margin: 0 0 8px !important; }
+.stApp .stMain:has(.wx-scope) .wx-section { font: 600 15px/1.3 var(--wx-font) !important; color: var(--wx-ink) !important; margin: 30px 0 4px !important; letter-spacing: -.005em !important; }
+.stApp .stMain:has(.wx-scope) .ds-section-title { font: 600 15px/1.3 var(--wx-font) !important; color: var(--wx-ink) !important; letter-spacing: -.005em !important; margin-top: 26px !important; }
+.stApp .stMain:has(.wx-scope) .ds-row-meta { font: 400 13px/1.5 var(--wx-font) !important; color: var(--wx-ink-3) !important; }
+
+/* ---- selectable lists (domain, starting point): one radio group each, rendered as rows ---- */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] { border-top: 1px solid var(--wx-line); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [data-testid="stWidgetLabel"] { display: none !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] { gap: 0 !important; width: 100% !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label {
+  display: flex !important; align-items: center !important; width: 100% !important; margin: 0 !important; padding: 0 14px !important; min-height: 46px !important; box-sizing: border-box !important;
+  border-bottom: 1px solid var(--wx-line) !important; border-left: 2px solid transparent !important; border-radius: 0 !important; background: transparent !important; cursor: pointer; transition: background .12s ease; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label > div:first-child { display: none !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label:hover { background: var(--wx-hover) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label:has(input:checked) { background: var(--wx-accent-soft) !important; border-left-color: var(--wx-accent) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label:has(input:focus-visible) { outline: 2px solid var(--wx-accent) !important; outline-offset: -2px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label p { font: 500 14px/1.3 var(--wx-font) !important; color: var(--wx-ink-2) !important; margin: 0 !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label:has(input:checked) p { color: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label p span[class*="small"], .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label p small { font-weight: 400 !important; }
+.stApp .stMain:has(.wx-scope) .wx-detail { border-left: 2px solid var(--wx-line-2); padding: 2px 0 2px 14px; margin: 14px 0 0; font: 400 13.5px/1.55 var(--wx-font) !important; color: var(--wx-ink-2) !important; }
+.stApp .stMain:has(.wx-scope) .wx-detail b { color: var(--wx-ink) !important; font-weight: 500 !important; }
+
+/* ---- fields ---- */
+.stApp .stMain:has(.wx-scope) [data-testid="stWidgetLabel"], .stApp .stMain:has(.wx-scope) [data-testid="stWidgetLabel"] p, .stApp .stMain:has(.wx-scope) label p {
+  font: 500 12.5px/1.3 var(--wx-font) !important; color: var(--wx-ink-2) !important; -webkit-text-fill-color: var(--wx-ink-2) !important; letter-spacing: 0 !important; text-transform: none !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stTextAreaRootElement"], .stApp .stMain:has(.wx-scope) [data-testid="stTextInputRootElement"], .stApp .stMain:has(.wx-scope) [data-baseweb="select"] > div,
+.stApp .stMain:has(.wx-scope) [data-testid="stNumberInputContainer"], .stApp .stMain:has(.wx-scope) [data-testid="stNumberInputRootElement"] {
+  background: var(--wx-field) !important; border: 1px solid var(--wx-line-2) !important; border-radius: 6px !important; box-shadow: none !important; }
+.stApp .stMain:has(.wx-scope) [data-baseweb="select"] div, .stApp .stMain:has(.wx-scope) input, .stApp .stMain:has(.wx-scope) textarea { font-family: var(--wx-font) !important; font-size: 14px !important; color: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stTextAreaRootElement"]:focus-within, .stApp .stMain:has(.wx-scope) [data-testid="stTextInputRootElement"]:focus-within,
+.stApp .stMain:has(.wx-scope) [data-baseweb="select"]:focus-within > div, .stApp .stMain:has(.wx-scope) [data-testid="stNumberInputContainer"]:focus-within { border-color: var(--wx-accent) !important; box-shadow: 0 0 0 3px var(--wx-accent-soft) !important; }
+
+/* ---- buttons: small, square-cornered, quiet; violet only for the primary action ---- */
+.stApp .stMain:has(.wx-scope) button[kind="secondary"] {
+  background: transparent !important; background-image: none !important; color: var(--wx-ink) !important; border: 1px solid var(--wx-line-2) !important; border-radius: 6px !important;
+  box-shadow: none !important; font: 500 13px/1 var(--wx-font) !important; min-height: 34px !important; padding: 0 14px !important; filter: none !important; width: auto !important; }
+.stApp .stMain:has(.wx-scope) button[kind="secondary"]:hover { border-color: var(--wx-accent) !important; background: var(--wx-accent-soft) !important; color: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) button[kind="secondary"]:focus-visible, .stApp .stMain:has(.wx-scope) button[kind="primary"]:focus-visible { outline: 2px solid var(--wx-accent) !important; outline-offset: 2px !important; }
+.stApp .stMain:has(.wx-scope) button[kind="secondary"]:disabled { color: var(--wx-ink-3) !important; border-color: var(--wx-line) !important; opacity: 1 !important; background: transparent !important; }
+.stApp .stMain:has(.wx-scope) button[kind="primary"] {
+  background: var(--wx-accent-solid) !important; background-image: none !important; color: #fff !important; border: 1px solid var(--wx-accent-solid) !important; border-radius: 6px !important;
+  box-shadow: none !important; font: 600 13px/1 var(--wx-font) !important; min-height: 36px !important; padding: 0 16px !important; filter: none !important; width: auto !important; }
+.stApp .stMain:has(.wx-scope) button[kind="primary"]:hover { background: #8c6df0 !important; border-color: #8c6df0 !important; }
+.stApp .stMain:has(.wx-scope) button[kind="primary"]:disabled { background: transparent !important; color: var(--wx-ink-3) !important; border-color: var(--wx-line-2) !important; opacity: 1 !important; }
+.stApp .stMain:has(.wx-scope) button p { color: inherit !important; font: inherit !important; }
+
+/* ---- suggestion rows: a list with hairlines, not a stack of boxes ---- */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_row"] { border-top: 1px solid var(--wx-line) !important; padding: 14px 0 12px !important; background: transparent !important; border-radius: 0 !important; }
+.stApp .stMain:has(.wx-scope) .wx-q { font: 500 14.5px/1.4 var(--wx-font) !important; color: var(--wx-ink) !important; margin: 0 0 4px !important; }
+.stApp .stMain:has(.wx-scope) .wx-meta { font: 400 12.5px/1.5 var(--wx-font) !important; color: var(--wx-ink-3) !important; margin: 2px 0 0 !important; }
+.stApp .stMain:has(.wx-scope) .wx-meta b { font-weight: 500 !important; color: var(--wx-ink-2) !important; }
+.stApp .stMain:has(.wx-scope) .wx-state { display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--wx-font); margin-right: 10px; }
+.stApp .stMain:has(.wx-scope) .wx-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.stApp .stMain:has(.wx-scope) .wx-ready { color: var(--wx-ok); } .stApp .stMain:has(.wx-scope) .wx-assume { color: var(--wx-warn); }
+.stApp .stMain:has(.wx-scope) .wx-ext { color: var(--wx-ext); } .stApp .stMain:has(.wx-scope) .wx-no { color: var(--wx-bad); }
+
+/* ---- surfaces inside the workflow ---- */
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] { background: transparent !important; border: 0 !important; border-top: 1px solid var(--wx-line) !important; border-radius: 0 !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] summary { padding-left: 0 !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] summary p { font: 500 13.5px/1.3 var(--wx-font) !important; color: var(--wx-ink-2) !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] summary:hover p { color: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stAlert"] { background: var(--wx-panel) !important; border: 1px solid var(--wx-line) !important; border-radius: 6px !important; box-shadow: none !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stAlert"] p { font: 400 13.5px/1.5 var(--wx-font) !important; color: var(--wx-ink-2) !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stVerticalBlockBorderWrapper"]:not([class*="st-key-wxu_row"]) { background: var(--wx-panel) !important; border: 1px solid var(--wx-line) !important; border-radius: 8px !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stCaptionContainer"], .stApp .stMain:has(.wx-scope) [data-testid="stCaptionContainer"] p { font: 400 12.5px/1.55 var(--wx-font) !important; color: var(--wx-ink-3) !important; opacity: 1 !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stMarkdownContainer"] p, .stApp .stMain:has(.wx-scope) [data-testid="stMarkdownContainer"] li { font-size: 14px; line-height: 1.6; }
+.stApp .stMain:has(.wx-scope) [data-testid="stDataFrame"] { border: 1px solid var(--wx-line) !important; border-radius: 6px !important; box-shadow: none !important; }
+
+/* ---- narrow screens: two panes stack, nothing clips ---- */
+@media (max-width: 760px) {
+  .stApp .stMain:has(.wx-scope) [data-testid="stMainBlockContainer"] { padding: 2.4rem 1rem 3rem !important; }
+  .stApp .stMain:has(.wx-scope) h1.wx-title { font-size: 22px !important; }
+  .stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-list"] { gap: 16px !important; overflow-x: auto !important; }
+}
+
+/* ---- row icons: inline SVG masks, so no icon font is needed; they take the text colour ---- */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label::before { content: ""; flex: 0 0 16px; width: 16px; height: 16px; margin-right: 12px; background: var(--wx-ink-3); -webkit-mask: var(--wx-icon) center/contain no-repeat; mask: var(--wx-icon) center/contain no-repeat; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label:has(input:checked)::before { background: var(--wx-accent); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(1) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6'/%3E%3Cpath d='M20 20l-4.5-4.5'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(2) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 20V11M12 20V5M19 20v-7'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(3) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 9l10-5 10 5-10 5z'/%3E%3Cpath d='M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(4) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='3'/%3E%3Cpath d='M12 8v8M8 12h8'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(5) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s6-5.5 6-11a6 6 0 10-12 0c0 5.5 6 11 6 11z'/%3E%3Ccircle cx='12' cy='10' r='2'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(6) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9l9-5 9 5z'/%3E%3Cpath d='M6 11v7M10 11v7M14 11v7M18 11v7M3 20h18'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:nth-child(7) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h10M18 7h2M4 17h2M10 17h10'/%3E%3Ccircle cx='16' cy='7' r='2'/%3E%3Ccircle cx='8' cy='17' r='2'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(1) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 21h4'/%3E%3Cpath d='M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(2) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='6' rx='7' ry='3'/%3E%3Cpath d='M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(3) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3Cpath d='M13.5 6.5l4 4'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(4) { --wx-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z'/%3E%3C/svg%3E"); }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label > div > div > div:first-child:not([data-testid]) { display: none !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label > div { margin: 0 !important; padding: 0 !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [data-testid="stRadioOptionCaption"], .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] label [data-testid="stCaptionContainer"] { font: 400 12.5px/1.4 var(--wx-font) !important; color: var(--wx-ink-3) !important; margin-top: 2px !important; }
+
+/* lists fill their column; text is left-aligned; the caption sits under the name */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"], .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] > div, .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [data-testid="stRadio"] { width: 100% !important; max-width: none !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label > div { flex: 1 1 auto !important; text-align: left !important; align-items: flex-start !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label > div > div { align-items: flex-start !important; margin-left: 0 !important; padding-left: 0 !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label > div * { text-align: left !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label { padding-top: 8px !important; padding-bottom: 8px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick"] [role="radiogroup"] > label [data-testid="stCaptionContainer"] p { font: 400 12.5px/1.4 var(--wx-font) !important; color: var(--wx-ink-3) !important; margin: 1px 0 0 !important; }
+
+/* expanders: a hairline list, not boxes (the border lives on the inner <details> element) */
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] details, .stApp .stMain:has(.wx-scope) [data-testid="stExpander"] > div { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] details > summary { padding: 12px 0 !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] details[open] > summary { padding-bottom: 6px !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 0 0 12px !important; }
+
+/* ================= layout refinement: two bordered panels, tiles, chevrons ================= */
+.stApp .stMain:has(.wx-scope) .wx-eyebrow { color: var(--wx-accent) !important; font-weight: 600 !important; }
+.stApp .stMain:has(.wx-scope) .wx-note { display: flex; align-items: center; gap: 8px; }
+.stApp .stMain:has(.wx-scope) .wx-note::before { content: ""; flex: 0 0 15px; height: 15px; background: var(--wx-ink-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v6M12 7.5v.5'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v6M12 7.5v.5'/%3E%3C/svg%3E") center/contain no-repeat; }
+/* tabs: the selected one is a filled tab with the underline */
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-list"] { gap: 6px !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab"] { padding: 11px 20px !important; border-radius: 8px 8px 0 0 !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [aria-selected="true"] { background: var(--wx-accent-soft) !important; }
+/* panels */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { background: rgba(255,255,255,.02) !important; border: 1px solid var(--wx-line-2) !important; border-radius: 14px !important; padding: 22px 22px 14px !important; height: 100%; }
+.stApp .stMain:has(.wx-scope) .wx-ph { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
+.stApp .stMain:has(.wx-scope) .wx-pico { flex: 0 0 28px; width: 28px; height: 28px; background: var(--wx-ink-2); }
+.stApp .stMain:has(.wx-scope) .wx-i-layers { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l9 5-9 5-9-5z'/%3E%3Cpath d='M3 13l9 5 9-5'/%3E%3Cpath d='M3 17.5l9 5 9-5' opacity='.5'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l9 5-9 5-9-5z'/%3E%3Cpath d='M3 13l9 5 9-5'/%3E%3Cpath d='M3 17.5l9 5 9-5' opacity='.5'/%3E%3C/svg%3E") center/contain no-repeat; }
+.stApp .stMain:has(.wx-scope) .wx-i-bolt { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2L4 14h7l-1 8 9-12h-7z'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2L4 14h7l-1 8 9-12h-7z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.stApp .stMain:has(.wx-scope) .wx-i-bookmark { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12v18l-6-4-6 4z'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12v18l-6-4-6 4z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.stApp .stMain:has(.wx-scope) .wx-pt { font: 600 19px/1.2 var(--wx-font) !important; color: var(--wx-ink) !important; letter-spacing: -.01em; }
+.stApp .stMain:has(.wx-scope) .wx-ps { font: 400 13.5px/1.4 var(--wx-font) !important; color: var(--wx-ink-3) !important; margin-top: 3px; }
+.stApp .stMain:has(.wx-scope) .wx-saved { display: flex; align-items: center; gap: 14px; margin: 30px 0 6px; padding-top: 22px; border-top: 1px solid var(--wx-line); }
+.stApp .stMain:has(.wx-scope) .wx-fieldlabel { font: 600 15px/1 var(--wx-font); color: var(--wx-ink); }
+/* inside a panel the list has no outer rule and no left bar; the selected row is a filled, rounded row */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] [class*="st-key-wxu_pick"] { border-top: 0 !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label { border-left: 0 !important; border-radius: 9px !important; padding: 0 16px !important; min-height: 46px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:has(input:checked) { background: rgba(124,92,230,.30) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:has(input:checked)::after { content: ""; flex: 0 0 18px; height: 18px; margin-left: auto; background: var(--wx-ink); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E") center/contain no-repeat; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:has(input:checked) p { color: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:has(input:checked)::before { background: var(--wx-ink) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label + label { border-top: 0 !important; }
+/* starting point: icon tile, two-line text, chevron */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label { border-left: 0 !important; border-radius: 10px !important; padding: 12px 16px 12px 10px !important; min-height: 68px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label::before { flex: 0 0 44px !important; width: 44px !important; height: 44px !important; margin-right: 16px !important; border-radius: 11px; background-color: rgba(255,255,255,.04) !important;
+  -webkit-mask: none !important; mask: none !important; background-size: 24px 24px !important; background-repeat: no-repeat !important; background-position: center !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:has(input:checked) { background: rgba(124,92,230,.14) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:has(input:checked)::before { background-color: rgba(124,92,230,.26) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label::after { content: ""; flex: 0 0 18px; height: 18px; margin-left: 12px; background: var(--wx-ink-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 5l7 7-7 7'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 5l7 7-7 7'/%3E%3C/svg%3E") center/contain no-repeat; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label p { font-size: 15px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(1)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8d3f5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 21h4'/%3E%3Cpath d='M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z'/%3E%3C/svg%3E") !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(2)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8d3f5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='6' rx='7' ry='3'/%3E%3Cpath d='M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3'/%3E%3C/svg%3E") !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(3)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8d3f5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3Cpath d='M13.5 6.5l4 4'/%3E%3C/svg%3E") !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:nth-child(4)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8d3f5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z'/%3E%3C/svg%3E") !important; }
+@media (max-width: 760px) { .stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab"] { padding: 10px 12px !important; } }
+.stApp .stMain:has(.wx-scope) .stTabs button[role="tab"] { padding: 11px 22px !important; border-radius: 9px 9px 0 0 !important; }
+.stApp .stMain:has(.wx-scope) .stTabs button[role="tab"][aria-selected="true"] { background: rgba(124,92,230,.22) !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-list"] { gap: 10px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { min-height: 100%; }
+.stApp .stMain:has(.wx-scope) .stTabs button[role="tab"][aria-selected="true"] { background: rgba(124,92,230,.36) !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stHorizontalBlock"]:has([class*="st-key-wxu_panel"]) { align-items: stretch !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stColumn"]:has([class*="st-key-wxu_panel"]) > div, .stApp .stMain:has(.wx-scope) [data-testid="stColumn"]:has([class*="st-key-wxu_panel"]) [data-testid="stVerticalBlock"], .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { height: 100% !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { padding-bottom: 24px !important; }

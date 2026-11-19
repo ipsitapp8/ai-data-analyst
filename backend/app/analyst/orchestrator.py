@@ -11,7 +11,7 @@ import pandas as pd
 
 import re
 
-from app.analyst import business, calc, conversation, documents, explain, followup, intake, metrics, ml, objectives, plan_checks, planner, present, router, scenario_bridge, tools
+from app.analyst import business, calc, conversation, documents, explain, followup, intake, metrics, ml, objectives, plan_checks, planner, present, router, scenario_bridge, tools, whatif_bridge
 from app.analyst import nl_planner
 from app.analyst import program as P
 from app.analyst import scope as scoping
@@ -1338,6 +1338,13 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     if bridged is not None:
         return _reply(bridged["answer"], "tool", model_on, started, plan=bridged["plan"], calls=bridged["calls"], notes=bridged["notes"],
                       details=bridged.get("details", ""))
+    # The universal what-if (education, healthcare, travel, government, marketing, hiring...) is the same engine the What-If page runs. It
+    # answers only sentences that match one of its scenario templates and returns None for the rest, so nothing answered before changes.
+    universal = whatif_bridge.try_answer(message, dfs, memory, filename,
+                                         scope_note=(scoping.describe(sc, len(dfs), len(df)) if scoping.active(sc) else None))
+    if universal is not None:
+        return _reply(universal["answer"], "tool", model_on, started, plan=universal["plan"], calls=universal["calls"], notes=universal["notes"],
+                      details=universal.get("details", ""))
     routed = router.route(message, dfs, memory)
     # 4. "what if X changes by N%" where X feeds the result just computed: re-run that calculation
     if routed and routed.get("type") == "router" and routed["tool"] == "column_change":

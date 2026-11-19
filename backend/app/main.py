@@ -48,6 +48,7 @@ from app.routers.quality import router as quality_router
 from app.routers.scenario_evidence import router as scenario_evidence_router
 from app.routers.scenario_models import router as scenario_models_router
 from app.routers.scenarios import router as scenarios_router
+from app.routers.whatif import router as whatif_router
 from app.routers.semantic import router as semantic_router
 from app.routers.analyst import router as analyst_router
 from app.routers.inspect import router as inspect_router
@@ -107,6 +108,7 @@ app.include_router(org_router)
 app.include_router(quality_router)
 app.include_router(copilot_router)
 app.include_router(scenarios_router)
+app.include_router(whatif_router)
 app.include_router(scenario_models_router)
 app.include_router(scenario_evidence_router)
 app.include_router(semantic_router)
