@@ -87,3 +87,21 @@ def test_an_analysis_of_a_file_that_is_gone_says_so_instead_of_an_internal_error
     out = ask_and_run(client, ws, "What is the total revenue?")
     q = question_row(out["question_id"])
     assert q.status == "failed" and "upload the file again" in q.error and "internal error" not in q.error
+
+
+def test_a_file_saved_under_another_machines_path_is_restored_here(path):
+    """Dataset rows carry the uploader's absolute path (a Windows or /app path); resolve() finds it by file name."""
+    name = os.path.basename(path)
+    foreign = r"C:\Users\someone\backend\data\uploads" + "\\" + name
+    db = SessionLocal()
+    db.add(StoredFile(filepath=foreign, content=CSV, size_bytes=len(CSV)))
+    db.commit()
+    os.remove(path)
+    try:
+        got = stored_files.resolve(foreign)
+        assert got is not None and os.path.samefile(got, path) and open(got, "rb").read() == CSV
+        assert stored_files.resolve("/app/data/uploads/never_saved.csv") is None
+    finally:
+        db.delete(db.get(StoredFile, foreign))
+        db.commit()
+        db.close()

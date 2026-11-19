@@ -72,6 +72,32 @@ def ensure(filepath: str) -> bool:
         db.close()
 
 
+def resolve(filepath: str) -> str | None:
+    """A path under UPLOADS_DIR that holds the file, or None if it exists nowhere.
+
+    Dataset rows keep the absolute path of the machine that took the upload (C:\\Users\\... from a
+    laptop, /app/data/... from Render), and several machines can share one database. So when the
+    stored path is not usable here, look for the same file name in this machine's uploads folder
+    and restore the saved copy there. Upload names start with a random id, so the name is unique.
+    """
+    if os.path.isfile(filepath):
+        return filepath
+    local = config.UPLOADS_DIR / filepath.replace("\\", "/").rsplit("/", 1)[-1]
+    if local.is_file():
+        return str(local)
+    db = SessionLocal()
+    try:
+        row = db.get(StoredFile, filepath)
+        if row is None:
+            return None
+        return str(local) if _write(str(local), bytes(row.content)) else None
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not restore %s", filepath, exc_info=True)
+        return None
+    finally:
+        db.close()
+
+
 def restore_missing() -> int:
     """At startup: put back every stored file a dataset version points at and the disk lacks."""
     restored = 0

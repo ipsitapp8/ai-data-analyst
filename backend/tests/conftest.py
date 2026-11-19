@@ -20,6 +20,7 @@ os.environ["UPLOADS_DIR"] = str(_scratch / "data" / "uploads")
 os.environ["WORKSPACES_DIR"] = str(_scratch / "data" / "workspaces")
 os.environ["JWT_SECRET_KEY"] = "test-only-secret-key-not-for-production-32b"
 os.environ["SANDBOX_BACKEND"] = "subprocess"
+os.environ["LLM_PRIMARY"] = "gemini"   # the provider-order tests assume Gemini answers first; llama-first has its own test
 # The subprocess runner is refused unless explicitly allowed (it is not a
 # security boundary). Tests of the pipeline's own logic opt in here; the
 # sandbox's isolation is tested separately against Docker (test_sandbox_security).

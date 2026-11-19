@@ -50,6 +50,9 @@ GEMINI_RATE_LIMIT_RETRIES = int(os.getenv("GEMINI_RATE_LIMIT_RETRIES", "2"))
 # where failing straight over to the backup model ends the run whenever the backup is not healthy.
 # Truncated, filtered, blocked and wrong-function replies are never retried: asking again does not change them.
 GEMINI_MALFORMED_RETRIES = int(os.getenv("GEMINI_MALFORMED_RETRIES", "1"))
+# One Gemini request may not take longer than this. Without a limit an overloaded Gemini holds a request for
+# minutes before answering 503, and the whole run hits its time limit before it can fail over to the backup.
+GEMINI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMINI_REQUEST_TIMEOUT_SECONDS", "75"))
 GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "30"))
 
 # --- Llama (Critic only) ---
@@ -211,6 +214,9 @@ RUN_MAX_COST_USD = float(os.getenv("RUN_MAX_COST_USD", "0"))
 
 # --- Providers ---
 # When false, a Gemini failure fails the run instead of continuing on Llama.
+# Which provider answers first: "gemini" or "llama" (the LLAMA_* endpoint, Groq by default). The other is the
+# backup. Gemini is the default: the small Groq model writes unreliable analysis code (unclosed brackets, wrong columns).
+LLM_PRIMARY = (os.getenv("LLM_PRIMARY", "gemini").strip().lower() or "gemini")
 LLM_FAILOVER_ENABLED = _bool("LLM_FAILOVER_ENABLED", "true")
 # USD per 1M tokens, "input,output". Estimates only; override per deployment.
 LLM_PRICE_GEMINI = os.getenv("LLM_PRICE_GEMINI", "0.30,2.50")

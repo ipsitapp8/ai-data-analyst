@@ -274,3 +274,21 @@ def test_llama_defaults_point_at_groq_so_a_model_name_alone_never_selects_anothe
     finally:
         monkeypatch.undo()
         importlib.reload(config)
+
+
+def test_llama_can_answer_first_and_gemini_is_then_the_backup(both_keys, monkeypatch):
+    monkeypatch.setattr(config, "LLM_PRIMARY", "llama")
+    monkeypatch.setattr(llama, "call_tool", lambda **kw: {"via": "llama"})
+    monkeypatch.setattr(llm_client, "call_tool_gemini", _raise(AssertionError("Gemini must not be called")))
+    assert llm_client.call_tool(**KW) == {"via": "llama"}
+    monkeypatch.setattr(llama, "call_tool", _raise(AuthenticationError(401, "invalid_api_key")))
+    monkeypatch.setattr(llm_client, "call_tool_gemini", lambda **kw: {"via": "gemini"})
+    assert llm_client.call_tool(**KW) == {"via": "gemini"}
+
+
+@pytest.mark.parametrize("raw", ['{"reasoning": "x", "formula_explanation": "y"}', '{"code": "  "}', "not json", "[1, 2]"])
+def test_an_unusable_llama_reply_is_a_failure_so_the_step_moves_to_gemini(both_keys, monkeypatch, raw):
+    schema = {"required": ["reasoning", "formula_explanation", "code"]}
+    assert llama._checked_args(raw, schema)[1] is not None
+    good = '{"reasoning": "r", "formula_explanation": "f", "code": "print(1)"}'
+    assert llama._checked_args(good, schema) == ({"reasoning": "r", "formula_explanation": "f", "code": "print(1)"}, None)

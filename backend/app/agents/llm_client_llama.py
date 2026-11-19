@@ -83,16 +83,39 @@ def call_tool(
     tokens_out = getattr(usage, "completion_tokens", None)
     elapsed_ms = int((time.monotonic() - started) * 1000)
     message = response.choices[0].message
+    problem = f"Llama did not return the expected '{tool_name}' tool call"
     for call in message.tool_calls or []:
         if call.function.name == tool_name:
-            args = json.loads(call.function.arguments)
-            runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,
-                                  fallback=_fallback)
-            return args
+            args, bad = _checked_args(call.function.arguments, tool_schema)
+            if bad is None:
+                runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,
+                                      fallback=_fallback)
+                return args
+            problem = f"Llama's '{tool_name}' reply was unusable: {bad}"
+            break
 
     runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,
                           fallback=_fallback, ok=False)
-    raise RuntimeError(f"Llama did not return the expected '{tool_name}' tool call")
+    raise RuntimeError(problem)
+
+
+def _checked_args(raw: str, schema: dict[str, Any]) -> tuple[dict | None, str | None]:
+    """Parse a tool call's arguments and check they hold the schema's required fields.
+
+    Smaller models sometimes send broken JSON or leave out a required field (a step with no `code`).
+    Returned as a failure here, the step is handed to the backup provider; returned as-is it would
+    crash the run later with a bare KeyError."""
+    try:
+        args = json.loads(raw)
+    except (TypeError, ValueError):
+        return None, "the arguments were not valid JSON"
+    if not isinstance(args, dict):
+        return None, "the arguments were not a JSON object"
+    for key in schema.get("required") or []:
+        value = args.get(key)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None, f"the required field '{key}' was missing or empty"
+    return args, None
 
 
 def call_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
