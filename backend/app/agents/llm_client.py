@@ -382,6 +382,24 @@ def call_tool(
     next_step = "failover_to_llama" if backup else "give_up_no_backup_provider"
     tries = config.GEMINI_RATE_LIMIT_RETRIES + 1
 
+    # Llama (Groq) first when it is the configured primary; Gemini then becomes the backup below.
+    llama_tried = False
+    if config.LLM_PRIMARY == "llama" and config.LLAMA_API_KEY:
+        llama_tried = True
+        started = time.monotonic()
+        try:
+            out = llm_client_llama.call_tool(**kwargs)
+            LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
+            return out
+        except runtime.RunAborted:
+            raise
+        except Exception as e:  # noqa: BLE001 - hand the step to Gemini
+            failures.append(f"llama({config.LLAMA_MODEL}): {e}")
+            reasons.append(_failed("llama", config.LLAMA_MODEL, e))
+            log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1,
+                               action="failover_to_gemini" if config.GEMINI_API_KEY else "give_up",
+                               error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
+
     if config.GEMINI_API_KEY:
         attempt = 0
         malformed_retries = 0
@@ -451,7 +469,9 @@ def call_tool(
         failures.append("gemini: no GEMINI_API_KEY set")
         reasons.append(_not_tried("gemini", "not_configured"))
 
-    if not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
+    if llama_tried:
+        pass  # already tried first; its failure is recorded above
+    elif not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
         failures.append("llama: failover disabled (LLM_FAILOVER_ENABLED=false)")
         reasons.append(_not_tried("llama", "disabled"))
     elif config.LLAMA_API_KEY:

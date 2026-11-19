@@ -214,6 +214,9 @@ RUN_MAX_COST_USD = float(os.getenv("RUN_MAX_COST_USD", "0"))
 
 # --- Providers ---
 # When false, a Gemini failure fails the run instead of continuing on Llama.
+# Which provider answers first: "llama" (the LLAMA_* endpoint, Groq by default) or "gemini". The other is the
+# backup. "llama" only takes effect when LLAMA_API_KEY is set; otherwise Gemini answers as before.
+LLM_PRIMARY = (os.getenv("LLM_PRIMARY", "llama").strip().lower() or "llama")
 LLM_FAILOVER_ENABLED = _bool("LLM_FAILOVER_ENABLED", "true")
 # USD per 1M tokens, "input,output". Estimates only; override per deployment.
 LLM_PRICE_GEMINI = os.getenv("LLM_PRICE_GEMINI", "0.30,2.50")

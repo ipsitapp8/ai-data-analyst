@@ -274,3 +274,13 @@ def test_llama_defaults_point_at_groq_so_a_model_name_alone_never_selects_anothe
     finally:
         monkeypatch.undo()
         importlib.reload(config)
+
+
+def test_llama_can_answer_first_and_gemini_is_then_the_backup(both_keys, monkeypatch):
+    monkeypatch.setattr(config, "LLM_PRIMARY", "llama")
+    monkeypatch.setattr(llama, "call_tool", lambda **kw: {"via": "llama"})
+    monkeypatch.setattr(llm_client, "call_tool_gemini", _raise(AssertionError("Gemini must not be called")))
+    assert llm_client.call_tool(**KW) == {"via": "llama"}
+    monkeypatch.setattr(llama, "call_tool", _raise(AuthenticationError(401, "invalid_api_key")))
+    monkeypatch.setattr(llm_client, "call_tool_gemini", lambda **kw: {"via": "gemini"})
+    assert llm_client.call_tool(**KW) == {"via": "gemini"}
