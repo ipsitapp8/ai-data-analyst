@@ -84,7 +84,8 @@ def get_client() -> genai.Client:
             raise RuntimeError(
                 "GEMINI_API_KEY is not set. Copy .env.example to .env and add your key."
             )
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+        _client = genai.Client(api_key=config.GEMINI_API_KEY,
+                               http_options=types.HttpOptions(timeout=config.GEMINI_REQUEST_TIMEOUT_SECONDS * 1000))
     return _client
 
 

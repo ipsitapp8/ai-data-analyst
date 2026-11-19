@@ -50,6 +50,9 @@ GEMINI_RATE_LIMIT_RETRIES = int(os.getenv("GEMINI_RATE_LIMIT_RETRIES", "2"))
 # where failing straight over to the backup model ends the run whenever the backup is not healthy.
 # Truncated, filtered, blocked and wrong-function replies are never retried: asking again does not change them.
 GEMINI_MALFORMED_RETRIES = int(os.getenv("GEMINI_MALFORMED_RETRIES", "1"))
+# One Gemini request may not take longer than this. Without a limit an overloaded Gemini holds a request for
+# minutes before answering 503, and the whole run hits its time limit before it can fail over to the backup.
+GEMINI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMINI_REQUEST_TIMEOUT_SECONDS", "75"))
 GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "30"))
 
 # --- Llama (Critic only) ---
