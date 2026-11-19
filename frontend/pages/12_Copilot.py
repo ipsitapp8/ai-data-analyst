@@ -299,6 +299,8 @@ busy = bool(pending)
 q = st.chat_input(("Silt is answering… you can queue another question" if busy else
                    "Ask about this dataset or document…") if (conv["dataset_id"] or conv["doc_id"]) else
                   "Choose or upload a dataset or document first", disabled=not (conv["dataset_id"] or conv["doc_id"]))
+if not q and (conv["dataset_id"] or conv["doc_id"]) and S.get("cp_handoff"):
+    q = S.pop("cp_handoff")          # a question handed over from the What-If page, with its scenario context in the text
 if q:
     enqueue(conv, q)
     st.rerun()

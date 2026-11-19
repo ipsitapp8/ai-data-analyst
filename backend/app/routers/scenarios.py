@@ -559,7 +559,8 @@ def list_scenarios(
     user: User = Depends(get_current_user),
     team: Team = Depends(get_current_team),
 ):
-    q = db.query(Scenario).filter_by(team_id=team.id)
+    # universal (multi-domain) scenarios share the table but have their own list (app/routers/whatif.py)
+    q = db.query(Scenario).filter(Scenario.team_id == team.id, ~Scenario.model.like("universal:%"))
     total = q.count()
     rows = q.order_by(Scenario.id.desc()).offset(offset).limit(limit).all()
     return {"total": total, "limit": limit, "offset": offset, "scenarios": [_out(s, full=False, fresh=scenario_library.freshness(db, team.id, s)) for s in rows]}
@@ -567,7 +568,7 @@ def list_scenarios(
 
 def _owned(db: Session, team: Team, scenario_id: int) -> Scenario:
     s = db.get(Scenario, scenario_id)
-    if s is None or s.team_id != team.id:
+    if s is None or s.team_id != team.id or (s.model or "").startswith("universal:"):   # universal ones: /api/whatif
         raise HTTPException(404, "Scenario not found")
     return s
 

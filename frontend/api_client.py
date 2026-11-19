@@ -905,3 +905,45 @@ def analyst_upload_document(filename: str, file_bytes: bytes) -> dict:
     files = {"file": (filename, file_bytes, "application/pdf")}
     resp = requests.post(f"{BACKEND_BASE_URL}/api/analyst/documents", files=files, headers=_headers(), timeout=TIMEOUT)
     return _handle(resp)
+
+
+# ---- universal what-if (app/routers/whatif.py) ----
+
+def whatif_domains() -> list[dict]:
+    return _get("/api/whatif/domains")["domains"]
+
+
+def whatif_profile(dataset_id: int, domain: str | None = None) -> dict:
+    return _post("/api/whatif/profile", {"dataset_id": dataset_id, "domain": domain})
+
+
+def whatif_suggest(dataset_id: int | None, domain: str | None, objective: str | None = None, use_model: bool = False) -> dict:
+    return _post("/api/whatif/suggest", {"dataset_id": dataset_id, "domain": domain, "objective": objective, "use_model": use_model}, timeout=90)
+
+
+def whatif_from_question(message: str, dataset_id: int | None, domain: str | None = None) -> dict:
+    return _post("/api/whatif/from-question", {"message": message, "dataset_id": dataset_id, "domain": domain})
+
+
+def whatif_run(scenario: dict, dataset_id: int | None) -> dict:
+    return _post("/api/whatif/run", {"scenario": scenario, "dataset_id": dataset_id})
+
+
+def whatif_save(scenario: dict, dataset_id: int | None, name: str) -> dict:
+    return _post("/api/whatif/scenarios", {"scenario": scenario, "dataset_id": dataset_id, "name": name})
+
+
+def whatif_saved() -> list[dict]:
+    return _get("/api/whatif/scenarios")["scenarios"]
+
+
+def whatif_get(scenario_id: int) -> dict:
+    return _get(f"/api/whatif/scenarios/{scenario_id}")
+
+
+def whatif_delete(scenario_id: int) -> None:
+    _delete(f"/api/whatif/scenarios/{scenario_id}")
+
+
+def whatif_compare(ids: list[int]) -> dict:
+    return _post("/api/whatif/compare", {"ids": ids})

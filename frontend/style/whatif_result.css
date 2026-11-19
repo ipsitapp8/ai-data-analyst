@@ -1,0 +1,73 @@
+/* What-if result view (what_if_result.py). Loaded after whatif.css; every rule hangs off the same .wx-scope main area.
+   Editorial, not dashboard: one serif voice for the title and the headline figure, hairline rules instead of boxes, and colour used
+   only for meaning (lavender = the simulated value, neutral = baseline, amber = caution, sage = exact, coral = a decrease). */
+.stApp .stMain:has(.wx-scope) {
+  --wr-serif: "Newsreader", "Source Serif 4", Georgia, "Times New Roman", serif;
+  --wr-sage: #8fbf9f; --wr-amber: #d4a95a; --wr-coral: #d49a8f; --wr-blue: #9aa4d6;
+}
+.stApp .stMain:has(.wx-scope) .wr-eyebrow { font: 500 12.5px/1.3 var(--wx-font); color: var(--wx-ink-3); margin: 18px 0 8px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.stApp .stMain:has(.wx-scope) .wr-eyebrow > :first-child { color: var(--wx-accent); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 11.5px; }
+.stApp .stMain:has(.wx-scope) .wr-sep { color: var(--wx-line-2); }
+.stApp .stMain:has(.wx-scope) h2.wr-title { font: 500 32px/1.15 var(--wr-serif) !important; letter-spacing: -.015em !important; color: var(--wx-ink) !important; margin: 0 !important; padding: 0 !important; -webkit-text-fill-color: currentColor !important; text-wrap: balance; }
+.stApp .stMain:has(.wx-scope) .wr-statusline { margin: 10px 0 2px; font: 400 13px/1.3 var(--wx-font); color: var(--wx-ink-3); display: flex; gap: 8px; align-items: center; }
+.stApp .stMain:has(.wx-scope) .wr-status { display: inline-flex; align-items: center; gap: 7px; color: var(--wx-ink-2); font-weight: 500; }
+.stApp .stMain:has(.wx-scope) .wr-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--wx-ink-3); }
+.stApp .stMain:has(.wx-scope) .wr-exact i { background: var(--wr-sage); } .stApp .stMain:has(.wx-scope) .wr-estimate i { background: var(--wr-blue); }
+.stApp .stMain:has(.wx-scope) .wr-forecast i, .stApp .stMain:has(.wx-scope) .wr-hypo i { background: var(--wr-amber); } .stApp .stMain:has(.wx-scope) .wr-none i { background: var(--wr-coral); }
+.stApp .stMain:has(.wx-scope) .wr-rule { height: 1px; background: var(--wx-line); margin: 18px 0 0; }
+.stApp .stMain:has(.wx-scope) .wr-warn { border-left: 2px solid var(--wr-amber); padding: 2px 0 2px 12px; margin: 16px 0 0; font: 400 13.5px/1.55 var(--wx-font); color: var(--wx-ink-2); }
+
+/* primary figure */
+.stApp .stMain:has(.wx-scope) .wr-hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 18px 56px; padding: 30px 0 26px; }
+.stApp .stMain:has(.wx-scope) .wr-k { font: 500 12px/1.3 var(--wx-font); letter-spacing: .05em; text-transform: uppercase; color: var(--wx-ink-3); }
+.stApp .stMain:has(.wx-scope) .wr-big { font: 500 68px/1 var(--wr-serif); letter-spacing: -.025em; color: var(--wx-ink); margin: 8px 0 0; font-variant-numeric: lining-nums tabular-nums; }
+.stApp .stMain:has(.wx-scope) .wr-big small { font: 400 15px/1 var(--wx-font); letter-spacing: 0; color: var(--wx-ink-3); margin-left: 10px; }
+.stApp .stMain:has(.wx-scope) .wr-range { font: 400 13px/1.5 var(--wx-font); color: var(--wx-ink-3); margin-top: 8px; max-width: 54ch; }
+.stApp .stMain:has(.wx-scope) .wr-figs { display: flex; flex-wrap: wrap; gap: 14px 0; padding-bottom: 6px; }
+.stApp .stMain:has(.wx-scope) .wr-fig { padding: 0 26px; border-left: 1px solid var(--wx-line); min-width: 96px; }
+.stApp .stMain:has(.wx-scope) .wr-fig b { display: block; font: 500 24px/1.1 var(--wr-serif); color: var(--wx-ink); font-variant-numeric: lining-nums tabular-nums; }
+.stApp .stMain:has(.wx-scope) .wr-fig span { display: block; font: 400 12px/1.3 var(--wx-font); color: var(--wx-ink-3); margin-top: 5px; max-width: 16ch; }
+.stApp .stMain:has(.wx-scope) .wr-fig.wr-up b { color: var(--wx-accent); } .stApp .stMain:has(.wx-scope) .wr-fig.wr-down b { color: var(--wr-coral); }
+
+/* ledger of measures */
+.stApp .stMain:has(.wx-scope) table.wr-ledger { width: 100%; border-collapse: collapse; margin: 2px 0 8px; font: 400 14px/1.4 var(--wx-font); font-variant-numeric: tabular-nums; }
+.stApp .stMain:has(.wx-scope) .wr-ledger th, .stApp .stMain:has(.wx-scope) .wr-ledger td { padding: 11px 12px 11px 0; border: 0; border-bottom: 1px solid var(--wx-line); text-align: right; background: transparent; color: var(--wx-ink-2); }
+.stApp .stMain:has(.wx-scope) .wr-ledger th:first-child { text-align: left; font-weight: 400; color: var(--wx-ink); }
+.stApp .stMain:has(.wx-scope) .wr-ledger thead th, .stApp .stMain:has(.wx-scope) .wr-ledger thead td { font: 500 11.5px/1 var(--wx-font); letter-spacing: .05em; text-transform: uppercase; color: var(--wx-ink-3); padding-top: 4px; }
+.stApp .stMain:has(.wx-scope) .wr-ledger tr.wr-prim th { font-weight: 600; } .stApp .stMain:has(.wx-scope) .wr-ledger tr.wr-prim td { color: var(--wx-ink); font-weight: 500; }
+.stApp .stMain:has(.wx-scope) .wr-ledger td.wr-up { color: var(--wx-accent); } .stApp .stMain:has(.wx-scope) .wr-ledger td.wr-down { color: var(--wr-coral); }
+.stApp .stMain:has(.wx-scope) .wr-ledger em { font-style: normal; color: var(--wx-ink-3); font-size: 12px; margin-left: 4px; }
+
+/* reading, headings, lists, record rows */
+.stApp .stMain:has(.wx-scope) .wr-h { font: 500 21px/1.25 var(--wr-serif); letter-spacing: -.01em; color: var(--wx-ink); margin: 38px 0 12px; padding-top: 22px; border-top: 1px solid var(--wx-line); }
+.stApp .stMain:has(.wx-scope) .wr-sub { font: 500 12px/1.3 var(--wx-font); letter-spacing: .05em; text-transform: uppercase; color: var(--wx-ink-3); margin: 14px 0 8px; }
+.stApp .stMain:has(.wx-scope) .wr-cap { font: 400 12.5px/1.55 var(--wx-font); color: var(--wx-ink-3); margin: 4px 0 0; }
+.stApp .stMain:has(.wx-scope) .wr-reading { border-left: 2px solid var(--wx-accent); padding: 0 0 0 22px; margin-top: 6px; }
+.stApp .stMain:has(.wx-scope) .wr-reading .wr-sub { margin-top: 8px; }
+.stApp .stMain:has(.wx-scope) .wr-reading p { font: 400 14px/1.65 var(--wx-font); color: var(--wx-ink-2); margin: 0 0 10px; }
+.stApp .stMain:has(.wx-scope) .wr-reading p.wr-lead { font: 400 21px/1.4 var(--wr-serif); color: var(--wx-ink); margin-bottom: 14px; }
+.stApp .stMain:has(.wx-scope) .wr-reading p.wr-cap { font-size: 12.5px; color: var(--wx-ink-3); }
+.stApp .stMain:has(.wx-scope) ul.wr-list { list-style: none !important; margin: 0 !important; padding: 0 !important; }
+.stApp .stMain:has(.wx-scope) ul.wr-list li { position: relative; padding: 9px 0 9px 16px; border-bottom: 1px solid var(--wx-line); font: 400 14px/1.55 var(--wx-font); color: var(--wx-ink-2); }
+.stApp .stMain:has(.wx-scope) ul.wr-list li::before { content: ""; position: absolute; left: 0; top: 18px; width: 6px; height: 1px; background: var(--wx-ink-3); }
+.stApp .stMain:has(.wx-scope) .wr-rows { border-top: 1px solid var(--wx-line); }
+.stApp .stMain:has(.wx-scope) .wr-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--wx-line); }
+.stApp .stMain:has(.wx-scope) .wr-rk { font: 500 13px/1.5 var(--wx-font); color: var(--wx-ink); }
+.stApp .stMain:has(.wx-scope) .wr-rv p { font: 400 14px/1.55 var(--wx-font); color: var(--wx-ink-2); margin: 0 0 5px; overflow-wrap: anywhere; }
+.stApp .stMain:has(.wx-scope) .wr-rv p:last-child { margin-bottom: 0; }
+
+/* the record tabs are plain text with an underline (the page-level tabs keep their filled style) */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wr_tabs"] .stTabs [data-baseweb="tab-list"] { gap: 28px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wr_tabs"] .stTabs button[role="tab"], .stApp .stMain:has(.wx-scope) [class*="st-key-wr_tabs"] .stTabs button[role="tab"][aria-selected="true"] { background: transparent !important; padding: 10px 0 !important; border-radius: 0 !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wr_tabs"] .stTabs [data-baseweb="tab-panel"] { padding-top: 14px !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stPopoverBody"] { border: 1px solid var(--wx-line-2) !important; border-radius: 8px !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stPlotlyChart"] { max-width: 100%; overflow: hidden; }
+
+@media (max-width: 760px) {
+  .stApp .stMain:has(.wx-scope) h2.wr-title { font-size: 25px !important; }
+  .stApp .stMain:has(.wx-scope) .wr-big { font-size: 52px; }
+  .stApp .stMain:has(.wx-scope) .wr-hero { gap: 18px 0; }
+  .stApp .stMain:has(.wx-scope) .wr-figs .wr-fig:first-child { padding-left: 0; border-left: 0; }
+  .stApp .stMain:has(.wx-scope) .wr-row { grid-template-columns: 1fr; gap: 4px; }
+  .stApp .stMain:has(.wx-scope) .wr-ledger th, .stApp .stMain:has(.wx-scope) .wr-ledger td { padding-right: 6px; font-size: 13px; }
+}
