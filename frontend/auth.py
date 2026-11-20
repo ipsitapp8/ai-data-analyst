@@ -22,10 +22,69 @@ import streamlit.components.v1 as components
 
 _SESSION_KEY = "_auth_ok"
 
-def _lp_words(text: str) -> str:
+def _lp_words(text: str, start: int = 0) -> str:
     """A title split into words, so each can rise in turn when it scrolls into view."""
     import html as _h
-    return " ".join(f'<span class="w" style="--i:{i}">{_h.escape(w)}</span>' for i, w in enumerate(text.split()))
+    return " ".join(f'<span class="w" style="--i:{start + i}">{_h.escape(w)}</span>' for i, w in enumerate(text.split()))
+
+
+# Every tool in the product, grouped. Names and one-liners follow what each page of the app says it does.
+_LP_GROUPS = [
+    ("Ask", "Questions in, answers out.", [
+        ("Analyses", "Ask in plain English", "An agent plans the analysis, writes the code and runs it in a sandbox."),
+        ("Silt Copilot", "Chat with your data", "Free-form questions, calculations and follow-ups in one conversation."),
+        ("Drill-down", "Break a metric down", "Filter and split one metric step by step, with rules only."),
+        ("Datasets", "Bring your data", "Upload CSV or Excel files, keep versions and explore your sources."),
+    ]),
+    ("Verify", "Nothing reaches you unchecked.", [
+        ("Critic", "A second model checks it", "An independent model re-verifies every number before the answer reaches you."),
+        ("Audit trail", "Every step is logged", "Full traceability for each analysis: the plan, the code and the evidence."),
+        ("Semantic layer", "One definition per metric", "Approved metric definitions that analyses use instead of guessing."),
+        ("Evaluation", "Measured against references", "Regression results for the pipeline and each of its parts."),
+    ]),
+    ("Investigate", "Find what moved, and where.", [
+        ("Root cause", "Where did the number move?", "Locate where a metric changed between two periods. Computed from your data."),
+        ("Data quality", "Spot drift early", "What changed in the data itself, kept separate from changes in the business."),
+        ("Alerts", "Hear about changes first", "What changed, went unusual or failed verification, in one feed."),
+    ]),
+    ("Decide", "Look ahead, then share it.", [
+        ("What-if", "Test a decision first", "Change an input and see the range of outcomes, with the evidence behind each."),
+        ("Dashboards", "Verified dashboards", "Generated from verified analyses, ready to read at a glance."),
+        ("Reports", "Packaged answers", "Every completed analysis, packaged and verified."),
+    ]),
+    ("Operate", "Run it as a team.", [
+        ("Scheduled", "Re-run automatically", "Tracked questions re-run on the latest data without anyone asking again."),
+        ("Workspaces", "Isolated by team", "Communities hold teams, and each team is its own isolated workspace."),
+        ("Shared links", "Share a result", "Send a read-only link to an analysis, no account needed to view it."),
+        ("Discussion", "Notes with context", "Comments pinned to an analysis or a dataset, so the context stays with it."),
+    ]),
+]
+
+
+def _lp_feature_grid() -> str:
+    """The full tool list as one markup string: a labelled block per group, a small card per tool."""
+    import html as _h
+    total = sum(len(g[2]) for g in _LP_GROUPS)
+    out = ['<div class="lp-sec lm-all"><div class="lp-eyebrow">Everything inside</div>',
+           f'<h2 class="lp-h2">{_lp_words("Every tool, in one workspace.")}</h2>',
+           f'<p class="lm-all-sub">{total} tools across asking, verifying, investigating, deciding and running your analytics.</p>',
+           '<div class="lm-groups">']
+    for gi, (name, line, items) in enumerate(_LP_GROUPS, 1):
+        cards = "".join(
+            f'<div class="lm-fcard"><div class="n">{_h.escape(tag)}</div><b>{_h.escape(title)}</b><p>{_h.escape(text)}</p></div>'
+            for tag, title, text in items)
+        out.append(f'<div class="lm-fgroup"><div class="lm-fhead"><div class="k">{gi:02d} / {_h.escape(name.upper())}</div>'
+                   f'<div class="t">{_h.escape(line)}</div></div><div class="lm-fcards">{cards}</div></div>')
+    out.append('</div></div>')
+    return "".join(out)
+
+
+def _lp_ticker() -> str:
+    """The tool names as a loop for the closing ticker (the list is doubled so the loop has no seam)."""
+    import html as _h
+    names = [tag for _, _, items in _LP_GROUPS for tag, _, _ in items]
+    chips = "".join(f'<span><i></i>{_h.escape(n)}</span>' for n in names)
+    return chips + chips
 
 
 # Scroll choreography for the landing page. Runs in Streamlit's same-origin component iframe and reaches up to the page:
@@ -40,8 +99,8 @@ _LP_REVEAL_JS = """
   if (!('IntersectionObserver' in w)) return;
   if (w.__lmStop) { try { w.__lmStop(); } catch (e) {} }
   w.__lmIntroAt = Date.now();
-  var SEL = '.lp-strip span,.lp-eyebrow,.lp-h2,.lp-feat,.lp-steps>div,.lp-final';
-  var STAGGER = '.lp-strip span,.lp-feat,.lp-steps>div';
+  var SEL = '.lp-strip span,.lp-eyebrow,.lp-h2,.lm-all-sub,.lp-feat,.lm-fgroup,.lm-fcard,.lp-steps>div,.lm-marq,.lm-final-card,.lm-big';
+  var STAGGER = '.lp-strip span,.lp-feat,.lm-fcard,.lp-steps>div';
   var INTRO = ['.lp-kicker', '.lp-title', '.lp-sub', '.lp-ctas'];
   var io = new w.IntersectionObserver(function (es) {
     es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('lm-in'); io.unobserve(e.target); } });
@@ -62,8 +121,8 @@ _LP_REVEAL_JS = """
       if (el.__lm) return; el.__lm = 1;
       var par = el.parentElement, idx = par ? Array.prototype.indexOf.call(par.children, el) : 0;
       if (el.matches(STAGGER)) el.style.transitionDelay = (idx * 90) + 'ms';
-      if (el.classList.contains('lp-feat')) {
-        el.setAttribute('data-par', [0, 0.03, 0.06][idx % 3]);
+      if (el.classList.contains('lp-feat')) el.setAttribute('data-par', [0, 0.03, 0.06][idx % 3]);
+      if (el.classList.contains('lp-feat') || el.classList.contains('lm-fcard')) {
         el.addEventListener('mousemove', function (e) { var b = el.getBoundingClientRect(); el.style.setProperty('--mx', (e.clientX - b.left) + 'px'); el.style.setProperty('--my', (e.clientY - b.top) + 'px'); });
       }
       el.classList.add('lm-r');
@@ -398,29 +457,22 @@ def require_login() -> None:
             '<span><u></u>Grouped by region</span><span><u></u>Compared Q2 vs Q3</span></div></div>'
             '<b>Every step is logged</b><p>See the plan, the code and the evidence behind each answer in the audit trail.</p></div>'
             '</div></div>'
-            '<div class="lp-sec"><div class="lp-eyebrow">And more inside</div>'
-            f'<h2 class="lp-h2">{_lp_words("Built to ask, trace and decide.")}</h2>'
-            '<div class="lp-feats">'
-            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-delta"><div class="hd"><span>Revenue, Q2 to Q3</span><b>&minus;12.4%</b></div>'
-            '<div class="bar"><span>West</span><i style="--w:68%"></i><em>&minus;8.4</em></div>'
-            '<div class="bar"><span>Online</span><i style="--w:34%"></i><em>&minus;3.1</em></div></div></div>'
-            '<b>Find where a number moved</b><p>Compare two periods and see which segments drove the change. Every figure is computed from your data.</p></div>'
-            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-what"><div class="row"><span>Price</span><i class="sl"><u></u></i><em>+5%</em></div>'
-            '<div class="row"><span>Revenue</span><b>118k &ndash; 131k</b></div><div class="row"><span>Range</span><b>80% of outcomes</b></div></div></div>'
-            '<b>Test a decision first</b><p>Change an input and see the range of outcomes, with the evidence behind each result.</p></div>'
-            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-chat"><span class="u">Why did March dip?</span>'
-            '<span class="a">Mostly West: 8.4 of 12.4 points.<i class="caret"></i></span></div></div>'
-            '<b>Chat with your data</b><p>Ask follow-ups in plain language and get answers with the numbers behind them.</p></div>'
-            '</div></div>'
+            f'{_lp_feature_grid()}'
             '<div class="lp-sec"><div class="lp-eyebrow">How it works</div>'
             f'<h2 class="lp-h2">{_lp_words("From question to trusted answer.")}</h2>'
             '<div class="lp-steps"><div><em>1</em><b>Upload your data</b><p>CSV, Excel or a database.</p></div>'
             '<div><em>2</em><b>Ask a question</b><p>The planner agent writes the analysis.</p></div>'
             '<div><em>3</em><b>Run in a sandbox</b><p>Code executes in isolation.</p></div>'
             '<div><em>4</em><b>Verified answer</b><p>The critic signs off, then you see it.</p></div></div></div>'
-            '<div class="lp-final"><h2>Ready to trust your numbers?</h2>'
-            '<p>Create a workspace and ask your first question in minutes.</p>'
-            '<a class="lp-btn light" href="?view=signup" target="_self">Get Started &rarr;</a></div>',
+            f'<div class="lm-finale"><div class="lm-marq"><div class="track">{_lp_ticker()}</div></div>'
+            '<div class="lm-final-card"><div class="lp-eyebrow">Your turn</div>'
+            f'<h2 class="lm-big">{_lp_words("Ask your")} <em>{_lp_words("first question.", 2)}</em></h2>'
+            '<p>Create a workspace, upload a CSV and get a verified answer in minutes.</p>'
+            '<div class="lm-cta"><a class="lp-btn dark" href="?view=signup" target="_self">Get Started <span class="arr">&rarr;</span></a>'
+            '<a class="lp-btn light" href="?view=login" target="_self">Log in</a></div>'
+            '<div class="lm-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span><span>Fully auditable</span></div></div>'
+            f'<div class="lm-marq rev"><div class="track">{_lp_ticker()}</div></div>'
+            '<div class="lm-foot"><span>Silt &mdash; Autonomous Data Analyst</span><span>Verified / Auditable / Actionable</span></div></div>',
             unsafe_allow_html=True,
         )
         with st.container(key="lp_scene"):

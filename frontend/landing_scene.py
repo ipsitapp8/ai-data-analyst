@@ -181,7 +181,14 @@ function journey() {
     cx += (px - cx) * jk; cy += (py - cy) * jk;
     R *= 1 + jk * (.35 + .2 * Math.sin(u * .9));
   }
-  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .5 * jk).toFixed(3); fe.style.filter = 'hue-rotate(' + (Math.sin(u * .5) * 32).toFixed(1) + 'deg) blur(' + (jk * 6).toFixed(1) + 'px)'; } } catch (e) {}
+  // the finale: near the bottom of the page the form settles in the middle and breathes behind the closing card
+  let fin = 0;
+  try { const max = scrollEl ? scrollEl.scrollHeight - scrollEl.clientHeight : 0; fin = max > 0 ? ss(.8, .97, so / max) : 0; } catch (e) {}
+  if (fin > 0) {
+    cx += (W * .5 - cx) * fin; cy += (H * .5 - cy) * fin;
+    R *= 1 + fin * (.3 + .06 * Math.sin(clock * 2.2));
+  }
+  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .5 * jk - .12 * fin).toFixed(3); fe.style.filter = 'hue-rotate(' + (Math.sin(u * .5) * 32 * (1 - fin)).toFixed(1) + 'deg) blur(' + (jk * 6 * (1 - .2 * fin)).toFixed(1) + 'px)'; } } catch (e) {}
 }
 function panels() { const d = par(); return d ? [...d.querySelectorAll('.lp-panel')].map(p => p.getBoundingClientRect()) : []; }
 function setVars() {
