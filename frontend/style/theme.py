@@ -801,6 +801,20 @@ def inject_base_css() -> None:
     st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
     st.markdown(_READABLE_TEXT_CSS, unsafe_allow_html=True)
     st.markdown(_ONBOARD_HANDOFF_CSS, unsafe_allow_html=True)
+    st.markdown(_NAV_GROUP_CSS, unsafe_allow_html=True)
+
+
+# Folding groups in the nav rail: the group name is a small label, the open one is gold, the pages sit under it.
+_NAV_GROUP_CSS = """<style>
+.st-key-nav [data-testid="stExpander"] { border: 0 !important; background: transparent !important; box-shadow: none !important; margin: 6px 0 0 !important; }
+.st-key-nav [data-testid="stExpander"] details { border: 0 !important; background: transparent !important; }
+.st-key-nav [data-testid="stExpander"] summary { padding: 10px 16px 8px !important; background: transparent !important; border-radius: 8px !important; }
+.st-key-nav [data-testid="stExpander"] summary:hover { background: rgba(255,255,255,.04) !important; }
+.st-key-nav [data-testid="stExpander"] summary p { font: 500 10.5px/1 "JetBrains Mono", ui-monospace, Consolas, monospace !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: #8c88a3 !important; margin: 0 !important; }
+.st-key-nav [data-testid="stExpander"] details[open] > summary p { color: #f3b24f !important; }
+.st-key-nav [data-testid="stExpander"] summary svg { color: #8c88a3 !important; width: 14px !important; height: 14px !important; }
+.st-key-nav [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 0 !important; }
+</style>"""
 
 
 # After "Create workspace" the next run (the real page) can take several seconds on a slow backend or database, and
@@ -1038,7 +1052,7 @@ NAV_PAGES = [
     ("analyst", "Silt Copilot", "pages/12_Copilot.py"),
     ("investigations", "Root cause", "pages/13_Investigations.py"),
     ("what_if", "What-if", "pages/14_What_If.py"),
-    ("copilot", "Drill-down sessions", "pages/19_Drilldown_Sessions.py"),
+    ("copilot", "Drill-down", "pages/19_Drilldown_Sessions.py"),
     ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
@@ -1050,6 +1064,19 @@ NAV_PAGES = [
     ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
     ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
     ("settings", "Settings", "pages/7_Settings.py"),
+]
+
+
+# The nav is grouped by what someone wants to do, not by when each page was built. A group opens by itself when it holds the
+# page being viewed; the others stay folded, so the rail stays short. Every key here is a key of NAV_PAGES.
+NAV_GROUPS = [
+    (None, ["home", "overview"]),
+    ("Your data", ["datasets", "semantic"]),
+    ("Ask", ["analyses", "analyst", "copilot"]),
+    ("Investigate", ["investigations", "data_quality", "what_if"]),
+    ("Share & automate", ["dashboards", "reports", "discussion", "scheduled"]),
+    ("Trust", ["audit", "evaluation"]),
+    ("Team", ["workspaces", "team_overview", "settings"]),
 ]
 
 
@@ -1188,10 +1215,22 @@ def render_sidebar(current: str) -> None:
         html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
         with st.container(key="nav"):
             unread = _unread_alert_count()
-            for key, label, target in NAV_PAGES:
-                shown = f"{label}  ·  {unread}" if key == "scheduled" and unread else label
-                if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
-                    st.switch_page(target)
+            pages = {key: (label, target) for key, label, target in NAV_PAGES}
+
+            def _items(keys: list[str]) -> None:
+                for key in keys:
+                    label, target = pages[key]
+                    shown = f"{label}  ·  {unread}" if key == "scheduled" and unread else label
+                    if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
+                        st.switch_page(target)
+
+            for group, keys in NAV_GROUPS:
+                if group is None:
+                    _items(keys)
+                    continue
+                badge = f"  ·  {unread}" if "scheduled" in keys and unread else ""
+                with st.expander(f"{group}{badge}", expanded=current in keys):
+                    _items(keys)
             if current_user() and st.button("Log out", key="nav_logout"):
                 logout()
                 st.rerun()

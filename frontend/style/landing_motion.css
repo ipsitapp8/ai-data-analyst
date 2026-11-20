@@ -150,7 +150,7 @@
 .stApp:has(.lm-scope) .vis { position: relative; height: 112px; margin-bottom: 20px; padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; gap: 9px; overflow: hidden;
   background: rgba(4,3,14,.5); border: 1px solid var(--lm-line); border-radius: 4px; font: 400 12.5px/1.2 var(--lm-sans); color: var(--lm-ink-2); }
 .stApp:has(.lm-scope) .vis * { animation-play-state: paused; }
-.stApp:has(.lm-scope) .lm-fcard.lm-in .vis *, .stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis * { animation-play-state: running; }
+.stApp:has(.lm-scope) .lm-fcard.lm-in .vis *, .stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis *, .stApp:has(.lm-scope) .lp-steps > div.lm-in .vis * { animation-play-state: running; }
 .stApp:has(.lm-scope) .vis .s1 { animation: lm-s1 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
 .stApp:has(.lm-scope) .vis .s2 { animation: lm-s2 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
 .stApp:has(.lm-scope) .vis .s3 { animation: lm-s3 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
@@ -248,3 +248,27 @@
 .stApp:has(.lm-scope) .lm-fhead { position: sticky; top: 120px; align-self: start; }
 
 @media (prefers-reduced-motion: reduce) { .stApp:has(.lm-scope) .vis *, .stApp:has(.lm-scope) .lp-chat > span, .stApp:has(.lm-scope) .lp-checks > span, .stApp:has(.lm-scope) .lp-log > span { animation: none !important; opacity: 1 !important; transform: none !important; clip-path: none !important; stroke-dashoffset: 0 !important; } }
+
+/* ====================================================== How it works: each step shows what happens */
+.stApp:has(.lm-scope) .lp-steps .vis { margin: 20px 0 0; height: 122px; }
+.stApp:has(.lm-scope) .lp-steps .vis p { font: 400 12.5px/1.2 var(--lm-sans) !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-steps { padding-bottom: 6px; }
+/* a data packet runs along the line from step to step */
+.stApp:has(.lm-scope) .lp-steps .packet { position: absolute; top: 19px; left: 6%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #fff4d6; box-shadow: 0 0 14px 4px rgba(243,178,79,.8); z-index: 2; pointer-events: none; animation: lm-pack 5.5s cubic-bezier(.5,0,.5,1) infinite; }
+@keyframes lm-pack { 0% { left: 6%; opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { left: 94%; opacity: 0; } }
+/* 1: a file drops into the box and loads */
+.stApp:has(.lm-scope) .v-up .drop { height: 48px; border: 1px dashed var(--lm-line-2); border-radius: 4px; display: grid; place-items: center; overflow: hidden; background: rgba(243,178,79,.04); }
+.stApp:has(.lm-scope) .v-up .file { padding: 6px 12px; border-radius: 3px; background: rgba(243,178,79,.12); border: 1px solid rgba(243,178,79,.5); font: 500 12px/1 var(--lm-mono); color: var(--lm-ink); animation: lm-fall 6.5s cubic-bezier(.3,1.4,.5,1) infinite both; }
+.stApp:has(.lm-scope) .v-up .prog { height: 5px; border-radius: 3px; background: rgba(243,178,79,.16); overflow: hidden; }
+.stApp:has(.lm-scope) .v-up .prog u { display: block; height: 100%; background: var(--lm-amber); transform-origin: left; }
+.stApp:has(.lm-scope) .v-up .ok { font: 500 11px/1 var(--lm-mono); color: var(--lm-amber); }
+@keyframes lm-fall { 0%, 3% { opacity: 0; transform: translateY(-40px); } 14% { opacity: 1; transform: none; } 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+/* 3: code appears, runs, finishes */
+.stApp:has(.lm-scope) .v-code code { display: block; font: 500 12.5px/1.2 var(--lm-mono); color: var(--lm-ink); background: rgba(255,255,255,.06); padding: 6px 9px; border-radius: 3px; }
+.stApp:has(.lm-scope) .v-code .run, .stApp:has(.lm-scope) .v-code .done { position: absolute; left: 15px; bottom: 13px; display: flex; align-items: center; gap: 8px; font: 500 11px/1 var(--lm-mono); color: var(--lm-amber); }
+.stApp:has(.lm-scope) .v-code .run { animation: lm-srun 6.5s infinite both; } .stApp:has(.lm-scope) .v-code .done { animation: lm-sdone 6.5s infinite both; }
+.stApp:has(.lm-scope) .v-code .run i { width: 10px; height: 10px; border: 2px solid var(--lm-amber); border-right-color: transparent; border-radius: 50%; animation: lm-rot .8s linear infinite; }
+@keyframes lm-srun { 0%, 34% { opacity: 0; } 38%, 56% { opacity: 1; } 60%, 100% { opacity: 0; } }
+@keyframes lm-sdone { 0%, 58% { opacity: 0; transform: translateY(6px); } 64%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .stApp:has(.lm-scope) .lp-steps .packet { animation: none; opacity: 0; } .stApp:has(.lm-scope) .v-code .run { display: none; } }
