@@ -93,6 +93,29 @@ def _steps_summary(step_results: list[dict]) -> str:
 
 
 def critic_node(state: AgentState) -> dict:
+    """Run the independent check. If the verifier itself breaks (provider down,
+    malformed reply, sandbox hiccup) the analysis is still delivered, honestly
+    labelled UNVERIFIED, rather than the whole run dying after the work is done."""
+    try:
+        return _critic_run(state)
+    except runtime.RunAborted:
+        raise
+    except Exception as e:  # noqa: BLE001 - the verifier failing must not discard finished work
+        logger.exception("Critic failed for question %s", state["question_id"])
+        return {
+            "critic_verdict": "unverified",
+            "critic_summary": (
+                "The independent verification step could not be completed "
+                f"({type(e).__name__}), so these results were not re-checked against the raw data. "
+                "Treat them as unverified, or run the analysis again."
+            ),
+            "critic_issues": [],
+            "critic_checks": [],
+            "critic_review_id": None,
+        }
+
+
+def _critic_run(state: AgentState) -> dict:
     question_id = state["question_id"]
     update_stage(question_id, "critic", "Independently re-checking results against raw data")
 
