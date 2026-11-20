@@ -51,6 +51,9 @@ def _fmt(x) -> str:
 
 
 def explore_tab(datasets: list[dict]) -> None:
+    # a dataset whose file is gone for good (no copy on disk or in the database) cannot be used, so it is not offered
+    hidden = [d for d in datasets if d.get("file_available") is False]
+    datasets = [d for d in datasets if d.get("file_available") is not False]
     try:
         domains = _cached(("domains",), whatif_domains)
     except ApiError as e:
@@ -95,6 +98,8 @@ def explore_tab(datasets: list[dict]) -> None:
                                  label_visibility="collapsed")
         elif can_use_data and needs_data:
             st.info("No dataset yet. Upload one on the Datasets page, or choose “Build a scenario manually”.")
+        if can_use_data and hidden:
+            st.caption(f"{len(hidden)} older dataset(s) are not listed because their file is no longer on the server. Upload them again to use them.")
         ds_id = ds["id"] if ds else None
         dom_arg = None if domain == "auto" else domain
         if ds_id and start != "Build a scenario manually":

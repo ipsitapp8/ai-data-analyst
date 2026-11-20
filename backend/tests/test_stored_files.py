@@ -105,3 +105,15 @@ def test_a_file_saved_under_another_machines_path_is_restored_here(path):
         db.delete(db.get(StoredFile, foreign))
         db.commit()
         db.close()
+
+
+def test_a_dataset_is_listed_as_unavailable_only_when_its_file_is_gone_for_good(path):
+    db = SessionLocal()
+    try:
+        assert stored_files.available(db, path) is True                              # on disk
+        assert stored_files.save(db, path)
+        os.remove(path)
+        assert stored_files.available(db, path) is True                              # gone from disk, saved in the database
+        assert stored_files.available(db, "/app/data/uploads/never_saved_file.csv") is False
+    finally:
+        db.close()
