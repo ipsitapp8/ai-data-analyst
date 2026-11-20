@@ -201,9 +201,9 @@
 /* Critic, Audit trail */
 .stApp:has(.lm-scope) .v-crit p, .stApp:has(.lm-scope) .v-log p { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--lm-ink); }
 .stApp:has(.lm-scope) .v-crit p i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #0c0a1c; background: var(--lm-amber); }
-.stApp:has(.lm-scope) .v-log { padding-left: 24px; } .stApp:has(.lm-scope) .v-log::before { content: ""; position: absolute; left: 20px; top: 18px; bottom: 18px; width: 1px; background: var(--lm-line-2); }
-.stApp:has(.lm-scope) .v-log p u { position: absolute; left: 16px; width: 9px; height: 9px; border-radius: 50%; background: #0f0b24; border: 2px solid var(--lm-amber); }
-.stApp:has(.lm-scope) .v-log p { padding-left: 12px; position: relative; }
+.stApp:has(.lm-scope) .v-log { padding-left: 38px; } .stApp:has(.lm-scope) .v-log::before { content: ""; position: absolute; left: 18px; top: 18px; bottom: 18px; width: 1px; background: var(--lm-line-2); }
+.stApp:has(.lm-scope) .v-log p u { position: absolute; left: -25px; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; box-sizing: border-box; border-radius: 50%; background: #0f0b24; border: 2px solid var(--lm-amber); }
+.stApp:has(.lm-scope) .v-log p { padding-left: 0; position: relative; }
 /* Semantic layer */
 .stApp:has(.lm-scope) .v-sem code { font: 500 14px/1 var(--lm-mono); color: var(--lm-ink); padding: 9px 12px; border-radius: 4px; background: rgba(255,255,255,.06); align-self: flex-start; }
 /* Root cause, Evaluation, What-if */
