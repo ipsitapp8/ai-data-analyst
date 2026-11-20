@@ -71,14 +71,14 @@ def explore_tab(datasets: list[dict]) -> None:
         left, right = st.columns([1, 1], gap="medium")
         with left:
             with st.container(border=True, key="wxu_panel_domain"):
-                html('<div class="wx-ph"><span class="wx-pico wx-i-layers"></span><div><div class="wx-pt">Domain</div>'
+                html('<div class="wx-ph"><div><div class="wx-pk">01 · Context</div><div class="wx-pt">Domain</div>'
                      '<div class="wx-ps">Choose the context for your analysis.</div></div></div>')
                 domain = st.radio("Domain", list(ui), format_func=lambda k: ui[k][1], key="wxu_pick_domain", on_change=_reset,
                                   label_visibility="collapsed")
                 html(f'<div class="wx-detail">{esc(ui[domain][2])}</div>')
         with right:
             with st.container(border=True, key="wxu_panel_start"):
-                html('<div class="wx-ph"><span class="wx-pico wx-i-bolt"></span><div><div class="wx-pt">Starting point</div>'
+                html('<div class="wx-ph"><div><div class="wx-pk">02 · How to begin</div><div class="wx-pt">Starting point</div>'
                      '<div class="wx-ps">How would you like to begin your scenario?</div></div></div>')
                 start = st.radio("Starting point", START, format_func=lambda k: k, captions=[START_UI[k][1] for k in START], key="wxu_pick_start",
                                  on_change=_reset, label_visibility="collapsed")

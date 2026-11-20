@@ -191,3 +191,23 @@ html:has(.wx-scope), body:has(.wx-scope), .stApp:has(.wx-scope), .stApp:has(.wx-
 .stApp .stMain:has(.wx-scope) [data-testid="stHorizontalBlock"]:has([class*="st-key-wxu_panel"]) { align-items: stretch !important; }
 .stApp .stMain:has(.wx-scope) [data-testid="stColumn"]:has([class*="st-key-wxu_panel"]) > div, .stApp .stMain:has(.wx-scope) [data-testid="stColumn"]:has([class*="st-key-wxu_panel"]) [data-testid="stVerticalBlock"], .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { height: 100% !important; }
 .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { padding-bottom: 24px !important; }
+
+/* ---- the two top boxes take the Root-cause card design: hairline box, small corners, mono amber label, serif title, muted text.
+   Only the Domain and Starting point panels; everything else on the page keeps its look. ---- */
+.stApp .stMain:has(.wx-scope) {
+  --wx-amber: #f3b24f; --wx-amber-hi: #ffc66e; --wx-amber-soft: rgba(243,178,79,.13);
+  --wx-serif: "Newsreader", "Source Serif 4", Georgia, serif; --wx-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] { background: rgba(255,255,255,.028) !important; border: 1px solid rgba(236,233,251,.11) !important; border-radius: 6px !important; box-shadow: none !important; padding: 24px 22px 22px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"]:hover { border-color: rgba(236,233,251,.22) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] .wx-ph { display: block; margin: 0 0 18px; }
+.stApp .stMain:has(.wx-scope) .wx-pk { font: 500 10.5px/1 var(--wx-mono) !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--wx-amber) !important; margin: 0 0 10px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] .wx-pt { font: 500 23px/1.15 var(--wx-serif) !important; letter-spacing: -.01em !important; color: #f2efe7 !important; margin: 0 0 6px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_panel"] .wx-ps { font: 400 14px/1.5 var(--wx-font) !important; color: var(--wx-ink-3) !important; margin: 0 !important; }
+/* the chosen row is amber-tinted, matching the accent of these boxes */
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label { border-radius: 4px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label { border-radius: 4px !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_domain"] [role="radiogroup"] > label:has(input:checked),
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:has(input:checked) { background: var(--wx-amber-soft) !important; box-shadow: inset 0 0 0 1px rgba(243,178,79,.4) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:has(input:checked)::before { background-color: rgba(243,178,79,.2) !important; }
+.stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label { transition: border-color .15s, background .15s; }
