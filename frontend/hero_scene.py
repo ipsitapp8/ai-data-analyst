@@ -84,7 +84,7 @@ function journey() {
   const px = W * (.5 + .3 * Math.sin(u * 1.25 + .6)), py = H * (.47 + .08 * Math.cos(u * 1.6));
   cx += (px - cx) * k; cy += (py - cy) * k;
   R *= 1 + k * (.5 + .25 * Math.sin(u * .9));
-  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .58 * k).toFixed(3); fe.style.filter = 'hue-rotate(' + ((u * 26) % 360).toFixed(1) + 'deg)'; } } catch (e) {}
+  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .58 * k).toFixed(3); fe.style.filter = 'hue-rotate(' + (Math.sin(u * .5) * 32).toFixed(1) + 'deg) blur(' + (k * 7).toFixed(1) + 'px)'; } } catch (e) {}
 }
 
 // divergence-free (curl) flow: particles keep an even density instead of piling into filaments

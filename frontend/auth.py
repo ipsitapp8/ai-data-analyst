@@ -22,11 +22,82 @@ import streamlit.components.v1 as components
 
 _SESSION_KEY = "_auth_ok"
 
+def _lp_words(text: str) -> str:
+    """A title split into words, so each can rise in turn when it scrolls into view."""
+    import html as _h
+    return " ".join(f'<span class="w" style="--i:{i}">{_h.escape(w)}</span>' for i, w in enumerate(text.split()))
+
+
+# Scroll choreography for the landing page. Runs in Streamlit's same-origin component iframe and reaches up to the page:
+# the first things rise in on load, the lower sections appear one by one as they come into view, feature columns drift at
+# different speeds, a light follows the cursor over each card and the steps line draws with the scroll. Elements are
+# hidden only after they are marked, so if this does not run everything is simply visible.
+_LP_REVEAL_JS = """
+<script>
+(function () {
+  var w, d;
+  try { w = window.parent; d = w.document; } catch (e) { return; }
+  if (!('IntersectionObserver' in w)) return;
+  if (w.__lmStop) { try { w.__lmStop(); } catch (e) {} }
+  w.__lmIntroAt = Date.now();
+  var SEL = '.lp-strip span,.lp-eyebrow,.lp-h2,.lp-feat,.lp-steps>div,.lp-final';
+  var STAGGER = '.lp-strip span,.lp-feat,.lp-steps>div';
+  var INTRO = ['.lp-kicker', '.lp-title', '.lp-sub', '.lp-ctas'];
+  var io = new w.IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('lm-in'); io.unobserve(e.target); } });
+  }, { threshold: 0.15, rootMargin: '0px 0px -5% 0px' });
+  function intro() {
+    if (Date.now() - w.__lmIntroAt > 2500) return;
+    INTRO.forEach(function (sel, i) {
+      d.querySelectorAll(sel).forEach(function (el) {
+        if (el.__lmi) return; el.__lmi = 1;
+        el.style.animationDelay = (i * 140) + 'ms'; el.classList.add('lm-intro');
+      });
+    });
+  }
+  function scan() {
+    intro();
+    var H = w.innerHeight;
+    d.querySelectorAll(SEL).forEach(function (el) {
+      if (el.__lm) return; el.__lm = 1;
+      var par = el.parentElement, idx = par ? Array.prototype.indexOf.call(par.children, el) : 0;
+      if (el.matches(STAGGER)) el.style.transitionDelay = (idx * 90) + 'ms';
+      if (el.classList.contains('lp-feat')) {
+        el.setAttribute('data-par', [0, 0.03, 0.06][idx % 3]);
+        el.addEventListener('mousemove', function (e) { var b = el.getBoundingClientRect(); el.style.setProperty('--mx', (e.clientX - b.left) + 'px'); el.style.setProperty('--my', (e.clientY - b.top) + 'px'); });
+      }
+      el.classList.add('lm-r');
+      if (el.getBoundingClientRect().top < H * 0.92) el.classList.add('lm-now', 'lm-in');
+      else io.observe(el);
+    });
+  }
+  function line() {
+    d.querySelectorAll('.lp-feat[data-par]').forEach(function (el) {
+      var r = el.getBoundingClientRect(), off = r.top + r.height / 2 - w.innerHeight / 2;
+      el.style.setProperty('--py', (-off * parseFloat(el.getAttribute('data-par'))).toFixed(1) + 'px');
+    });
+    var s = d.querySelector('.lp-steps'); if (!s) return;
+    var r = s.getBoundingClientRect(), p = (w.innerHeight * 0.85 - r.top) / (w.innerHeight * 0.5);
+    s.style.setProperty('--lm-p', Math.max(0, Math.min(1, p)).toFixed(3));
+  }
+  var raf = 0;
+  function tick() { if (raf) return; raf = w.requestAnimationFrame(function () { raf = 0; scan(); line(); }); }
+  var mo = new w.MutationObserver(tick);
+  mo.observe(d.body, { childList: true, subtree: true });
+  d.addEventListener('scroll', tick, true);
+  w.addEventListener('resize', tick);
+  w.__lmStop = function () { io.disconnect(); mo.disconnect(); d.removeEventListener('scroll', tick, true); w.removeEventListener('resize', tick); };
+  tick();
+})();
+</script>"""
+
+
 def _landing_css() -> str:
     """Landing/sign-in stylesheet (style/landing.css), flattened like _gate_css."""
     raw = (Path(__file__).parent / "style" / "landing.css").read_text(encoding="utf-8")
     raw += chr(10) + (Path(__file__).parent / "style" / "landing_indigo.css").read_text(encoding="utf-8")
     raw += chr(10) + (Path(__file__).parent / "style" / "landing_hero.css").read_text(encoding="utf-8")
+    raw += chr(10) + (Path(__file__).parent / "style" / "landing_motion.css").read_text(encoding="utf-8")
     return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
 
 
@@ -40,7 +111,7 @@ def _gate_css() -> str:
 _GATE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500'
     '&display=swap" rel="stylesheet">'
 )
 _GATE_LOGO = (
@@ -287,6 +358,7 @@ def require_login() -> None:
 
     if view not in ("login", "signup"):
         st.markdown(
+            '<div class="lm-scope"></div>'
             f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
             '<div class="lp-navpill"><a href="?" target="_self">Home</a><a class="off" href="?view=login" target="_self">Log in</a></div>'
             '<div class="lp-nav-r"><a class="lp-pill" href="?view=signup" target="_self">Get started &#8599;</a></div></div>'
@@ -310,10 +382,11 @@ def require_login() -> None:
             '<div class="lp-pmeter"><b></b></div></div>'
             '<div class="lp-core-cap">Illustrative demonstration &middot; sample question, not a live analysis</div>'
             '</div></div>'
+            '<div class="lm-cue"><span>Scroll</span><i></i></div>'
             '<div class="lp-strip"><span>CSV &amp; Excel</span><span>PostgreSQL</span><span>Sandboxed Python</span>'
             '<span>Audit trail</span><span>Scheduled reports</span></div>'
             '<div class="lp-sec"><div class="lp-eyebrow">Why Silt</div>'
-            '<h2 class="lp-h2">An analyst that shows its work.</h2>'
+            f'<h2 class="lp-h2">{_lp_words("An analyst that shows its work.")}</h2>'
             '<div class="lp-feats">'
             '<div class="lp-feat"><div class="lp-fvis"><div class="lp-chat"><span class="u">Which region grew fastest?</span>'
             '<span class="a">West, up 18.4% quarter over quarter.<i class="caret"></i></span></div></div>'
@@ -325,8 +398,22 @@ def require_login() -> None:
             '<span><u></u>Grouped by region</span><span><u></u>Compared Q2 vs Q3</span></div></div>'
             '<b>Every step is logged</b><p>See the plan, the code and the evidence behind each answer in the audit trail.</p></div>'
             '</div></div>'
+            '<div class="lp-sec"><div class="lp-eyebrow">And more inside</div>'
+            f'<h2 class="lp-h2">{_lp_words("Built to ask, trace and decide.")}</h2>'
+            '<div class="lp-feats">'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-delta"><div class="hd"><span>Revenue, Q2 to Q3</span><b>&minus;12.4%</b></div>'
+            '<div class="bar"><span>West</span><i style="--w:68%"></i><em>&minus;8.4</em></div>'
+            '<div class="bar"><span>Online</span><i style="--w:34%"></i><em>&minus;3.1</em></div></div></div>'
+            '<b>Find where a number moved</b><p>Compare two periods and see which segments drove the change. Every figure is computed from your data.</p></div>'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-what"><div class="row"><span>Price</span><i class="sl"><u></u></i><em>+5%</em></div>'
+            '<div class="row"><span>Revenue</span><b>118k &ndash; 131k</b></div><div class="row"><span>Range</span><b>80% of outcomes</b></div></div></div>'
+            '<b>Test a decision first</b><p>Change an input and see the range of outcomes, with the evidence behind each result.</p></div>'
+            '<div class="lp-feat"><div class="lp-fvis"><div class="lp-chat"><span class="u">Why did March dip?</span>'
+            '<span class="a">Mostly West: 8.4 of 12.4 points.<i class="caret"></i></span></div></div>'
+            '<b>Chat with your data</b><p>Ask follow-ups in plain language and get answers with the numbers behind them.</p></div>'
+            '</div></div>'
             '<div class="lp-sec"><div class="lp-eyebrow">How it works</div>'
-            '<h2 class="lp-h2">From question to trusted answer.</h2>'
+            f'<h2 class="lp-h2">{_lp_words("From question to trusted answer.")}</h2>'
             '<div class="lp-steps"><div><em>1</em><b>Upload your data</b><p>CSV, Excel or a database.</p></div>'
             '<div><em>2</em><b>Ask a question</b><p>The planner agent writes the analysis.</p></div>'
             '<div><em>3</em><b>Run in a sandbox</b><p>Code executes in isolation.</p></div>'
@@ -338,6 +425,7 @@ def require_login() -> None:
         )
         with st.container(key="lp_scene"):
             st.iframe(LANDING_SCENE_HTML, height=200)
+        components.html(_LP_REVEAL_JS, height=0)
         st.stop()
 
     # ---- sign-in page ----

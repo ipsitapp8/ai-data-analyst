@@ -1,0 +1,112 @@
+/* Landing page only: every rule hangs off .lm-scope, which exists only on the signed-out landing view, so the sign-in
+   page and the app are untouched. Same design language as the Home, Root-cause and What-if pages: gold accent, serif
+   headlines, mono labels, hairline cards with small corners. The blob and the page background are left as they are. */
+.stApp:has(.lm-scope) {
+  --lm-ink: #f2efe7; --lm-ink-2: #bdb9cc; --lm-ink-3: #8c88a3;
+  --lm-line: rgba(242,239,231,.11); --lm-line-2: rgba(242,239,231,.22); --lm-panel: rgba(255,255,255,.03);
+  --lm-card: rgba(14,11,32,.82);
+  --lm-amber: #f3b24f; --lm-amber-hi: #ffc66e; --lm-amber-soft: rgba(243,178,79,.14);
+  --lm-serif: "Newsreader", "Source Serif 4", Georgia, serif; --lm-sans: "Inter", system-ui, sans-serif; --lm-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+/* ------------------------------------------------------------------ hero */
+.stApp:has(.lm-scope) .lp-kicker { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
+  font: 500 11px/1 var(--lm-mono) !important; letter-spacing: .16em !important; text-transform: uppercase !important; color: var(--lm-ink-3) !important; display: inline-flex !important; align-items: center !important; gap: 12px !important; }
+.stApp:has(.lm-scope) .lp-kicker .dot { width: 22px !important; height: 1px !important; border-radius: 0 !important; background: var(--lm-amber) !important; box-shadow: none !important; animation: none !important; }
+.stApp:has(.lm-scope) .lp-title { font: 500 clamp(2.7rem, 5.2vw, 4.7rem)/1.04 var(--lm-serif) !important; letter-spacing: -.025em !important; color: var(--lm-ink) !important; animation: none !important; }
+.stApp:has(.lm-scope) .lp-title .l1 { display: block; font: italic 400 clamp(1.5rem, 2.4vw, 2.1rem)/1.2 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink-3) !important; -webkit-text-fill-color: var(--lm-ink-3) !important; margin-bottom: 8px; }
+.stApp:has(.lm-scope) .lp-title .grad { font-style: italic !important; background: none !important; color: var(--lm-amber-hi) !important; -webkit-text-fill-color: var(--lm-amber-hi) !important; }
+.stApp:has(.lm-scope) .lp-sub { font: 400 16.5px/1.65 var(--lm-sans) !important; color: var(--lm-ink-2) !important; animation: none !important; }
+.stApp:has(.lm-scope) .lp-ctas { animation: none !important; }
+
+/* the three agent cards around the blob */
+.stApp:has(.lm-scope) .lp-panel { background: var(--lm-card) !important; border: 1px solid var(--lm-line-2) !important; border-radius: 6px !important; box-shadow: none !important; }
+.stApp:has(.lm-scope) .lp-panel.on { border-color: rgba(243,178,79,.7) !important; box-shadow: 0 0 36px rgba(243,178,79,.14) !important; }
+.stApp:has(.lm-scope) .lp-ptag { font: 500 10px/1 var(--lm-mono) !important; letter-spacing: .14em !important; color: var(--lm-amber) !important; }
+.stApp:has(.lm-scope) .lp-ptag i { background: var(--lm-amber) !important; box-shadow: none !important; border-radius: 1px !important; }
+.stApp:has(.lm-scope) .lp-ptitle { font: 500 20px/1.2 var(--lm-serif) !important; letter-spacing: -.005em !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-pline { font: 400 13px/1.45 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+.stApp:has(.lm-scope) .lp-pline.lp-dim { color: var(--lm-ink-3) !important; }
+.stApp:has(.lm-scope) .lp-pmeter b { background: var(--lm-amber) !important; }
+.stApp:has(.lm-scope) .lp-core-cap { font: 400 11px/1.4 var(--lm-mono) !important; color: var(--lm-ink-3) !important; }
+
+/* hero rise-in, driven by the script so each piece can follow the one before it */
+@keyframes lm-intro { from { opacity: 0; transform: translateY(30px); filter: blur(7px); } to { opacity: 1; transform: none; filter: none; } }
+.stApp:has(.lm-scope) .lm-intro { animation: lm-intro 1s cubic-bezier(.2,.7,.2,1) both !important; }
+
+/* scroll cue */
+.stApp:has(.lm-scope) .lm-cue { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 4vh 0 0; font: 500 10px/1 var(--lm-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--lm-ink-3); }
+.stApp:has(.lm-scope) .lm-cue i { width: 1px; height: 38px; background: linear-gradient(var(--lm-amber), transparent); transform-origin: top; animation: lm-cue 2.2s ease-in-out infinite; }
+@keyframes lm-cue { 0% { transform: scaleY(0); opacity: 0; } 40% { opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+
+/* ------------------------------------------------------------ the strip */
+.stApp:has(.lm-scope) .lp-strip { background: transparent !important; border-color: var(--lm-line) !important; }
+.stApp:has(.lm-scope) .lp-strip span, .stApp:has(.lm-scope) .lp-strip span:nth-child(2), .stApp:has(.lm-scope) .lp-strip span:nth-child(4) {
+  font: 500 12px/1.2 var(--lm-mono) !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--lm-ink-2) !important; }
+
+/* ------------------------------------------------------------- sections */
+.stApp:has(.lm-scope) .lp-eyebrow { background: none !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; font: 500 10.5px/1 var(--lm-mono) !important; letter-spacing: .16em !important; color: var(--lm-amber) !important;
+  display: inline-flex !important; align-items: center; gap: 12px; }
+.stApp:has(.lm-scope) .lp-eyebrow::before, .stApp:has(.lm-scope) .lp-eyebrow::after { content: ""; width: 22px; height: 1px; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .lp-h2 { font: 500 clamp(2.1rem, 4vw, 3.4rem)/1.08 var(--lm-serif) !important; letter-spacing: -.02em !important; color: var(--lm-ink) !important; margin: 18px 0 40px !important; }
+.stApp:has(.lm-scope) .lp-h2 .w { display: inline-block; opacity: 0; transform: translateY(.55em); filter: blur(5px); font: inherit !important; color: inherit !important;
+  transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1), filter .7s; transition-delay: calc(var(--i) * 85ms); }
+.stApp:has(.lm-scope) .lp-h2.lm-in .w { opacity: 1; transform: none; filter: none; }
+.stApp:has(.lm-scope) .lp-h2.lm-r { opacity: 1; transform: none; }                /* the words carry the motion */
+.stApp:has(.lm-scope) .lp-h2.lm-now .w { transition: none; }
+
+/* feature cards */
+.stApp:has(.lm-scope) .lp-feats { gap: 24px !important; }
+.stApp:has(.lm-scope) .lp-feat { --mx: 50%; --my: 0px; --py: 0px; translate: 0 var(--py); position: relative; overflow: hidden; background: var(--lm-panel) !important; border: 1px solid var(--lm-line) !important; border-radius: 6px !important; box-shadow: none !important; padding: 14px 14px 28px !important; }
+.stApp:has(.lm-scope) .lp-feat::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(280px circle at var(--mx) var(--my), rgba(243,178,79,.16), transparent 70%); }
+.stApp:has(.lm-scope) .lp-feat::after { content: ""; position: absolute; left: 0; top: 0; height: 1px; width: 100%; background: var(--lm-amber); transform: scaleX(0); transform-origin: left; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.stApp:has(.lm-scope) .lp-feat:hover { border-color: var(--lm-line-2) !important; }
+.stApp:has(.lm-scope) .lp-feat:hover::before { opacity: 1; }
+.stApp:has(.lm-scope) .lp-feat:hover::after { transform: scaleX(1); }
+.stApp:has(.lm-scope) .lp-feat > b { position: relative; font: 500 24px/1.15 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink) !important; margin: 20px 10px 8px !important; }
+.stApp:has(.lm-scope) .lp-feat > p { position: relative; font: 400 14.5px/1.6 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+.stApp:has(.lm-scope) .lp-fvis { border-radius: 4px !important; position: relative; }
+
+/* two new mini visuals */
+.stApp:has(.lm-scope) .lp-delta, .stApp:has(.lm-scope) .lp-what { width: 100%; display: flex; flex-direction: column; gap: 12px; font: 400 13px/1.2 var(--lm-sans); color: var(--lm-ink-2); }
+.stApp:has(.lm-scope) .lp-delta .hd { display: flex; justify-content: space-between; align-items: baseline; }
+.stApp:has(.lm-scope) .lp-delta .hd b { font: 500 26px/1 var(--lm-serif); color: var(--lm-amber-hi); }
+.stApp:has(.lm-scope) .lp-delta .bar { display: grid; grid-template-columns: 56px 1fr 36px; align-items: center; gap: 10px; }
+.stApp:has(.lm-scope) .lp-delta .bar i { height: 6px; border-radius: 3px; background: rgba(243,178,79,.16); position: relative; display: block; }
+.stApp:has(.lm-scope) .lp-delta .bar i::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--w); border-radius: 3px; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .lp-delta .bar em, .stApp:has(.lm-scope) .lp-what em { font: 500 12px/1 var(--lm-mono); font-style: normal; color: var(--lm-ink); text-align: right; }
+.stApp:has(.lm-scope) .lp-what .row { display: grid; grid-template-columns: 76px 1fr auto; align-items: center; gap: 10px; }
+.stApp:has(.lm-scope) .lp-what .row b { grid-column: 2 / 4; text-align: right; font: 500 15px/1 var(--lm-serif); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .lp-what .sl { height: 4px; border-radius: 2px; background: rgba(242,239,231,.14); position: relative; display: block; }
+.stApp:has(.lm-scope) .lp-what .sl u { position: absolute; left: 62%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--lm-amber); box-shadow: 0 0 0 4px rgba(243,178,79,.18); }
+
+/* steps */
+.stApp:has(.lm-scope) .lp-steps { --lm-p: 0; }
+.stApp:has(.lm-scope) .lp-steps::before { border-top: 1px solid var(--lm-line-2) !important; }
+.stApp:has(.lm-scope) .lp-steps::after { content: ""; position: absolute; left: 6%; right: 6%; top: 22px; border-top: 1px solid var(--lm-amber); transform-origin: left; transform: scaleX(var(--lm-p)); }
+.stApp:has(.lm-scope) .lp-steps em { border-radius: 6px !important; background: #0f0b24 !important; border: 1px solid var(--lm-line-2) !important; color: var(--lm-amber) !important; font: 500 14px/1 var(--lm-mono) !important; box-shadow: none !important; position: relative; z-index: 1;
+  transition: border-color .8s ease .25s, box-shadow .8s ease .25s; }
+.stApp:has(.lm-scope) .lp-steps > div.lm-in em { border-color: var(--lm-amber) !important; box-shadow: 0 0 0 4px rgba(243,178,79,.08), 0 0 26px rgba(243,178,79,.28) !important; }
+.stApp:has(.lm-scope) .lp-steps b { font: 500 22px/1.15 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-steps p { font: 400 14px/1.55 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+
+/* closing card */
+.stApp:has(.lm-scope) .lp-final { border-radius: 6px !important; border: 1px solid var(--lm-line-2) !important; background: radial-gradient(60% 120% at 50% 0%, rgba(243,178,79,.12), transparent 70%), var(--lm-panel) !important; box-shadow: none !important; }
+.stApp:has(.lm-scope) .lp-final h2 { font: 500 clamp(1.9rem, 3.6vw, 3rem)/1.1 var(--lm-serif) !important; letter-spacing: -.02em !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-final p { font: 400 16px/1.6 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+
+/* ------------------------------------------- reveal as you scroll.
+   Hidden only after the script has marked an element (.lm-r) and until it enters the screen (.lm-in). */
+.stApp:has(.lm-scope) .lm-r { opacity: 0; transform: translateY(30px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); will-change: opacity, transform; }
+.stApp:has(.lm-scope) .lm-r.lm-in { opacity: 1; transform: none; }
+.stApp:has(.lm-scope) .lm-r.lm-now { transition: none !important; }
+
+@media (max-width: 760px) { .stApp:has(.lm-scope) .lp-feat { translate: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .stApp:has(.lm-scope) .lm-r { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .stApp:has(.lm-scope) .lm-intro { animation: none !important; }
+  .stApp:has(.lm-scope) .lp-feat { translate: none; }
+  .stApp:has(.lm-scope) .lp-h2 .w { opacity: 1; transform: none; filter: none; transition: none; }
+  .stApp:has(.lm-scope) .lm-cue i { animation: none; }
+  .stApp:has(.lm-scope) .lp-steps::after { transform: none; }
+}

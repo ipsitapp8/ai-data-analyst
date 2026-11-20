@@ -163,6 +163,25 @@ function anchor() {
   else stage = { x: W * .55, y: H * .16, w: W * .4, h: H * .64, ok: true };
   if (mobile) { cx = stage.x + stage.w * .5; cy = stage.y + Math.min(175, stage.h * .45); R = Math.min(stage.w * .27, 118); }
   else { cx = stage.x + stage.w * .42; cy = stage.y + stage.h * .5; R = Math.min(stage.w * .30, stage.h * .31); }
+  journey();
+}
+// As the page scrolls the form leaves the hero and drifts across the background: it wanders left and right behind each
+// section, swells, softens and shifts hue, and spins faster while the page is moving. The page itself is never touched.
+let scrollEl = null, so = 0, lastSo = 0, spin = 0, jk = 0;
+function journey() {
+  if (REDUCE) return;
+  let s = 0;
+  try { const d = par(); scrollEl = scrollEl || (d && (d.querySelector('[data-testid="stMain"]') || d.scrollingElement)); s = scrollEl ? scrollEl.scrollTop : 0; } catch (e) {}
+  so += (s - so) * .1;
+  spin += (Math.min(6, Math.abs(so - lastSo) * .12) - spin) * .15; lastSo = so;
+  const u = so / Math.max(1, H); jk = ss(.1, .9, u);
+  if (jk > 0) {
+    stage.ok = true;                                          // keep drawing after the hero has scrolled away
+    const px = W * (.5 + .3 * Math.sin(u * 1.25 + .6)), py = H * (.47 + .08 * Math.cos(u * 1.6));
+    cx += (px - cx) * jk; cy += (py - cy) * jk;
+    R *= 1 + jk * (.35 + .2 * Math.sin(u * .9));
+  }
+  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .5 * jk).toFixed(3); fe.style.filter = 'hue-rotate(' + (Math.sin(u * .5) * 32).toFixed(1) + 'deg) blur(' + (jk * 6).toFixed(1) + 'px)'; } } catch (e) {}
 }
 function panels() { const d = par(); return d ? [...d.querySelectorAll('.lp-panel')].map(p => p.getBoundingClientRect()) : []; }
 function setVars() {
@@ -253,7 +272,7 @@ function draw(t, dt) {
 
   const pulse = t > PULSE_AT && t < PULSE_AT + 1.9 ? (t - PULSE_AT) / 1.9 : -1, pf = pulse >= 0 ? Math.sin(Math.PI * pulse) : 0;
   const energy = Math.max(act[0], act[1], act[2]) * .6 + pf;
-  rotY += dt * (.14 + (sx - .5) * .5); tiltA = .3 + (sy - .5) * .45;
+  rotY += dt * (.14 + spin * .9 + (sx - .5) * .5); tiltA = .3 + (sy - .5) * .45;
 
   bx.globalCompositeOperation = 'lighter';
   let g = bx.createRadialGradient(cx, cy, 0, cx, cy, R * 3.2);
@@ -270,7 +289,7 @@ function draw(t, dt) {
     bx.fillStyle = o; bx.beginPath(); bx.arc(cx, cy, R * 1.1, 0, TAU); bx.fill();
   }
 
-  const pr = panels();
+  const pr = jk > .05 ? [] : panels();                          // the cards have scrolled away: no connector lines
   for (let i = 0; i < Math.min(3, pr.length); i++) {
     const b = pr[i], py = b.top + b.height / 2, from = [(b.left + b.width / 2) < cx ? b.right : b.left, py], port = ringPoint(i, [-2.1, .25, 2.4][i], 0), a = act[i];
     const gr = fx.createLinearGradient(from[0], from[1], port[0], port[1]);
