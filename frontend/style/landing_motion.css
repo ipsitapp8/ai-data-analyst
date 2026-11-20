@@ -143,3 +143,108 @@
 @media (prefers-reduced-motion: reduce) {
   .stApp:has(.lm-scope) .lm-marq .track, .stApp:has(.lm-scope) .lm-final-card, .stApp:has(.lm-scope) .lm-cta::before { animation: none; }
 }
+
+/* ====================================================== a small animation inside every tool card
+   One 6.5 s loop per card. Items appear in order (s1 ... s5), bars grow, a line draws. Everything is paused until the card
+   has scrolled into view (.lm-in), so the loop starts when you reach it. */
+.stApp:has(.lm-scope) .vis { position: relative; height: 112px; margin-bottom: 20px; padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; gap: 9px; overflow: hidden;
+  background: rgba(4,3,14,.5); border: 1px solid var(--lm-line); border-radius: 4px; font: 400 12.5px/1.2 var(--lm-sans); color: var(--lm-ink-2); }
+.stApp:has(.lm-scope) .vis * { animation-play-state: paused; }
+.stApp:has(.lm-scope) .lm-fcard.lm-in .vis *, .stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis * { animation-play-state: running; }
+.stApp:has(.lm-scope) .vis .s1 { animation: lm-s1 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s2 { animation: lm-s2 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s3 { animation: lm-s3 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s4 { animation: lm-s4 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s5 { animation: lm-s5 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .gx1 { animation: lm-gx1 6.5s ease infinite both; } .stApp:has(.lm-scope) .vis .gx2 { animation: lm-gx2 6.5s ease infinite both; } .stApp:has(.lm-scope) .vis .gx3 { animation: lm-gx3 6.5s ease infinite both; }
+@keyframes lm-s1 { 0%, 3% { opacity: 0; transform: translateY(9px) scale(.96); } 9%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s2 { 0%, 17% { opacity: 0; transform: translateY(9px) scale(.96); } 23%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s3 { 0%, 31% { opacity: 0; transform: translateY(9px) scale(.96); } 37%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s4 { 0%, 45% { opacity: 0; transform: translateY(9px) scale(.96); } 51%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s5 { 0%, 59% { opacity: 0; transform: translateY(9px) scale(.96); } 65%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-gx1 { 0%, 5% { transform: scaleX(0); } 24%, 88% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+@keyframes lm-gx2 { 0%, 19% { transform: scaleX(0); } 38%, 88% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+@keyframes lm-gx3 { 0%, 33% { transform: scaleX(0); } 52%, 88% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+@keyframes lm-gy { 0%, 5% { transform: scaleY(0); } 26%, 88% { transform: scaleY(1); } 96%, 100% { transform: scaleY(0); } }
+@keyframes lm-draw { 0%, 5% { stroke-dashoffset: 100; } 42%, 88% { stroke-dashoffset: 0; } 96%, 100% { stroke-dashoffset: 100; } }
+@keyframes lm-arc { 0%, 5% { stroke-dashoffset: 100; } 45%, 88% { stroke-dashoffset: 28; } 96%, 100% { stroke-dashoffset: 100; } }
+@keyframes lm-knob { 0%, 8% { left: 16%; } 36%, 62% { left: 74%; } 90%, 100% { left: 16%; } }
+@keyframes lm-sdots { 0%, 17% { opacity: 0; } 22%, 38% { opacity: 1; } 44%, 100% { opacity: 0; } }
+@keyframes lm-dot { 0%, 100% { transform: translateY(0); opacity: .45; } 50% { transform: translateY(-4px); opacity: 1; } }
+@keyframes lm-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes lm-type { 0%, 14% { clip-path: inset(0 100% 0 0); } 38%, 88% { clip-path: inset(0 0 0 0); } 96%, 100% { clip-path: inset(0 100% 0 0); } }
+@keyframes lm-pulse { 0% { box-shadow: 0 0 0 0 rgba(243,178,79,.55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(243,178,79,0); } }
+
+.stApp:has(.lm-scope) .vis .row { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 10px; }
+.stApp:has(.lm-scope) .vis i { display: block; font-style: normal; }
+.stApp:has(.lm-scope) .vis .row > i, .stApp:has(.lm-scope) .v-data .file i { height: 6px; border-radius: 3px; background: rgba(243,178,79,.16); overflow: hidden; }
+.stApp:has(.lm-scope) .vis .row > i u, .stApp:has(.lm-scope) .v-data .file i u { display: block; height: 100%; width: var(--w, 100%); border-radius: 3px; background: var(--lm-amber); transform-origin: left; }
+.stApp:has(.lm-scope) .vis .stamp { align-self: flex-start; padding: 5px 9px; border: 1px solid var(--lm-amber); border-radius: 3px; font: 500 11px/1 var(--lm-mono); letter-spacing: .08em; color: var(--lm-amber); text-transform: uppercase; }
+.stApp:has(.lm-scope) .vis b { font-weight: 500; }
+
+/* Analyses: a question, then the answer typed out */
+.stApp:has(.lm-scope) .v-type .q { align-self: flex-end; padding: 7px 12px; border-radius: 4px; border: 1px solid rgba(243,178,79,.5); background: rgba(243,178,79,.1); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-type .a { align-self: flex-start; padding: 7px 12px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--lm-ink); animation: none; opacity: 1; transform: none; clip-path: inset(0 100% 0 0); animation: lm-type 6.5s steps(18, end) infinite both; }
+.stApp:has(.lm-scope) .v-type .a u { display: inline-block; width: 1px; height: 12px; margin-left: 3px; background: var(--lm-amber); vertical-align: -2px; animation: lm-caret .8s steps(2) infinite; }
+/* Copilot */
+.stApp:has(.lm-scope) .v-chat .u { align-self: flex-end; padding: 7px 12px; border-radius: 4px; background: rgba(243,178,79,.1); border: 1px solid rgba(243,178,79,.5); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-chat .r { position: absolute; left: 15px; bottom: 14px; padding: 7px 12px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-chat .dots { position: absolute; left: 15px; bottom: 16px; display: flex; gap: 4px; padding: 9px 11px; border-radius: 4px; background: rgba(255,255,255,.06); animation: lm-sdots 6.5s infinite both; }
+.stApp:has(.lm-scope) .v-chat .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--lm-amber); animation: lm-dot .9s ease-in-out infinite; } .stApp:has(.lm-scope) .v-chat .dots i:nth-child(2) { animation-delay: .15s; } .stApp:has(.lm-scope) .v-chat .dots i:nth-child(3) { animation-delay: .3s; }
+/* Drill-down: a trail of filters */
+.stApp:has(.lm-scope) .v-drill { flex-direction: row; flex-wrap: wrap; align-content: center; align-items: center; gap: 8px 6px; }
+.stApp:has(.lm-scope) .v-drill span { padding: 6px 10px; border: 1px solid var(--lm-line-2); border-radius: 3px; color: var(--lm-ink); background: rgba(255,255,255,.04); }
+.stApp:has(.lm-scope) .v-drill span.s4 { border-color: var(--lm-amber); color: var(--lm-amber-hi); } .stApp:has(.lm-scope) .v-drill b { color: var(--lm-ink-3); }
+/* Datasets: a file loads, versions stack up */
+.stApp:has(.lm-scope) .v-data .file { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 4px; background: rgba(255,255,255,.05); } .stApp:has(.lm-scope) .v-data .file em { font: 500 12px/1 var(--lm-mono); font-style: normal; color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-data .vers { display: flex; gap: 8px; } .stApp:has(.lm-scope) .v-data .vers span { padding: 5px 10px; border-radius: 3px; border: 1px solid var(--lm-line-2); font: 500 11px/1 var(--lm-mono); color: var(--lm-ink-2); } .stApp:has(.lm-scope) .v-data .vers span.s5 { border-color: var(--lm-amber); color: var(--lm-amber-hi); }
+/* Critic, Audit trail */
+.stApp:has(.lm-scope) .v-crit p, .stApp:has(.lm-scope) .v-log p { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-crit p i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #0c0a1c; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .v-log { padding-left: 24px; } .stApp:has(.lm-scope) .v-log::before { content: ""; position: absolute; left: 20px; top: 18px; bottom: 18px; width: 1px; background: var(--lm-line-2); }
+.stApp:has(.lm-scope) .v-log p u { position: absolute; left: 16px; width: 9px; height: 9px; border-radius: 50%; background: #0f0b24; border: 2px solid var(--lm-amber); }
+.stApp:has(.lm-scope) .v-log p { padding-left: 12px; position: relative; }
+/* Semantic layer */
+.stApp:has(.lm-scope) .v-sem code { font: 500 14px/1 var(--lm-mono); color: var(--lm-ink); padding: 9px 12px; border-radius: 4px; background: rgba(255,255,255,.06); align-self: flex-start; }
+/* Root cause, Evaluation, What-if */
+.stApp:has(.lm-scope) .v-rc .hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; } .stApp:has(.lm-scope) .v-rc .hd b { font: 500 22px/1 var(--lm-serif); color: var(--lm-amber-hi); }
+.stApp:has(.lm-scope) .v-wi .row { grid-template-columns: 62px 1fr; } .stApp:has(.lm-scope) .v-wi .sl { height: 4px; border-radius: 2px; background: rgba(242,239,231,.14); position: relative; }
+.stApp:has(.lm-scope) .v-wi .knob { position: absolute; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; background: var(--lm-amber); box-shadow: 0 0 0 4px rgba(243,178,79,.18); animation: lm-knob 6.5s ease-in-out infinite both; }
+.stApp:has(.lm-scope) .v-wi .row b { font: 500 17px/1 var(--lm-serif); color: var(--lm-ink); }
+/* Data quality: a line that drifts */
+.stApp:has(.lm-scope) .v-dq svg { width: 100%; height: 100%; position: absolute; inset: 0; padding: 12px 14px 22px; box-sizing: border-box; overflow: visible; }
+.stApp:has(.lm-scope) .v-dq path { fill: none; stroke: var(--lm-amber); stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 100; vector-effect: non-scaling-stroke; animation: lm-draw 6.5s ease infinite both; }
+.stApp:has(.lm-scope) .v-dq circle { fill: var(--lm-amber-hi); } .stApp:has(.lm-scope) .v-dq .tag { position: absolute; left: 14px; bottom: 10px; font: 500 10px/1 var(--lm-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--lm-amber); }
+/* Alerts */
+.stApp:has(.lm-scope) .v-al { gap: 8px; } .stApp:has(.lm-scope) .v-al .toast { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 4px; background: rgba(255,255,255,.06); } .stApp:has(.lm-scope) .v-al .toast i { flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .v-al .toast i.pulse { animation: lm-pulse 1.6s ease-out infinite; } .stApp:has(.lm-scope) .v-al .toast b { display: block; color: var(--lm-ink); font-size: 12px; } .stApp:has(.lm-scope) .v-al .toast span { font-size: 11px; color: var(--lm-ink-3); } .stApp:has(.lm-scope) .v-al .toast.dim { opacity: .8; }
+/* Dashboards: bars that rise */
+.stApp:has(.lm-scope) .v-db { flex-direction: row; align-items: flex-end; gap: 12px; padding-bottom: 14px; }
+.stApp:has(.lm-scope) .v-db i { flex: 1; height: var(--h); border-radius: 3px 3px 0 0; background: linear-gradient(var(--lm-amber), rgba(243,178,79,.25)); transform-origin: bottom; animation: lm-gy 6.5s ease infinite both; animation-delay: calc(var(--n) * .22s); }
+/* Reports: lines are written, then stamped */
+.stApp:has(.lm-scope) .v-rp { gap: 8px; } .stApp:has(.lm-scope) .v-rp .l { margin: 0; height: 6px; border-radius: 3px; background: rgba(242,239,231,.22); transform-origin: left; } .stApp:has(.lm-scope) .v-rp .l.short { width: 60%; }
+/* Scheduled */
+.stApp:has(.lm-scope) .v-sc { flex-direction: row; align-items: center; gap: 14px; } .stApp:has(.lm-scope) .v-sc svg { width: 54px; height: 54px; transform: rotate(-90deg); flex: 0 0 54px; }
+.stApp:has(.lm-scope) .v-sc .track { fill: none; stroke: rgba(242,239,231,.14); stroke-width: 4; } .stApp:has(.lm-scope) .v-sc .arc { fill: none; stroke: var(--lm-amber); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: lm-arc 6.5s ease infinite both; }
+.stApp:has(.lm-scope) .v-sc b { display: block; font: 500 16px/1.2 var(--lm-serif); color: var(--lm-ink); } .stApp:has(.lm-scope) .v-sc span { font: 500 11px/1.3 var(--lm-mono); color: var(--lm-amber); }
+/* Workspaces */
+.stApp:has(.lm-scope) .v-ws { flex-direction: row; flex-wrap: wrap; align-content: center; gap: 8px; } .stApp:has(.lm-scope) .v-ws .t { padding: 8px 12px; border-radius: 4px; border: 1px solid var(--lm-line-2); color: var(--lm-ink); background: rgba(255,255,255,.04); } .stApp:has(.lm-scope) .v-ws .t::before { content: "\25A0"; color: var(--lm-amber); margin-right: 8px; font-size: 9px; }
+.stApp:has(.lm-scope) .v-ws em { width: 100%; font: 500 11px/1 var(--lm-mono); font-style: normal; letter-spacing: .08em; text-transform: uppercase; color: var(--lm-ink-3); }
+/* Shared links */
+.stApp:has(.lm-scope) .v-sh { flex-direction: row; align-items: center; gap: 10px; } .stApp:has(.lm-scope) .v-sh .link { padding: 8px 12px; border-radius: 4px; border: 1px solid var(--lm-line-2); font: 500 12px/1 var(--lm-mono); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-sh .dash { flex: 1; height: 0; border-top: 1px dashed var(--lm-amber); } .stApp:has(.lm-scope) .v-sh .badge { padding: 6px 10px; border-radius: 3px; background: var(--lm-amber-soft); color: var(--lm-amber-hi); font: 500 11px/1 var(--lm-mono); letter-spacing: .08em; text-transform: uppercase; }
+/* Discussion */
+.stApp:has(.lm-scope) .v-ds p { margin: 0; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--lm-ink); } .stApp:has(.lm-scope) .v-ds p.me { margin-left: 22px; background: rgba(243,178,79,.1); }
+.stApp:has(.lm-scope) .v-ds p i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--lm-amber); color: #0c0a1c; font: 600 10px/1 var(--lm-mono); }
+
+/* the three 'Why Silt' cards get the same life: lines appear one after another when the card arrives */
+.stApp:has(.lm-scope) .lp-chat > span:nth-child(1), .stApp:has(.lm-scope) .lp-checks > span:nth-child(1), .stApp:has(.lm-scope) .lp-log > span:nth-child(1) { animation: lm-s1 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .lp-chat > span:nth-child(2), .stApp:has(.lm-scope) .lp-checks > span:nth-child(2), .stApp:has(.lm-scope) .lp-log > span:nth-child(2) { animation: lm-s2 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .lp-checks > span:nth-child(3), .stApp:has(.lm-scope) .lp-log > span:nth-child(3) { animation: lm-s3 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .lp-feat .lp-fvis span, .stApp:has(.lm-scope) .lp-feat .lp-fvis i { animation-play-state: paused; }
+.stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis span, .stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis i { animation-play-state: running; }
+
+/* the group title stays in view while its cards scroll past */
+.stApp:has(.lm-scope) .lm-fhead { position: sticky; top: 120px; align-self: start; }
+
+@media (prefers-reduced-motion: reduce) { .stApp:has(.lm-scope) .vis *, .stApp:has(.lm-scope) .lp-chat > span, .stApp:has(.lm-scope) .lp-checks > span, .stApp:has(.lm-scope) .lp-log > span { animation: none !important; opacity: 1 !important; transform: none !important; clip-path: none !important; stroke-dashoffset: 0 !important; } }

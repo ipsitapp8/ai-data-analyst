@@ -61,6 +61,30 @@ _LP_GROUPS = [
 ]
 
 
+# A small looping animation per tool, shown at the top of its card. Pure markup: the motion is CSS, and it only plays
+# once the card has scrolled into view.
+_LP_VIS = {
+    "Analyses": '<div class="vis v-type"><span class="q s1">Which region grew fastest?</span><span class="a s2">West, up 18.4%<u></u></span></div>',
+    "Silt Copilot": '<div class="vis v-chat"><span class="u s1">Why did March dip?</span><span class="dots"><i></i><i></i><i></i></span><span class="r s3">Mostly West: 8.4 of 12.4 points</span></div>',
+    "Drill-down": '<div class="vis v-drill"><span class="s1">Revenue</span><b class="s2">&rsaquo;</b><span class="s2">West</span><b class="s3">&rsaquo;</b><span class="s3">Q3</span><b class="s4">&rsaquo;</b><span class="s4">Online</span></div>',
+    "Datasets": '<div class="vis v-data"><div class="file s1"><em>sales.csv</em><i><u class="gx1"></u></i></div><div class="vers"><span class="s3">v1</span><span class="s4">v2</span><span class="s5">v3</span></div></div>',
+    "Critic": '<div class="vis v-crit"><p class="s1"><i>&#10003;</i>Totals match source</p><p class="s2"><i>&#10003;</i>No double counting</p><p class="s3"><i>&#10003;</i>12 of 12 reproduced</p></div>',
+    "Audit trail": '<div class="vis v-log"><p class="s1"><u></u>Plan saved</p><p class="s2"><u></u>Code executed</p><p class="s3"><u></u>Evidence kept</p></div>',
+    "Semantic layer": '<div class="vis v-sem"><code class="s1">Revenue = SUM(amount)</code><span class="stamp s3">&#10003; approved</span></div>',
+    "Evaluation": '<div class="vis v-eval"><div class="row"><span>Planner</span><i><u class="gx1"></u></i></div><div class="row"><span>Executor</span><i><u class="gx2"></u></i></div><div class="row"><span>Critic</span><i><u class="gx3"></u></i></div></div>',
+    "Root cause": '<div class="vis v-rc"><div class="hd s1"><span>Revenue, Q2 to Q3</span><b>&minus;12.4%</b></div><div class="row"><span>West</span><i><u class="gx1" style="--w:70%"></u></i></div><div class="row"><span>Online</span><i><u class="gx2" style="--w:34%"></u></i></div></div>',
+    "Data quality": '<div class="vis v-dq"><svg viewBox="0 0 200 60" preserveAspectRatio="none"><path pathLength="100" d="M0 42 L28 38 L56 40 L84 36 L112 39 L140 22 L170 12 L200 8"/><circle class="s4" cx="140" cy="22" r="4"/></svg><span class="tag s4">drift detected</span></div>',
+    "Alerts": '<div class="vis v-al"><div class="toast s1"><i class="pulse"></i><div><b>Revenue looks unusual</b><span>West &middot; just now</span></div></div><div class="toast s3 dim"><i></i><div><b>A check failed verification</b><span>Scheduled run &middot; 06:00</span></div></div></div>',
+    "What-if": '<div class="vis v-wi"><div class="row"><span>Price</span><i class="sl"><u class="knob"></u></i></div><div class="row"><span>Revenue</span><b class="s2">118k &ndash; 131k</b></div></div>',
+    "Dashboards": '<div class="vis v-db"><i style="--h:46%;--n:0"></i><i style="--h:72%;--n:1"></i><i style="--h:58%;--n:2"></i><i style="--h:88%;--n:3"></i><i style="--h:66%;--n:4"></i></div>',
+    "Reports": '<div class="vis v-rp"><p class="l s1"></p><p class="l s2"></p><p class="l short s3"></p><span class="stamp s4">&#10003; verified</span></div>',
+    "Scheduled": '<div class="vis v-sc"><svg viewBox="0 0 44 44"><circle class="track" cx="22" cy="22" r="18"/><circle class="arc" cx="22" cy="22" r="18" pathLength="100"/></svg><div><b class="s1">Every Monday</b><span class="s2">next run 06:00</span></div></div>',
+    "Workspaces": '<div class="vis v-ws"><span class="t s1">Sales</span><span class="t s2">Finance</span><span class="t s3">Ops</span><em class="s4">Each team is isolated</em></div>',
+    "Shared links": '<div class="vis v-sh"><span class="link s1">shared link</span><span class="dash"></span><span class="badge s3">view only</span></div>',
+    "Discussion": '<div class="vis v-ds"><p class="s1"><i>A</i>Check the West drop?</p><p class="s3 me"><i>B</i>Pinned to Q3 analysis</p></div>',
+}
+
+
 def _lp_feature_grid() -> str:
     """The full tool list as one markup string: a labelled block per group, a small card per tool."""
     import html as _h
@@ -71,7 +95,7 @@ def _lp_feature_grid() -> str:
            '<div class="lm-groups">']
     for gi, (name, line, items) in enumerate(_LP_GROUPS, 1):
         cards = "".join(
-            f'<div class="lm-fcard"><div class="n">{_h.escape(tag)}</div><b>{_h.escape(title)}</b><p>{_h.escape(text)}</p></div>'
+            f'<div class="lm-fcard">{_LP_VIS.get(tag, "")}<div class="n">{_h.escape(tag)}</div><b>{_h.escape(title)}</b><p>{_h.escape(text)}</p></div>'
             for tag, title, text in items)
         out.append(f'<div class="lm-fgroup"><div class="lm-fhead"><div class="k">{gi:02d} / {_h.escape(name.upper())}</div>'
                    f'<div class="t">{_h.escape(line)}</div></div><div class="lm-fcards">{cards}</div></div>')
