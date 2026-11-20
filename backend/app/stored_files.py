@@ -114,3 +114,15 @@ def restore_missing() -> int:
     if restored:
         logger.info("Restored %d uploaded file(s) from the database", restored)
     return restored
+
+
+def available(db, filepath: str) -> bool:
+    """True if the file can be read here, or restored: on disk (at its stored path or in this uploads folder)
+    or saved in the database. Used to hide datasets whose file is gone for good."""
+    if os.path.isfile(filepath) or (config.UPLOADS_DIR / filepath.replace("\\", "/").rsplit("/", 1)[-1]).is_file():
+        return True
+    try:
+        return db.get(StoredFile, filepath) is not None
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        return True   # not knowing is not a reason to hide a dataset

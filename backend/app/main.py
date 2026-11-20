@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import config, data_quality, fallbacks, jobs, provenance
+from app import config, data_quality, fallbacks, jobs, provenance, stored_files
 from app.database import get_db, init_db
 from app.dataset_versions import add_version, latest_version, version_count
 from app.logging_config import setup_logging
@@ -263,6 +263,7 @@ def _dataset_out(db: Session, d: Dataset) -> DatasetProfile:
         uploaded_at=latest.uploaded_at if latest else d.uploaded_at,
         version=latest.version_number if latest else 1,
         version_count=version_count(db, d.id),
+        file_available=stored_files.available(db, latest.filepath if latest else d.filepath),
     )
 
 
