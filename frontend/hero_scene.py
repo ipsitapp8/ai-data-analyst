@@ -71,20 +71,18 @@ function anchor() {
   cx = sx + sw * .36; cy = sy + sh * .53; R = Math.min(sw, sh) * .23;
   journey();
 }
-// As the page scrolls the sphere leaves the hero and drifts across the background: it wanders left and right behind each
-// section, swells and dims, shifts hue and spins faster while the page is moving. Nothing here moves the page itself.
-let scrollEl = null, so = 0, lastSo = 0, spin = 0;
+// The sphere stays in the hero and scrolls away with the page. As you scroll down, the dots let go of it and spread out over
+// the whole page, softened (blurred and dimmed) so the text on top stays readable. jk is how far the page has been scrolled
+// (0 at the top, 1 once the hero is well behind you). Nothing here moves the page itself.
+let scrollEl = null, so = 0, lastSo = 0, spin = 0, jk = 0;
 function journey() {
   if (REDUCE) return;
   let s = 0;
   try { scrollEl = scrollEl || window.parent.document.querySelector('[data-testid="stMain"]') || window.parent.document.scrollingElement; s = scrollEl ? scrollEl.scrollTop : 0; } catch (e) {}
   so += (s - so) * .1;
   spin += (Math.min(6, Math.abs(so - lastSo) * .12) - spin) * .15; lastSo = so;
-  const u = so / Math.max(1, H), k = ss(.1, .9, u);
-  const px = W * (.5 + .3 * Math.sin(u * 1.25 + .6)), py = H * (.47 + .08 * Math.cos(u * 1.6));
-  cx += (px - cx) * k; cy += (py - cy) * k;
-  R *= 1 + k * (.5 + .25 * Math.sin(u * .9));
-  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .58 * k).toFixed(3); fe.style.filter = 'hue-rotate(' + (Math.sin(u * .5) * 32).toFixed(1) + 'deg) blur(' + (k * 7).toFixed(1) + 'px)'; } } catch (e) {}
+  jk = ss(.1, .9, so / Math.max(1, H));
+  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .5 * jk).toFixed(3); fe.style.filter = 'blur(' + (jk * 5).toFixed(1) + 'px)'; } } catch (e) {}
 }
 
 // divergence-free (curl) flow: particles keep an even density instead of piling into filaments
@@ -145,7 +143,7 @@ function draw(t, dt) {
   rotY += dt * (.5 + spin * 1.4) + (tmx - .5) * dt * 1.6; tiltA = .42 + (tmy - .5) * .6 + spin * .05;
 
   // sphere weight, drives glow and wireframe
-  const sw = t < 10 ? 0 : t < 14 ? ss(10, 14, t) : t < 16.5 ? 1 : 1 - ss(16.5, 18, t);
+  const sw = (t < 10 ? 0 : t < 14 ? ss(10, 14, t) : t < 16.5 ? 1 : 1 - ss(16.5, 18, t)) * (1 - jk);
   anchor(); fade(REDUCE ? 1 : .3);
 
   // advance the loose points every frame so every transition starts from where they are
@@ -167,7 +165,7 @@ function draw(t, dt) {
     ctx.fillStyle = g; ctx.fillRect(cx - R * 1.6, cy - R * 1.6, R * 3.2, R * 3.2);
   }
   // scan wave
-  const waveOn = t > 4 && t < 8.6, waveR = ss(4, 8.2, t) * Math.hypot(W, H) * .62;
+  const waveOn = t > 4 && t < 8.6 && jk < .3, waveR = ss(4, 8.2, t) * Math.hypot(W, H) * .62;
   if (waveOn) {
     ctx.beginPath(); ctx.arc(cx, cy, waveR, 0, TAU);
     stroke(`rgba(214,190,255,${.16 * (1 - ss(7.6, 8.6, t))})`, 1.2);
@@ -192,6 +190,7 @@ function draw(t, dt) {
         x = s[0] + (p.x - s[0]) * k + (p.y - s[1]) * .2 * p.sw * Math.sin(Math.PI * k);
         y = s[1] + (p.y - s[1]) * k - (p.x - s[0]) * .2 * p.sw * Math.sin(Math.PI * k); col = 1 - k; df = 1 - k; rz = s[2]; p._y3 = s[3]; }
     }
+    if (jk > 0) { const f = 1 - jk; x = p.x + (x - p.x) * f; y = p.y + (y - p.y) * f; col *= f; df *= f; }   // scrolled: no formation, the dots stay spread out
     // alpha and size
     let size = p.sz * 2.1, a = .26;
     if (col > 0) a = .38 + .3 * (.5 + .5 * zr) * (1 - df);
@@ -229,7 +228,7 @@ function draw(t, dt) {
       stroke(`rgba(206,176,255,${.08 * sw})`, .8);
     }
   }
-  if (t > 13.6 && t < 16.8) for (const off of [0, .5]) {
+  if (t > 13.6 && t < 16.8 && jk < .3) for (const off of [0, .5]) {
     const k = clamp((t - 13.6 - off) / 2.6); if (k <= 0 || k >= 1) continue;
     ctx.beginPath(); ctx.arc(cx, cy, R * (1.02 + k * .85), 0, TAU); stroke(`rgba(225,205,255,${.34 * (1 - k)})`, 1.4);
   }
