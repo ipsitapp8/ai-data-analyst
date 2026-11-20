@@ -100,7 +100,8 @@ def route_after_executor(state: AgentState) -> str:
 
 
 def route_after_critic(state: AgentState) -> str:
-    if state.get("critic_verdict") == "verified":
+    if state.get("critic_verdict") in ("verified", "unverified"):
+        # "unverified" = the verifier itself broke; re-planning can't fix that.
         return "dashboard"
     if state.get("revision_count", 0) < config.MAX_CRITIC_REVISIONS:
         return "revise"
