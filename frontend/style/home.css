@@ -1,0 +1,98 @@
+/* Home page only. Every rule hangs off a main area that contains .hm-scope, so no other page changes.
+   Same design language as Root cause and What-if: serif headings, mono amber labels, hairline cards with small corners,
+   Inter body text. The hero's particle animation and the page background are left as they are. */
+.stApp .stMain:has(.hm-scope) {
+  --hm-ink: #f2efe7; --hm-ink-2: #bdb9cc; --hm-ink-3: #8c88a3;
+  --hm-line: rgba(242,239,231,.11); --hm-line-2: rgba(242,239,231,.22); --hm-panel: rgba(255,255,255,.028);
+  --hm-card: rgba(14,11,32,.88);
+  --hm-amber: #f3b24f; --hm-amber-hi: #ffc66e; --hm-amber-soft: rgba(243,178,79,.14);
+  --hm-serif: "Newsreader", "Source Serif 4", Georgia, serif; --hm-sans: "Inter", system-ui, sans-serif; --hm-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------- hero text */
+.stApp .stMain:has(.hm-scope) .h-badge { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
+  font: 500 11px/1 var(--hm-mono) !important; letter-spacing: .16em !important; text-transform: uppercase !important; color: var(--hm-ink-3) !important; display: flex !important; align-items: center !important; gap: 12px !important; }
+.stApp .stMain:has(.hm-scope) .h-badge::before { content: ""; width: 22px; height: 1px; background: var(--hm-amber); }
+.stApp .stMain:has(.hm-scope) .h-badge .tag { background: none !important; padding: 0 !important; border-radius: 0 !important; color: var(--hm-amber) !important; font: inherit !important; letter-spacing: inherit !important; }
+.stApp .stMain:has(.hm-scope) .h-badge .tag::after { content: " /"; color: var(--hm-ink-3); }
+.stApp .stMain:has(.hm-scope) .h-hero { font: 500 clamp(2.7rem, 5vw, 4.4rem)/1.03 var(--hm-serif) !important; letter-spacing: -.025em !important; color: var(--hm-ink) !important; margin: 20px 0 18px !important; }
+.stApp .stMain:has(.hm-scope) .h-hero span { font-style: italic !important; background: none !important; color: var(--hm-amber-hi) !important; -webkit-text-fill-color: var(--hm-amber-hi) !important; }
+.stApp .stMain:has(.hm-scope) .h-lede { font: 400 16px/1.65 var(--hm-sans) !important; color: var(--hm-ink-2) !important; max-width: 520px !important; }
+.stApp .stMain:has(.hm-scope) .h-lede em { font-style: normal !important; font-weight: 500 !important; color: var(--hm-ink) !important; }
+.stApp .stMain:has(.hm-scope) .h-proof { font: 400 13px/1.4 var(--hm-sans) !important; color: var(--hm-ink-3) !important; }
+.stApp .stMain:has(.hm-scope) .h-proof span::before { color: var(--hm-amber) !important; }
+.stApp .stMain:has(.hm-scope) .h-try { font: 500 10.5px/1 var(--hm-mono) !important; letter-spacing: .14em !important; color: var(--hm-amber) !important; }
+.stApp .stMain:has(.hm-scope) [class*="st-key-home_chips"] button, .stApp .stMain:has(.hm-scope) [class*="st-key-home_chips"] button[kind="secondary"] {
+  background: var(--hm-panel) !important; border: 1px solid var(--hm-line-2) !important; border-radius: 4px !important; box-shadow: none !important; color: var(--hm-ink-2) !important;
+  font: 400 13.5px/1.35 var(--hm-sans) !important; padding: 10px 14px !important; }
+.stApp .stMain:has(.hm-scope) [class*="st-key-home_chips"] button p { font: inherit !important; color: inherit !important; }
+.stApp .stMain:has(.hm-scope) [class*="st-key-home_chips"] button:hover { border-color: var(--hm-amber) !important; color: var(--hm-ink) !important; background: var(--hm-amber-soft) !important; transform: none !important; }
+
+/* -------------------------------------------- the two cards over the animation */
+.stApp .stMain:has(.hm-scope) .h-float { background: var(--hm-card) !important; border: 1px solid var(--hm-line-2) !important; border-radius: 6px !important; box-shadow: none !important; }
+.stApp .stMain:has(.hm-scope) .h-ask-ico { background: var(--hm-amber-soft) !important; color: var(--hm-amber) !important; border-radius: 4px !important; }
+.stApp .stMain:has(.hm-scope) .h-ask-q small, .stApp .stMain:has(.hm-scope) .h-metric .lbl { font: 500 10px/1 var(--hm-mono) !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--hm-amber) !important; margin-bottom: 7px !important; }
+.stApp .stMain:has(.hm-scope) .h-ask-q { font: 500 17px/1.25 var(--hm-serif) !important; letter-spacing: -.005em !important; color: var(--hm-ink) !important; }
+.stApp .stMain:has(.hm-scope) .h-metric .num { font: 500 46px/1 var(--hm-serif) !important; letter-spacing: -.02em !important; color: var(--hm-ink) !important; margin: 2px 0 8px !important; }
+.stApp .stMain:has(.hm-scope) .h-metric .sub { font: 400 12.5px/1.4 var(--hm-sans) !important; color: var(--hm-ink-3) !important; }
+.stApp .stMain:has(.hm-scope) .h-metric .sub b { color: #5fd08f !important; font-weight: 500 !important; }
+.stApp .stMain:has(.hm-scope) .h-running { font: 500 11px/1 var(--hm-mono) !important; color: var(--hm-amber) !important; }
+.stApp .stMain:has(.hm-scope) .h-stage-title { font: 500 clamp(1.5rem, 2.3vw, 2.2rem)/1.08 var(--hm-serif) !important; letter-spacing: -.015em !important; font-style: italic !important; }
+
+/* ------------------------------------------------------------ scroll cue */
+.stApp .stMain:has(.hm-scope) .hm-cue { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 26px 0 0; font: 500 10px/1 var(--hm-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--hm-ink-3); }
+.stApp .stMain:has(.hm-scope) .hm-cue i { width: 1px; height: 38px; background: linear-gradient(var(--hm-amber), transparent); transform-origin: top; animation: hm-cue 2.2s ease-in-out infinite; }
+@keyframes hm-cue { 0% { transform: scaleY(0); opacity: 0; } 40% { opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+
+/* ------------------------------------------------------ capability strip */
+.stApp .stMain:has(.hm-scope) .h-strip-eyebrow { font: 500 10.5px/1 var(--hm-mono) !important; letter-spacing: .16em !important; color: var(--hm-amber) !important; margin: 64px 0 16px !important; }
+.stApp .stMain:has(.hm-scope) .h-strip { background: var(--hm-panel) !important; border: 1px solid var(--hm-line) !important; border-radius: 6px !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp .stMain:has(.hm-scope) .h-strip > div { font: 500 14px/1.3 var(--hm-sans) !important; color: var(--hm-ink) !important; border-left: 1px solid var(--hm-line) !important; }
+.stApp .stMain:has(.hm-scope) .h-strip > div:first-child { border-left: 0 !important; }
+.stApp .stMain:has(.hm-scope) .h-strip svg { color: var(--hm-amber) !important; }
+
+/* ----------------------------------------------- how it works: a timeline */
+.stApp .stMain:has(.hm-scope) .h-how-eyebrow { font: 500 10.5px/1 var(--hm-mono) !important; letter-spacing: .16em !important; color: var(--hm-amber) !important; margin-top: 72px !important; display: flex; align-items: center; gap: 12px; }
+.stApp .stMain:has(.hm-scope) .h-how-eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--hm-amber); }
+.stApp .stMain:has(.hm-scope) .h-how-title { font: 500 clamp(2rem, 3.4vw, 2.9rem)/1.08 var(--hm-serif) !important; letter-spacing: -.02em !important; color: var(--hm-ink) !important; margin: 14px 0 34px !important; }
+.stApp .stMain:has(.hm-scope) .h-steps { display: block !important; position: relative; counter-reset: hm-step; --hm-p: 0; }
+.stApp .stMain:has(.hm-scope) .h-steps::before, .stApp .stMain:has(.hm-scope) .h-steps::after { content: ""; position: absolute; left: 31px; top: 28px; bottom: 28px; width: 1px; }
+.stApp .stMain:has(.hm-scope) .h-steps::before { background: var(--hm-line); }
+.stApp .stMain:has(.hm-scope) .h-steps::after { background: var(--hm-amber); transform-origin: top; transform: scaleY(var(--hm-p)); }
+.stApp .stMain:has(.hm-scope) .h-step { display: grid !important; grid-template-columns: 62px 1fr; column-gap: 20px; align-items: start; padding: 22px 0 24px !important; border-top: 1px solid var(--hm-line); position: relative; }
+.stApp .stMain:has(.hm-scope) .h-step:first-child { border-top: 0; }
+.stApp .stMain:has(.hm-scope) .h-step-ico { grid-column: 1; grid-row: 1 / span 2; width: 62px !important; height: 62px !important; margin: 0 !important; border-radius: 6px !important; box-shadow: none !important;
+  background: #0f0b24 !important; border: 1px solid var(--hm-line-2) !important; color: var(--hm-amber) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; position: relative; z-index: 1; }
+.stApp .stMain:has(.hm-scope) .h-step-name { grid-column: 2; grid-row: 1; font: 500 24px/1.15 var(--hm-serif) !important; letter-spacing: -.01em !important; color: var(--hm-ink) !important; padding-top: 4px; }
+.stApp .stMain:has(.hm-scope) .h-step-name::before { counter-increment: hm-step; content: "0" counter(hm-step) "  ·  "; font: 500 11px/1 var(--hm-mono); letter-spacing: .14em; color: var(--hm-amber); vertical-align: middle; }
+.stApp .stMain:has(.hm-scope) .h-step-desc { grid-column: 2; grid-row: 2; font: 400 14.5px/1.6 var(--hm-sans) !important; color: var(--hm-ink-2) !important; margin-top: 6px !important; padding: 0 !important; max-width: 46ch; }
+.stApp .stMain:has(.hm-scope) .h-step-desc br { display: none; }
+.stApp .stMain:has(.hm-scope) .h-arrow { display: none !important; }
+
+/* ------------------------------------------------------ workspace snapshot */
+.stApp .stMain:has(.hm-scope) .h-snap { background: var(--hm-panel) !important; border: 1px solid var(--hm-line) !important; border-radius: 6px !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; margin-top: 72px !important; padding: 24px 22px !important; }
+.stApp .stMain:has(.hm-scope) .h-snap-head { font: 500 10.5px/1 var(--hm-mono) !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--hm-amber) !important; }
+.stApp .stMain:has(.hm-scope) .h-snap-live { font: 400 12px/1 var(--hm-sans) !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--hm-ink-3) !important; }
+.stApp .stMain:has(.hm-scope) .h-tile { background: rgba(4,3,14,.45) !important; border: 1px solid var(--hm-line) !important; border-radius: 4px !important; box-shadow: none !important; padding: 14px 14px 12px !important; min-width: 0; }
+.stApp .stMain:has(.hm-scope) .h-tile-num { font: 500 36px/1 var(--hm-serif) !important; letter-spacing: -.02em !important; color: var(--hm-ink) !important; }
+.stApp .stMain:has(.hm-scope) .h-tile-lbl { font: 500 10px/1.2 var(--hm-mono) !important; letter-spacing: .1em !important; text-transform: uppercase !important; color: var(--hm-ink-3) !important; margin-top: 12px !important; flex-wrap: wrap; }
+.stApp .stMain:has(.hm-scope) .h-tile-lbl svg { color: var(--hm-amber); width: 14px; height: 14px; }
+.stApp .stMain:has(.hm-scope) .h-snap-row { border-color: var(--hm-line) !important; font: 400 14px/1.35 var(--hm-sans) !important; padding: 13px 2px !important; }
+.stApp .stMain:has(.hm-scope) .h-snap-row .t { color: var(--hm-ink) !important; }
+.stApp .stMain:has(.hm-scope) .h-snap-foot { background: rgba(4,3,14,.45) !important; border-radius: 4px !important; font: 400 14px/1.5 var(--hm-sans) !important; color: var(--hm-ink-2) !important; }
+.stApp .stMain:has(.hm-scope) .h-snap-ico { color: var(--hm-amber) !important; }
+.stApp .stMain:has(.hm-scope) .h-footer { font: 400 11px/1.4 var(--hm-mono) !important; letter-spacing: .06em !important; color: var(--hm-ink-3) !important; border-color: var(--hm-line) !important; }
+.stApp .stMain:has(.hm-scope) .h-footer b { color: var(--hm-amber) !important; }
+
+/* ------------------------------------------------ reveal as you scroll.
+   Hidden only after the script has marked an element (.hm-r) and until it enters the screen (.hm-in), so if the script
+   never runs, everything is simply visible. */
+.stApp .stMain:has(.hm-scope) .hm-r { opacity: 0; transform: translateY(30px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); will-change: opacity, transform; }
+.stApp .stMain:has(.hm-scope) .hm-r.hm-in { opacity: 1; transform: none; }
+.stApp .stMain:has(.hm-scope) .hm-r.hm-now { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .stApp .stMain:has(.hm-scope) .hm-r { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .stApp .stMain:has(.hm-scope) .hm-cue i { animation: none; }
+  .stApp .stMain:has(.hm-scope) .h-steps::after { transform: none; }
+}
+@media (max-width: 760px) { .stApp .stMain:has(.hm-scope) .h-step { grid-template-columns: 52px 1fr; column-gap: 14px; } .stApp .stMain:has(.hm-scope) .h-step-ico { width: 52px !important; height: 52px !important; } .stApp .stMain:has(.hm-scope) .h-steps::before, .stApp .stMain:has(.hm-scope) .h-steps::after { left: 26px; } }

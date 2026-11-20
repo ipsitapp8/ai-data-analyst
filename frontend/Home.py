@@ -6,8 +6,10 @@ backend, same as the Overview page. The hero stage is drawn in CSS (no image ass
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from api_client import ApiError, list_datasets, list_questions
 from hero_scene import SCENE_HTML
@@ -16,6 +18,58 @@ from style.theme import esc, html, page_setup, render_sidebar, verdict_badge
 
 page_setup("Home")
 render_sidebar("home")
+
+# Page-scoped skin (style/home.css): every rule hangs off .hm-scope, so no other page is affected.
+_FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+          '<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500'
+          '&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">')
+_css = (Path(__file__).resolve().parent / "style" / "home.css").read_text(encoding="utf-8")
+# one line, because markdown ends an HTML block at the first blank line
+st.markdown(_FONTS + "<style>" + " ".join(line.strip() for line in _css.splitlines() if line.strip()) + "</style>"
+            '<div class="hm-scope"></div>', unsafe_allow_html=True)
+
+# Reveal-as-you-scroll. Runs in Streamlit's same-origin component iframe and reaches up to the page: marks the lower
+# sections, shows each one as it comes into view, and grows the timeline line with the scroll. Elements are hidden only
+# after they are marked, so if this does not run (or the browser lacks IntersectionObserver) the page is just fully visible.
+_REVEAL_JS = """
+<script>
+(function () {
+  var w, d;
+  try { w = window.parent; d = w.document; } catch (e) { return; }
+  if (!('IntersectionObserver' in w)) return;
+  if (w.__hmStop) { try { w.__hmStop(); } catch (e) {} }
+  var SEL = '.h-strip-eyebrow,.h-strip>div,.h-how-eyebrow,.h-how-title,.h-step,.h-snap,.h-tile,.h-snap-row,.h-snap-foot,.h-footer';
+  var io = new w.IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('hm-in'); io.unobserve(e.target); } });
+  }, { threshold: 0.15, rootMargin: '0px 0px -5% 0px' });
+  function scan() {
+    var H = w.innerHeight;
+    d.querySelectorAll(SEL).forEach(function (el) {
+      if (el.__hm) return;
+      el.__hm = 1;
+      var par = el.parentElement, idx = par ? Array.prototype.indexOf.call(par.children, el) : 0;
+      if (/(^|\\s)(h-tile|h-snap-row)(\\s|$)/.test(el.className) || (par && /(^|\\s)h-strip(\\s|$)/.test(par.className))) el.style.transitionDelay = (idx * 90) + 'ms';
+      el.classList.add('hm-r');
+      if (el.getBoundingClientRect().top < H * 0.92) { el.classList.add('hm-now', 'hm-in'); }   // already on screen (or passed): no animation
+      else io.observe(el);
+    });
+  }
+  function line() {
+    var s = d.querySelector('.h-steps'); if (!s) return;
+    var r = s.getBoundingClientRect(), p = (w.innerHeight * 0.62 - r.top) / Math.max(1, r.height);
+    s.style.setProperty('--hm-p', Math.max(0, Math.min(1, p)).toFixed(3));
+  }
+  var raf = 0;
+  function tick() { if (raf) return; raf = w.requestAnimationFrame(function () { raf = 0; scan(); line(); }); }
+  var mo = new w.MutationObserver(tick);
+  mo.observe(d.body, { childList: true, subtree: true });
+  d.addEventListener('scroll', tick, true);
+  w.addEventListener('resize', tick);
+  w.__hmStop = function () { io.disconnect(); mo.disconnect(); d.removeEventListener('scroll', tick, true); w.removeEventListener('resize', tick); };
+  tick();
+})();
+</script>"""
+components.html(_REVEAL_JS, height=0)
 
 _has_team = bool(st.session_state.get("active_team_id"))
 _REFRESH = "10s"          # how often the live panels re-read the backend
@@ -75,11 +129,11 @@ EXAMPLE_QUESTIONS = GENERIC_QUESTIONS
 
 def _steps() -> str:
     data = [
-        (I_UPLOAD, "1. Upload", "Add your CSV or<br>connect your database."),
-        (I_PLAN, "2. Plan", "The agent analyses your<br>question and creates a plan."),
-        (I_CODE, "3. Execute", "Writes and runs code<br>in a secure sandbox."),
-        (I_VERIFY, "4. Verify", "Independent model<br>checks the results."),
-        (I_CHART, "5. Visualize", "Get a clean dashboard<br>and actionable insights."),
+        (I_UPLOAD, "Upload", "Add your CSV or<br>connect your database."),
+        (I_PLAN, "Plan", "The agent analyses your<br>question and creates a plan."),
+        (I_CODE, "Execute", "Writes and runs code<br>in a secure sandbox."),
+        (I_VERIFY, "Verify", "Independent model<br>checks the results."),
+        (I_CHART, "Visualize", "Get a clean dashboard<br>and actionable insights."),
     ]
     parts = []
     for i, (ico, name, desc) in enumerate(data):
@@ -196,6 +250,8 @@ with st.container(key="home_hero"):
         with st.container(key="home_stage"):
             st.iframe(SCENE_HTML, height=470)   # canvas scene; cards below float over it
             _hero_stage()
+
+html('<div class="hm-cue"><span>Scroll</span><i></i></div>')
 
 # ------------------------------------------------------ capability strip --
 html(
