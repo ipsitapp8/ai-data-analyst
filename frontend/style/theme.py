@@ -800,6 +800,17 @@ def inject_base_css() -> None:
     st.markdown(_FONTS_LINK, unsafe_allow_html=True)
     st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
     st.markdown(_READABLE_TEXT_CSS, unsafe_allow_html=True)
+    st.markdown(_ONBOARD_HANDOFF_CSS, unsafe_allow_html=True)
+
+
+# After "Create workspace" the next run (the real page) can take several seconds on a slow backend or database, and
+# Streamlit keeps the previous run's forms on screen, dimmed, until it finishes. Those stale onboarding cards are hidden and a
+# short message is shown instead, so it reads as "loading" rather than as a broken, repeated form.
+_ONBOARD_HANDOFF_CSS = """<style>
+[class*="st-key-card_onboard"]:has([data-stale="true"]), [class*="st-key-onb_logout"]:has([data-stale="true"]) { display: none !important; }
+[data-testid="stMainBlockContainer"]:has([class*="st-key-card_onboard"] [data-stale="true"])::before {
+  content: "Setting up your workspace…"; display: block; margin: 22vh auto 0; text-align: center; font-size: 1.05rem; color: #bdb9cc; letter-spacing: .01em; }
+</style>"""
 
 
 def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
