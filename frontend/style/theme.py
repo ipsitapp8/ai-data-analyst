@@ -919,6 +919,16 @@ def _consume_invite_param() -> None:
     st.query_params.clear()
 
 
+def _reload_page() -> None:
+    """Load the page afresh after a workspace step. Redrawing in place left the onboarding card on screen above
+    the new page (the browser kept that block when the next run drew over it); a full load starts from a clean page,
+    and the sign-in cookie brings the user straight back to Home."""
+    import streamlit.components.v1 as components
+    st.markdown("<style>[class*='st-key-card_onboard']{display:none !important}</style>", unsafe_allow_html=True)
+    components.html("<script>window.parent.location.reload();</script>", height=0)
+    st.stop()
+
+
 def _require_team_onboarding() -> None:
     """Full-screen first-run step for a logged-in user with no team: accept a
     pending invite or create a workspace, with no app nav shown. Every
@@ -965,7 +975,7 @@ def _require_team_onboarding() -> None:
                             accept_invite(inv["team_id"])
                             invalidate_workspaces_cache()
                             st.session_state["_go_home"] = True
-                            st.rerun()
+                            _reload_page()
                         except ApiError as e:
                             st.error(f"Could not accept: {e}")
         html("<div style='height:14px'></div>")
@@ -987,7 +997,7 @@ def _require_team_onboarding() -> None:
                     st.session_state["active_team_id"] = team["id"]
                     invalidate_workspaces_cache()
                     st.session_state["_go_home"] = True
-                    st.rerun()
+                    _reload_page()
                 except ApiError as e:
                     st.error(f"Could not create workspace: {e}")
 
@@ -1003,7 +1013,7 @@ def _require_team_onboarding() -> None:
                 st.session_state["active_team_id"] = result["team_id"]
                 st.session_state["active_community_id"] = result["community_id"]
                 st.session_state["_go_home"] = True
-                st.rerun()
+                _reload_page()
             except ApiError as e:
                 st.error(f"Could not use that invitation: {e}")
 

@@ -69,6 +69,22 @@ function anchor() {
   if (r && r.width > 50) { sx = r.left; sy = r.top; sw = r.width; sh = r.height; }
   else { sx = W * .55; sy = H * .14; sw = W * .38; sh = H * .6; }
   cx = sx + sw * .36; cy = sy + sh * .53; R = Math.min(sw, sh) * .23;
+  journey();
+}
+// As the page scrolls the sphere leaves the hero and drifts across the background: it wanders left and right behind each
+// section, swells and dims, shifts hue and spins faster while the page is moving. Nothing here moves the page itself.
+let scrollEl = null, so = 0, lastSo = 0, spin = 0;
+function journey() {
+  if (REDUCE) return;
+  let s = 0;
+  try { scrollEl = scrollEl || window.parent.document.querySelector('[data-testid="stMain"]') || window.parent.document.scrollingElement; s = scrollEl ? scrollEl.scrollTop : 0; } catch (e) {}
+  so += (s - so) * .1;
+  spin += (Math.min(6, Math.abs(so - lastSo) * .12) - spin) * .15; lastSo = so;
+  const u = so / Math.max(1, H), k = ss(.1, .9, u);
+  const px = W * (.5 + .3 * Math.sin(u * 1.25 + .6)), py = H * (.47 + .08 * Math.cos(u * 1.6));
+  cx += (px - cx) * k; cy += (py - cy) * k;
+  R *= 1 + k * (.5 + .25 * Math.sin(u * .9));
+  try { const fe = window.frameElement; if (fe) { fe.style.opacity = (1 - .58 * k).toFixed(3); fe.style.filter = 'hue-rotate(' + ((u * 26) % 360).toFixed(1) + 'deg)'; } } catch (e) {}
 }
 
 // divergence-free (curl) flow: particles keep an even density instead of piling into filaments
@@ -126,7 +142,7 @@ function frame(now) {
 
 function draw(t, dt) {
   tmx += (mx - tmx) * .06; tmy += (my - tmy) * .06;
-  rotY += dt * .5 + (tmx - .5) * dt * 1.6; tiltA = .42 + (tmy - .5) * .6;
+  rotY += dt * (.5 + spin * 1.4) + (tmx - .5) * dt * 1.6; tiltA = .42 + (tmy - .5) * .6 + spin * .05;
 
   // sphere weight, drives glow and wireframe
   const sw = t < 10 ? 0 : t < 14 ? ss(10, 14, t) : t < 16.5 ? 1 : 1 - ss(16.5, 18, t);

@@ -38,23 +38,43 @@ _REVEAL_JS = """
   try { w = window.parent; d = w.document; } catch (e) { return; }
   if (!('IntersectionObserver' in w)) return;
   if (w.__hmStop) { try { w.__hmStop(); } catch (e) {} }
-  var SEL = '.h-strip-eyebrow,.h-strip>div,.h-how-eyebrow,.h-how-title,.h-step,.h-snap,.h-tile,.h-snap-row,.h-snap-foot,.h-footer';
+  w.__hmIntroAt = Date.now();
+  var SEL = '.h-strip-eyebrow,.h-strip>div,.h-feat-eyebrow,.h-feat-title,.h-feat,.h-how-eyebrow,.h-how-title,.h-step,.h-snap,.h-tile,.h-snap-row,.h-snap-foot,.h-footer';
+  var INTRO = ['.h-badge', '.h-hero', '.h-lede', '[class*="st-key-home_ctas"]', '.h-try', '[class*="st-key-home_chips"]', '.h-proof'];
   var io = new w.IntersectionObserver(function (es) {
     es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('hm-in'); io.unobserve(e.target); } });
   }, { threshold: 0.15, rootMargin: '0px 0px -5% 0px' });
+  function intro() {
+    if (Date.now() - w.__hmIntroAt > 2500) return;            // only the first moments after the page opens
+    INTRO.forEach(function (sel, i) {
+      d.querySelectorAll(sel).forEach(function (el) {
+        if (el.__hmi) return; el.__hmi = 1;
+        el.style.animationDelay = (i * 130) + 'ms'; el.classList.add('hm-intro');
+      });
+    });
+  }
   function scan() {
+    intro();
     var H = w.innerHeight;
     d.querySelectorAll(SEL).forEach(function (el) {
       if (el.__hm) return;
       el.__hm = 1;
       var par = el.parentElement, idx = par ? Array.prototype.indexOf.call(par.children, el) : 0;
-      if (/(^|\\s)(h-tile|h-snap-row)(\\s|$)/.test(el.className) || (par && /(^|\\s)h-strip(\\s|$)/.test(par.className))) el.style.transitionDelay = (idx * 90) + 'ms';
+      if (/(^|\\s)(h-tile|h-snap-row|h-feat)(\\s|$)/.test(el.className) || (par && /(^|\\s)h-strip(\\s|$)/.test(par.className))) el.style.transitionDelay = (idx * 90) + 'ms';
+      if (el.classList.contains('h-feat') && !el.__hmm) {                // a soft light that follows the cursor over each card
+        el.__hmm = 1;
+        el.addEventListener('mousemove', function (e) { var b = el.getBoundingClientRect(); el.style.setProperty('--mx', (e.clientX - b.left) + 'px'); el.style.setProperty('--my', (e.clientY - b.top) + 'px'); });
+      }
       el.classList.add('hm-r');
       if (el.getBoundingClientRect().top < H * 0.92) { el.classList.add('hm-now', 'hm-in'); }   // already on screen (or passed): no animation
       else io.observe(el);
     });
   }
   function line() {
+    d.querySelectorAll('.h-feat[data-par]').forEach(function (el) {   // columns drift at different speeds: depth
+      var r = el.getBoundingClientRect(), off = r.top + r.height / 2 - w.innerHeight / 2;
+      el.style.setProperty('--py', (-off * parseFloat(el.getAttribute('data-par'))).toFixed(1) + 'px');
+    });
     var s = d.querySelector('.h-steps'); if (!s) return;
     var r = s.getBoundingClientRect(), p = (w.innerHeight * 0.62 - r.top) / Math.max(1, r.height);
     s.style.setProperty('--hm-p', Math.max(0, Math.min(1, p)).toFixed(3));
@@ -138,7 +158,7 @@ def _steps() -> str:
     parts = []
     for i, (ico, name, desc) in enumerate(data):
         parts.append(f'<div class="h-step"><div class="h-step-ico">{ico}</div>'
-                     f'<div class="h-step-name">{name}</div><div class="h-step-desc">{desc}</div></div>')
+                     f'<div class="h-step-name">{name}</div><div class="h-step-desc">{desc.replace("<br>", " ")}</div></div>')
         if i < len(data) - 1:
             parts.append('<div class="h-arrow">→</div>')
     return "".join(parts)
@@ -261,11 +281,33 @@ html(
     f'<div>{I_LOG}Audit trail</div><div>{I_DASH}Dashboards</div></div>'
 )
 
+def _words(text: str) -> str:
+    """A title split into words, so each can rise in turn when the title scrolls into view."""
+    return " ".join(f'<span class="w" style="--i:{i}">{esc(w)}</span>' for i, w in enumerate(text.split()))
+
+
+# ------------------------------------------------------------ what is inside --
+_FEATS = [
+    ("Analyses", "Ask in plain English", "Type a question. An agent plans the analysis, writes the code and runs it in a sandbox."),
+    ("Verification", "A second model checks it", "An independent critic re-verifies every number before the answer reaches you."),
+    ("Root cause", "Find where a number moved", "Compare two periods and see which segments drove the change. Every figure is computed from your data."),
+    ("What-if", "Test a decision first", "Change an input and see the range of outcomes, with goal-seek and the evidence behind each result."),
+    ("Copilot", "Chat with your data", "Ask follow-ups in plain language and get answers with the numbers behind them."),
+    ("Audit trail", "Every answer shows its work", "The plan, code, result and checks are kept for each dashboard, so anyone can inspect them."),
+]
+_cards = "".join(
+    f'<div class="h-feat" data-par="{(0, 0.03, 0.06)[i % 3]}"><div class="k">{i + 1:02d} · {esc(tag)}</div>'
+    f'<div class="t">{esc(title)}</div><p>{esc(text)}</p></div>'
+    for i, (tag, title, text) in enumerate(_FEATS))
+html('<div class="h-feat-eyebrow">What is inside</div>'
+     f'<div class="h-feat-title">{_words("One workspace for asking, checking and deciding.")}</div>'
+     f'<div class="h-feats">{_cards}</div>')
+
 # ------------------------------------------------- how it works + snapshot --
 how_l, snap_r = st.columns([1.75, 1.0], gap="large")
 with how_l:
     html('<div class="h-how-eyebrow">How it works</div>')
-    html('<div class="h-how-title">From raw data to real insights.</div>')
+    html(f'<div class="h-how-title">{_words("From raw data to real insights.")}</div>')
     html(f'<div class="h-steps">{_steps()}</div>')
 
 with snap_r:
