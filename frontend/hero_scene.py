@@ -108,10 +108,10 @@ function caption(t) {
   ctx.globalCompositeOperation = 'source-over'; ctx.textBaseline = 'alphabetic';
   for (const [h, s, a] of items) {
     if (a < .01) continue;
-    ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.font = '600 12px system-ui,Segoe UI,sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px'; ctx.fillText(h, sx + 24, sy + 34);
+    ctx.globalAlpha = a; ctx.fillStyle = '#f3b24f'; ctx.font = '500 11px "JetBrains Mono",ui-monospace,Consolas,monospace';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.fillText(h, sx + 24, sy + 34);
     if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '400 11.5px system-ui,Segoe UI,sans-serif'; ctx.fillText(s, sx + 24, sy + 52);
+    ctx.fillStyle = 'rgba(242,239,231,.7)'; ctx.font = 'italic 400 14px Georgia,"Times New Roman",serif'; ctx.fillText(s, sx + 24, sy + 54);
   }
   ctx.globalAlpha = 1;
 }
