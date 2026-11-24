@@ -414,30 +414,34 @@ if entries:
             st.error(st.session_state.pop("cs_error"))
 
         html("<div style='height:8px'></div>")
-        pick_l, pick_r = st.columns([1.5, 3.5], gap="medium")
+        current = view["chart_type"] or target["detected"]
+        no_data = target["data"] is None or target["data"].df.empty
+        pick_l, pick_f, pick_t = st.columns([2, 1.3, 1.7], gap="medium", vertical_alignment="bottom")
         with pick_l:
             html('<div class="ds-studio-label">Chart</div>')
             st.selectbox("Chart", keys, key=target_key, label_visibility="collapsed",
                          format_func=lambda k: by_key[k]["chart"]["title"])
-        current = view["chart_type"] or target["detected"]
-        with pick_r:
+        with pick_f:
             html(f'<div class="ds-studio-label">Chart type · {len(cs.CHART_TYPES)} options</div>')
             st.session_state.setdefault(
                 w + "group", cs.CHART_TYPES[current]["group"] if current else cs.GROUPS[0])
-            group = st.segmented_control("Chart family", cs.GROUPS, key=w + "group",
-                                         label_visibility="collapsed") or cs.GROUPS[0]
+            group = st.selectbox("Chart family", cs.GROUPS, key=w + "group", label_visibility="collapsed")
+        in_group = cs.types_in_group(group)
+        with pick_t:
+            html('<div class="ds-studio-label">Type</div>')
+            pills_key = f"{w}type_{group}"
+            if not no_data:
+                # keep the dropdown in sync with the chart as shown (the pick itself was
+                # already saved by _on_type_pick before this run started)
+                st.session_state[pills_key] = current if current in in_group else None
+            st.selectbox("Chart type", in_group, key=pills_key, label_visibility="collapsed",
+                         index=None, placeholder="Choose a type", disabled=no_data,
+                         format_func=lambda t: cs.CHART_TYPES[t]["label"],
+                         on_change=_on_type_pick, args=(ck, pills_key))
 
-        if target["data"] is None or target["data"].df.empty:
+        if no_data:
             html('<div class="ds-row-meta">This chart has no plotted values that can be re-charted.</div>')
         else:
-            pills_key = f"{w}type_{group}"
-            in_group = cs.types_in_group(group)
-            # keep the pills in sync with the chart as shown (the pick itself was
-            # already saved by _on_type_pick before this run started)
-            st.session_state[pills_key] = current if current in in_group else None
-            st.pills("Chart type", in_group, key=pills_key, label_visibility="collapsed",
-                     format_func=lambda t: f":material/{cs.CHART_TYPES[t]['icon']}: {cs.CHART_TYPES[t]['label']}",
-                     on_change=_on_type_pick, args=(ck, pills_key))
             original = cs.CHART_TYPES[target["detected"]]["label"] if target["detected"] else target["data"].source_type
             showing = cs.CHART_TYPES[current]["label"] if view["chart_type"] else f"{original} (as generated)"
             html(f'<div class="ds-row-meta" style="margin:2px 0 10px 0;">Showing: <b>{esc(showing)}</b>'
@@ -446,7 +450,7 @@ if entries:
             style = view["style"]
             for field, suffix in _STYLE_FIELDS:
                 st.session_state.setdefault(w + suffix, style[field])
-            s1, s2, s3, s4, s5 = st.columns([1.35, 0.75, 2.6, 1.3, 1.0], gap="small",
+            s1, s2, s3, s4, s5 = st.columns([1.35, 0.75, 1.3, 1.3, 1.0], gap="small",
                                             vertical_alignment="bottom")
             with s1:
                 html('<div class="ds-studio-label">Palette</div>')
@@ -458,9 +462,9 @@ if entries:
                                 on_change=_on_style_change, args=(ck, "color"))
             with s3:
                 html('<div class="ds-studio-label">Effect</div>')
-                st.segmented_control("Effect", list(cs.EFFECTS), key=w + "effect",
-                                     format_func=cs.EFFECTS.get, label_visibility="collapsed",
-                                     on_change=_on_style_change, args=(ck,))
+                st.selectbox("Effect", list(cs.EFFECTS), key=w + "effect",
+                             format_func=cs.EFFECTS.get, label_visibility="collapsed",
+                             on_change=_on_style_change, args=(ck,))
             with s4:
                 html('<div class="ds-studio-label">Animation</div>')
                 st.selectbox("Animation", list(cs.ANIMATIONS), key=w + "anim", format_func=cs.ANIMATIONS.get,
