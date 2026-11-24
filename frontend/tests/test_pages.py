@@ -1480,8 +1480,9 @@ def test_universal_tab_detects_the_domain_and_lists_classified_questions(api, mo
     at = _explore(page("14_What_If.py", ws))
     assert at.session_state["wxu_domain"] == "auto" and "What would you like to explore?" in text_of(at)
     at.selectbox(key="wxu_ds").select_index(1).run()
+    assert "Looks like Education" in text_of(_explore(at)), "the detection is explained"
+    at.button(key="wxu_next_setup").click().run()
     text = text_of(_explore(at))
-    assert "Looks like Education" in text, "the detection is explained"
     assert "Ready to simulate" in text and "Needs assumptions" in text and "Needs external data" in text
     assert "What if the passing marks change" in text
 
@@ -1491,6 +1492,7 @@ def test_universal_tab_runs_a_scenario_shows_results_and_saves_it(api, monkeypat
     ws = _students_ws(api)
     at = _explore(page("14_What_If.py", ws))
     at.selectbox(key="wxu_ds").select_index(1).run()
+    at.button(key="wxu_next_setup").click().run()
     use = [b for b in at.button if b.key and b.key.startswith("wxu_use_education:edu_pass_marks")][0]
     use.click().run()
     at = _explore(at)
@@ -1512,6 +1514,7 @@ def test_universal_tab_asks_for_missing_values_instead_of_running(api, monkeypat
     ws = _students_ws(api)
     at = _explore(page("14_What_If.py", ws))
     at.selectbox(key="wxu_ds").select_index(1).run()
+    at.button(key="wxu_next_setup").click().run()
     [b for b in at.button if b.key and b.key.startswith("wxu_use_education:edu_enrolment_capacity")][0].click().run()
     at = _explore(at)
     sid = at.session_state["wxu_sel"]["id"]
@@ -1527,6 +1530,7 @@ def test_universal_tab_works_without_a_dataset_for_travel(api, monkeypatch):
     at = _explore(page("14_What_If.py", ws))
     at.radio(key="wxu_pick_domain").set_value("travel").run()
     at.radio(key="wxu_pick_start").set_value("Build a scenario manually").run()
+    at.button(key="wxu_next_setup").click().run()
     at = _explore(at)
     assert "Needs assumptions" in text_of(at) and "Extend the trip" not in at.session_state["wxu_domain"]
     assert any("extend my trip" in str(m.value) for m in at.markdown)

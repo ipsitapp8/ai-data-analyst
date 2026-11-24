@@ -82,7 +82,10 @@ with st.container(key="flat_table"):
             </div>
             """
         )
-        for d in datasets:
+        PAGE_SIZE = 8
+        pages = max(1, -(-len(datasets) // PAGE_SIZE))
+        page_no = min(max(int(st.session_state.get("ds_page", 1)), 1), pages)
+        for d in datasets[(page_no - 1) * PAGE_SIZE: page_no * PAGE_SIZE]:
             profile = d.get("profile", {})
             cols = profile.get("columns", [])
             total_cells = max(d["row_count"] * max(d["col_count"], 1), 1)
@@ -112,6 +115,20 @@ with st.container(key="flat_table"):
                 </div>
                 """
             )
+
+if datasets and len(datasets) > PAGE_SIZE:
+    pg_l, pg_m, pg_r = st.columns([1, 2, 1])
+    with pg_l:
+        if st.button("‹  Previous", key="ds_prev", disabled=page_no <= 1):
+            st.session_state["ds_page"] = page_no - 1
+            st.rerun()
+    with pg_m:
+        html(f'<div class="ds-row-meta" style="text-align:center;padding-top:8px;">Page {page_no} of {pages} · '
+             f'{len(datasets)} datasets</div>')
+    with pg_r:
+        if st.button("Next  ›", key="ds_next", disabled=page_no >= pages):
+            st.session_state["ds_page"] = page_no + 1
+            st.rerun()
 
 if datasets:
     html("<div style='height:20px'></div>")
