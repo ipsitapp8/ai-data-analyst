@@ -731,27 +731,27 @@ _FONTS_LINK = (
 )
 
 # Line icons for the sidebar nav, drawn as CSS masks so they inherit the row's colour.
-_NAV_ICONS = {
-    "home": '<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/>',
-    "overview": '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
-    "datasets": '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    "analyses": '<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>',
-    "scheduled": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    "dashboards": '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
-    "reports": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M8.5 13h7M8.5 17h5"/>',
-    "audit": '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2"/>',
-    "workspaces": '<path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/>',
-    "team_overview": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3 3 0 0 1 0 6M18 14c1.8.6 3 2.4 3 4.5"/>',
-    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
-    "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
-    "copilot": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
-    "analyst": '<path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2 8 12.7 4 8.8l5.5-.8z"/>',
-    "investigations": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M8 10.5h5M10.5 8v5"/>',
-    "what_if": '<path d="M4 18c4 0 4-12 8-12s4 12 8 12"/><path d="M4 21h16"/>',
-    "data_quality": '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16v.5"/>',
-    "semantic": '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7"/>',
-    "evaluation": '<path d="M9 3h6v4l4 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L9 7z"/><path d="M8 14h8"/>',
-    "discussion": '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/>',
+_NAV_ICONS = {   # Lucide (lucide.dev), one consistent stroke family
+    "home": '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    "overview": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    "datasets": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+    "analyses": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
+    "analyst": '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
+    "investigations": '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    "what_if": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+    "copilot": '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+    "scheduled": '<path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/>',
+    "dashboards": '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+    "reports": '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    "audit": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+    "data_quality": '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+    "semantic": '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+    "evaluation": '<path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/>',
+    "discussion": '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    "team_overview": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    "workspaces": '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
+    "settings": '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+    "logout": '<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>',
 }
 
 
@@ -788,6 +788,12 @@ _READABLE_TEXT_CSS = (
 )
 
 
+def _sidebar_css() -> str:
+    """The sidebar's final stylesheet (style/sidebar.css). Loaded after every other skin so it has the last word."""
+    raw = Path(__file__).with_name("sidebar.css").read_text(encoding="utf-8")
+    return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
+
+
 def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
@@ -801,20 +807,7 @@ def inject_base_css() -> None:
     st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
     st.markdown(_READABLE_TEXT_CSS, unsafe_allow_html=True)
     st.markdown(_ONBOARD_HANDOFF_CSS, unsafe_allow_html=True)
-    st.markdown(_NAV_GROUP_CSS, unsafe_allow_html=True)
-
-
-# Folding groups in the nav rail: the group name is a small label, the open one is gold, the pages sit under it.
-_NAV_GROUP_CSS = """<style>
-.st-key-nav [data-testid="stExpander"] { border: 0 !important; background: transparent !important; box-shadow: none !important; margin: 6px 0 0 !important; }
-.st-key-nav [data-testid="stExpander"] details { border: 0 !important; background: transparent !important; }
-.st-key-nav [data-testid="stExpander"] summary { padding: 10px 16px 8px !important; background: transparent !important; border-radius: 8px !important; }
-.st-key-nav [data-testid="stExpander"] summary:hover { background: rgba(255,255,255,.04) !important; }
-.st-key-nav [data-testid="stExpander"] summary p { font: 500 10.5px/1 "JetBrains Mono", ui-monospace, Consolas, monospace !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: #8c88a3 !important; margin: 0 !important; }
-.st-key-nav [data-testid="stExpander"] details[open] > summary p { color: #f3b24f !important; }
-.st-key-nav [data-testid="stExpander"] summary svg { color: #8c88a3 !important; width: 14px !important; height: 14px !important; }
-.st-key-nav [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 0 !important; }
-</style>"""
+    st.markdown(_sidebar_css(), unsafe_allow_html=True)
 
 
 # After "Create workspace" the next run (the real page) can take several seconds on a slow backend or database, and
@@ -832,7 +825,7 @@ def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
         page_title=f"{title} · SILT",
         page_icon="▤",
         layout="wide",
-        initial_sidebar_state="expanded" if sidebar else "collapsed",
+        initial_sidebar_state="auto" if sidebar else "collapsed",
     )
     if public:
         # Anonymous read-only pages (share links): no gates, no team, no nav.
@@ -1052,7 +1045,7 @@ NAV_PAGES = [
     ("analyst", "Silt Copilot", "pages/12_Copilot.py"),
     ("investigations", "Root cause", "pages/13_Investigations.py"),
     ("what_if", "What-if", "pages/14_What_If.py"),
-    ("copilot", "Drill-down", "pages/19_Drilldown_Sessions.py"),
+    ("copilot", "Drill-down sessions", "pages/19_Drilldown_Sessions.py"),
     ("scheduled", "Scheduled", "pages/10_Scheduled.py"),
     ("dashboards", "Dashboards", "pages/4_Dashboards.py"),
     ("reports", "Reports", "pages/5_Reports.py"),
@@ -1067,17 +1060,11 @@ NAV_PAGES = [
 ]
 
 
-# The nav is grouped by what someone wants to do, not by when each page was built. A group opens by itself when it holds the
-# page being viewed; the others stay folded, so the rail stays short. Every key here is a key of NAV_PAGES.
-NAV_GROUPS = [
-    (None, ["home", "overview"]),
-    ("Your data", ["datasets", "semantic"]),
-    ("Ask", ["analyses", "analyst", "copilot"]),
-    ("Investigate", ["investigations", "data_quality", "what_if"]),
-    ("Share & automate", ["dashboards", "reports", "discussion", "scheduled"]),
-    ("Trust", ["audit", "evaluation"]),
-    ("Team", ["workspaces", "team_overview", "settings"]),
-]
+# Everyday pages sit in the rail; the rest are one click away under "More" (nothing is removed, and the section opens by
+# itself when you are on one of its pages). Every key is a key of NAV_PAGES.
+NAV_MAIN = ["home", "overview", "datasets", "analyses", "analyst", "dashboards", "reports", "settings"]
+NAV_MORE = ["investigations", "what_if", "copilot", "scheduled", "audit", "data_quality", "semantic", "evaluation",
+            "discussion", "team_overview", "workspaces"]
 
 
 @st.cache_data(ttl=5)
@@ -1198,45 +1185,68 @@ def render_topbar() -> None:
                 st.rerun()
 
 
+_LOGO_MARK = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" '
+    'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
+)
 _LOGO = (
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#837ab6" stroke-width="2" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 
 
+def _account_card() -> None:
+    """The workspace / account selector at the foot of the sidebar: a card showing where you are; it opens the workspace
+    switcher and Log out. Only the label is new, the switcher and the log-out button are the existing ones."""
+    user = current_user() or {}
+    active_team = st.session_state.get("active_team_id")
+    workspace, team = _active_workspace_name(user), ""
+    try:
+        for c in _cached_my_workspaces()["communities"]:
+            for t in c["teams"]:
+                if t["id"] == active_team:
+                    workspace, team = c["name"], t["name"]
+    except ApiError:
+        pass
+    who = (user.get("display_name") or user.get("email") or "Account").strip()
+    initial = (workspace[:1] or who[:1] or "S").upper()
+    sub = f"{team} \u00b7 {who}" if team else who
+    css_str = lambda v: '"' + str(v).replace("\\", "").replace('"', "").replace("\n", " ")[:42] + '"'
+    st.markdown(f"<style>.st-key-sb_account button{{--ini:{css_str(initial)};--sub:{css_str(sub)};}}</style>", unsafe_allow_html=True)
+    with st.container(key="sb_account"):
+        with st.popover(workspace or "Workspace", use_container_width=True):
+            _render_workspace_switcher()
+            if current_user() and st.button("Log out", key="nav_logout"):
+                logout()
+                st.rerun()
+
+
 def render_sidebar(current: str) -> None:
-    """Logo, icon nav rail, workspace switcher, log-out; plus the top status strip."""
+    """Brand, grouped navigation, and the workspace / account card; plus the top status strip."""
     render_topbar()
     if st.session_state.get("flash"):
         st.success(st.session_state.pop("flash"))
     if st.session_state.get("flash_error"):
         st.error(st.session_state.pop("flash_error"))
     with st.sidebar:
-        html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
+        html(f'<div class="sb-brand"><div class="sb-logo">{_LOGO_MARK}</div>'
+             '<div class="sb-wm"><b>Silt</b><span>Data intelligence</span></div></div>')
         with st.container(key="nav"):
             unread = _unread_alert_count()
             pages = {key: (label, target) for key, label, target in NAV_PAGES}
 
-            def _items(keys: list[str]) -> None:
-                for key in keys:
-                    label, target = pages[key]
-                    shown = f"{label}  ·  {unread}" if key == "scheduled" and unread else label
-                    if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
-                        st.switch_page(target)
+            def _item(key: str) -> None:
+                label, target = pages[key]
+                shown = f"{label}  \u00b7  {unread}" if key == "scheduled" and unread else label
+                if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
+                    st.switch_page(target)
 
-            for group, keys in NAV_GROUPS:
-                if group is None:
-                    _items(keys)
-                    continue
-                badge = f"  ·  {unread}" if "scheduled" in keys and unread else ""
-                with st.expander(f"{group}{badge}", expanded=current in keys):
-                    _items(keys)
-            if current_user() and st.button("Log out", key="nav_logout"):
-                logout()
-                st.rerun()
-
-        html('<div class="silt-ws-label">Workspace</div>')
-        _render_workspace_switcher()
+            for key in NAV_MAIN:
+                _item(key)
+            with st.expander("More", expanded=current in NAV_MORE):
+                for key in NAV_MORE:
+                    _item(key)
+        _account_card()
 
 
 def require_active_team(title: str = "") -> None:
