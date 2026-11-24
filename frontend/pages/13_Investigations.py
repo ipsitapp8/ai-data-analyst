@@ -455,6 +455,105 @@ def _evidence_section(report: dict) -> None:
                   if family.get("comparisons") else ""))
 
 
+_TIER_TAG = {"plausible_contributor": ("Plausible contributor", "strong"), "association": ("Association only", "weak")}
+_HELD = {"holds": "holds", "vanishes": "disappears", "attenuated": "shrinks", "unclear": "inconclusive",
+         "not_separable": "not separable", "no_gap": "—"}
+
+
+def _pct_text(v, digits: int = 1) -> str:
+    return "—" if v is None else f"{v * 100:+.{digits}f}%"
+
+
+def _own_change_text(f: dict, e: dict) -> str:
+    """A segment present in one period only has no % change; say so instead of a bare dash."""
+    presence = f.get("presence", "both")
+    if presence == "new":
+        return "new in the comparison period"
+    if presence == "lost":
+        return "absent from the comparison period"
+    return _pct_text(e.get("change_pct"))
+
+
+def _root_cause_section(rc: dict) -> None:
+    """Problem, finding, ranked factors with the evidence behind each, what was held fixed, and what to do next."""
+    if not rc or rc.get("error"):
+        if rc and rc.get("error"):
+            st.caption(rc["error"])
+        return
+    pr, dg = rc.get("problem") or {}, rc.get("diagnosis") or {}
+    scope = pr.get("scope") or "all rows"
+    base, comp = pr.get("baseline") or ["", ""], pr.get("comparison") or ["", ""]
+    html('<div class="ds-section-title" style="margin-top:14px;">Problem</div>')
+    st.markdown(
+        f"**{esc(pr.get('outcome', ''))}** {'rose' if pr.get('direction') == 'increase' else 'fell'} "
+        f"{_pct_text((pr.get('change_pct') or 0) / 100) if pr.get('change_pct') is not None else ''} "
+        f"between {esc(str(base[0])[:10])} – {esc(str(base[1])[:10])} and {esc(str(comp[0])[:10])} – {esc(str(comp[1])[:10])} "
+        f"(periods: {esc(str(pr.get('periods_source', '')))}). Scope: {esc(scope)}. "
+        f"{pr.get('rows_baseline', 0):,} baseline rows, {pr.get('rows_comparison', 0):,} comparison rows.")
+    _bullets("Ambiguities in the question", pr.get("ambiguities") or [])
+    html('<div class="ds-section-title" style="margin-top:14px;">Finding</div>')
+    st.markdown(f"**{dg.get('headline', '')}**")
+    cs = rc.get("causal_status") or {}
+    if cs.get("text"):
+        st.caption(cs["text"])
+
+    for chart in rc.get("charts") or []:
+        plot(figure_from_json(chart["plotly_json"]), height=320)
+
+    factors = rc.get("factors") or []
+    if factors:
+        html('<div class="ds-section-title" style="margin-top:14px;">Contributing factors, ranked by evidence</div>')
+        body = []
+        for f in factors:
+            e = f["evidence"]
+            label, cls = _TIER_TAG.get(f["tier"], (f.get("tier_label", ""), "weak"))
+            held = [f"{_HELD.get(t['result'], t['result'])} · {esc(t['against'])}" for t in (f.get("adjustment") or {}).get("tests", [])[:3]]
+            share = e.get("share_of_change")
+            width = 0 if share is None or share < 0 else min(share, 1.0) * 100
+            limits = list(f.get("failed_checks") or []) + [x for x in (f.get("limitations") or []) if x not in (f.get("failed_checks") or [])]
+            body.append(
+                f'<tr><td><b>{esc(f["factor"])}</b><div class="rc-muted">{esc(f.get("role", ""))}</div></td>'
+                f'<td>{esc(_n(e.get("value_a")))} → {esc(_n(e.get("value_b")))}'
+                f'<div class="rc-muted">{e.get("rows_a", 0):,} → {e.get("rows_b", 0):,} rows</div></td>'
+                f'<td>{esc(_own_change_text(f, e))} vs {esc(_pct_text(e.get("rest_change_pct")))} elsewhere'
+                f'<div class="rc-muted">{"" if share is None else f"{share * 100:.0f}% of the change"}</div>'
+                f'<div class="rc-bar"><span style="width:{width:.0f}%"></span></div></td>'
+                f'<td>{"<br>".join(held) or "not tested"}</td>'
+                f'<td><span class="rc-tag rc-{cls}">{esc(label)}</span>'
+                f'<div class="rc-muted">data quality: {esc(f.get("evidence_quality", ""))}'
+                f'{" · same direction in both halves" if f.get("consistent_across_halves") else ""}</div></td>'
+                f'<td>{esc("; ".join(limits)) or "none noted"}</td></tr>')
+        st.markdown(_EVIDENCE_CSS + '<div class="rc-panel"><table><thead><tr><th>Factor</th><th>Baseline → comparison</th>'
+                    '<th>Change vs the rest</th><th>Other factors held fixed</th><th>Evidence level</th><th>Limitations</th></tr></thead><tbody>'
+                    + "".join(body) + "</tbody></table></div>", unsafe_allow_html=True)
+        lead = factors[0]
+        if lead.get("why_it_matters"):
+            st.caption("Lead factor: " + lead["why_it_matters"])
+    sub = rc.get("sub_location")
+    if sub:
+        st.caption(f"Inside {sub['within']}, the change sits mainly in {sub['dimension']} = {sub['segment']} "
+                   f"({sub['a']:,.0f} → {sub['b']:,.0f}, {abs(sub['share']) * 100:.0f}% of that factor's change).")
+
+    nums = [n for n in rc.get("numeric_factors") or [] if n.get("moved")]
+    if nums:
+        html('<div class="ds-section-title" style="margin-top:14px;">Numeric variables that shifted</div>')
+        st.dataframe(pd.DataFrame([{
+            "Variable": n["column"], "Mean before": round(n["mean_a"], 3), "Mean after": round(n["mean_b"], 3),
+            "Change %": round(n["mean_change_pct"] * 100, 1), "Standardised difference": round(n["std_diff"], 2),
+            "Row-level relationship before (rho)": (n.get("relationship") or {}).get("a", {}).get("rho"),
+            "Row-level relationship after (rho)": (n.get("relationship") or {}).get("b", {}).get("rho")} for n in nums]),
+            use_container_width=True, hide_index=True)
+        st.caption("A variable that moved is an association to check, not a driver. Spearman rho is the rank relationship with the "
+                   "outcome inside each period; the p-values behind “moved” are Holm-adjusted.")
+
+    _bullets("Data checks", [c.get("text", "") if isinstance(c, dict) else str(c) for c in rc.get("data_checks") or []])
+    if rc.get("next_steps"):
+        _bullets("What to investigate next", rc["next_steps"])
+    with st.expander("How to read this, and how it was computed"):
+        for line in (rc.get("how_to_read") or []) + (rc.get("method_notes") or []):
+            html(f'<div class="ds-row-meta" style="padding:3px 0;">• {esc(line)}</div>')
+
+
 if inv.get("engine") == "hypothesis" and inv["status"] in ("queued", "running"):
     st.info("This investigation is still running. Open it on the Analyses page to watch progress, or reload this page.")
     _evidence_line(inv.get("evidence") or {})
@@ -559,7 +658,10 @@ if report.get("status") == "inconclusive" and not report.get("ranked_contributor
 for chart in report.get("charts") or []:
     plot(figure_from_json(chart["plotly_json"]), height=320)
 
-_evidence_section(report)
+_root_cause_section(report.get("root_cause"))
+_detail = st.expander("Segment decomposition detail") if report.get("root_cause") and not report["root_cause"].get("error") else st.container()
+with _detail:
+    _evidence_section(report)
 
 if report.get("ranked_contributors"):
     html('<div class="ds-section-title" style="margin-top:14px;">Contributors, ranked by measured contribution and evidence quality</div>')

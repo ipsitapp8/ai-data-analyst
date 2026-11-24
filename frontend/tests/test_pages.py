@@ -262,6 +262,21 @@ def test_investigations_page_asks_without_a_model_and_shows_the_evidence_table(a
     assert "--dash-surface" not in _styles(at), "the palette is borrowed for the table; the page keeps its own look"
 
 
+def test_investigations_page_shows_the_root_cause_section(api, ws):
+    from platform_helpers import run_job
+
+    created = api.post("/api/investigations/ask", headers=ws["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    at = healthy(page("13_Investigations.py", ws, investigation_id=created["investigation_id"]))
+    text = text_of(at)
+    for expected in ("Problem", "Finding", "Contributing factors, ranked by evidence", "Other factors held fixed",
+                     "Evidence level", "What to investigate next", "nothing here can show that a factor caused the change"):
+        assert expected in text, expected
+    assert "Plausible contributor" in text or "Association only" in text
+    assert "% confident" not in text and "probability" not in text.lower()
+
+
 def _hypothesis_script() -> dict:
     import test_hypothesis_engine as fixtures
 
@@ -1031,7 +1046,7 @@ def test_restyling_in_chart_studio_keeps_the_user_s_palette(api, ws):
     out = ask_and_run(api, ws, "Total revenue by region")
     at = healthy(page("4_Dashboards.py", ws, active_question_id=out["question_id"]))
     before = _figures(at)[0].data[0]
-    pills = next(w for w in at.get("button_group") if "type_" in (w.key or ""))
+    pills = next(w for w in at.selectbox if "type_" in (w.key or ""))
     pills.set_value("hbar").run()
     healthy(at)
     after = _figures(at)[0].data[0]
@@ -1515,3 +1530,21 @@ def test_universal_tab_works_without_a_dataset_for_travel(api, monkeypatch):
     at = _explore(at)
     assert "Needs assumptions" in text_of(at) and "Extend the trip" not in at.session_state["wxu_domain"]
     assert any("extend my trip" in str(m.value) for m in at.markdown)
+
+
+
+def test_investigations_page_end_to_end_on_an_uploaded_dataset_with_a_new_segment(api, monkeypatch):
+    """Upload -> ask -> job -> page: a vendor that exists only in the later period is shown as the located driver, not as '—'."""
+    import rc_fixtures
+    from platform_helpers import run_job
+
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    csv = rc_fixtures.new_vendor_slows_resolution().to_csv(index=False).encode()
+    w = workspace(api, csv, "tickets.csv")
+    created = api.post("/api/investigations/ask", headers=w["h"],
+                       json={"dataset_id": w["ds"], "question": "Why did hours increase in Q2 2025 compared to Q1 2025?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    at = healthy(page("13_Investigations.py", w, investigation_id=created["investigation_id"]))
+    text = text_of(at)
+    assert "vendor = Brightline" in text and "new in the comparison period" in text and "Plausible contributor" in text
+    assert "% confident" not in text and "n/a against" not in text
