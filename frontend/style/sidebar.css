@@ -96,3 +96,9 @@ section[data-testid="stSidebar"] > div, [data-testid="stSidebarContent"] {
 .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled::before { filter: brightness(0) invert(1) !important; }
 html body .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled, html body .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled:hover {
   background: rgba(243,178,79,.10) !important; background-image: none !important; box-shadow: inset 2px 0 0 #f3b24f !important; border-color: transparent !important; }
+
+/* Home row sat on the brand divider: keep the nav clear of the brand block and make every row full width */
+.stApp .sb-brand { position: relative; z-index: 1; margin-bottom: 16px !important; }
+.stApp .st-key-nav { position: relative; z-index: 0; padding-top: 6px !important; }
+.stApp .st-key-nav [data-testid="stElementContainer"], .stApp .st-key-nav .stButton { width: 100% !important; margin: 0 !important; }
+.stApp .st-key-nav .stButton > button { width: 100% !important; transform: none !important; }
