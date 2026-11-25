@@ -51,6 +51,14 @@ if S.get("investigation_id") is not None and "inv_step" not in S:
     S["inv_step"] = STEPS[1]            # coming back from a run: show what it found
 step = st.segmented_control("Step", STEPS, key="inv_step", label_visibility="collapsed", selection_mode="single") or STEPS[0]
 
+if step != STEPS[0]:
+    # results steps: keep the title as a slim header so the findings start near the top of the screen
+    st.markdown("<style>.stApp .stMain:has(.iv-scope) .iv-lede, .stApp .stMain:has(.iv-scope) .iv-rule, .stApp .stMain:has(.iv-scope) .pi { display: none !important; }"
+                ".stApp .stMain:has(.iv-scope) .iv-title { font-size: 1.7rem !important; margin: 0 0 12px !important; }"
+                ".stApp .stMain:has(.iv-scope) .iv-eyebrow { margin: -3rem 0 6px !important; }"
+                ".stApp .stMain:has(.iv-scope) [data-testid='stMainBlockContainer'] { padding-top: 2.6rem !important; }</style>",
+                unsafe_allow_html=True)
+
 
 def _go(target: str, inv_id: int | None = None) -> None:
     """Button callback: move to a step (and optionally open an investigation)."""
