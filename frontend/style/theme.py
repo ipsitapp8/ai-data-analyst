@@ -1720,26 +1720,30 @@ def _inspect_dialog() -> None:
 
 
 _INTRO_CSS = """<style>
-.pi-box { margin: 6px 0 22px; padding: 12px 16px; border-left: 2px solid #f3b24f; background: rgba(255,255,255,.03); border-radius: 0 6px 6px 0; max-width: 860px; }
-.pi-box .pi-line { font: 400 14.5px/1.55 "Inter", system-ui, sans-serif; color: #d8d4e6; }
-.pi-box .pi-line b { color: #f3b24f; font-weight: 600; }
-.pi-box details { margin-top: 8px; }
-.pi-box summary { cursor: pointer; font: 500 11.5px/1.4 "JetBrains Mono", ui-monospace, Consolas, monospace; letter-spacing: .09em; text-transform: uppercase; color: #bdb9cc; }
-.pi-box summary:hover { color: #ffc66e; }
-.pi-box ol { margin: 10px 0 2px 18px; padding: 0; color: #bdb9cc; font: 400 14px/1.6 "Inter", system-ui, sans-serif; }
-.pi-box ol li { margin: 3px 0; }
-.pi-box .pi-tip { margin-top: 8px; font: 400 13px/1.5 "Inter", system-ui, sans-serif; color: #8c88a3; }
+.pi { margin: 4px 0 26px; max-width: 760px; }
+.pi .pi-lede { font: 400 15.5px/1.65 "Inter", system-ui, sans-serif; color: #b4b0c6; margin: 0; }
+.pi details { margin-top: 14px; }
+.pi summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: 500 13.5px/1 "Inter", system-ui, sans-serif; color: #d9d5e8; padding: 7px 0; }
+.pi summary::-webkit-details-marker { display: none; }
+.pi summary::before { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; margin-right: 2px; }
+.pi details[open] summary::before { transform: rotate(45deg); }
+.pi summary:hover { color: #f3b24f; }
+.pi .pi-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 28px; margin: 10px 0 0; padding: 16px 0 0; border-top: 1px solid rgba(242,239,231,.10); list-style: none; counter-reset: pi; }
+.pi .pi-steps li { counter-increment: pi; font: 400 14px/1.55 "Inter", system-ui, sans-serif; color: #b4b0c6; padding: 0 0 14px; }
+.pi .pi-steps li::before { content: counter(pi, decimal-leading-zero); display: block; font: 500 12px/1 "JetBrains Mono", ui-monospace, Consolas, monospace; color: #f3b24f; margin-bottom: 8px; letter-spacing: .04em; }
+.pi .pi-note { margin: 2px 0 0; font: 400 13px/1.55 "Inter", system-ui, sans-serif; color: #8c88a3; }
 </style>"""
 
 
 def page_intro(purpose: str, steps: list[str] | None = None, tip: str | None = None) -> None:
-    """A short plain-language box under a page title: what the page is for, and (folded) how to use it.
+    """A short plain-language description under a page title, with the steps folded behind "How it works".
     Written for someone seeing the page for the first time. Static text only; it never calls the backend."""
-    body = f'<div class="pi-line"><b>What this is for.</b> {esc(purpose)}</div>'
+    body = f'<p class="pi-lede">{esc(purpose)}</p>'
     if steps:
         items = "".join(f"<li>{esc(s)}</li>" for s in steps)
-        body += f"<details><summary>How to use it</summary><ol>{items}</ol></details>"
-    if tip:
-        body += f'<div class="pi-tip">{esc(tip)}</div>'
+        note = f'<p class="pi-note">{esc(tip)}</p>' if tip else ""
+        body += f'<details><summary>How it works</summary><ol class="pi-steps">{items}</ol>{note}</details>'
+    elif tip:
+        body += f'<p class="pi-note" style="margin-top:8px;">{esc(tip)}</p>'
     st.markdown(_INTRO_CSS, unsafe_allow_html=True)
-    html(f'<div class="pi-box">{body}</div>')
+    html(f'<div class="pi">{body}</div>')
