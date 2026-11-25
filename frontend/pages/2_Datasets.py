@@ -43,6 +43,10 @@ if st.session_state.get("show_uploader"):
                     except ApiError:
                         pass
                     st.session_state["show_uploader"] = False
+                    if res.get("already_existed"):
+                        st.session_state["flash"] = (f"**{res['filename']}** is already in your datasets, so nothing "
+                                                     "was added. It is selected for you.")
+                        st.rerun()
                     st.success(f"Profiled **{res['filename']}** — "
                                f"{res['row_count']:,} rows, {res['col_count']} columns.")
                     st.rerun()

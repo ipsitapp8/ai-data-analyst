@@ -171,7 +171,10 @@ with left:
                         target = {"dataset_id": d["id"], "doc_id": None}
                         read = ((d.get("profile") or {}).get("ingestion") or {})
                         how = read.get("notes") or []
-                        S["cp_flash"] = (f"Added **{d['filename']}** ({ui.file_kind(up.name)}"
+                        if d.get("already_existed"):
+                            S["cp_flash"] = f"**{d['filename']}** is already in your datasets, so it was not added again. It is selected."
+                        else:
+                          S["cp_flash"] = (f"Added **{d['filename']}** ({ui.file_kind(up.name)}"
                                          + (f", sheet {sheet}" if sheet else "") + f"): {d['row_count']:,} rows × "
                                          f"{d['col_count']} columns. It is now selected."
                                          + ("\n\n**How the file was read:** " + " ".join(how[:6]) if how else ""))

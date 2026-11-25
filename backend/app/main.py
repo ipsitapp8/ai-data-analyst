@@ -278,6 +278,21 @@ def upload_dataset(
     dest_path, profile = _save_and_profile_upload(file, sheet)
     name = file.filename if not sheet else f"{file.filename} [{sheet}]"
 
+    # The same file uploaded again must not create a second copy: match on name + content hash.
+    digest = provenance.file_sha256(str(dest_path))
+    if digest:
+        for existing in db.query(Dataset).filter(Dataset.team_id == team.id, Dataset.filename == name).all():
+            current = latest_version(db, existing)
+            if current is not None and provenance.fingerprint(db, current) == digest:
+                try:
+                    if str(dest_path) != str(current.filepath):
+                        Path(dest_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+                out = _dataset_out(db, existing)
+                out.already_existed = True
+                return out
+
     dataset = Dataset(
         team_id=team.id,
         filename=name,
@@ -290,6 +305,9 @@ def upload_dataset(
     db.commit()
     db.refresh(dataset)
     version = add_version(db, dataset, filename=name, filepath=str(dest_path), profile=profile)
+    if digest and not version.content_sha256:
+        version.content_sha256 = digest
+        db.commit()
     _after_new_version(db, dataset, version)
     return _dataset_out(db, dataset)
 
