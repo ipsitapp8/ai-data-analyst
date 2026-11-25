@@ -150,6 +150,8 @@ def test_csv_excel_and_pdf_uploads_reach_the_copilot(api, ws):
     bad = api.post("/api/analyst/documents", files={"file": ("x.pdf", b"not a pdf", "application/pdf")}, headers=ws["h"])
     assert bad.status_code == 400
     at = healthy(page("12_Copilot.py", ws))
+    at.button(key="cp_chg_btn").click().run()          # the pickers open behind "Change dataset"
+    healthy(at)
     labels = " ".join(str(o) for s in at.selectbox for o in s.options)
     assert "costs.csv" in labels and "costs.xlsx" in labels and "report.pdf" in labels
 
