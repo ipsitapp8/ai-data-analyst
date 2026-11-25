@@ -17,10 +17,13 @@ from typing import Any
 
 import time
 
-from openai import OpenAI
+import logging
+
+from openai import BadRequestError, OpenAI
 
 from app import config, runtime
 
+log = logging.getLogger(__name__)
 _client: OpenAI | None = None
 
 
@@ -58,25 +61,26 @@ def call_tool(
                               int((time.monotonic() - started) * 1000))
         return dict(out)
     client = get_client()
-    response = client.chat.completions.create(
-        model=config.LLAMA_MODEL,
-        max_tokens=max_tokens,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_content},
-        ],
-        tools=[
-            {
-                "type": "function",
-                "function": {
-                    "name": tool_name,
-                    "description": tool_description,
-                    "parameters": tool_schema,
-                },
-            }
-        ],
-        tool_choice={"type": "function", "function": {"name": tool_name}},
-    )
+    tools = [{"type": "function", "function": {"name": tool_name, "description": tool_description,
+                                               "parameters": tool_schema}}]
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user_content}]
+    forced = {"type": "function", "function": {"name": tool_name}}
+    # Groq answers HTTP 400 to a forced tool_choice when the model's first attempt is not valid JSON for
+    # the schema (tool_use_failed). Retrying with the looser "required" and a larger budget usually works.
+    attempts = [(forced, max_tokens), ("required", max_tokens + 2048), ("required", max_tokens + 4096)]
+    response = None
+    last_error: Exception | None = None
+    for choice, budget in attempts:
+        try:
+            response = client.chat.completions.create(
+                model=config.LLAMA_MODEL, max_tokens=budget, messages=messages, tools=tools, tool_choice=choice,
+            )
+            break
+        except BadRequestError as exc:
+            last_error = exc
+            log.warning("llama 400 on %s: %s", tool_name, str(exc)[:400])
+    if response is None:
+        raise last_error  # type: ignore[misc]
 
     usage = getattr(response, "usage", None)
     tokens_in = getattr(usage, "prompt_tokens", None)
