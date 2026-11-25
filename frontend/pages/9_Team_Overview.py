@@ -22,6 +22,8 @@ render_sidebar("team_overview")
 require_active_team("Team Overview")
 
 page_header("Team Overview", "Every analysis this team has run, newest first.")
+from style.theme import page_intro
+page_intro('A list of everything your team has analysed, newest first, so nobody repeats work.', ['Scroll the list', 'Open any item to see its answer'])
 
 try:
     questions = list_questions()

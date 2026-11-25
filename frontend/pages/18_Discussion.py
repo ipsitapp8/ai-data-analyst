@@ -20,6 +20,8 @@ render_sidebar("discussion")
 require_active_team("Discussion")
 
 page_header("Discussion", "Comments and notes for this team. Pin one to an analysis or dataset to keep the context.")
+from style.theme import page_intro
+page_intro('A shared notepad for your team. Leave comments, and pin one to an analysis or dataset so the context stays attached.', ['Write a comment', 'Optionally pin it to an analysis or dataset', 'Teammates see it here'])
 
 try:
     questions = list_questions()

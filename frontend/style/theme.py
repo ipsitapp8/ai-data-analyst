@@ -726,7 +726,7 @@ def html(markup: str) -> None:
 _FONTS_LINK = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@400;500;600;700'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500'
     '&display=swap" rel="stylesheet">'
 )
 
@@ -736,7 +736,7 @@ _NAV_ICONS = {   # Lucide (lucide.dev), one consistent stroke family
     "overview": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
     "datasets": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
     "analyses": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
-    "analyst": '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
+    "analyst": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     "investigations": '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
     "what_if": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
     "copilot": '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
@@ -798,7 +798,8 @@ def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8") + "\n" + (
-        Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8")
+        Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8") + chr(10) + (
+        Path(__file__).with_name("workbench.css")).read_text(encoding="utf-8")
     # Flatten to one line: markdown ends an HTML block at the first blank line,
     # which would spill the rest of the stylesheet onto the page as text.
     skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())
@@ -1056,14 +1057,13 @@ NAV_PAGES = [
     ("discussion", "Discussion", "pages/18_Discussion.py"),
     ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
     ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
-    ("settings", "Settings", "pages/7_Settings.py"),
 ]
 
 
 # Everyday pages sit in the rail; the rest are one click away under "More" (nothing is removed, and the section opens by
 # itself when you are on one of its pages). Every key is a key of NAV_PAGES.
-NAV_MAIN = ["home", "overview", "datasets", "analyses", "analyst", "dashboards", "reports", "settings"]
-NAV_MORE = ["investigations", "what_if", "copilot", "scheduled", "audit", "data_quality", "semantic", "evaluation",
+NAV_MAIN = ["home", "overview", "datasets", "analyses", "analyst", "investigations", "what_if", "dashboards", "reports"]
+NAV_MORE = ["copilot", "scheduled", "audit", "data_quality", "semantic", "evaluation",
             "discussion", "team_overview", "workspaces"]
 
 
@@ -1164,14 +1164,11 @@ def _active_workspace_name(user: dict | None) -> str:
 def render_topbar() -> None:
     """Fixed top strip, right-aligned: live backend status and the active workspace."""
     user = current_user()
-    alive = _backend_alive()
     name = _active_workspace_name(user)
     initials = "".join(w[0] for w in (user or {}).get("display_name", name).split()[:2]).upper() or "•"
     html(
         f"""
         <div class="silt-topbar">
-          <div class="silt-tb-status"><span class="silt-dot {'silt-dot-on' if alive else 'silt-dot-off'}"></span>
-            {'Backend online' if alive else 'Backend unreachable'}</div>
           <div class="silt-tb-user"><div class="silt-tb-avatar">{esc(initials)}</div>
             <div class="silt-tb-ws">{esc(name)}</div></div>
         </div>
@@ -1720,3 +1717,29 @@ def _inspect_dialog() -> None:
     if st.button("Close", key="inspect_close"):
         st.session_state["_inspect_open"] = False
         st.rerun()
+
+
+_INTRO_CSS = """<style>
+.pi-box { margin: 6px 0 22px; padding: 12px 16px; border-left: 2px solid #f3b24f; background: rgba(255,255,255,.03); border-radius: 0 6px 6px 0; max-width: 860px; }
+.pi-box .pi-line { font: 400 14.5px/1.55 "Inter", system-ui, sans-serif; color: #d8d4e6; }
+.pi-box .pi-line b { color: #f3b24f; font-weight: 600; }
+.pi-box details { margin-top: 8px; }
+.pi-box summary { cursor: pointer; font: 500 11.5px/1.4 "JetBrains Mono", ui-monospace, Consolas, monospace; letter-spacing: .09em; text-transform: uppercase; color: #bdb9cc; }
+.pi-box summary:hover { color: #ffc66e; }
+.pi-box ol { margin: 10px 0 2px 18px; padding: 0; color: #bdb9cc; font: 400 14px/1.6 "Inter", system-ui, sans-serif; }
+.pi-box ol li { margin: 3px 0; }
+.pi-box .pi-tip { margin-top: 8px; font: 400 13px/1.5 "Inter", system-ui, sans-serif; color: #8c88a3; }
+</style>"""
+
+
+def page_intro(purpose: str, steps: list[str] | None = None, tip: str | None = None) -> None:
+    """A short plain-language box under a page title: what the page is for, and (folded) how to use it.
+    Written for someone seeing the page for the first time. Static text only; it never calls the backend."""
+    body = f'<div class="pi-line"><b>What this is for.</b> {esc(purpose)}</div>'
+    if steps:
+        items = "".join(f"<li>{esc(s)}</li>" for s in steps)
+        body += f"<details><summary>How to use it</summary><ol>{items}</ol></details>"
+    if tip:
+        body += f'<div class="pi-tip">{esc(tip)}</div>'
+    st.markdown(_INTRO_CSS, unsafe_allow_html=True)
+    html(f'<div class="pi-box">{body}</div>')

@@ -29,6 +29,8 @@ page_setup("Workspaces")
 render_sidebar("workspaces")
 
 page_header("Workspaces", "Communities hold teams; each team is its own isolated workspace.")
+from style.theme import page_intro
+page_intro('A workspace is where your data and analyses live. A community groups several teams; each team has its own private space.', ['Create a workspace, or join one with an invitation link', 'Switch between them from the bottom of the sidebar'], tip='Most people only need one workspace.')
 
 try:
     invites = my_invites()

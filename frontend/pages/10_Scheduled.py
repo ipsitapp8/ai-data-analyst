@@ -25,6 +25,8 @@ render_sidebar("scheduled")
 require_active_team("Scheduled Analyses")
 
 page_header("Scheduled Analyses", "Tracked questions, re-run automatically on the latest data.")
+from style.theme import page_intro
+page_intro('Save a question you ask often and Silt re-runs it on your latest data, so you do not have to ask it again.', ['Pick a question you have already analysed', 'Choose how often it should run', 'Come back here to see each new result and whether it changed'])
 
 # ---- alert feed: what changed, went unusual, or failed verification ----
 try:

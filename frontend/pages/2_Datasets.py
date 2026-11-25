@@ -18,12 +18,12 @@ with head_l:
     page_header("Datasets", "Manage and explore your data sources.")
 with head_r:
     html("<div style='height:10px'></div>")
-    b1, b2 = st.columns(2)
-    with b1:
-        upload_open = st.button("Upload Data", key="ds_upload_btn")
-    with b2:
-        st.button("＋  Connect Source", type="primary", key="ds_connect_btn",
-                  help="Database / cloud sources are not part of this MVP yet.")
+    upload_open = st.button("Upload data", type="primary", key="ds_upload_btn")
+
+from style.theme import page_intro
+page_intro("Your data lives here. Upload a CSV or Excel file once and Silt checks its quality, then you can ask questions about it on any other page.",
+           ["Press Upload data and choose a file", "Press Profile this dataset and wait a moment", "Check the table below: rows, columns and data quality", "Press Analyze this to ask your first question"],
+           tip="Quality is the share of cells that are filled in. A low score means many blanks, which can weaken answers.")
 
 if upload_open:
     st.session_state["show_uploader"] = not st.session_state.get("show_uploader", False)
@@ -65,7 +65,7 @@ with st.container(key="flat_table"):
         html(
             '<div style="padding:34px 22px;text-align:center;">'
             '<div class="ds-row-title" style="margin-bottom:5px;">No datasets yet</div>'
-            '<div class="ds-row-meta">Click <b>Upload Data</b> above to add your first CSV.</div>'
+            '<div class="ds-row-meta">Nothing to analyse yet. Click <b>Upload data</b> above and choose a CSV or Excel file. Your file stays in your workspace.</div>'
             "</div>"
         )
     else:

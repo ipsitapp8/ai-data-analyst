@@ -57,6 +57,8 @@ ready = [q for q in questions if q.get("has_dashboard")]
 
 if not qid:
     page_header("Dashboards", "Generated from verified analyses.")
+    from style.theme import page_intro
+    page_intro('Charts and key numbers generated from your verified analyses. Nothing here is typed by hand.', ['Run an analysis on the Analyses page', 'Come back and open its dashboard', 'Download or share it'])
     if not ready:
         st.info("No dashboards yet — run an analysis first.")
         if st.button("Go to Analyses  →", type="primary", key="db_go"):

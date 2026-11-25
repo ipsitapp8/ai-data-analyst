@@ -269,6 +269,20 @@ def log_provider_event(provider: str, tool_name: str, failure: dict, *, attempt:
     runtime.record_event("provider", f"{provider}:{failure['kind']}", detail)
 
 
+def _thinking_config():
+    """Gemini 3 models spend part of max_output_tokens on internal "thinking". With the small limits used for structured
+    answers (a triage verdict, a plan) that budget runs out before the answer is written (finish_reason MAX_TOKENS), so the
+    run fails. Keep thinking low for these calls. Older model names do not take a level, so they are left alone."""
+    if str(config.GEMINI_MODEL).startswith("gemini-3"):
+        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    return None
+
+
+def _output_limit(max_tokens: int) -> int:
+    """Headroom for the little thinking that is still done, so a short answer is never cut off."""
+    return max_tokens + 2048 if str(config.GEMINI_MODEL).startswith("gemini-3") else max_tokens
+
+
 def call_tool_gemini(
     system: str,
     user_content: str,
@@ -303,7 +317,8 @@ def call_tool_gemini(
         contents=user_content,
         config=types.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=max_tokens,
+            max_output_tokens=_output_limit(max_tokens),
+            thinking_config=_thinking_config(),
             tools=[types.Tool(function_declarations=[function_decl])],
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
@@ -507,7 +522,8 @@ def call_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
         contents=user_content,
         config=types.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=max_tokens,
+            max_output_tokens=_output_limit(max_tokens),
+            thinking_config=_thinking_config(),
         ),
     )
     return (response.text or "").strip()

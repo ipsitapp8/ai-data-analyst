@@ -27,6 +27,10 @@ html('<div class="iv-scope"></div>'
      '<p class="iv-lede">Locate where a metric changed between two periods. The evidence is descriptive and is kept clearly '
      'separate from cause.</p>'
      '<div class="iv-rule"></div>')
+from style.theme import page_intro
+page_intro("Use this when a number went up or down and you want to know why. For example: revenue fell in March, so which region or product caused it?",
+           ["Choose the dataset and the number to investigate", "Pick the two periods to compare, such as February and March", "Read which segments moved it most, and what could not be explained"],
+           tip="Results show where the change came from. They do not prove what caused it.")
 
 try:
     datasets = list_datasets()
@@ -56,7 +60,7 @@ with aside_col:
 
 with main_col:
     if not datasets:
-        st.info("Upload a dataset first.")
+        st.info("No dataset yet. Root cause compares your own numbers across two periods, so upload a CSV or Excel file on the Datasets page first.")
     else:
         ds = st.selectbox("Dataset", datasets, format_func=lambda d: d["filename"], key="inv_ds")
         cols = ds["profile"].get("columns", [])

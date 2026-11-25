@@ -16,6 +16,8 @@ render_sidebar("copilot")
 require_active_team("Copilot")
 page_header("Drill-down sessions", "Filter and break down one metric step by step, with rules only. "
             "For free-form questions, calculations and the trained local model, use Silt Copilot.")
+from style.theme import page_intro
+page_intro('Narrow down one number step by step, for example revenue, then only the North region, then only last quarter. No AI is involved; it is plain filtering.', ['Pick a dataset and the number to track', 'Add a filter or a breakdown', 'Repeat until you find what you were looking for'])
 if st.button("Open Silt Copilot  →", key="dd_to_silt"):
     st.switch_page("pages/12_Copilot.py")
 
@@ -26,7 +28,7 @@ except ApiError as e:
     st.stop()
 
 if not datasets:
-    st.info("No dataset yet — upload a CSV first.")
+    st.info("No dataset yet. Silt answers from your own data, so upload a CSV or Excel file on the Datasets page first.")
     if st.button("Go to Datasets  →", type="primary", key="cp_go_ds"):
         st.switch_page("pages/2_Datasets.py")
     st.stop()

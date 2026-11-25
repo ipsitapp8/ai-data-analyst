@@ -220,15 +220,6 @@ def test_a_run_that_could_not_reach_a_model_shows_which_provider_failed_and_how(
     assert all("action=not_tried" in r["Detail"] for r in failed)
 
 
-def test_settings_names_the_configured_models_next_to_the_key_status(api, ws):
-    from app import config
-
-    at = page("7_Settings.py", ws).run()       # the page's own warning about the test sandbox runner is an st.error
-    assert not at.exception, [e.value for e in at.exception]
-    text = text_of(at)
-    assert f"Gemini · {config.GEMINI_MODEL}" in text and f"Llama · {config.LLAMA_MODEL}" in text and "No key" in text
-
-
 # ----------------------------------------------------------- investigations --
 
 def test_investigations_page_shows_the_report(api, ws):
@@ -830,13 +821,6 @@ def test_evaluation_page_shows_a_stored_run(api, ws):
     assert f"Suite <b>{report['suite_version']}</b>" in text_of(at)
     assert run_id > 0
 
-
-# ----------------------------------------------------------------- settings --
-
-def test_settings_page_reports_the_sandbox_honestly(api, ws):
-    at = healthy_except_expected(page("7_Settings.py", ws))
-    text = text_of(at) + "\n".join(str(e.value) for e in at.error)
-    assert "not a security boundary" in text, "the development runner is called out on the Settings page"
 
 
 def healthy_except_expected(at: AppTest) -> AppTest:

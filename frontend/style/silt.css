@@ -40,7 +40,7 @@ button[kind="secondary"]:hover { border-color: var(--border-strong) !important; 
   background: rgba(255,255,255,0.88); border-bottom: 1px solid var(--border); backdrop-filter: blur(8px);
 }
 .silt-tb-status { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-secondary); }
-.silt-tb-user { display: flex; align-items: center; gap: 10px; padding-left: 20px; border-left: 1px solid var(--border); }
+.silt-tb-user { display: flex; align-items: center; gap: 10px; }
 .silt-tb-avatar {
   width: 28px; height: 28px; border-radius: 50%; background: var(--accent-bg); color: var(--accent);
   display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;

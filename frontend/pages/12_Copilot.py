@@ -117,6 +117,11 @@ with h2:
     a.markdown(f"<div style='text-align:right;margin-top:6px'>{pill}<div class='cp-src'>{ident}</div></div>",
                unsafe_allow_html=True)
 
+from style.theme import page_intro
+page_intro("A chat for quick questions about one dataset or document. Ask in everyday words, then follow up; every number is calculated from your data.",
+           ["Choose a dataset (or upload a file) in the boxes below", "Click an example or type your own question", "Ask follow-ups; the conversation remembers the context"],
+           tip="For one clear question with a saved report and dashboard, use Analyses instead.")
+
 left, main = st.columns([1, 3.4], gap="medium")
 
 # --------------------------------------------------------------- conversations panel --
