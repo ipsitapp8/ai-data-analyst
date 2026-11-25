@@ -107,3 +107,13 @@ html body .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disable
 html body .stApp .silt-topbar { background: #0f0d1f !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 10px !important; box-shadow: 0 6px 18px rgba(0,0,0,.45) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 html body .stApp .st-key-topbar_logout { background: transparent !important; }
 html body .stApp .st-key-topbar_logout button { background: #17142b !important; border: 1px solid rgba(255,255,255,.14) !important; border-radius: 8px !important; }
+
+/* File uploader: the icon glyph rendered as stray text ("uploadupload", "add") and the file list scrolled sideways.
+   Hide the glyphs, keep the real labels, and stop the list from overflowing. */
+html body .stApp [data-testid="stFileUploaderDropzone"] [data-testid="stIconMaterial"],
+html body .stApp [data-testid="stFileUploaderDropzone"] button span[class*="material"] { display: none !important; }
+html body .stApp [data-testid="stFileUploaderDropzone"] { padding: 12px 14px !important; min-height: 0 !important; overflow: hidden !important; }
+html body .stApp [data-testid="stFileUploaderDropzone"] button { white-space: nowrap; }
+html body .stApp [data-testid="stFileUploader"] section, html body .stApp [data-testid="stFileUploader"] [data-testid="stFileUploaderFileList"] { overflow-x: hidden !important; scrollbar-width: none; max-width: 100%; }
+html body .stApp [data-testid="stFileUploader"] *::-webkit-scrollbar { display: none; }
+html body .stApp [data-testid="stFileUploaderFile"] { max-width: 100% !important; }

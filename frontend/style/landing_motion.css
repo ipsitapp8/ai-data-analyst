@@ -272,3 +272,14 @@
 @keyframes lm-sdone { 0%, 58% { opacity: 0; transform: translateY(6px); } 64%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
 @keyframes lm-rot { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .stApp:has(.lm-scope) .lp-steps .packet { animation: none; opacity: 0; } .stApp:has(.lm-scope) .v-code .run { display: none; } }
+
+/* multi-column footer */
+.stApp:has(.lm-scope) .lm-footer { width: min(1180px, 88vw); margin: 10vh auto 0; padding: 56px 0 28px; border-top: 1px solid var(--lm-line); }
+.stApp:has(.lm-scope) .lf-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 40px; }
+.stApp:has(.lm-scope) .lf-logo { font: 600 2rem/1 var(--lm-serif); font-style: italic; color: var(--lm-ink); }
+.stApp:has(.lm-scope) .lf-brand p { margin: 14px 0 0; max-width: 30ch; font: 400 15px/1.6 var(--lm-sans); color: var(--lm-ink-2); }
+.stApp:has(.lm-scope) .lf-col h4 { margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--lm-line); font: 600 1.05rem/1.2 var(--lm-serif); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .lf-col a, .stApp:has(.lm-scope) .lf-col span { display: block; padding: 7px 0; font: 400 14.5px/1.4 var(--lm-sans); color: var(--lm-ink-2); text-decoration: none; }
+.stApp:has(.lm-scope) .lf-col a:hover { color: var(--lm-amber); }
+.stApp:has(.lm-scope) .lf-bar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--lm-line); font: 400 11px/1.4 var(--lm-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--lm-ink-3); }
+@media (max-width: 800px) { .stApp:has(.lm-scope) .lf-grid { grid-template-columns: 1fr 1fr; } .stApp:has(.lm-scope) .lf-brand { grid-column: 1 / -1; } }

@@ -28,6 +28,54 @@ page_intro("Your data lives here. Upload a CSV or Excel file once and Silt check
 if upload_open:
     st.session_state["show_uploader"] = not st.session_state.get("show_uploader", False)
 
+def _notes_editor(chosen: dict) -> None:
+    NOTE_KINDS = {
+        "knowledge": ("What the data means", "Column definitions, units and quirks the file does not show.",
+                      "e.g. “amount” is in cents. “status = 9” means test account, exclude it."),
+        "lesson": ("Mistakes to avoid", "Things Silt should not repeat. Answers the checker rejects are added here automatically.",
+                   "e.g. Revenue must exclude refunds, which appear as negative amounts."),
+    }
+    tabs = st.tabs([v[0] for v in NOTE_KINDS.values()])
+    for tab, (kind, (_label, blurb, placeholder)) in zip(tabs, NOTE_KINDS.items()):
+        with tab:
+            st.caption(blurb)
+            try:
+                notes = list_notes(chosen["id"], kind)
+            except ApiError as e:
+                notes = []
+                st.error(f"Could not load notes: {e}")
+
+            form_key = f"note_form_{kind}_{chosen['id']}"
+            with st.form(form_key, clear_on_submit=True):
+                text = st.text_area("New note", placeholder=placeholder, max_chars=1000,
+                                    label_visibility="collapsed", key=f"note_text_{kind}_{chosen['id']}")
+                if st.form_submit_button("Add note", type="primary"):
+                    if not text.strip():
+                        st.warning("Write something first.")
+                    else:
+                        try:
+                            create_note(chosen["id"], kind, text)
+                            st.rerun()
+                        except ApiError as e:
+                            st.error(f"Could not save note: {e}")
+
+            if not notes:
+                html('<div class="ds-row-meta" style="padding:6px 0;">Nothing here yet.</div>')
+            for n in notes:
+                left, right = st.columns([12, 1])
+                with left:
+                    tag = badge("Critic", "warn") if n["source"] == "critic" else ""
+                    html(f'<div style="font-size:0.88rem;line-height:1.55;padding:6px 0;">'
+                         f'{tag} {esc(n["text"])}</div>')
+                with right:
+                    if st.button("✕", key=f"del_note_{n['id']}", help="Delete this note"):
+                        try:
+                            delete_note(chosen["id"], n["id"])
+                            st.rerun()
+                        except ApiError as e:
+                            st.error(f"Could not delete: {e}")
+
+
 if st.session_state.get("show_uploader"):
     with st.container(key="card_upload"):
         html('<div class="ds-section-title">Upload a CSV</div>')
@@ -43,6 +91,10 @@ if st.session_state.get("show_uploader"):
                     except ApiError:
                         pass
                     st.session_state["show_uploader"] = False
+                    if res.get("already_existed"):
+                        st.session_state["flash"] = (f"**{res['filename']}** is already in your datasets, so nothing "
+                                                     "was added. It is selected for you.")
+                        st.rerun()
                     st.success(f"Profiled **{res['filename']}** — "
                                f"{res['row_count']:,} rows, {res['col_count']} columns.")
                     st.rerun()
@@ -280,53 +332,10 @@ if datasets:
     # ------------------------------------------------ knowledge & lessons --
     html("<div style='height:20px'></div>")
     with st.container(key="card_knowledge"):
-        html('<div class="ds-section-title">Knowledge &amp; lessons</div>')
-        html('<div class="ds-page-sub" style="margin:4px 0 6px 0;">Notes the planner reads before every '
-             'analysis of this dataset. They guide it, but results are still computed and verified '
-             'from the data.</div>')
+        html('<div class="ds-section-title">Teach Silt about this data <span class="ds-row-meta">(optional)</span></div>')
+        html('<div class="ds-page-sub" style="margin:4px 0 6px 0;">Silt reads only your file, so it can miss what a column '
+             'really means. Add a short note here and it will be used in every analysis of this dataset. '
+             'Skip this if the column names already say it all.</div>')
+        with st.expander("Add or review notes", expanded=False):
+            _notes_editor(chosen)
 
-        NOTE_KINDS = {
-            "knowledge": ("Knowledge", "What the data means: column definitions, units, quirks.",
-                          "e.g. “amount” is in cents. “status = 9” means test account, exclude it."),
-            "lesson": ("Lessons", "Mistakes to avoid. Rejections by the Critic are added here automatically.",
-                       "e.g. Revenue must exclude refunds, which appear as negative amounts."),
-        }
-        tabs = st.tabs([v[0] for v in NOTE_KINDS.values()])
-        for tab, (kind, (_label, blurb, placeholder)) in zip(tabs, NOTE_KINDS.items()):
-            with tab:
-                st.caption(blurb)
-                try:
-                    notes = list_notes(chosen["id"], kind)
-                except ApiError as e:
-                    notes = []
-                    st.error(f"Could not load notes: {e}")
-
-                form_key = f"note_form_{kind}_{chosen['id']}"
-                with st.form(form_key, clear_on_submit=True):
-                    text = st.text_area("New note", placeholder=placeholder, max_chars=1000,
-                                        label_visibility="collapsed", key=f"note_text_{kind}_{chosen['id']}")
-                    if st.form_submit_button("Add note", type="primary"):
-                        if not text.strip():
-                            st.warning("Write something first.")
-                        else:
-                            try:
-                                create_note(chosen["id"], kind, text)
-                                st.rerun()
-                            except ApiError as e:
-                                st.error(f"Could not save note: {e}")
-
-                if not notes:
-                    html('<div class="ds-row-meta" style="padding:6px 0;">Nothing here yet.</div>')
-                for n in notes:
-                    left, right = st.columns([12, 1])
-                    with left:
-                        tag = badge("Critic", "warn") if n["source"] == "critic" else ""
-                        html(f'<div style="font-size:0.88rem;line-height:1.55;padding:6px 0;">'
-                             f'{tag} {esc(n["text"])}</div>')
-                    with right:
-                        if st.button("✕", key=f"del_note_{n['id']}", help="Delete this note"):
-                            try:
-                                delete_note(chosen["id"], n["id"])
-                                st.rerun()
-                            except ApiError as e:
-                                st.error(f"Could not delete: {e}")

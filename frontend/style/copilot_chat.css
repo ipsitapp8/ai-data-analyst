@@ -1,0 +1,124 @@
+/* Silt Copilot: a chat workspace. Everything is scoped to a page that contains .cp-scope, so no other page changes. */
+html body .stApp:has(.cp-scope) { background: #0a0716 !important; }
+[data-testid="stMain"]:has(.cp-scope), .stApp:has(.cp-scope) [data-testid="stAppViewContainer"] { background: transparent !important; }
+
+/* ambient light: violet and ember glows with two soft flowing lines, fixed behind the whole page */
+html body .stApp:has(.cp-scope)::before {
+  content: "" !important; position: fixed; inset: 0; z-index: 0; pointer-events: none; display: block !important;
+  background:
+    radial-gradient(60% 45% at 92% 8%, rgba(139,92,246,.28), transparent 70%),
+    radial-gradient(55% 40% at 100% 92%, rgba(243,128,60,.22), transparent 70%),
+    radial-gradient(50% 40% at 0% 100%, rgba(139,92,246,.20), transparent 70%),
+    radial-gradient(40% 30% at 12% 14%, rgba(243,178,79,.10), transparent 70%),
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0 560 C 220 470 420 520 640 610 S 1040 720 1200 640' fill='none' stroke='%23a78bfa' stroke-opacity='.35' stroke-width='1.6'/%3E%3Cpath d='M0 590 C 240 500 440 550 660 640 S 1050 740 1200 670' fill='none' stroke='%23f3b24f' stroke-opacity='.18' stroke-width='1'/%3E%3Cpath d='M720 800 C 900 640 1040 470 1200 420' fill='none' stroke='%23a78bfa' stroke-opacity='.30' stroke-width='1.4'/%3E%3C/svg%3E") center / 100% 100% no-repeat !important;
+}
+html body .stApp:has(.cp-scope)::after {            /* the glowing frame around the workspace */
+  content: "" !important; display: block !important; position: fixed; inset: 6px 6px 6px 254px; z-index: 0; pointer-events: none; border-radius: 22px;
+  box-shadow: inset 0 0 0 1px rgba(243,178,79,.16), inset 0 0 90px rgba(139,92,246,.10), inset 0 -40px 90px rgba(243,128,60,.07);
+}
+html body .stApp:has(.cp-scope) .stMain .block-container { position: relative; z-index: 1; max-width: 1000px !important; padding: 1.2rem 1.5rem 7rem !important; }
+@media (max-width: 900px) { .stApp:has(.cp-scope)::after { inset: 4px; } }
+
+/* ---------- header ---------- */
+html body .st-key-cp_head { padding-right: 0; }
+@media (min-width: 900px) { .st-key-cp_head { padding-right: 230px; } }
+.cp-title { font: 700 2.15rem/1.1 'Newsreader', Georgia, serif !important; letter-spacing: -.01em; color: #f4f1ea !important; margin: 0; }
+.cp-title span { background: linear-gradient(100deg, #f3b24f 0%, #ffd991 55%, #f4f1ea 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important; }
+.cp-spark { font-style: normal; color: #f6a9c8; font-size: 1.15rem; vertical-align: .55em; margin-left: 2px; }
+.cp-tag { color: #a39fc2; font-size: .95rem; margin-top: 6px; }
+html body .st-key-cp_head [data-testid="stHorizontalBlock"] { align-items: center; gap: .6rem; }
+
+/* icon-only square buttons (search, history) */
+html body .st-key-cp_head [data-testid="stPopover"] > div > button, .st-key-cp_head [data-testid="stPopover"] button {
+  width: 46px !important; min-width: 46px !important; height: 46px !important; padding: 0 !important; justify-content: center !important;
+  background: rgba(20,14,40,.72) !important; border: 1px solid rgba(255,255,255,.14) !important; border-radius: 13px !important; box-shadow: none !important; }
+html body .st-key-cp_head [data-testid="stPopover"] button:hover { border-color: rgba(243,178,79,.55) !important; }
+html body .st-key-cp_head [data-testid="stPopover"] button p,
+html body .st-key-cp_head [data-testid="stPopover"] button [data-testid="stMarkdownContainer"] { display: none !important; }
+html body .st-key-cp_head [data-testid="stPopover"] button > div > div:last-child:not(:first-child) { display: none !important; }
+html body .st-key-cp_head [data-testid="stPopover"] button > div { justify-content: center !important; width: 100%; }
+/* New chat: a gold pill */
+html body .st-key-cp_new button { height: 46px !important; border-radius: 999px !important; background: linear-gradient(180deg, #f9c068, #f0a93f) !important; color: #1a1205 !important; border: 0 !important; font-weight: 650 !important; box-shadow: 0 6px 22px rgba(243,178,79,.28) !important; white-space: nowrap; }
+html body .st-key-cp_new button:hover { filter: brightness(1.06); }
+html body .st-key-cp_new button p, .st-key-cp_new button span { color: #1a1205 !important; }
+[data-testid="stPopoverBody"] { min-width: 380px; max-width: 92vw; background: #130f26 !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 16px !important; box-shadow: 0 18px 50px rgba(0,0,0,.55) !important; }
+.cp-group { font: 600 10.5px/1 'JetBrains Mono', monospace; letter-spacing: .12em; text-transform: uppercase; color: #6f6a92; margin: 14px 0 6px; }
+.cp-snip { color: #9a96b9; font-size: .8rem; margin: -4px 0 8px 2px; }
+
+/* ---------- dataset card ---------- */
+html body .st-key-cp_ds { background: rgba(18,12,38,.62); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 14px 18px; margin: 18px 0 10px; box-shadow: 0 0 0 1px rgba(243,178,79,.05); }
+html body .st-key-cp_ds [data-testid="stHorizontalBlock"] { align-items: center; }
+.cp-ds { display: flex; align-items: center; gap: 16px; }
+.cp-ds-i { width: 50px; height: 50px; flex: 0 0 50px; display: grid; place-items: center; border-radius: 13px; background: rgba(67,217,163,.10); border: 1px solid rgba(67,217,163,.20); }
+.cp-ds-n { font: 650 1.02rem/1.25 'Inter', sans-serif; color: #f4f1ea; overflow-wrap: anywhere; }
+.cp-ds-m { font-size: .86rem; color: #a39fc2; margin-top: 3px; }
+html body .st-key-cp_chg_btn button { background: transparent !important; color: #f3b24f !important; border: 1px solid rgba(243,178,79,.6) !important; border-radius: 12px !important; height: 42px; white-space: nowrap; }
+html body .st-key-cp_chg_btn button:hover { background: rgba(243,178,79,.10) !important; }
+html body .st-key-cp_chg_btn button p, .st-key-cp_chg_btn button span { color: #f3b24f !important; }
+
+/* ---------- messages ---------- */
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"] { background: transparent !important; border: 0 !important; box-shadow: none !important; backdrop-filter: none !important; padding: 0 !important; max-width: none !important; margin: 20px 0 0 !important; gap: 14px; align-items: flex-start; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessageContent"] { min-width: 0; }
+/* avatars: the user's initial, and the Silt mark for answers */
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessageAvatarCustom"], html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"] > img {
+  width: 44px !important; height: 44px !important; min-width: 44px; border-radius: 50% !important; background: #17122d !important; border: 1px solid rgba(243,178,79,.6) !important; display: grid !important; place-items: center; overflow: hidden; flex: 0 0 44px; box-shadow: 0 0 18px rgba(243,178,79,.10); }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"] > img { padding: 11px; object-fit: contain; box-sizing: border-box; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessageAvatarCustom"] > * { display: none !important; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessageAvatarCustom"]::after { content: var(--cp-init); font: 600 1.05rem/1 'Inter', sans-serif; color: #f3b24f; }
+/* the user's message: right-aligned in a soft bubble */
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarCustom"]) { flex-direction: row-reverse; justify-content: flex-start; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarCustom"]) [data-testid="stChatMessageContent"] {
+  flex: 0 1 auto; max-width: 68%; background: rgba(52,40,86,.70); border: 1px solid rgba(255,255,255,.13); border-radius: 18px 18px 4px 18px; padding: 14px 22px; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarCustom"]) [data-testid="stChatMessageContent"] * { color: #f4f1ea !important; }
+/* the answer: a framed card */
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has(> img) [data-testid="stChatMessageContent"] {
+  flex: 1 1 auto; max-width: 88%; background: rgba(24,17,48,.80); border: 1px solid rgba(255,255,255,.14); border-radius: 18px 18px 18px 4px; padding: 20px 24px; box-shadow: 0 12px 36px rgba(0,0,0,.30); }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has(> img) [data-testid="stChatMessageContent"] p,
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has(> img) [data-testid="stChatMessageContent"] li { color: #ece8f6; line-height: 1.6; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"]:has(> img) strong { color: #f3b24f !important; font-weight: 650; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessage"] em { font-style: normal; color: #a39fc2; }
+.cp-time { font-size: .78rem; color: #8a86a8; margin: 8px 0 0; }
+.cp-time.u { text-align: right; padding-right: 58px; }
+.cp-time.u, .cp-time.a { margin-top: 8px; }
+.cp-time.a { padding-left: 56px; }
+html body .stApp:has(.cp-scope) .cp-src { color: #8a86a8 !important; font-size: .76rem; margin-top: 12px; }
+html body .stApp:has(.cp-scope) .cp-src * { color: #8a86a8 !important; }
+/* tables inside answers */
+html body .stApp:has(.cp-scope) [data-testid="stChatMessage"] table { width: 100%; display: table; border-collapse: separate; border-spacing: 0; border: 1px solid rgba(255,255,255,.13); border-radius: 12px; overflow: hidden; margin: 12px 0 8px; font-size: .92rem; }
+html body .stApp:has(.cp-scope) [data-testid="stChatMessage"] th { background: rgba(255,255,255,.05) !important; color: #f4f1ea !important; font-weight: 600; text-align: left; padding: 12px 16px !important; border: 0 !important; border-bottom: 1px solid rgba(255,255,255,.12) !important; }
+html body .stApp:has(.cp-scope) [data-testid="stChatMessage"] td { padding: 12px 16px !important; border: 0 !important; border-bottom: 1px solid rgba(255,255,255,.08) !important; color: #e6e2f2 !important; }
+html body .stApp:has(.cp-scope) [data-testid="stChatMessage"] tr:last-child td { border-bottom: 0 !important; }
+
+/* ---------- welcome + prompts ---------- */
+.cp-hello { text-align: center; margin: 5vh 0 6px; font: 500 2.1rem/1.2 'Newsreader', Georgia, serif; color: #f4f1ea; }
+.cp-hello-sub { text-align: center; color: #a39fc2; margin-bottom: 26px; font-size: .96rem; }
+html body .stApp.stApp.stApp:has(.cp-scope) .stMain.stMain [class*="st-key-ex_"] button { background: rgba(24,17,48,.66) !important; border: 1px solid rgba(255,255,255,.13) !important; border-radius: 14px !important; color: #e6e2f2 !important; min-height: 58px; font-weight: 500 !important; }
+html body .stApp.stApp.stApp:has(.cp-scope) .stMain.stMain [class*="st-key-ex_"] button:hover { border-color: rgba(243,178,79,.6) !important; background: rgba(243,178,79,.08) !important; }
+
+/* ---------- composer ---------- */
+html body .stApp:has(.cp-scope) [data-testid="stBottom"], .stApp:has(.cp-scope) [data-testid="stBottomBlockContainer"] { background: transparent !important; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInput"] { background: rgba(20,14,42,.86) !important; border: 1px solid transparent !important; border-radius: 20px !important; max-width: 960px; margin: 0 auto;
+  background-image: linear-gradient(rgba(20,14,42,.92), rgba(20,14,42,.92)), linear-gradient(100deg, rgba(243,178,79,.75), rgba(139,92,246,.55), rgba(243,128,60,.7)) !important; background-origin: border-box !important; background-clip: padding-box, border-box !important;
+  box-shadow: 0 0 34px rgba(243,128,60,.14), 0 0 60px rgba(139,92,246,.12); padding: 6px !important; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInput"] textarea { color: #f4f1ea !important; font-size: 1rem; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInput"] textarea::placeholder { color: #a39fc2 !important; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInputSubmitButton"] { background: linear-gradient(180deg, #f9c068, #f0a93f) !important; color: #1a1205 !important; border-radius: 12px !important; width: 44px; height: 44px; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInputSubmitButton"]:disabled { opacity: .55; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInputSubmitButton"] svg { color: #1a1205 !important; fill: #1a1205 !important; }
+html body .stApp:has(.cp-scope) [data-testid="stChatInput"] button:not([data-testid="stChatInputSubmitButton"]) { background: rgba(255,255,255,.07) !important; border-radius: 12px !important; color: #cfcbe6 !important; width: 44px; height: 44px; }
+
+html body .stApp.stApp:has(.cp-scope) [data-testid="stMainBlockContainer"], html body .stApp.stApp:has(.cp-scope) .stMain .block-container { padding-top: 3.4rem !important; padding-bottom: 7.5rem !important; }
+/* rows inside the History / Search overlays: quiet until hovered */
+html body [data-testid="stPopoverBody"] button { background: rgba(255,255,255,.04) !important; border: 1px solid rgba(255,255,255,.10) !important; border-radius: 12px !important; color: #e6e2f2 !important; }
+html body [data-testid="stPopoverBody"] button:hover { background: rgba(243,178,79,.10) !important; border-color: rgba(243,178,79,.5) !important; }
+html body [data-testid="stPopoverBody"] button[kind="primary"] { background: linear-gradient(180deg, #f9c068, #f0a93f) !important; color: #1a1205 !important; border: 0 !important; }
+html body [data-testid="stPopoverBody"] button[kind="primary"] p { color: #1a1205 !important; }
+
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatMessageContent"] { margin: 0 !important; }
+html body .stApp.stApp:has(.cp-scope) .st-key-cp_head { margin-top: -4.2rem; }
+
+/* the message box floats over a solid fade, so scrolling text never shows through or collides with it */
+html body .stApp.stApp:has(.cp-scope) [data-testid="stBottom"] { background: transparent !important; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stBottom"] > div { background: linear-gradient(to top, #0a0716 0%, #0a0716 68%, rgba(10,7,22,0) 100%) !important; padding-top: 44px !important; padding-bottom: 14px !important; }
+html body .stApp.stApp:has(.cp-scope) [data-testid="stChatInput"] { background-image: linear-gradient(#140e2a, #140e2a), linear-gradient(100deg, rgba(243,178,79,.75), rgba(139,92,246,.55), rgba(243,128,60,.7)) !important; background-color: #140e2a !important; }
+html body .stApp.stApp:has(.cp-scope) .stMain .block-container, html body .stApp.stApp:has(.cp-scope) [data-testid="stMainBlockContainer"] { padding-bottom: 9.5rem !important; }

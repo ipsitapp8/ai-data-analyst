@@ -36,8 +36,7 @@ def _assistant_text(at) -> str:
 
 def test_page_renders_empty_state_and_answers_a_question(api, ws):
     at = healthy(page("12_Copilot.py", ws))
-    assert "Start with a question" in text_of(at)
-    assert "Local model offline" in text_of(at)
+    assert "What would you like to know?" in text_of(at)
     _ask(at, "Explain this dataset in simple terms.")
     text = _assistant_text(at)
     assert "In simple terms:" in text and "720 records" in text      # fixture: 720 rows
@@ -64,10 +63,10 @@ def test_follow_up_keeps_context_and_conversations_persist(api, ws):
     assert len(at.chat_message) == 4
     assert "In short" in _assistant_text(at) or "top" in _assistant_text(at).lower()
     first = at.session_state["cp_active"]
-    at.button[[b.label for b in at.button].index("＋ New conversation")].click().run()
+    at.button[[b.label for b in at.button].index("New chat")].click().run()
     healthy(at)
     assert at.session_state["cp_active"] != first and len(at.chat_message) == 0
-    at.button(key=f"cv_{first}").click().run()
+    at.button(key=f"hx_{first}").click().run()
     healthy(at)
     assert at.session_state["cp_active"] == first and len(at.chat_message) == 4
 
@@ -151,6 +150,8 @@ def test_csv_excel_and_pdf_uploads_reach_the_copilot(api, ws):
     bad = api.post("/api/analyst/documents", files={"file": ("x.pdf", b"not a pdf", "application/pdf")}, headers=ws["h"])
     assert bad.status_code == 400
     at = healthy(page("12_Copilot.py", ws))
+    at.button(key="cp_chg_btn").click().run()          # the pickers open behind "Change dataset"
+    healthy(at)
     labels = " ".join(str(o) for s in at.selectbox for o in s.options)
     assert "costs.csv" in labels and "costs.xlsx" in labels and "report.pdf" in labels
 
@@ -253,6 +254,8 @@ def test_a_question_after_uploading_a_file_with_an_existing_name_is_answered(api
            for _ in range(2)]
     convs = {"c1": {"title": "New conversation", "dataset_id": None, "doc_id": ids[1], "log": [], "created": time.time()}}
     at = healthy(page("12_Copilot.py", ws, cp_convs=convs, cp_active="c1"))
+    at.button(key="cp_chg_btn").click().run()          # the selectors open behind "Change dataset"
+    healthy(at)
     doc_box = next(s for s in at.selectbox if s.label == "Document")
     shown = list(doc_box.options)                      # AppTest exposes the labels the browser sees
     assert len(set(shown)) == len(shown) == 3, shown     # none + two copies, each with its own label
@@ -262,3 +265,33 @@ def test_a_question_after_uploading_a_file_with_an_existing_name_is_answered(api
     log = at.session_state["cp_convs"]["c1"]["log"]
     assert at.session_state["cp_active"] == "c1" and at.session_state["cp_convs"]["c1"]["doc_id"] == ids[1]
     assert [t["q"] for t in log] == ["When is the next review date?"] and "15 January" in log[0]["r"]["answer"]
+
+
+# ------------------------------------------------- saved chats: search / history --
+
+def test_saved_chat_survives_a_new_session_and_can_be_searched_renamed_and_deleted(api, ws):
+    at = healthy(page("12_Copilot.py", ws))
+    _ask(at, "Show the top two products.")
+    cid = at.session_state["cp_active"]
+
+    fresh = healthy(page("12_Copilot.py", ws))                 # a brand-new browser session: nothing in memory
+    assert len(fresh.chat_message) == 0
+    assert any(b.key == f"hx_{cid}" for b in fresh.button)     # but the chat is listed in History
+    fresh.button(key=f"hx_{cid}").click().run()
+    healthy(fresh)
+    assert len(fresh.chat_message) == 2 and fresh.session_state["cp_active"] == cid
+
+    fresh.text_input(key="cp_search").set_value("top two").run()
+    assert any(b.key == f"sr_{cid}" for b in fresh.button)
+    fresh.text_input(key="cp_search").set_value("zzz-nothing-matches").run()
+    assert not any(str(b.key).startswith("sr_") for b in fresh.button)
+    assert any("No chats match" in str(c.value) for c in fresh.caption)
+
+    fresh.button(key=f"ed_{cid}").click().run()
+    fresh.text_input(key=f"rn_{cid}").set_value("Product ranking").run()
+    fresh.button(key=f"rns_{cid}").click().run()
+    assert any(c.get("title") == "Product ranking" for c in api.get(
+        "/api/copilot/conversations", headers=ws["h"]).json()["conversations"])
+
+    fresh.button(key=f"dl_{cid}").click().run()
+    assert api.get("/api/copilot/conversations", headers=ws["h"]).json()["conversations"] == []

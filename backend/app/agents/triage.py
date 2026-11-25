@@ -84,10 +84,9 @@ User's question: {question!r}
             return {
                 "rejected": True,
                 "rejection_reason": (
-                    "The Gemini API quota is exhausted, so no analysis can run right now. "
-                    "Free-tier keys are capped per model per day — wait for the quota to "
-                    "reset, switch GEMINI_MODEL in .env to a model with remaining quota, "
-                    "or enable billing on your Google AI Studio project."
+                    "The AI service has hit its usage limit, so no analysis can run right now. "
+                    "This clears by itself: try again in a few minutes. If it keeps happening, the "
+                    "site's AI quota needs to be raised by whoever runs this deployment."
                 ),
                 "suggestions": [],
             }

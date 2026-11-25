@@ -931,3 +931,40 @@ class StoredFile(Base):
     content = Column(LargeBinary, nullable=False)
     size_bytes = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=utcnow)
+
+
+class CopilotConversation(Base):
+    """A saved Silt Copilot chat. Owned by one user inside one team; never visible to anyone else.
+    `id` is the client-generated conversation id the analyst also uses as its memory key."""
+
+    __tablename__ = "copilot_conversations"
+
+    id = Column(String(64), primary_key=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False, default="New chat")
+    dataset_id = Column(Integer, nullable=True)
+    document_id = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, index=True)
+
+    messages = relationship("CopilotMessage", back_populates="conversation", cascade="all, delete-orphan",
+                            order_by="CopilotMessage.position")
+
+
+class CopilotMessage(Base):
+    """One question and its answer inside a saved Copilot chat (`response_json` is NULL while unanswered)."""
+
+    __tablename__ = "copilot_messages"
+    __table_args__ = (UniqueConstraint("conversation_id", "position", name="uq_copilot_message_position"),)
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(String(64), ForeignKey("copilot_conversations.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    question = Column(Text, nullable=False)
+    answer_text = Column(Text, default="")          # plain text of the answer, kept for search
+    response_json = Column(JSONVariant, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    conversation = relationship("CopilotConversation", back_populates="messages")
