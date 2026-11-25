@@ -504,7 +504,16 @@ def require_login() -> None:
             '<a class="lp-btn light" href="?view=login" target="_self">Log in</a></div>'
             '<div class="lm-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span><span>Fully auditable</span></div></div>'
             f'<div class="lm-marq rev"><div class="track">{_lp_ticker()}</div></div>'
-            '<div class="lm-foot"><span>Silt &mdash; Autonomous Data Analyst</span><span>Verified / Auditable / Actionable</span></div></div>',
+            '<footer class="lm-footer"><div class="lf-grid">'
+            '<div class="lf-brand"><div class="lf-logo">Silt</div>'
+            '<p>An autonomous data analyst. Ask in plain English, get an answer a second model has checked.</p></div>'
+            '<div class="lf-col"><h4>Product</h4><a href="?view=signup" target="_self">Get started</a>'
+            '<a href="?view=login" target="_self">Log in</a><span>CSV &amp; Excel upload</span><span>Scheduled reports</span></div>'
+            '<div class="lf-col"><h4>Analysis</h4><span>Ask in plain English</span><span>Root cause</span>'
+            '<span>What-if scenarios</span><span>Data quality</span></div>'
+            '<div class="lf-col"><h4>Trust</h4><span>Runs in a secure sandbox</span><span>Independent critic</span>'
+            '<span>Full audit trail</span><span>Semantic layer</span></div></div>'
+            '<div class="lf-bar"><span>&copy; 2026 Silt</span><span>Verified &middot; Auditable &middot; Actionable</span></div></footer></div>',
             unsafe_allow_html=True,
         )
         with st.container(key="lp_scene"):
