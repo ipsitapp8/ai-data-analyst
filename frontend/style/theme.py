@@ -1728,7 +1728,8 @@ _INTRO_CSS = """<style>
 .pi summary::before { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; margin-right: 2px; }
 .pi details[open] summary::before { transform: rotate(45deg); }
 .pi summary:hover { color: #f3b24f; }
-.pi .pi-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 28px; margin: 10px 0 0; padding: 16px 0 0; border-top: 1px solid rgba(242,239,231,.10); list-style: none; counter-reset: pi; }
+.pi .pi-steps { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 0 28px; margin: 10px 0 0; padding: 16px 0 0; border-top: 1px solid rgba(242,239,231,.10); list-style: none; counter-reset: pi; }
+@media (max-width: 760px) { .pi .pi-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pi .pi-steps li { counter-increment: pi; font: 400 14px/1.55 "Inter", system-ui, sans-serif; color: #b4b0c6; padding: 0 0 14px; }
 .pi .pi-steps li::before { content: counter(pi, decimal-leading-zero); display: block; font: 500 12px/1 "JetBrains Mono", ui-monospace, Consolas, monospace; color: #f3b24f; margin-bottom: 8px; letter-spacing: .04em; }
 .pi .pi-note { margin: 2px 0 0; font: 400 13px/1.55 "Inter", system-ui, sans-serif; color: #8c88a3; }
@@ -1742,7 +1743,7 @@ def page_intro(purpose: str, steps: list[str] | None = None, tip: str | None = N
     if steps:
         items = "".join(f"<li>{esc(s)}</li>" for s in steps)
         note = f'<p class="pi-note">{esc(tip)}</p>' if tip else ""
-        body += f'<details><summary>How it works</summary><ol class="pi-steps">{items}</ol>{note}</details>'
+        body += f'<details><summary>How it works</summary><ol class="pi-steps" style="--n:{min(len(steps), 4)}">{items}</ol>{note}</details>'
     elif tip:
         body += f'<p class="pi-note" style="margin-top:8px;">{esc(tip)}</p>'
     st.markdown(_INTRO_CSS, unsafe_allow_html=True)
