@@ -101,3 +101,9 @@ html:has(.iv-scope), body:has(.iv-scope), .stApp:has(.iv-scope), .stApp:has(.iv-
 .stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button { white-space: nowrap !important; padding: 0 14px !important; font-size: 13px !important; width: auto !important; }
 .stApp .stMain:has(.iv-scope) [class*="st-key-iv_card"] button p { white-space: nowrap !important; }
 .stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button, .stApp .stMain:has(.iv-scope) [class*="st-key-iv_ex"] button[kind="secondary"] { min-height: 66px !important; align-items: flex-start !important; }
+
+/* the step control: hairline segments, the current step in amber */
+.stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button { background: transparent !important; background-image: none !important; border: 1px solid rgba(242,239,231,.18) !important; border-radius: 4px !important; box-shadow: none !important; color: #bdb9cc !important; min-height: 38px !important; padding: 0 16px !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button p { color: inherit !important; font: 500 13px/1 "Inter", system-ui, sans-serif !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button[kind*="Active"], .stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button[aria-checked="true"], .stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button[aria-pressed="true"] { background: rgba(243,178,79,.14) !important; border-color: #f3b24f !important; color: #ffc66e !important; }
+.stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button *, .stApp .stMain:has(.iv-scope) [data-testid="stButtonGroup"] button p { background: transparent !important; background-image: none !important; -webkit-text-fill-color: currentColor !important; }
