@@ -163,10 +163,10 @@ with st.container(key="flat_dash"):
             with col:
                 html(
                     f"""
-                    <div class="ds-card" style="display:flex;align-items:center;gap:14px;">
-                      {bars}
-                      <div>
-                        <div class="ds-row-title">{esc(q["text"][:30])}</div>
+                    <div class="ds-card" style="display:flex;align-items:center;gap:14px;margin-bottom:12px;min-height:74px;">
+                      <div style="flex:0 0 30px;">{bars}</div>
+                      <div style="min-width:0;">
+                        <div class="ds-row-title" title="{esc(q["text"])}" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;">{esc(q["text"])}</div>
                         <div class="ds-row-meta">Updated {esc(q["age"])}</div>
                       </div>
                     </div>
