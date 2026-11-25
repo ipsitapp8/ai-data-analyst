@@ -947,3 +947,34 @@ def whatif_delete(scenario_id: int) -> None:
 
 def whatif_compare(ids: list[int]) -> dict:
     return _post("/api/whatif/compare", {"ids": ids})
+
+
+# ------------------------------------------------------- saved Copilot chats --
+
+def copilot_list(q: str | None = None) -> list[dict]:
+    return _get("/api/copilot/conversations", q=(q or None))["conversations"]
+
+
+def copilot_get(conversation_id: str) -> dict:
+    return _get(f"/api/copilot/conversations/{conversation_id}")
+
+
+def copilot_save(conversation_id: str, dataset_id: int | None, document_id: str | None, title: str | None = None) -> dict:
+    return _put(f"/api/copilot/conversations/{conversation_id}",
+                {"dataset_id": dataset_id, "document_id": document_id, "title": title})
+
+
+def copilot_save_message(conversation_id: str, position: int, question: str, response: dict | None,
+                         answer_text: str = "") -> dict:
+    return _put(f"/api/copilot/conversations/{conversation_id}/messages/{position}",
+                {"question": question, "response": response, "answer_text": answer_text})
+
+
+def copilot_rename(conversation_id: str, title: str) -> dict:
+    resp = requests.patch(f"{BACKEND_BASE_URL}/api/copilot/conversations/{conversation_id}", json={"title": title},
+                          headers=_headers(), timeout=TIMEOUT)
+    return _handle(resp)
+
+
+def copilot_delete(conversation_id: str) -> None:
+    _delete(f"/api/copilot/conversations/{conversation_id}")

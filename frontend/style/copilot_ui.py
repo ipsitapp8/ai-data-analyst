@@ -226,3 +226,15 @@ def unique_labels(labels: dict) -> dict:
     for label in labels.values():
         seen[label] = seen.get(label, 0) + 1
     return {k: (f"{v} · #{str(k)[:6]}" if seen[v] > 1 else v) for k, v in labels.items()}
+
+
+# ------------------------------------------------------------------- chat artwork --
+from urllib.parse import quote as _quote
+
+TABLE_ICON = ('<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#43d9a3" stroke-width="2" '
+              'stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/>'
+              '<path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>')
+_LOGO_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" '
+             'stroke="#f3b24f" stroke-width="2.2" stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>')
+from pathlib import Path as _Path
+LOGO_AVATAR = str(_Path(__file__).with_name("silt_avatar.png"))

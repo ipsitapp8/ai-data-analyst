@@ -35,6 +35,7 @@ from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
 from app.routers.alerts import router as alerts_router
 from app.routers.chat import router as chat_router
+from app.routers.copilot_history import router as copilot_history_router
 from app.routers.insights import router as insights_router
 from app.routers.correlations import router as correlations_router
 from app.routers.chart_views import router as chart_views_router
@@ -99,6 +100,7 @@ app.include_router(insights_router)
 app.include_router(correlations_router)
 app.include_router(alerts_router)
 app.include_router(chat_router)
+app.include_router(copilot_history_router)
 app.include_router(scheduled_router)
 app.include_router(chart_views_router)
 app.include_router(jobs_router)
