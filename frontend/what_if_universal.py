@@ -29,7 +29,7 @@ DOMAIN_UI = {"auto": ("travel_explore", "Detect from my data", "Silt reads your 
 START_UI = {"Explore suggestions": ("lightbulb", "See questions worth asking based on your data and domain.", ""),
             "Use my dataset": ("database", "Start from your data and real columns.", ""),
             "Build a scenario manually": ("edit_note", "Define your own values, assumptions and constraints.", ""),
-            "Brainstorm with Silt AI": ("auto_awesome", "Describe your goal and get a ranked list of scenarios.", "")}
+            "Brainstorm with Silt AI": ("lightbulb", "Describe your goal and get a ranked list of scenarios.", "")}
 START = ["Explore suggestions", "Use my dataset", "Build a scenario manually", "Brainstorm with Silt AI"]
 METHOD_LABEL = {"deterministic": "Exact calculation", "regression": "Estimate from my data", "forecast": "Trend forecast", "monte_carlo": "Monte Carlo simulation",
                 "sensitivity": "Sensitivity analysis", "break_even": "Break-even", "goal_seek": "Goal seek"}

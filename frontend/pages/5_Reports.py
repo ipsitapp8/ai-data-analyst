@@ -12,6 +12,8 @@ render_sidebar("reports")
 require_active_team("Reports")
 
 page_header("Reports", "Every completed analysis, packaged and verified.")
+from style.theme import page_intro
+page_intro('Each finished analysis packaged as a report you can open, read and share, with a note on how the numbers were verified.', ['Run an analysis first', 'It appears here when it finishes', 'Open it to read or download'])
 
 try:
     questions = list_questions()

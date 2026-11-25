@@ -1,0 +1,94 @@
+/* Workbench skin for every page except Home, Root cause and What-if (those carry their own, and already look like this).
+   It is the Root cause page's design applied site-wide: one plain deep-ink background, warm off-white text, one amber accent,
+   a serif headline, mono labels, hairline rules, sharp 4-6px corners. No gradients, glow or glass.
+   Every rule hangs off WB, so the three pages that own their skin are untouched. */
+
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) {
+  --iv-ink: #f2efe7; --iv-ink-2: #bdb9cc; --iv-ink-3: #8c88a3;
+  --iv-line: rgba(242,239,231,.11); --iv-line-2: rgba(242,239,231,.22);
+  --iv-panel: rgba(255,255,255,.028); --iv-field: rgba(4,3,14,.55);
+  --iv-amber: #f3b24f; --iv-amber-hi: #ffc66e; --iv-amber-ink: #1d1406; --iv-amber-soft: rgba(243,178,79,.14);
+  --iv-serif: "Newsreader", "Source Serif 4", Georgia, serif; --iv-sans: "Inter", system-ui, sans-serif; --iv-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --ink: var(--iv-ink) !important; --ink-soft: var(--iv-ink-2) !important; --text-primary: var(--iv-ink) !important; --text-secondary: var(--iv-ink-2) !important;
+  --text-muted: var(--iv-ink-3) !important; --border: var(--iv-line) !important; --border-strong: var(--iv-line-2) !important; --line: var(--iv-line) !important;
+  --accent: var(--iv-amber) !important; --accent-ink: var(--iv-amber-hi) !important; --accent-bg: var(--iv-amber-soft) !important; --accent-border: rgba(243,178,79,.38) !important;
+  --bg-card: var(--iv-panel) !important; --bg-card-hover: rgba(255,255,255,.05) !important; --bg-inset: var(--iv-field) !important; --purple: var(--iv-amber) !important;
+}
+
+/* one plain deep-ink background: no site glow */
+.stApp:not(:has(.iv-scope, .wx-scope, .hm-scope))::before, .stApp:not(:has(.iv-scope, .wx-scope, .hm-scope))::after { display: none !important; content: none !important; background: none !important; }
+html:not(:has(.iv-scope, .wx-scope, .hm-scope)), body:not(:has(.iv-scope, .wx-scope, .hm-scope)), .stApp:not(:has(.iv-scope, .wx-scope, .hm-scope)),
+.stApp:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stAppViewContainer"] { background: #0a0918 !important; }
+
+/* the page itself, not a glass panel */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stMainBlockContainer"] {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; padding-top: 4.2rem !important; }
+
+/* header */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-page-title {
+  font: 500 40px/1.06 var(--iv-serif) !important; letter-spacing: -.02em !important; color: var(--iv-ink) !important; background: none !important; -webkit-text-fill-color: currentColor !important; margin: 0 !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-page-sub { font: 400 15.5px/1.6 var(--iv-sans) !important; color: var(--iv-ink-2) !important; max-width: 64ch !important; margin: 12px 0 8px !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) h1, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) h2, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) h3 {
+  font-family: var(--iv-serif) !important; font-weight: 500 !important; letter-spacing: -.012em !important; color: var(--iv-ink) !important; -webkit-text-fill-color: currentColor !important; background: none !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-section-title { font: 500 21px/1.25 var(--iv-serif) !important; letter-spacing: -.01em !important; color: var(--iv-ink) !important; }
+
+/* labels, captions, body text */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stWidgetLabel"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stWidgetLabel"] * {
+  font: 500 11px/1.3 var(--iv-mono) !important; letter-spacing: .09em !important; text-transform: uppercase !important; color: var(--iv-ink-3) !important; -webkit-text-fill-color: var(--iv-ink-3) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stRadio"] label p, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stCheckbox"] label p {
+  font: 400 14px/1.4 var(--iv-sans) !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--iv-ink-2) !important; -webkit-text-fill-color: var(--iv-ink-2) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stCaptionContainer"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stCaptionContainer"] p,
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-row-meta { font-family: var(--iv-sans) !important; color: var(--iv-ink-3) !important; opacity: 1 !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-row-title { font-family: var(--iv-sans) !important; color: var(--iv-ink) !important; }
+
+/* fields */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stTextAreaRootElement"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stTextInputRootElement"],
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-baseweb="select"] > div, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stNumberInputRootElement"],
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stDateInputField"] {
+  background: var(--iv-field) !important; border: 1px solid var(--iv-line-2) !important; border-radius: 4px !important; box-shadow: none !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-baseweb="select"] > div, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-baseweb="select"] div,
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) input, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) textarea { font-family: var(--iv-sans) !important; color: var(--iv-ink) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stTextAreaRootElement"]:focus-within, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stTextInputRootElement"]:focus-within,
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-baseweb="select"]:focus-within > div { border-color: var(--iv-amber) !important; box-shadow: 0 0 0 3px var(--iv-amber-soft) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stFileUploaderDropzone"] { background: var(--iv-panel) !important; border: 1px dashed var(--iv-line-2) !important; border-radius: 6px !important; }
+
+/* panels: hairline, flat */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-card, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [class*="st-key-card"],
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [class*="st-key-flat"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [class*="st-key-chartcard_"],
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stMetric"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stForm"],
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stExpander"] {
+  background: var(--iv-panel) !important; background-image: none !important; border: 1px solid var(--iv-line) !important; border-radius: 6px !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [class*="st-key-card"]:hover, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [class*="st-key-chartcard_"]:hover,
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-card:hover, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stMetric"]:hover {
+  border-color: var(--iv-line-2) !important; transform: none !important; box-shadow: none !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [class*="st-key-flat"] { border-radius: 6px !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stExpander"] summary p { font: 500 11.5px/1.3 var(--iv-mono) !important; letter-spacing: .1em !important; text-transform: uppercase !important; color: var(--iv-ink-2) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stMetricLabel"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stMetricLabel"] * {
+  font: 500 11px/1.3 var(--iv-mono) !important; letter-spacing: .09em !important; text-transform: uppercase !important; color: var(--iv-ink-3) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stMetricValue"] { font-family: var(--iv-serif) !important; font-weight: 500 !important; color: var(--iv-ink) !important; }
+
+/* buttons: amber primary, outlined secondary */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button[kind="primary"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button[kind="primaryFormSubmit"],
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stFormSubmitButton > button {
+  background: var(--iv-amber) !important; background-image: none !important; color: var(--iv-amber-ink) !important; border: 1px solid var(--iv-amber) !important; border-radius: 4px !important;
+  box-shadow: none !important; filter: none !important; font: 600 13.5px/1 var(--iv-sans) !important; min-height: 40px !important; padding: 0 18px !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button[kind="primary"]:hover, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stFormSubmitButton > button:hover {
+  background: var(--iv-amber-hi) !important; border-color: var(--iv-amber-hi) !important; transform: none !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button[kind="primary"]:disabled { background: transparent !important; color: var(--iv-ink-3) !important; border-color: var(--iv-line-2) !important; opacity: 1 !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button[kind="secondary"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stDownloadButton > button,
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stLinkButton > a {
+  background: transparent !important; background-image: none !important; color: var(--iv-ink) !important; border: 1px solid rgba(242,239,231,.38) !important; border-radius: 4px !important; box-shadow: none !important;
+  font: 600 13.5px/1 var(--iv-sans) !important; min-height: 40px !important; padding: 0 18px !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button[kind="secondary"]:hover, .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stDownloadButton > button:hover {
+  border-color: var(--iv-amber) !important; color: var(--iv-amber-hi) !important; background: transparent !important; transform: none !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) button p { color: inherit !important; font: inherit !important; }
+
+/* tabs, alerts, tables */
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stTabs [data-baseweb="tab-highlight"] { background-color: var(--iv-amber) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stTabs [data-baseweb="tab"] { font-family: var(--iv-sans) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stTabs [aria-selected="true"], .stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .stTabs [aria-selected="true"] p { color: var(--iv-amber-hi) !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stAlert"] { border-radius: 6px !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) [data-testid="stDataFrame"] { border: 1px solid var(--iv-line) !important; border-radius: 6px !important; }
+.stApp .stMain:not(:has(.iv-scope, .wx-scope, .hm-scope)) .ds-quality-fill { background: var(--iv-amber) !important; }

@@ -211,3 +211,11 @@ html:has(.wx-scope), body:has(.wx-scope), .stApp:has(.wx-scope), .stApp:has(.wx-
 .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:has(input:checked) { background: var(--wx-amber-soft) !important; box-shadow: inset 0 0 0 1px rgba(243,178,79,.4) !important; }
 .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label:has(input:checked)::before { background-color: rgba(243,178,79,.2) !important; }
 .stApp .stMain:has(.wx-scope) [class*="st-key-wxu_pick_start"] [role="radiogroup"] > label { transition: border-color .15s, background .15s; }
+
+/* the step control: hairline segments, the current step in amber */
+.stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button { background: transparent !important; background-image: none !important; border: 1px solid var(--wx-line, rgba(242,239,231,.18)) !important; border-radius: 4px !important; box-shadow: none !important; color: #bdb9cc !important; min-height: 36px !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button p { color: inherit !important; font: 500 13px/1 "Inter", system-ui, sans-serif !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button[kind*="Active"], .stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button[aria-checked="true"], .stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button[aria-pressed="true"] {
+  background: rgba(243,178,79,.14) !important; border-color: #f3b24f !important; color: #ffc66e !important; }
+.stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button *, .stApp .stMain:has(.wx-scope) [data-testid="stButtonGroup"] button p { background: transparent !important; background-image: none !important; -webkit-text-fill-color: currentColor !important; }
+.stApp .stMain:has(.wx-scope) .stTabs [data-baseweb="tab-highlight"] { background-color: #f3b24f !important; } .stApp .stMain:has(.wx-scope) .stTabs [aria-selected="true"], .stApp .stMain:has(.wx-scope) .stTabs [aria-selected="true"] p { color: #ffc66e !important; }

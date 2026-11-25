@@ -11,6 +11,8 @@ from style.theme import badge, esc, html, page_header, page_setup, render_sideba
 page_setup("Evaluation")
 render_sidebar("evaluation")
 page_header("Agent evaluation", "Regression results for the pipeline and each of its parts, against reference answers.")
+from style.theme import page_intro
+page_intro("Silt's own accuracy test. It replays reference questions with known answers and shows how often Silt gets them right. Mainly for people who maintain the product.", ['Press run to start a test', 'Read the pass rate for each stage'], tip='You do not need this page to analyse your data.')
 
 try:
     suite, runs = eval_suite(), list_eval_runs()

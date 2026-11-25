@@ -16,6 +16,8 @@ page_setup("Semantic layer")
 render_sidebar("semantic")
 require_active_team("Semantic layer")
 page_header("Business semantic layer", "One approved definition per metric. Analyses use these instead of guessing.")
+from style.theme import page_intro
+page_intro('Fixes one official meaning for each business term (for example, what counts as revenue) so every analysis calculates it the same way.', ['Add a metric and write its definition', 'Get it approved', 'Analyses then use the approved definition instead of guessing'], tip='Optional. Skip this page until you notice two analyses disagreeing about the same number.')
 
 try:
     metrics, datasets, terms = list_metrics(), list_datasets(), list_terms()

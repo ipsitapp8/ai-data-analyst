@@ -45,6 +45,28 @@ with head_r:
     if st.button("＋  New Analysis", type="primary", key="ov_new"):
         st.switch_page("pages/3_Analyses.py")
 
+from style.theme import page_intro
+page_intro("Your workspace at a glance: what you have uploaded, asked and verified, and where to go next.")
+_steps = [
+    ("Upload your data", "Add a CSV or Excel file so Silt has something to read.", bool(datasets), "pages/2_Datasets.py", "Upload data"),
+    ("Ask your first question", "Type it in everyday language. Silt runs the analysis and checks it.", bool(questions), "pages/3_Analyses.py", "Ask a question"),
+    ("Read your dashboard", "Every verified answer comes with charts and a report.", bool(verified), "pages/4_Dashboards.py", "Open dashboards"),
+]
+_next = next((s for s in _steps if not s[2]), None)
+if _next:
+    _rows = "".join(
+        f'<div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid rgba(242,239,231,.08);">'
+        f'<div style="width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:grid;place-items:center;font:600 12px/1 Inter,system-ui,sans-serif;'
+        f'{"background:#f3b24f;color:#1d1406;" if done else "border:1px solid rgba(242,239,231,.35);color:#bdb9cc;"}">{"✓" if done else i}</div>'
+        f'<div><div style="font:600 14.5px/1.3 Inter,system-ui,sans-serif;color:#f2efe7;">{esc(t)}</div>'
+        f'<div style="font:400 13px/1.5 Inter,system-ui,sans-serif;color:#8c88a3;">{esc(d)}</div></div></div>'
+        for i, (t, d, done, _p, _b) in enumerate(_steps, 1))
+    with st.container(key="card_getstarted"):
+        html('<div class="ds-section-title">Get started in three steps</div>' + _rows)
+        if st.button(f"{_next[4]}  →", type="primary", key="ov_next_step"):
+            st.switch_page(_next[3])
+    html("<div style='height:18px'></div>")
+
 cols = st.columns(4, gap="medium")
 stats = [
     ("Datasets", str(len(datasets))),

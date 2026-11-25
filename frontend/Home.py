@@ -247,7 +247,7 @@ if not _has_team:
 with st.container(key="home_hero"):
     left, right = st.columns([1.0, 1.0], gap="large")
     with left:
-        html('<div class="h-badge"><span class="tag">AGENTIC</span>Your autonomous data analyst</div>')
+        html('<div class="h-badge"><span class="tag">SILT</span>Ask questions about your data in plain English</div>')
         html('<div class="h-hero">Ask your data anything.<br><span>Trust every answer.</span></div>')
         html('<div class="h-lede">An AI agent plans the analysis, writes and runs the code in a sandbox, '
              'and a second, <em>independent model checks the result</em> before it reaches you.</div>')
@@ -266,6 +266,9 @@ with st.container(key="home_hero"):
             _chips()
         html('<div class="h-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span>'
              '<span>Fully auditable</span></div>')
+        html('<div class="h-lede" style="margin-top:18px;"><b>New here? Three steps.</b> '
+             '1. Upload a CSV or Excel file on <em>Datasets</em>. 2. Ask a question on <em>Analyses</em>, or chat on <em>Silt Copilot</em>. '
+             '3. Read the answer, with its checks, on <em>Dashboards</em> and <em>Reports</em>.</div>')
     with right:
         with st.container(key="home_stage"):
             st.iframe(SCENE_HTML, height=470)   # canvas scene; cards below float over it
