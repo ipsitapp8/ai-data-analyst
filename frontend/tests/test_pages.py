@@ -222,13 +222,18 @@ def test_a_run_that_could_not_reach_a_model_shows_which_provider_failed_and_how(
 
 # ----------------------------------------------------------- investigations --
 
+def _steps(ws, **state):
+    """The Root cause page's Findings and Evidence steps, for the same investigation."""
+    return [healthy(page("13_Investigations.py", ws, inv_step=step, **state)) for step in ("2 · Findings", "3 · Evidence")]
+
+
 def test_investigations_page_shows_the_report(api, ws):
     out = ask_and_run(api, ws, "Why did revenue change?")
-    at = healthy(page("13_Investigations.py", ws))
-    text = text_of(at)
+    found, evidence = _steps(ws)
+    text = text_of(found) + text_of(evidence)
     assert "West" in text and "Hypotheses tested" in text and "Not established" in text
     assert "not what caused it" in text, "the caveats are on the page"
-    assert len(at.metric) >= 6 and len(at.dataframe) >= 1
+    assert len(found.metric) >= 6 and len(found.dataframe) + len(evidence.dataframe) >= 1
     assert api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]["question_id"] == out["question_id"]
 
 
@@ -243,14 +248,15 @@ def test_investigations_page_asks_without_a_model_and_shows_the_evidence_table(a
                        json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
     assert run_job(created["job_id"]) == "succeeded"
     at = healthy(page("13_Investigations.py", ws, investigation_id=created["investigation_id"]))
-    text = text_of(at)
+    found, evidence = _steps(ws, investigation_id=created["investigation_id"])
+    text = text_of(found) + text_of(evidence)
     for expected in ("Evidence for each candidate explanation", "region = West", "Strong evidence of location",
                      "Hypothesis, not a finding", "not testable with this dataset", "never evidence of what",
                      "Recommended follow-up analyses", "last month", "larger than the metric's ordinary variation"):
         assert expected in text, expected
     assert "interval" in text and "after adjustment" in text, "uncertainty is shown, adjusted for the segments tested"
     assert "31 days against 28" in text and "like for like the change is" in text and "Exact arithmetic" in text
-    assert "--dash-surface" not in _styles(at), "the palette is borrowed for the table; the page keeps its own look"
+    assert "--dash-surface" not in _styles(evidence), "the palette is borrowed for the table; the page keeps its own look"
 
 
 def test_investigations_page_shows_the_root_cause_section(api, ws):
@@ -279,8 +285,9 @@ def test_investigations_page_shows_a_hypothesis_report(api, ws):
 
     created = ask(api, ws, "Why did revenue drop by 20% in the last two months?")
     assert run_job(created["job_id"], _hypothesis_script()) == "succeeded"
-    at = healthy(page("13_Investigations.py", ws))
-    text = text_of(at)
+    found, evidence = _steps(ws)
+    at = found
+    text = text_of(found) + text_of(evidence)
     assert "Supported" in text and "Weakened" in text and "H1" in text and "West" in text
     for section in ("Observed result", "Statistical evidence", "Practical significance", "How to read these statistics",
                     "Possible explanations (not established)",
@@ -290,7 +297,7 @@ def test_investigations_page_shows_a_hypothesis_report(api, ws):
     assert "do not prove what caused it" in "\n".join(str(s.value) for s in at.success), "the determination is the first thing shown"
     assert "6 of 8 model calls" in text and "12 of 24 analyses" in text and "every number checked" in text
     assert [m.value for m in at.metric][:3] == ["145,800.00", "131,310.00", "-14,490.00"]
-    tables = {tuple(d.value.columns)[:2]: d.value for d in at.dataframe}
+    tables = {tuple(d.value.columns)[:2]: d.value for d in evidence.dataframe}
     assert len(tables[("ID", "Analysis")]) == 12, "the executed analyses are listed"
     technical = tables[("Analysis", "For")]
     assert list(technical["For"])[0] == "headline" and "Welch's t-test" in set(technical["Method"])
@@ -323,13 +330,32 @@ def test_investigations_page_starts_a_hypothesis_investigation(api, ws, monkeypa
     at.button(key="inv_why_go").click().run()
     inv = api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]
     assert inv["engine"] == "hypothesis" and inv["status"] == "queued"
-    waiting = healthy(page("13_Investigations.py", ws))
+    waiting = healthy(page("13_Investigations.py", ws, inv_step="2 · Findings"))
     assert "still running" in text_of(waiting)
 
 
 def test_investigations_page_empty_state(api, ws):
-    at = healthy(page("13_Investigations.py", ws))
+    at = healthy(page("13_Investigations.py", ws, inv_step="History"))
     assert "No investigations yet" in text_of(at)
+    at = healthy(page("13_Investigations.py", ws, inv_step="2 · Findings"))
+    assert "No investigation has been run yet" in text_of(at)
+
+
+def test_investigations_page_is_split_into_steps_and_history_opens_a_run(api, ws):
+    from platform_helpers import run_job
+
+    created = api.post("/api/investigations/ask", headers=ws["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    ask = healthy(page("13_Investigations.py", ws))
+    assert (ask.session_state["inv_step"] or "1 · Ask") == "1 · Ask" and len(ask.metric) == 0, "the form alone, no results on the same page"
+    found, evidence = _steps(ws, investigation_id=created["investigation_id"])
+    assert len(found.metric) >= 3 and "Evidence for each candidate explanation" not in text_of(found)
+    assert "Evidence for each candidate explanation" in text_of(evidence) and len(evidence.metric) == 0
+    hist = healthy(page("13_Investigations.py", ws, inv_step="History"))
+    hist.button(key=f"inv_open_{created['investigation_id']}").click().run()
+    healthy(hist)
+    assert hist.session_state["inv_step"] == "2 · Findings" and len(hist.metric) >= 3
 
 
 # ------------------------------------------------------------------ what-if --
@@ -1532,7 +1558,7 @@ def test_investigations_page_end_to_end_on_an_uploaded_dataset_with_a_new_segmen
     created = api.post("/api/investigations/ask", headers=w["h"],
                        json={"dataset_id": w["ds"], "question": "Why did hours increase in Q2 2025 compared to Q1 2025?"}).json()
     assert run_job(created["job_id"]) == "succeeded"
-    at = healthy(page("13_Investigations.py", w, investigation_id=created["investigation_id"]))
-    text = text_of(at)
+    found, evidence = _steps(w, investigation_id=created["investigation_id"])
+    text = text_of(found) + text_of(evidence)
     assert "vendor = Brightline" in text and "new in the comparison period" in text and "Plausible contributor" in text
     assert "% confident" not in text and "n/a against" not in text
