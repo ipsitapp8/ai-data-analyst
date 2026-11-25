@@ -36,8 +36,7 @@ def _assistant_text(at) -> str:
 
 def test_page_renders_empty_state_and_answers_a_question(api, ws):
     at = healthy(page("12_Copilot.py", ws))
-    assert "Start with a question" in text_of(at)
-    assert "Local model offline" in text_of(at)
+    assert "What would you like to know?" in text_of(at)
     _ask(at, "Explain this dataset in simple terms.")
     text = _assistant_text(at)
     assert "In simple terms:" in text and "720 records" in text      # fixture: 720 rows
@@ -64,7 +63,7 @@ def test_follow_up_keeps_context_and_conversations_persist(api, ws):
     assert len(at.chat_message) == 4
     assert "In short" in _assistant_text(at) or "top" in _assistant_text(at).lower()
     first = at.session_state["cp_active"]
-    at.button[[b.label for b in at.button].index("＋ New conversation")].click().run()
+    at.button[[b.label for b in at.button].index("＋ New chat")].click().run()
     healthy(at)
     assert at.session_state["cp_active"] != first and len(at.chat_message) == 0
     at.button(key=f"cv_{first}").click().run()

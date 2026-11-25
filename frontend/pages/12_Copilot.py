@@ -96,48 +96,37 @@ if S.get("cp_active") not in S["cp_convs"]:
 conv = S["cp_convs"][S["cp_active"]]
 
 # --------------------------------------------------------------------------- header --
-h1, h2 = st.columns([3, 1.5])
-with h1:
-    st.markdown("<div class='cp-title'><span>Silt</span> Copilot</div><div class='cp-sub'>Ask about your data in plain "
-                "language. The local model understands the question and explains the answer; every number is "
-                "computed from your data.</div>", unsafe_allow_html=True)
-with h2:
-    served = status.get("served") or {}
-    if served.get("verified") and served.get("adapter_is_v1"):
-        ident = (f"{html_escape(str(served.get('base_model', '')).split('/')[-1])} + Silt LoRA v1 "
-                 f"({str(served.get('adapter_sha256', ''))[:8]}) · on this computer")
-    elif served.get("verified"):
-        ident = (f"{html_escape(str(served.get('base_model', '')))} · adapter "
-                 f"{html_escape(str(served.get('adapter') or 'none'))} — <b>not the v1 adapter</b>")
-    else:
-        ident = html_escape(status.get("model_name", ""))
-    pill = ("<span class='cp-pill'>● Local model running</span>" if status.get("model_available") else
-            "<span class='cp-pill off'>● Local model offline — Silt's tools only</span>")
-    a, b = st.columns([3, 1])
-    a.markdown(f"<div style='text-align:right;margin-top:6px'>{pill}<div class='cp-src'>{ident}</div></div>",
-               unsafe_allow_html=True)
+st.markdown("<div class='cp-title'><span>Silt</span> Copilot</div>", unsafe_allow_html=True)
 
 from style.theme import page_intro
 page_intro("A chat for quick questions about one dataset or document. Ask in everyday words, then follow up; every number is calculated from your data.",
            ["Choose a dataset (or upload a file) in the boxes below", "Click an example or type your own question", "Ask follow-ups; the conversation remembers the context"],
            tip="For one clear question with a saved report and dashboard, use Analyses instead.")
 
-left, main = st.columns([1, 3.4], gap="medium")
+st.markdown("<style>.stMain .block-container { max-width: 900px !important; }"
+            ".st-key-cp_toolbar > [data-testid='stVerticalBlock'] { flex-direction: row !important; flex-wrap: wrap; gap: 10px !important; align-items: center; }"
+            ".st-key-cp_toolbar [data-testid='stElementContainer'] { width: auto !important; }"
+            ".cp-hello { text-align: center; margin: 34px 0 6px; font: 500 2rem/1.2 'Newsreader', Georgia, serif; color: #f2efe7; }"
+            ".cp-hello-sub { text-align: center; color: #9a96b9; margin-bottom: 22px; font-size: .95rem; }"
+            "</style>", unsafe_allow_html=True)
 
 # --------------------------------------------------------------- conversations panel --
-with left:
-    if st.button("＋ New conversation", width="stretch", type="primary"):
+with st.container(key="cp_toolbar"):
+    if st.button("＋ New chat", type="primary"):
         new_conv(conv["dataset_id"], conv["doc_id"])
         st.rerun()
-    st.caption("Conversations")
-    for cid, c in sorted(S["cp_convs"].items(), key=lambda kv: -kv[1]["created"]):
-        ctx = ds_by_id.get(c["dataset_id"], {}).get("filename") or doc_by_id.get(c["doc_id"], {}).get("filename") or "—"
-        label = f"{'▸ ' if cid == S['cp_active'] else ''}{c['title'][:38]}"
-        if st.button(label, key=f"cv_{cid}", width="stretch", help=f"{len(c['log'])} messages · {ctx}"):
-            S["cp_active"] = cid
-            st.rerun()
+    with st.popover("History"):
+        past = sorted(S["cp_convs"].items(), key=lambda kv: -kv[1]["created"])
+        if len(past) <= 1 and not conv["log"]:
+            st.caption("Your earlier chats will be listed here.")
+        for cid, c in past:
+            ctx = ds_by_id.get(c["dataset_id"], {}).get("filename") or doc_by_id.get(c["doc_id"], {}).get("filename") or "—"
+            label = f"{'● ' if cid == S['cp_active'] else ''}{c['title'][:44]}"
+            if st.button(label, key=f"cv_{cid}", width="stretch", help=f"{len(c['log'])} messages · {ctx}"):
+                S["cp_active"] = cid
+                st.rerun()
 
-    with st.popover("⤒ Upload a file", width="stretch"):
+    with st.popover("Add a file"):
         st.caption("CSV, Excel (.xlsx/.xls) or text-based PDF. Data files become datasets; PDFs become searchable "
                    "documents with page references.")
         up = st.file_uploader("File", type=["csv", "xlsx", "xls", "pdf"], key=f"cp_up_{S['cp_upload_n']}",
@@ -188,6 +177,7 @@ with left:
                 st.error(f"**{up.name}** could not be added: " + re.sub(r"^\d{3}: ", "", str(e)))
 
 # --------------------------------------------------------------------- context bar --
+main = st.container()
 with main:
     if S.get("cp_flash"):
         st.success(S.pop("cp_flash"))
@@ -280,8 +270,9 @@ with main:
 
     if not conv["log"]:
         doc_only = conv["doc_id"] and not conv["dataset_id"]
-        st.markdown("<div class='cp-empty'><b>Start with a question.</b> Ask it the way you would ask a colleague — "
-                    "no column names or formulas needed. For example:</div>", unsafe_allow_html=True)
+        st.markdown("<div class='cp-hello'>What would you like to know?</div>"
+                    "<div class='cp-hello-sub'>Ask the way you would ask a colleague. Try one of these, or type your own below.</div>",
+                    unsafe_allow_html=True)
         ex = EXAMPLES_DOC if doc_only else EXAMPLES_DATA + (EXAMPLES_DOC[:1] if conv["doc_id"] else [])
         cols = st.columns(3)
         for i, q in enumerate(ex):
