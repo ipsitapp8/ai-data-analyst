@@ -102,3 +102,8 @@ html body .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disable
 .stApp .st-key-nav { position: relative; z-index: 0; padding-top: 6px !important; }
 .stApp .st-key-nav [data-testid="stElementContainer"], .stApp .st-key-nav .stButton { width: 100% !important; margin: 0 !important; }
 .stApp .st-key-nav .stButton > button { width: 100% !important; transform: none !important; }
+
+/* Top-right account pill: solid so page headings scrolling underneath never show through it */
+html body .stApp .silt-topbar { background: #0f0d1f !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 10px !important; box-shadow: 0 6px 18px rgba(0,0,0,.45) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html body .stApp .st-key-topbar_logout { background: transparent !important; }
+html body .stApp .st-key-topbar_logout button { background: #17142b !important; border: 1px solid rgba(255,255,255,.14) !important; border-radius: 8px !important; }
