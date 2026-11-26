@@ -80,7 +80,8 @@ def subsegments(seg: str) -> list[str]:
     pieces = [x for x in re.split(r",\s+(?:and\s+)?|\s+and\s+|\s+&\s+", seg) if x and x.strip()]
     groups: list[str] = []
     for x in pieces:
-        if not groups or (_TASK.search(x) and _TASK.search(groups[-1])):
+        joins_compared = bool(groups) and re.fullmatch(r"\s*(?:compare|comparing|between)\s+\S+(?:\s+\S+)?\s*", groups[-1], re.I)
+        if not groups or (_TASK.search(x) and _TASK.search(groups[-1]) and not joins_compared):
             groups.append(x.strip())
         else:
             groups[-1] += " and " + x.strip()

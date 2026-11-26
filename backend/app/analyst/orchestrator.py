@@ -7,6 +7,7 @@ import threading
 import time
 from collections import OrderedDict
 
+import numpy as np
 import pandas as pd
 
 import re
@@ -58,6 +59,8 @@ def ask(message: str, df: pd.DataFrame | None, memory: dict, use_model: bool | N
         filename: str | None = None, document: dict | None = None) -> dict:
     started = time.monotonic()
     model_on = planner.model_available() if use_model is None else use_model
+    if df is not None:
+        message = _comparatives(message, df)
     before = memory.get("_turn")
     out = _ask_turn(message, df, memory, use_model, model_on, filename, document, started)
     if out.get("plan_source") == "input_check":
@@ -170,7 +173,9 @@ def _ask_turn(message, df, memory, use_model, model_on, filename, document, star
         read_as.append(f"“{w}” read as `{c}` (the only column measuring it)" if w not in _sem.MONEY_IN_WORDS else
                        f"“{w}” read as `{c}` — {_sem.money_in_columns(df)[1]}; say if you mean something else")
     chart_kind = followup.chart_request(message)
-    stopped = _stated_gate(message, df, memory, model_on, started)
+    stopped = _money_verb_gate(message, df, model_on, started)
+    if stopped is None:
+        stopped = _stated_gate(message, df, memory, model_on, started)
     if stopped is not None:
         out = _finish(stopped, message, df, memory, None, started)
         if read_as:
@@ -1434,6 +1439,12 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
             out = _ask_metric(message, df, memory, model_on, started, sc)
             if out is not None and any(c.get("status") == "ok" for c in out.get("calls", [])):
                 return out
+        if lost and scoping.active(sc) and sc.get("where"):
+            # "which companies are older than 30 and rated above 4": listing the records that meet the conditions
+            # applies them exactly (the scope's own mask), so it is an answer, not an unrestricted figure
+            out = _ask_lookup(message, df, model_on, started, sc=sc)
+            if out is not None and any(c.get("tool") == "filter_records" for c in out.get("calls", [])):
+                return out
         if lost:
             # the request is limited (a relative period, "only escalated") and no program could apply it: an answer
             # over all the records would look right and be wrong
@@ -1485,6 +1496,9 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     if out is not None:
         return out
     out = _ask_value_distribution(message, df, model_on, started)
+    if out is not None:
+        return out
+    out = _ask_lookup(message, df, model_on, started, sc=sc)
     if out is not None:
         return out
     out = _ask_compare_columns(message, dfs, model_on, started)
@@ -2595,14 +2609,18 @@ def _ask_compare_values(message, df, model_on, started) -> dict | None:
     sub = df[df[col].astype(str).isin(vals)]
     if sub[col].astype(str).value_counts().reindex(vals).eq(1).all():
         return _compare_records(col, vals, nums, sub, model_on, started)
-    try:
-        r = tools.run({"tool": "compare_groups", "args": {"outcome": nums[0], "group": col}}, sub, {})
-    except Exception:  # noqa: BLE001
-        return None
-    return _reply(explain.render("compare_groups", r), "tool", model_on, started,
-                  charts=present.charts("compare_groups", r),
-                  calls=[{"tool": "compare_groups", "status": "ok", "result": _jsonable(r)}],
-                  notes=[f"Compared only the {col.replace('_', ' ')} values you named: " + ", ".join(vals) + "."])
+    texts, charts, calls = [], [], []
+    for m in nums:                                   # every measure the question names, each compared on its own
+        try:
+            r = tools.run({"tool": "compare_groups", "args": {"outcome": m, "group": col}}, sub, {})
+        except Exception:  # noqa: BLE001
+            return None                              # one measure cannot be compared: leave the question to the others
+        texts.append(explain.render("compare_groups", r))
+        charts += present.charts("compare_groups", r)
+        calls.append({"tool": "compare_groups", "status": "ok", "args": {"outcome": m, "group": col}, "result": _jsonable(r)})
+    return _reply("\n\n".join(texts), "tool", model_on, started, charts=charts, calls=calls,
+                  notes=[f"Compared only the {col.replace('_', ' ')} values you named: " + ", ".join(vals)
+                         + f"; on {', '.join(nums)}."])
 
 
 def _compare_records(col, vals, nums, sub, model_on, started) -> dict:
@@ -2676,6 +2694,256 @@ def _ask_value_distribution(message, df, model_on, started) -> dict | None:
                   calls=[{"tool": "count_by", "status": "ok", "args": {"group": col, "values": vals}, "result": result}],
                   notes=[f"Grouped by {col} and counted the records in each value; the values you named are "
                          + ", ".join(vals) + "."])
+
+
+# ------------------------------------------------- plain look-ups: values of a column, one record, extremes, range --
+_LOOKUP_STOP = {"no", "of", "the", "num", "number", "nr", "id"}
+_LIST_Q = re.compile(r"\b(different|distinct|unique|types? of|kinds? of|categories of|list|values of|what are the|"
+                     r"which are the|show (?:me )?(?:all )?the|all the)\b", re.I)
+_MODE_Q = re.compile(r"\b(?:most|least) (common|frequent|popular|usual)\b", re.I)
+_COUNT_BY_Q = re.compile(r"\b(count|number of|how many)\b.*\b(by|per|for each|in each)\b", re.I)
+_DETAIL_Q = re.compile(r"\b(details?|info(?:rmation)?|profile|record|everything|tell me about|show)\b", re.I)
+_AGG_Q = re.compile(r"\b(average|mean|median|total|sum|count|how many|number of|compare|versus|vs|trend|forecast|"
+                    r"predict|correlat\w*|distribution|highest|lowest|top|bottom)\b", re.I)
+_RANGE_Q = re.compile(r"\b(range of|min(?:imum)? and max(?:imum)?|lowest and highest|smallest and largest|spread of)\b", re.I)
+# adjectives that name a direction on a column whose name has the word: "oldest company" -> highest *age*
+_ADJ = {"oldest": ("age", False), "youngest": ("age", True), "newest": ("age", True),
+        "cheapest": ("price", True), "priciest": ("price", False), "costliest": ("cost", False),
+        "longest": ("length", False), "shortest": ("length", True), "heaviest": ("weight", False),
+        "lightest": ("weight", True), "tallest": ("height", False)}
+
+
+_COMPARATIVE = {"older": ("age", "above"), "younger": ("age", "below"), "newer": ("age", "below"),
+                "cheaper": ("price", "below"), "pricier": ("price", "above"), "costlier": ("cost", "above"),
+                "longer": ("length", "above"), "shorter": ("length", "below"), "heavier": ("weight", "above"),
+                "lighter": ("weight", "below"), "taller": ("height", "above")}
+
+
+def _comparatives(message: str, df) -> str:
+    """'older than 30 years' says a threshold on the column whose name holds the adjective's word (Company_Age,
+    patient_age): written as that threshold ("Company_Age above 30 years") so every reader applies it. Left as it is
+    when no column -- or more than one -- has the word: then the threshold is not guessed."""
+    from app.analyst.data import kind_of
+
+    def sub(m):
+        word, cmp_ = _COMPARATIVE[m.group(1).lower()]
+        cols = [c for c in df.columns if kind_of(df[c]) == "numeric" and word in _col_words(c)]
+        return f"{cols[0]} {cmp_} " if len(cols) == 1 else m.group(0)
+    return re.sub(rf"\b({'|'.join(_COMPARATIVE)})\s+than\s+", sub, message, flags=re.I)
+
+
+_MONEY_TOKENS = {"charge", "cost", "bill", "price", "amount", "fee", "payment", "revenue", "spend", "expense", "salary",
+                 "sale", "income", "pay", "fare", "premium", "wage"}
+# verb forms only ("department charges the most", "which store spent more"): "cost per lead" / "charge amount" are nouns
+_MONEY_VERB = re.compile(r"\b(charges|charged|costs|spends|spent|pays|paid|bills|billed|earns|earned|makes|made)\s+"
+                         r"(?:the\s+|their\s+|its\s+)?(most|more|least|less|highest|lowest|patients|customers|clients)\b", re.I)
+
+
+def _money_verb_gate(message, df, model_on, started) -> dict | None:
+    """'Which department charges the most?' says money without naming which money column: with a room charge, a
+    medication cost and a patient bill, picking the one whose name shares the verb (room_charge) would answer a
+    different question. When the data has two or more money columns and the question names none of them in full,
+    Silt asks which one to use."""
+    from app.analyst.data import kind_of
+    if df is None or not _MONEY_VERB.search(message):
+        return None
+    money = [c for c in df.columns if kind_of(df[c]) == "numeric" and _col_words(c) & _MONEY_TOKENS]
+    if len(money) < 2:
+        return None
+    low = message.lower()
+    if any(re.search(rf"(?<![a-z0-9]){re.escape(f)}(?![a-z0-9])", low)
+           for c in money for f in {str(c).lower(), str(c).lower().replace("_", " ")}):
+        return None                                   # a money column is named in full: no ambiguity
+    vm = _MONEY_VERB.search(message)
+    verb = vm.group(1)
+    example = (message[:vm.start()] + f"has the highest average {money[0]}"
+               + re.sub(r"^\s*(?:on average|on)\b", "", message[vm.end():])).strip()
+    return _reply(f"“{verb}” could mean any of these money columns: " + ", ".join(f"`{c}`" for c in money)
+                  + f". Which one should I use? For example: *{example}*",
+                  "tool", model_on, started, plan={"type": "clarify", "options": money},
+                  notes=["The question names money by a verb, not a column, and the data holds several money columns; "
+                         "Silt asks rather than choosing one."])
+
+
+def _col_words(c) -> set:
+    from app.analyst.deliverables import _stem
+    raw = re.sub(r"([a-z])([A-Z])", r"\1 \2", str(c))
+    return {_stem(t) for t in re.split(r"[^A-Za-z0-9]+", raw.lower()) if t and t not in _LOOKUP_STOP}
+
+
+def _cols_named(message: str, df) -> list:
+    """Columns the message names by their words, in any order or plural ("types of companies" -> company_type,
+    "headquarters" -> Head_Quarters, "No_of_Employee" -> No_of_Employee); most words matched first."""
+    from app.analyst.deliverables import _stem
+    words = {_stem(w) for w in re.findall(r"[a-z0-9]+", message.lower())}
+    hits = []
+    for c in df.columns:
+        toks = _col_words(c)
+        compact = _stem(re.sub(r"[^a-z0-9]+", "", str(c).lower()))
+        if (toks and toks <= words) or (len(compact) > 4 and compact in words):
+            hits.append((-len(toks), str(c)))
+    return [c for _, c in sorted(hits)]
+
+
+def _label_col(df):
+    """The column that names each record (company / product / patient name): the text column with the most values."""
+    from app.analyst.data import kind_of
+    texts = [c for c in df.columns if kind_of(df[c]) == "categorical"]
+    named = [c for c in texts if "name" in _col_words(c)]
+    return max(named or texts, key=lambda c: df[c].nunique()) if texts else None
+
+
+def _value_table(df, col, limit=25) -> tuple[str, dict]:
+    vc = df[col].astype("string").value_counts(dropna=True)
+    miss = int(df[col].isna().sum())
+    rows = [f"| {html_cell(v)} | {int(k):,} | {100 * k / len(df):.1f}% |" for v, k in vc.head(limit).items()]
+    text = (f"| {col} | records | share |\n|---|---:|---:|\n" + "\n".join(rows)
+            + (f"\n\n…and **{len(vc) - limit:,}** more values (the {limit} most frequent are shown)." if len(vc) > limit else "")
+            + (f"\n\n{miss:,} record(s) have no {col}." if miss else ""))
+    return text, {"column": col, "distinct": int(len(vc)), "missing": miss,
+                  "top": {str(v): int(k) for v, k in vc.head(limit).items()}}
+
+
+def html_cell(v) -> str:
+    return str(v).replace("|", "\\|").replace("\n", " ")
+
+
+def _ask_lookup(message, df, model_on, started, sc=None) -> dict | None:
+    """Plain questions about what is IN the data, answered straight from the records: one record ("headquarters of
+    TCS", "details of Infosys"), the values of a column ("what are the different types of companies", "most common
+    company type", "count companies by company type"), an extreme named by an adjective ("oldest company") and a
+    range ("range of ratings"). Every figure is read or counted from the table; nothing is estimated."""
+    from app.analyst import intent
+    from app.analyst.data import kind_of
+    named_cols = _cols_named(message, df)
+    cats = [c for c in named_cols if kind_of(df[c]) == "categorical"]
+    nums = [c for c in named_cols if kind_of(df[c]) == "numeric"]
+    low = message.lower()
+
+    # 0. the table itself: its columns, its first / last rows
+    if re.search(r"\bcolumn names?\b|\b(?:list|what are|show|which are|name)(?: me)? (?:the |all )?(?:the )?(?:columns|fields|variables)\b|"
+                 r"\bwhat columns\b", low):
+        tbl = "| column | type | distinct values | missing |\n|---|---|---:|---:|\n" + "\n".join(
+            f"| {c} | {kind_of(df[c])} | {df[c].nunique():,} | {int(df[c].isna().sum()):,} |" for c in df.columns)
+        return _reply(f"This dataset has **{len(df.columns)} columns** and {len(df):,} records:\n\n" + tbl, "tool", model_on,
+                      started, calls=[{"tool": "schema", "status": "ok", "result": {"columns": [str(c) for c in df.columns]}}])
+    hm = re.search(r"\b(first|top|last|bottom)\s+(\d{1,3})\s+(rows|records|entries|lines)\b|\b(preview|sample rows|head of)\b", low)
+    if hm:
+        k = int(hm.group(2)) if hm.group(2) else 5
+        part = df.tail(k) if hm.group(1) in ("last", "bottom") else df.head(k)
+        cols = list(df.columns)
+        tbl = "| " + " | ".join(map(str, cols)) + " |\n|" + "---|" * len(cols) + "\n" + "\n".join(
+            "| " + " | ".join(html_cell("—" if pd.isna(r[c]) else r[c]) for c in cols) + " |" for _, r in part.iterrows())
+        which = "last" if hm.group(1) in ("last", "bottom") else "first"
+        return _reply(f"The {which} {len(part)} of {len(df):,} records, as stored:\n\n" + tbl, "tool", model_on, started,
+                      calls=[{"tool": "rows", "status": "ok", "args": {"which": which, "n": k}, "result": {"rows": int(len(part))}}])
+
+    # percentiles / quartiles of a named measure
+    pm = re.findall(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+percentile", low)
+    if (pm or re.search(r"\bquartiles?\b|\biqr\b|\binterquartile\b", low)) and nums:
+        m = nums[0]
+        v = df[m].dropna()
+        qs = [int(x) for x in pm] or [25, 50, 75]
+        vals = {q: float(np.percentile(v, q)) for q in qs}
+        lines = "\n".join(f"| {q}th percentile | {vals[q]:,.4g} |" for q in qs)
+        extra = (f"\n\nInterquartile range (75th − 25th): **{vals[75] - vals[25]:,.4g}**." if {25, 75} <= set(vals) else "")
+        return _reply(f"**{m}** over {len(v):,} records:\n\n| percentile | value |\n|---|---:|\n" + lines + extra,
+                      "tool", model_on, started,
+                      calls=[{"tool": "percentiles", "status": "ok", "args": {"column": m, "q": qs}, "result": {str(k): x for k, x in vals.items()}}])
+
+    # records meeting stated conditions ("which companies are older than 30 years and have a rating above 4?")
+    where = (sc or {}).get("where") or []
+    if where and re.match(r"\s*(which|list|show|find|get|what|give)\b", low) and not _AGG_Q.search(message):
+        keep = scoping.mask(df, sc)
+        hit = df[keep]
+        lc = _label_col(df)
+        cond_cols = list(dict.fromkeys(w["column"] for w in where if w.get("column") in df.columns))
+        cols = ([lc] if lc and lc not in cond_cols else []) + cond_cols
+        top = hit.sort_values(cond_cols[0], ascending=False) if cond_cols else hit
+        tbl = "| " + " | ".join(map(str, cols)) + " |\n|" + "---|" * len(cols) + "\n" + "\n".join(
+            "| " + " | ".join(html_cell("—" if pd.isna(r[c]) else (f"{r[c]:,.4g}" if isinstance(r[c], float) else r[c]))
+                              for c in cols) + " |" for _, r in top.head(25).iterrows())
+        cond = scoping.describe(sc)
+        head = f"**{len(hit):,}** of {len(df):,} records meet **{cond}**" + (
+            f"; the first 25 (by {cond_cols[0]}, highest first) are shown:" if len(hit) > 25 else ":")
+        return _reply(head + "\n\n" + (tbl if len(hit) else "_No record meets every condition._"), "tool", model_on, started,
+                      calls=[{"tool": "filter_records", "status": "ok", "args": {"where": [w.get("text") for w in where]},
+                              "result": {"matching": int(len(hit)), "records": int(len(df))}}])
+
+    # 1. one record named by its value in a long text column
+    ents = intent.names_in_long_columns(message, df, [])[0]
+    if len(ents) == 1 and not _AGG_Q.search(message) and (_DETAIL_Q.search(message) or named_cols):
+        ecol, val = ents[0]
+        rows = df[df[ecol].astype(str).str.strip() == val]
+        show = [c for c in named_cols if c != ecol] or [c for c in df.columns]
+        if len(rows):
+            cols = [ecol] + [c for c in show if c != ecol]
+            tbl = "| " + " | ".join(map(str, cols)) + " |\n|" + "---|" * len(cols) + "\n" + "\n".join(
+                "| " + " | ".join(html_cell("—" if pd.isna(r[c]) else r[c]) for c in cols) + " |" for _, r in rows.head(5).iterrows())
+            head = (f"**{val}** — {', '.join(f'`{c}`' for c in cols[1:])}:" if len(cols) <= 4 else f"**{val}** — its record:")
+            return _reply(head + "\n\n" + tbl + (f"\n\n{len(rows)} records are named {val}; the first 5 are shown." if len(rows) > 5 else ""),
+                          "tool", model_on, started,
+                          calls=[{"tool": "lookup", "status": "ok", "args": {"column": ecol, "value": val, "columns": cols[1:]},
+                                  "result": {"rows": int(len(rows))}}],
+                          notes=[f"Read from the record(s) where {ecol} = {val}."])
+
+    # 2. min / max / range of a named measure
+    if _RANGE_Q.search(message) and len(nums) >= 1:
+        m = nums[0]
+        v = df[m].dropna()
+        if len(v):
+            lc = _label_col(df)
+            lo_r, hi_r = df.loc[v.idxmin()], df.loc[v.idxmax()]
+            who = (lambda r: f" ({r[lc]})" if lc and lc != m and pd.notna(r[lc]) else "")
+            ans = (f"**{m}** ranges from **{v.min():,.4g}**{who(lo_r)} to **{v.max():,.4g}**{who(hi_r)} — a range of "
+                   f"**{v.max() - v.min():,.4g}** over {len(v):,} records (median {v.median():,.4g}).")
+            return _reply(ans, "tool", model_on, started,
+                          calls=[{"tool": "range", "status": "ok", "args": {"column": m},
+                                  "result": {"min": float(v.min()), "max": float(v.max()), "n": int(len(v))}}])
+
+    # 3. an extreme named by an adjective ("oldest company")
+    adj = next((a for a in _ADJ if re.search(rf"\b{a}\b", low)), None)
+    if adj:
+        word, asc = _ADJ[adj]
+        mcol = next((c for c in df.columns if kind_of(df[c]) == "numeric" and word in _col_words(c)), None)
+        lc = _label_col(df)
+        if mcol and lc:
+            top = df.dropna(subset=[mcol]).sort_values(mcol, ascending=asc).head(5)
+            best = top.iloc[0]
+            tbl = f"| {lc} | {mcol} |\n|---|---:|\n" + "\n".join(f"| {html_cell(r[lc])} | {r[mcol]:,.4g} |" for _, r in top.iterrows())
+            return _reply(f"The {adj} by **{mcol}** is **{best[lc]}** ({mcol} = {best[mcol]:,.4g}).\n\n" + tbl,
+                          "tool", model_on, started,
+                          calls=[{"tool": "extreme", "status": "ok", "args": {"column": mcol, "ascending": asc, "label": lc},
+                                  "result": {"value": str(best[lc]), mcol: float(best[mcol])}}],
+                          notes=[f"“{adj}” read as the {'lowest' if asc else 'highest'} {mcol}."])
+
+    # 4. the values of one category column: list, most common, count by
+    count_only = re.search(r"\b(how many|number of|count)\b", low) and not _COUNT_BY_Q.search(message)
+    ranking = re.search(r"\b(top|bottom|best|worst|highest|lowest|largest|smallest|biggest|rank\w*)\b", low)
+    pie = re.search(r"\b(pie|donut|doughnut)\b", low)
+    chart_of = re.search(r"\b(pie|donut|doughnut|bar)\b(?:\s+chart|\s+graph)?|\b(chart|graph|plot)\b", low)
+    if "column" in low and not chart_of:
+        return None                                  # "column names" is the schema (handled above), never a column's values
+    if len(cats) >= 1 and not nums and not count_only and not ranking and (_LIST_Q.search(message) or _MODE_Q.search(message)
+                                                             or _COUNT_BY_Q.search(message) or chart_of):
+        col = cats[0]
+        text, res = _value_table(df, col)
+        mode = _MODE_Q.search(message)
+        if mode and res["top"]:
+            least = "least" in mode.group(0).lower()
+            vc = df[col].astype("string").value_counts(dropna=True)
+            v, k = (vc.index[-1], vc.iloc[-1]) if least else (vc.index[0], vc.iloc[0])
+            head = (f"The {'least' if least else 'most'} common **{col}** is **{v}** — {int(k):,} of {len(df):,} records "
+                    f"({100 * k / len(df):.1f}%).\n\n")
+        else:
+            head = f"**{col}** has **{res['distinct']:,}** different values in {len(df):,} records:\n\n"
+        charts = present._bar(f"Records by {col}", col, "records",  # noqa: SLF001
+                              [{col: k, "records": v} for k, v in list(res["top"].items())[:15]])
+        if pie and charts:
+            charts[0]["type"] = "pie"
+        return _reply(head + text, "tool", model_on, started, charts=charts,
+                      calls=[{"tool": "value_counts", "status": "ok", "args": {"column": col}, "result": res}])
+    return None
 
 
 _WHICH_TOP = re.compile(r"\bwhich\s+([a-z]+)\s+(?:has|had|have|is|was|shows?|got|gets)\s+(?:the\s+)?(highest|lowest|"

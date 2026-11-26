@@ -119,3 +119,20 @@ def test_a_plan_that_matches_its_clause_is_computed():
     d = next(x for x in ds if x.kind == "stat")
     assert d.status == "done"
     assert deliverables.plan_mismatch(d, df, profile(df)) is None
+
+
+@pytest.mark.parametrize("q", ["Which department charges the most?",
+                               "Which department charges the most on average, and how long do its patients stay "
+                               "compared to other departments?"])
+def test_money_said_by_a_verb_with_several_money_columns_is_asked_not_guessed(q):
+    df = hospital()
+    out = _ask(q, df)
+    assert out["plan"]["type"] == "clarify"
+    assert set(out["plan"]["options"]) == {"room_charge", "medication_cost", "patient_bill"}
+    assert not out["calls"]                                   # nothing computed on a guessed column
+
+
+def test_a_money_column_named_in_full_is_used_without_asking():
+    df = hospital()
+    a = _ask("Which department has the highest average patient bill?", df)["answer"]
+    assert df.groupby("department")["patient_bill"].mean().idxmax() in a and "could mean" not in a
