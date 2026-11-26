@@ -1,0 +1,26 @@
+# Public entry point for Silt.
+#
+# No domain yet: plain HTTP on the server's IP address. Traffic, including passwords, is NOT encrypted.
+# When a domain's DNS A record points at this server, replace ":80" below with the domain name
+# (for example `silt.example.com`), set APP_URL=https://silt.example.com in /etc/silt/ui.env and
+# /etc/silt/api.env, then run `systemctl reload caddy && systemctl restart silt-ui silt-api`.
+# Caddy then obtains and renews an HTTPS certificate by itself (ports 80 and 443 must be open).
+:80 {
+	encode zstd gzip
+
+	# Uploads: the API accepts up to 200 MB (MAX_UPLOAD_BYTES); a little headroom for the form encoding.
+	request_body {
+		max_size 210MB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+	}
+
+	# Streamlit, HTTP and WebSocket. Caddy sets X-Forwarded-For to the visitor's address (it does not trust one
+	# sent by the visitor), which the UI forwards to the API for per-visitor rate limits.
+	reverse_proxy 127.0.0.1:8501
+}

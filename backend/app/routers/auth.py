@@ -13,6 +13,7 @@ from app import config
 from app.database import get_db
 from app.authz import ensure_org_member
 from app.models import Team, TeamMember, User
+from app.rate_limit import client_ip
 from app.rate_limit import enforce as rate_limit
 from app.schemas import GoogleExchange, LoginRequest, SignupRequest, TokenResponse, UserOut
 from app.security import create_access_token, get_current_user, hash_password, verify_password
@@ -39,7 +40,7 @@ def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_d
     # Keyed by IP alone (not email too): the point here is slowing down mass
     # account creation from one source, not per-email brute force -- signup
     # already fails fast on a duplicate email regardless.
-    rate_limit(f"signup:{request.client.host}", max_attempts=10, window_seconds=60)
+    rate_limit(f"signup:{client_ip(request)}", max_attempts=10, window_seconds=60)
 
     email = payload.email.strip().lower()
     if not is_valid_email(email):
@@ -83,7 +84,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     # Keyed by IP+email: caps guessing passwords for one account, and caps
     # one source hammering many accounts, without one user's repeated bad
     # attempts locking out everyone behind the same NAT/proxy IP.
-    rate_limit(f"login:{request.client.host}:{email}", max_attempts=8, window_seconds=60)
+    rate_limit(f"login:{client_ip(request)}:{email}", max_attempts=8, window_seconds=60)
 
     user = db.query(User).filter(User.email == email).first()
     if user is None or not verify_password(payload.password, user.password_hash):
@@ -109,7 +110,7 @@ def google_exchange(payload: GoogleExchange, request: Request, db: Session = Dep
     expected = config.INTERNAL_AUTH_SECRET
     if not expected:
         raise HTTPException(404, "Not found")
-    rate_limit(f"google:{request.client.host}", max_attempts=30, window_seconds=60)
+    rate_limit(f"google:{client_ip(request)}", max_attempts=30, window_seconds=60)
     if not x_internal_secret or not hmac.compare_digest(x_internal_secret.encode(), expected.encode()):
         raise HTTPException(403, "Forbidden")
     if not payload.email_verified:

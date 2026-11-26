@@ -1,14 +1,18 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: silt
       POSTGRES_USER: silt
-      POSTGRES_PASSWORD: silt
+      # Local development keeps the old "silt" password; a server sets POSTGRES_PASSWORD (deploy/vultr/setup.sh
+      # generates one into /etc/silt/compose.env and starts compose with --env-file).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-silt}
     ports:
-      # Host port 5433, not 5432 -- avoids colliding with a native Postgres
-      # service that may already be running on the host's default port.
-      - "5433:5432"
+      # Loopback only. Docker writes its own iptables rules for published ports, so a port published on 0.0.0.0
+      # is reachable from the internet even with a host firewall (UFW) that blocks it. Host port 5433, not 5432,
+      # avoids colliding with a native Postgres already on the default port.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -5,3 +5,16 @@ backgroundColor = "#0b0820"
 secondaryBackgroundColor = "#140e3a"
 textColor = "#ece8ff"
 font = "sans serif"
+
+# Safe everywhere. A public server additionally hides error details and turns the file watcher off through the
+# environment of its service (deploy/vultr/silt-ui.service), so local development keeps tracebacks and reloads.
+[server]
+enableXsrfProtection = true
+enableCORS = true
+maxUploadSize = 200          # MB; the API's own limit is MAX_UPLOAD_BYTES (200 MB by default)
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"      # no developer menu (clear cache, rerun settings) for visitors

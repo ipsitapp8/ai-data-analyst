@@ -12,7 +12,28 @@ import time
 from collections import defaultdict
 from threading import Lock
 
-from fastapi import HTTPException
+import ipaddress
+
+from fastapi import HTTPException, Request
+
+# The Streamlit frontend calls this API server-side, so every request arrives from loopback: keyed on the socket
+# address, one limit would be shared by every visitor (one person could lock everyone out of signup). The frontend
+# forwards the visitor's own address in this header; it is believed only on a loopback connection -- the API listens
+# on 127.0.0.1, so that is the frontend on this machine -- and only when it is a valid IP address.
+CLIENT_IP_HEADER = "X-Silt-Client-IP"
+_LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def client_ip(request: Request) -> str:
+    """The visitor's address for rate limiting: the forwarded one from the local frontend, else the socket's."""
+    peer = request.client.host if request.client else "unknown"
+    fwd = (request.headers.get(CLIENT_IP_HEADER) or "").strip()
+    if fwd and peer in _LOOPBACK:
+        try:
+            return str(ipaddress.ip_address(fwd))
+        except ValueError:
+            pass
+    return peer
 
 _attempts: dict[str, list[float]] = defaultdict(list)
 _lock = Lock()

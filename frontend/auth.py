@@ -11,6 +11,8 @@ development is unchanged.
 from __future__ import annotations
 
 import hmac
+import time
+import threading
 import json
 import os
 from pathlib import Path
@@ -240,6 +242,36 @@ def _password_is_set() -> str:
     return os.getenv("APP_PASSWORD", "").strip()
 
 
+# Wrong guesses at the shared password, per visitor address, kept in this process: a public deployment would
+# otherwise let anyone try passwords as fast as they can submit the form.
+GATE_MAX_FAILURES = int(os.getenv("APP_PASSWORD_MAX_FAILURES", "8"))
+GATE_WINDOW_SECONDS = int(os.getenv("APP_PASSWORD_WINDOW_SECONDS", "600"))
+_gate_failures: dict[str, list[float]] = {}
+_gate_lock = threading.Lock()
+
+
+def _gate_key() -> str:
+    from api_client import client_ip
+    return client_ip() or "unknown"
+
+
+def _gate_recent(who: str) -> list[float]:
+    cutoff = time.monotonic() - GATE_WINDOW_SECONDS
+    recent = [t for t in _gate_failures.get(who, []) if t > cutoff]
+    _gate_failures[who] = recent
+    return recent
+
+
+def _gate_locked(who: str) -> bool:
+    with _gate_lock:
+        return len(_gate_recent(who)) >= GATE_MAX_FAILURES
+
+
+def _gate_failed(who: str) -> None:
+    with _gate_lock:
+        _gate_recent(who).append(time.monotonic())
+
+
 def require_password() -> None:
     """Halt rendering until the correct shared password is entered.
 
@@ -260,12 +292,17 @@ def require_password() -> None:
         submitted = st.form_submit_button("Enter", type="primary", use_container_width=True)
 
     if submitted:
+        who = _gate_key()
+        if _gate_locked(who):
+            st.error("Too many wrong passwords. Try again in a few minutes.")
+            st.stop()
         # compare_digest over utf-8 bytes: constant time, and avoids the
         # UnicodeEncodeError compare_digest raises on non-ascii str input.
         if hmac.compare_digest(entered.encode("utf-8"), expected.encode("utf-8")):
             st.session_state[_SESSION_KEY] = True
             st.rerun()
         else:
+            _gate_failed(who)
             st.error("Incorrect password.")
 
     st.stop()

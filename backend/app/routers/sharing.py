@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app import config
 from app.database import get_db
 from app.models import Dashboard, DatasetVersion, Question, ShareLink, Team, User
+from app.rate_limit import client_ip
 from app.rate_limit import enforce as rate_limit
 from app.security import get_current_team, get_current_user
 from app.verdict import (
@@ -150,7 +151,7 @@ def revoke_share(
 @router.get("/api/public/shared/{token}")
 def public_dashboard(token: str, request: Request, db: Session = Depends(get_db)):
     """No auth. Unknown, revoked and expired tokens all look identical (404)."""
-    rate_limit(f"public_share:{request.client.host}", max_attempts=60, window_seconds=60)
+    rate_limit(f"public_share:{client_ip(request)}", max_attempts=60, window_seconds=60)
     link = db.query(ShareLink).filter_by(token=token).first()
     if link is None or not _active(link, dt.datetime.utcnow()):
         raise HTTPException(404, "This link is invalid or has expired")
