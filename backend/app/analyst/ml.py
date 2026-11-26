@@ -95,6 +95,15 @@ def screen_features(df: pd.DataFrame, target: str, task: str, features: list[str
     return keep, dropped
 
 
+def _fit(model, X, y, task: str):
+    """Fit the pipeline. Classes are balanced with per-row weights, exactly what class_weight="balanced" computes:
+    scikit-learn 1.9 rejects class_weight="balanced" when a class label looks like a number ('0'/'1')."""
+    if task == "classification":
+        from sklearn.utils.class_weight import compute_sample_weight
+        return model.fit(X, y, forest__sample_weight=compute_sample_weight("balanced", y))
+    return model.fit(X, y)
+
+
 def _cross_validate(model, X, y, task: str, seed: int, n_classes: int | None, time_ordered: bool = False) -> dict:
     """K-fold cross-validation of the same pipeline (preprocessing refitted inside every fold, so nothing leaks from
     the held-out rows) against the naive baseline on the same folds."""
@@ -111,7 +120,7 @@ def _cross_validate(model, X, y, task: str, seed: int, n_classes: int | None, ti
             continue                    # an early fold with one class has nothing to learn
         m = clone(model)
         m.set_params(forest__n_estimators=100, forest__n_jobs=-1)    # a fold verdict needs fewer trees than the final model
-        fitted = m.fit(X.iloc[tr], y.iloc[tr])
+        fitted = _fit(m, X.iloc[tr], y.iloc[tr], task)
         pred = fitted.predict(X.iloc[te])
         if task == "classification":
             m_scores.append(balanced_accuracy_score(y.iloc[te], pred))
@@ -195,7 +204,7 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
                           ("onehot", OneHotEncoder(handle_unknown="ignore"))]), categorical),
     ])
     if task == "classification":
-        forest = RandomForestClassifier(n_estimators=300, random_state=seed, class_weight="balanced", n_jobs=-1,
+        forest = RandomForestClassifier(n_estimators=300, random_state=seed, n_jobs=-1,
                                         min_samples_leaf=2)
     else:
         forest = RandomForestRegressor(n_estimators=300, random_state=seed, n_jobs=-1, min_samples_leaf=2)
@@ -214,7 +223,7 @@ def train(df: pd.DataFrame, target: str, task: str | None = None, features: list
     if not time_col:
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=seed, stratify=y if task == "classification" else None)
-    model.fit(X_train, y_train)
+    _fit(model, X_train, y_train, task)
     pred = model.predict(X_test)
 
     if task == "classification":

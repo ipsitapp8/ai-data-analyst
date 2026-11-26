@@ -25,6 +25,10 @@ MONTHS = ["january", "february", "march", "april", "may", "june", "july", "augus
           "november", "december"]
 _MONTH_RE = re.compile(r"\b(" + "|".join(MONTHS + [m[:3] for m in MONTHS if m != "may"]) + r")\b\.?(?:\s+(\d{4}))?", re.I)
 _YEAR_RE = re.compile(r"\b(?:in|during|for|of)\s+(\d{4})\b", re.I)
+_ORD = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3, "fourth": 4, "4th": 4, "last": 0, "final": 0}
+_HALF_RE = re.compile(r"\b(?:(first|1st|second|2nd|last|final)\s+half\s+(?:of\s+)?|h([12])\s*)(\d{4})\b", re.I)
+_QUARTER_RE = re.compile(r"\b(?:(first|1st|second|2nd|third|3rd|fourth|4th|last|final)\s+quarter\s+(?:of\s+)?|q([1-4])\s*)"
+                         r"(\d{4})\b", re.I)
 
 
 # "expected", "expect" -- not "life expectancy", which is a measure, not a prediction
@@ -149,6 +153,17 @@ def _time(df: pd.DataFrame, message: str) -> dict | None:
     from app.analyst.intent import _OPEN, _RANGE  # noqa: PLC0415
     if _RANGE.search(message) or _OPEN.search(message):
         return None                     # "between 1 and 15 August": a date range (intent.explicit_period), not August
+    # "the second half of 2024", "H2 2024", "Q3 2024", "the third quarter of 2024": a set of months of one year
+    for rx, size in ((_HALF_RE, 6), (_QUARTER_RE, 3)):
+        h = rx.search(message)
+        if h:
+            k = int(h.group(2)) if h.group(2) else _ORD[h.group(1).lower()] or 12 // size
+            year = int(h.group(3))
+            months = list(range((k - 1) * size + 1, k * size + 1))
+            word = "half" if size == 6 else "quarter"
+            return {"column": col, "year": year, "month": None, "months": months,
+                    "label": f"{MONTHS[months[0] - 1].capitalize()}–{MONTHS[months[-1] - 1].capitalize()} {year} "
+                             f"(the {['first', 'second', 'third', 'fourth'][k - 1]} {word})"}
     m = _MONTH_RE.search(message)
     if m and not re.search(r"\b(by|per|each|every|monthly)\s+month", message, re.I):
         name = m.group(1).lower()
@@ -437,6 +452,8 @@ def mask(df: pd.DataFrame, scope: dict | None) -> pd.Series:
             keep &= d.dt.year == t["year"]
         if t.get("month"):
             keep &= d.dt.month == t["month"]
+        if t.get("months"):
+            keep &= d.dt.month.isin(t["months"])
     return keep
 
 
@@ -450,7 +467,9 @@ def describe(scope: dict | None, n_in: int | None = None, n_all: int | None = No
     if scope.get("period"):
         parts.append(f"{scope['period']['column'].replace('_', ' ')}: {scope['period']['label']}")
     t = scope.get("time")
-    if t:
+    if t and t.get("label"):
+        parts.append(f"{t['column'].replace('_', ' ')} in {t['label']}")
+    elif t:
         parts.append(f"{t['column'].replace('_', ' ')} in "
                      + (f"{MONTHS[t['month'] - 1].capitalize()} " if t.get("month") else "")
                      + (str(t["year"]) if t.get("year") else "(any year)"))
@@ -494,6 +513,8 @@ def as_exclusions(scope: dict) -> list[dict]:
             cond.append(f"year({t['column']}) != {t['year']}")
         if t.get("month"):
             cond.append(f"month({t['column']}) != {t['month']}")
+        if t.get("months"):
+            cond.append(f"month({t['column']}) < {t['months'][0]} or month({t['column']}) > {t['months'][-1]}")
         if cond:
             out.append({"reason": "outside " + describe({"entities": {}, "time": t}).split(" in ", 1)[-1],
                         "where": " or ".join(cond)})

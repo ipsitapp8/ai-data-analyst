@@ -57,6 +57,20 @@ def test_a_ranking_answer_shows_a_table_and_a_chart_built_from_the_data(api, ws)
     assert charts, "the ranking is drawn"
 
 
+def test_a_compound_request_is_answered_whole_and_its_forecast_chart_is_rendered(api, ws):
+    """P0: summary + total + forecast + graph in one message -> every item answered, a checklist, and a real chart."""
+    df = pd.read_csv(io.BytesIO(__import__("platform_helpers").SALES_CSV))
+    at = _ask(healthy(page("12_Copilot.py", ws)),
+              "Give me a summary of the data, then the total revenue, and forecast revenue for Widget for the next "
+              "2 months and show me in a graph.")
+    text = _assistant_text(at)
+    assert "Summary of the dataset" in text and "What you asked, and where it is answered" in text
+    assert f"{df.revenue.sum():,.0f}" in text and "Forecast of revenue for Widget" in text
+    charts = at.get("vega_lite_chart")
+    assert charts, "the requested graph is drawn"
+    assert any("every part of your request" in str(m.value).lower() for m in at.markdown)
+
+
 def test_follow_up_keeps_context_and_conversations_persist(api, ws):
     at = healthy(page("12_Copilot.py", ws))
     _ask(at, "Show the top two products.")

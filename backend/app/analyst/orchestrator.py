@@ -180,6 +180,9 @@ def _ask_turn(message, df, memory, use_model, model_on, filename, document, star
         conversation.record(memory, message, out)
         return out
     try:
+        if memory.get("_said"):
+            memory["_prev_said"] = memory["_said"]   # the previous request (context for the model decomposer)
+        memory["_said"] = said               # the user's own words, before any reference was resolved in place
         out = _dispatch(message, df, memory, model_on, filename, started, chart_kind)
     except tools.RoleRefusal as e:
         # the aggregation asked for has no meaning for what the column is (an identifier averaged or ranked on, a
@@ -198,7 +201,9 @@ def _ask_turn(message, df, memory, use_model, model_on, filename, document, star
         # define one exactly: a count, a distinct count, a rate, a combined total, a relation between two measures,
         # or a question in several clauses. Its program runs only if it passes the same verification as any answer.
         routed = _followup_from_last(message, df, memory, model_on, started) or \
-            _spec_route(message, df, memory, model_on, started)
+            _spec_route(message, df, memory, model_on, started) or \
+            _compound_followup(message, df, memory, model_on, started, filename) or \
+            _model_followup(message, df, memory, model_on, started, filename)
         if routed is not None:
             out = routed
     if (out.get("plan") or {}).get("type") == "clarify" and (out["plan"].get("options") or []) and \
@@ -230,7 +235,7 @@ def _ask_turn(message, df, memory, use_model, model_on, filename, document, star
     # completeness: every statistic or profile item the question names must be in the answer; anything missing is
     # said, so a partial answer is never presented as the whole one (app/analyst/requirements.py)
     if any(c.get("status") == "ok" for c in out.get("calls", [])) and out.get("plan_source") not in (
-            "conversation", "conversation_rules", "input_check", "withheld"):
+            "conversation", "conversation_rules", "input_check", "withheld", "compound"):
         from app.analyst import requirements
         gaps = requirements.missing_items(said, out.get("answer", ""))
         if gaps:
@@ -249,6 +254,7 @@ def _ask_turn(message, df, memory, use_model, model_on, filename, document, star
         out["notes"].insert(0, res["note"] + (f" Run as: “{message}”." if message != said else ""))
         out["understood_as"] = message
         out["plan"] = {**out.get("plan", {}), "conversation": res["kind"]}
+    _remember_deliverables(message, df, memory, out)
     conversation.record(memory, message, out)
     return out
 
@@ -292,6 +298,33 @@ def _answered_request(out: dict, message: str, df):
         if g:
             req.group = g
     return req
+
+
+_PRONOUN_ONLY = re.compile(r"^\W*(?:so\s+|and\s+|ok(?:ay)?,?\s+)?(?:is|are|was|has|have|did|does|will)\s+(?:it|this|that|they|things?)\b"
+                    r"|^\W*(?:which|what)(?:'s| is)?\s+(?:one|the one)\s+(?:is\s+)?(?:better|best|worse|worst|strongest|weakest)\b"
+                    r"|^\W*how\s+(?:is|are|did)\s+(?:it|this|that|they)\b", re.I)
+
+
+def _vague_subject(message: str, df, memory: dict) -> dict | None:
+    """'is it dropping?', 'which one is better', 'how did it do?': a question whose only subject is a pronoun, on a
+    conversation with nothing earlier for it to refer to, names no column and no value -- Silt asks which measure (and
+    what to compare) instead of guessing one."""
+    if df is None or memory.get("last_result") or memory.get("_last_ds") or len(message.split()) > 8:
+        return None
+    if not _PRONOUN_ONLY.search(message) or followup_cols(df, message):
+        return None
+    from app.analyst import calc
+    if calc.named_values(df, message):
+        return None
+    from app.analyst.semantics import measure_options
+    opts = measure_options(df)
+    if len(opts) < 2:
+        return None
+    return _reply("Which measure do you mean — and, if you're comparing, which groups or periods? Options: "
+                  + ", ".join(f"`{c}`" for c in opts[:6]) + ".", "tool", True, time.monotonic(),
+                  plan={"type": "clarify", "options": opts[:6], "reason": "vague subject"},
+                  notes=["The question's only subject is a pronoun and nothing earlier in the conversation says what "
+                         "it refers to; Silt asks instead of choosing a measure."])
 
 
 def _record_last_result(out: dict, message: str, df, memory: dict, sc: dict | None) -> None:
@@ -588,6 +621,77 @@ def _chart_from_last_result(message, df, memory, kind, model_on, started) -> dic
                           "result": {"values": lr["values"], "from_turn": lr.get("turn")}}])
 
 
+
+def _remember_deliverables(message: str, df, memory: dict, out: dict) -> None:
+    """What this turn asked for, as deliverables: a later "same for X" / "variance as well" / "what if the target
+    was N" / "plot those" edits exactly this, with one explicit change."""
+    if df is None or _dead_end(out):
+        return
+    try:
+        from app.analyst import deliverables as _d
+        if out.get("plan_source") == "compound" and out.get("deliverables"):
+            items = [{k: v for k, v in d.items() if k in _d.Deliverable.__dataclass_fields__} for d in out["deliverables"]]
+            memory["_last_ds"] = {"route": "compound", "question": message, "items": items}
+            return
+        ds = [d for d in _d.extract(message, df) if d.kind not in ("unparsed",)]
+        if ds:
+            memory["_last_ds"] = {"route": out.get("plan_source"), "question": message, "items": _d.to_items(ds)}
+    except Exception:  # noqa: BLE001 - remembering is best effort
+        logger.exception("could not record the turn's deliverables")
+
+
+def _compound_followup(message: str, df, memory: dict, model_on: bool, started: float, filename=None) -> dict | None:
+    last = memory.get("_last_ds")
+    if df is None or not last or len(message.split()) > 16:
+        return None
+    from app.analyst import compound as _compound
+    from app.analyst import deliverables as _d
+    try:
+        edited = _d.followup_edit(message, _d.from_items(last["items"]), df)
+    except Exception:  # noqa: BLE001
+        logger.exception("follow-up edit failed")
+        return None
+    if not edited:
+        return None
+    ds, change = edited
+    res = _compound.answer(message, ds, df, filename)
+    note = f"_Follow-up to *{last['question']}* — {change}._\n\n"
+    out = _reply(note + res["answer"], "compound", model_on, started,
+                 plan={"type": "compound", "followup": True, "deliverables": [d["label"] for d in res["deliverables"]]},
+                 calls=res["calls"], charts=res["charts"], verification=res["verification"],
+                 notes=[f"Follow-up: {change}."])
+    out["deliverables"] = res["deliverables"]
+    out["decomposition"] = {"source": "followup_edit", "items": len(ds)}
+    if res["incomplete"]:
+        out["incomplete"] = res["incomplete"]
+    return out
+
+
+def _model_followup(message: str, df, memory: dict, model_on: bool, started: float, filename=None) -> dict | None:
+    """Last resort for a follow-up nothing deterministic could read: the model decomposes it with the previous
+    request as context; every field is grounded before use."""
+    if df is None or not model_on or not memory.get("_prev_said"):
+        return None
+    from app.analyst import compound as _compound
+    from app.analyst import decomposer as _decomposer
+    if not _decomposer.enabled():
+        return None
+    trace: dict = {}
+    ds = _decomposer.decompose(message, df, previous=memory["_prev_said"], trace=trace)
+    if not ds or any(d.kind in ("unparsed", "clarify") for d in ds):
+        return None
+    res = _compound.answer(message, ds, df, filename)
+    out = _reply(f"_Follow-up to *{memory['_prev_said']}*, read with the previous request as context._\n\n" + res["answer"],
+                 "compound", model_on, started,
+                 plan={"type": "compound", "followup": True, "deliverables": [d["label"] for d in res["deliverables"]]},
+                 calls=res["calls"], charts=res["charts"], verification=res["verification"],
+                 notes=["Follow-up read by the model with the previous request; every field grounded in the data."])
+    out["deliverables"] = res["deliverables"]
+    out["decomposition"] = {"source": trace.get("source"), "items": len(ds), "followup": True}
+    if res["incomplete"]:
+        out["incomplete"] = res["incomplete"]
+    return out
+
 def _dead_end(out: dict) -> bool:
     """An answer that computed nothing and is no deliberate clarification or refusal: a placeholder reply."""
     if any(c.get("status") == "ok" for c in out.get("calls", [])):
@@ -658,6 +762,7 @@ def _clause_answers(message, parts, df, memory, model_on, started) -> dict | Non
     from app.analyst import intent
     from app.analyst import semantics as _sem
     blocks, calls, checks, charts, missing, status = [], [], [], [], [], []
+    checklist_lines: list[str] = []
     for i, part in enumerate(parts, 1):
         rp = None
         try:
@@ -673,7 +778,14 @@ def _clause_answers(message, parts, df, memory, model_on, started) -> dict | Non
             status.append((i, st))
             tag = "✓ answered — recomputed independently with pandas" if st == "verified" else \
                 "answered — not independently verified"
-            blocks.append(f"**{i}. {part[:1].upper() + part[1:]}?** _({tag})_\n\n{sub['answer']}")
+            body, _, own_list = sub["answer"].partition("\n\n**What you asked, and where it is answered**\n")
+            if own_list:
+                # one checklist for the whole question (below), not one per part
+                lines_ = [ln for ln in own_list.split("\n") if ln.startswith("- ")]
+                checklist_lines.extend(f"- part {i}: " + ln[2:] for ln in lines_)
+                rest = "\n".join(ln for ln in own_list.split("\n") if ln.strip() and not ln.startswith("- "))
+                body = body + ("\n\n" + rest if rest else "")
+            blocks.append(f"**{i}. {part[:1].upper() + part[1:]}?** _({tag})_\n\n{body}")
             calls += sub["calls"]
             checks += own
             charts += sub.get("charts") or []
@@ -705,6 +817,8 @@ def _clause_answers(message, parts, df, memory, model_on, started) -> dict | Non
         status.append((i, "needs your answer"))
     if not calls:
         return None
+    if checklist_lines:
+        blocks.append("**What you asked, and where it is answered**\n" + "\n".join(checklist_lines))
     out = _reply("\n\n".join(blocks), "rule_program", model_on, started, calls=calls, charts=charts,
                  verification=checks, plan={"type": "program", "objective": "rule_planned", "parts": len(parts)},
                  notes=[f"Answered clause by clause ({len(parts)} parts); "
@@ -851,6 +965,18 @@ def _verify_answer(out, message, df, memory, model_on, started) -> dict:
     """Every answer that computed something passes app/analyst/verify.py, whichever path produced it. A figure that
     fails is withheld: Silt's own program for the request answers instead if it verifies, otherwise nothing is shown."""
     from app.analyst import verify
+    if out.get("plan_source") == "compound":
+        # each deliverable was validated and recomputed on its own scope by app/analyst/compound.py; the single-
+        # question verifier would read the whole message as one calculation
+        items = out.get("deliverables") or []
+        ok = [d for d in items if d.get("status") == "done" and d.get("validation") == "recomputed independently"]
+        out["verify_status"] = "verified" if items and len(ok) == len(items) else (
+            "partially verified" if ok else "not independently verified")
+        out["answer"] += ("\n\n_Verification: " + (f"✓ each of the {len(items)} items was computed by Silt's tools and "
+                          "recomputed independently" if out["verify_status"] == "verified" else
+                          f"{len(ok)} of {len(items)} items computed and recomputed independently; the others are marked "
+                          "above") + "._")
+        return out
     opts = (out.get("plan") or {}).get("options") or []
     if (out.get("plan") or {}).get("type") == "clarify" and len(opts) == 1 and df is not None:
         # "Which numeric column do you mean? Options: count": one option is no choice. Silt's own program for the
@@ -1002,6 +1128,63 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
         if followed is not None:
             return _reply(followed["answer"], "tool", model_on, started, plan=followed["plan"], calls=followed["calls"],
                           notes=followed["notes"], details=followed.get("details", ""))
+    # A compound request (several deliverables: summary + statistics + target + forecast + chart ...) is answered as
+    # one task by app/analyst/compound.py BEFORE any single-intent handler can claim the whole message: each
+    # deliverable keeps its own scope, runs on its own (a failure never erases the others) and is checked off.
+    if df is not None:
+        from app.analyst import compound as _compound
+        from app.analyst import decomposer as _decomposer
+        from app.analyst import deliverables as _deliverables
+        try:
+            _ds = _deliverables.extract(message, df)
+        except Exception:  # noqa: BLE001 - the reader is best effort; the existing paths still answer
+            logger.exception("deliverable extraction failed")
+            _ds = []
+        _source, _trace = "rules", {}
+        _followup = _deliverables.follow_up(memory.get("_said") or message, memory)
+        if not memory.get("_compound_legacy") and memory.get("_last_ds") and \
+                ((memory["_last_ds"].get("route") == "compound") or
+                 (_followup and _deliverables.FU_OTHERS.search(message) and len(message.split()) <= 8)):
+            fu = _compound_followup(message, df, memory, model_on, started, filename)
+            if fu is not None:
+                return fu
+        if model_on and not memory.get("_compound_legacy") and _decomposer.enabled() and \
+                _decomposer.worth_asking(message, _ds, _followup):
+            # the model reads the whole request (and, for a follow-up, the previous one); every field it returns is
+            # grounded in the data before use, and the rule reader stands in when it fails
+            _m = _decomposer.decompose(message, df, trace=_trace)
+            if _m:
+                _ds, _source = _m, _trace.get("source", "model")
+        memory["_decomposition"] = {"source": _source, "items": len(_ds),
+                                    "problems": [a.get("problems") for a in _trace.get("attempts", [])]}
+        if _ds and _deliverables.is_compound(_ds) and not memory.get("_compound_legacy") and \
+                not _deliverables.hypothetical(message) and not _deliverables.hypothetical(memory.get("_said") or "") \
+                and not _followup:
+            if _deliverables.legacy_first(_ds, message):
+                # statistics / rankings only: Silt's existing multi-part paths answer first; their answer stands only
+                # if it states every requested value (checked independently below), otherwise the compound answer
+                memory["_compound_legacy"] = True
+                try:
+                    legacy = _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
+                finally:
+                    memory.pop("_compound_legacy", None)
+                ok, missing = _compound.covers(legacy, _ds if _source != "rules" else _deliverables.extract(message, df), df)
+                if ok:
+                    return legacy
+                logger.info("compound: the %s answer missed %s; answered as a compound request",
+                            legacy.get("plan_source"), missing)
+            res = _compound.answer(message, _ds, df, filename)
+            out = _reply(res["answer"], "compound", model_on, started,
+                         plan={"type": "compound", "deliverables": [d["label"] for d in res["deliverables"]]},
+                         calls=res["calls"], charts=res["charts"], verification=res["verification"],
+                         notes=[f"Answered as one request with {len(_ds)} requested items, each computed on its own "
+                                "scope and checked off" + (f"; not complete: {', '.join(res['incomplete'])}"
+                                                           if res["incomplete"] else "; every item was answered") + "."])
+            out["deliverables"] = res["deliverables"]
+            out["decomposition"] = memory.get("_decomposition")
+            if res["incomplete"]:
+                out["incomplete"] = res["incomplete"]
+            return out
     # "Explain the profit difference", "does profit equal revenue minus cost?": the stored profit reconciled with
     # revenue - cost record by record (app/analyst/reconcile.py), before it is read as a question about the last answer
     # "how many records, what columns, how many missing values": a description of the table itself
@@ -1119,6 +1302,9 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                       + ", ".join(f"`{c}`" for c in df.columns[:8]) + f"). It has nothing called **{sw.group(1)}**. To analyse "
                       f"{sw.group(1)}, choose that file in the **Dataset** selector — each dataset keeps its own conversation.",
                       "tool", model_on, started, plan={"type": "clarify", "switch_dataset": sw.group(1)})
+    vague = _vague_subject(message, df, memory)
+    if vague is not None:
+        return vague
     out = _ask_investigation(message, df, memory, model_on, started, filename)
     if out is not None:
         return out
@@ -1183,6 +1369,24 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
                       charts=obj["charts"], notes=obj["notes"])
     # Multi-step objectives (target feasibility, absence scenarios, entity vs the rest, changing an assumption,
     # comparing scenarios) run as validated analysis programs (app/analyst/program.py, objectives.py).
+    # A target or required pace on data recorded as weekly / monthly / quarterly / yearly totals: compared with those
+    # period totals (and a tested forecast for "will ..."), never projected from a daily pace (objectives.py assumes
+    # event records within a period).
+    if df is not None:
+        from app.analyst import compound as _compound
+        from app.analyst import deliverables as _deliverables
+        _ds = _deliverables.extract(message, df)
+        if any(d.kind in ("target_check", "pace") for d in _ds) and _compound.period_totals(df, _ds):
+            res = _compound.answer(message, _ds, df, filename)
+            out = _reply(res["answer"], "compound", model_on, started,
+                         plan={"type": "compound", "deliverables": [d["label"] for d in res["deliverables"]]},
+                         calls=res["calls"], charts=res["charts"], verification=res["verification"],
+                         notes=["The records are period totals (one per person per period), so the target was compared "
+                                "with those totals and, for a question about the future, with a tested forecast."])
+            out["deliverables"] = res["deliverables"]
+            if res["incomplete"]:
+                out["incomplete"] = res["incomplete"]
+            return out
     try:
         obj = objectives.handle(message, df, memory, sc)
     except Exception as e:  # noqa: BLE001 - a program failure is reported, never hidden behind another answer
@@ -1730,7 +1934,9 @@ def _finish(out: dict, message: str, df, memory: dict, chart_kind: str | None, s
         out.setdefault("notes", []).insert(0, "Filters not applied: " + "; ".join(sc["dropped"]) + ".")
     if out.get("plan_source") not in ("conversation", "conversation_rules", "input_check"):
         checks = list(out.get("verification") or [])
-        if scoping.active(sc) and out.get("plan_source") != "model_program":
+        if scoping.active(sc) and out.get("plan_source") not in ("model_program", "compound"):
+            # (a compound answer scopes each deliverable to its own clause and checks it there; a person named in one
+            # clause is not the scope of the others, so the message-wide scope check does not apply to it)
             used = _records_used(out)
             n_scope = int(scoping.mask(df, sc).sum()) if df is not None else None
             ok = answered and (used is None or 0 < used <= (n_scope if n_scope is not None else used))
@@ -2294,6 +2500,13 @@ def followup_cols(df, message):
         if w and " " not in w and len(w) >= 5:
             # one-word columns also in their -ed form: "rated" for rating, "reviewed" for review
             forms += [re.sub(r"ing$", "ed", w), w + "ed", w + "d"]
+        # the name exactly as written ("by depotCode", "per weekOf"), not only split into words
+        forms.append(re.sub(r"[^a-z0-9]+", " ", str(c).lower()).strip())
+        # a code column of a few repeated values names its entity: "by depot" for depotCode, "district" for DistrictCd
+        parts = w.split()
+        if len(parts) >= 2 and parts[-1] in ("code", "cd", "id") and df[c].dtype == object \
+                and 1 < df[c].nunique() <= 200 and df[c].nunique() < len(df):
+            forms.append(" ".join(parts[:-1]))
         if w and any(re.search(rf" {re.escape(f)}s? ", low) for f in dict.fromkeys(forms)):
             out.append(c)
     return out
@@ -2620,6 +2833,27 @@ def _trend_answer(message, t, model_on, started) -> dict:
                                                              "result": _jsonable(t)}])
 
 
+def _window_owned_by_scope(calls: list[dict], sc: dict | None, notes: list[str]) -> None:
+    """The question names a period ("in February 2025", "the second half of 2024"): Silt's scope reader has already
+    limited the records to it, from the question's own words. A date filter the model adds on that same column can
+    only repeat that window or contradict it (a wrong day, a wrong half), so it is removed and the removal is said."""
+    tcol = ((sc or {}).get("time") or {}).get("column") if scoping.active(sc) else None
+    if not tcol:
+        return
+    dropped = []
+    for c in calls:
+        fl = (c.get("args") or {}).get("filters")
+        if not fl:
+            continue
+        keep = [f for f in fl if f.get("column") != tcol]
+        if len(keep) != len(fl):
+            dropped += [f"{f['column']} {f['op']} {f.get('value')}" for f in fl if f.get("column") == tcol]
+            c["args"]["filters"] = keep
+    if dropped:
+        notes.append("The period comes from the question (" + scoping.describe(sc) + "); the model's own date filter ("
+                     + "; ".join(dict.fromkeys(dropped)) + ") was not used.")
+
+
 def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, started: float) -> dict:
     notes: list[str] = []
     plan, source, first_pass = None, "rules", None
@@ -2642,6 +2876,8 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
                 refused.append(str(e))
             except tools.InvalidCall as e:
                 errors.append(str(e))
+        if source in ("model", "model_retry"):
+            _window_owned_by_scope(validated, memory.get("_scope"), notes)
         if refused and not any(c["tool"] in ("compute_metric", "describe_column") for c in validated):
             # the aggregation asked for has no meaning for what the column is: said, never computed with a warning
             return _reply("**I can't compute that.** " + " ".join(dict.fromkeys(refused)), "tool", model_on, started,
@@ -2694,10 +2930,27 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
         answer = reply
     elif plan["type"] == "clarify":
         opts = plan.get("options") or []
+        if source in ("model", "model_retry") and opts:
+            # the model's options name columns as it wrote them: resolve to the dataset's own names; when it asks the
+            # user to choose a column, never offer one that does not exist
+            opts, dropped = plan_checks.canonical_options(opts, df, plan.get("question", ""))
+            plan = {**plan, "options": opts}
+            if dropped:
+                notes.append("Options the model offered that are not columns of this dataset were left out: "
+                             + ", ".join(f"`{o}`" for o in dropped[:5]) + ".")
         answer = plan.get("question", "Could you clarify?") + ("\n\nOptions: " + ", ".join(f"`{o}`" for o in opts) if opts else "")
     elif plan["type"] == "decline":
-        answer = ("**I can't compute that.** " if plan.get("role_refusal") else
-                  "**The available data is not sufficient for this.** ") + plan.get("reason", "")
+        reason, head = plan.get("reason", ""), "**The available data is not sufficient for this.** "
+        if re.search(r"advertis|campaign|marketing|ad spend|budget", reason, re.I) and \
+                not re.search(r"advertis|campaign|marketing|ad spend|budget|promot", message, re.I):
+            # a reason about a different request (the model's advertising template): never shown as the explanation
+            reason = ("This request is not an analysis of the records in this file — Silt computes totals, averages, "
+                      "comparisons, trends and forecasts from the data; it does not take actions, make decisions "
+                      "about individual people, or answer from outside knowledge.")
+            head = "**I can't do that with this data.** "
+            notes.append("The model's decline reason referred to something the request did not mention; a plain "
+                         "statement of what Silt can and cannot do was shown instead.")
+        answer = ("**I can't compute that.** " if plan.get("role_refusal") else head) + reason
     elif plan["type"] == "explain_previous":
         if memory.get("last_recommendation"):
             answer = explain.why(memory["last_recommendation"], message)
@@ -2720,8 +2973,9 @@ def _ask_planned(message: str, df: pd.DataFrame, memory: dict, model_on: bool, s
                                       max_tokens=350)
             text = text.split("</think>")[-1].strip()
             text = _check_significance(_drop_boilerplate(text, evidence, notes), evidence, notes)
+            text, fixed = _repair_rounding(text, evidence, message, notes)
             bad = explain.ungrounded(text, evidence, message)
-            grounding = {"checked": True, "ungrounded": bad}
+            grounding = {"checked": True, "ungrounded": bad, "rounding_repaired": fixed}
             if bad:
                 notes.append(f"The model's summary cited numbers not in the results ({', '.join(bad[:5])}); it was not shown.")
             elif text:
@@ -2787,6 +3041,16 @@ _ROUTED_RENDER = {"drivers": present.drivers, "understand": present.understand, 
                   "budget_ranked": lambda r: f"**Scope:** {r['chosen_by']}.\n\n" + explain.render("budget_scenario", r)}
 
 
+def _repair_rounding(text: str, evidence, message: str, notes: list[str]) -> tuple[str, list]:
+    """explain.repair_roundings, with a note when a last-digit rounding slip was corrected (the grounding check
+    that follows is unchanged and still rejects any number that is not a rounding of a result)."""
+    text, fixed = explain.repair_roundings(text, evidence, message)
+    if fixed:
+        notes.append("Rounding in the model's summary was corrected to match the results: "
+                     + ", ".join(f"{a} -> {b}" for a, b in fixed[:5]) + ".")
+    return text, fixed
+
+
 def _narrate(message: str, evidence: list, notes: list[str]) -> tuple[str | None, dict]:
     """A short model-written summary of computed results, shown only if every number in it is grounded."""
     try:
@@ -2799,11 +3063,12 @@ def _narrate(message: str, evidence: list, notes: list[str]) -> tuple[str | None
             return None, {"checked": True, "ungrounded": [], "discarded": "not prose"}
         text = _drop_boilerplate(text, evidence, notes)
         text = _check_significance(text, evidence, notes)
+        text, fixed = _repair_rounding(text, evidence, message, notes)
         bad = explain.ungrounded(text, evidence, message)
         if bad:
             notes.append(f"The model's summary cited numbers not in the results ({', '.join(bad[:5])}); it was not shown.")
             return None, {"checked": True, "ungrounded": bad}
-        return (text or None), {"checked": True, "ungrounded": []}
+        return (text or None), {"checked": True, "ungrounded": [], "rounding_repaired": fixed}
     except Exception as e:  # noqa: BLE001
         notes.append(f"No model summary ({type(e).__name__}).")
         return None, {"checked": False}
@@ -3277,6 +3542,7 @@ def _narrate_calc(message: str, evidence: dict, notes: list[str]) -> tuple[str |
             notes.append("The model's explanation contradicted the computed ranking (" + "; ".join(wrong[:3])
                          + "); it was not shown. The computed results below are complete.")
             return None, {"checked": True, "ungrounded": [], "contradictions": wrong}
+        text, fixed = _repair_rounding(text, evidence, message, notes)
         bad = explain.ungrounded(text, evidence, message)
         if bad:
             notes.append(f"The model's explanation cited numbers the calculator did not produce ({', '.join(bad[:5])}); "

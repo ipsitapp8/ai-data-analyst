@@ -54,6 +54,31 @@ def contradiction(plan: dict, df: pd.DataFrame, message: str) -> str | None:
 
 
 
+_COLUMN_Q = re.compile(r"\b(column|predict|target|variable|feature|field)\b", re.I)
+
+
+def canonical_options(options: list, df: pd.DataFrame, question: str = "") -> tuple[list, list]:
+    """A model clarification's options with column names resolved to the dataset's own names (tools.resolve_column:
+    exact first, then a unique case-insensitive match). When the question asks the user to choose a column, options
+    that are no column (or ambiguous) are dropped so the user is never offered a column that does not exist; other
+    options (category values such as "North") are kept as written. Returns (kept, dropped)."""
+    from app.analyst import tools  # noqa: PLC0415
+    kept, dropped, about_columns = [], [], bool(_COLUMN_Q.search(question or ""))
+    for o in options or []:
+        try:
+            col = tools.resolve_column(o, df.columns)
+        except tools.InvalidCall:
+            col = None
+        if col is not None:
+            if col not in kept:
+                kept.append(col)
+        elif about_columns:
+            dropped.append(o)
+        else:
+            kept.append(o)
+    return kept, dropped
+
+
 _RATE_Q = re.compile(r"\b(rate|share|percent\w*|proportion|fraction|how likely)\b", re.I)
 _AVG_Q = re.compile(r"\b(average|mean|typical|per (record|row|employee|person|customer|store))\b", re.I)
 _TOTAL_Q = re.compile(r"\b(total|sum|overall amount|in all)\b", re.I)

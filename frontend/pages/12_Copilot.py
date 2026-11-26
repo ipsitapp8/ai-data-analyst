@@ -47,11 +47,13 @@ SOURCE = {"model": "Planned by the fine-tuned local model",
           "refine": "The previous calculation re-run with your change by Silt's calculator",
           "conversation_state": "Read against your open request · nothing was calculated",
           "program": "Analysis program: validated steps run by Silt's deterministic tools",
+          "compound": "Every part of your request computed by Silt's tools and checked off",
           "model_program": "Analysis program planned by the local model; validated and computed by Silt",
           "rule_program": "Analysis program built by Silt from the request's parts; validated and computed",
           "withheld": "Withheld by Silt's answer verification · no figure shown"}
 # the answer-verification status of a computed answer (backend app/analyst/verify.py), shown with its source
 VERIFY = {"verified": "✓ Verified independently", "not independently verified": "◐ Not independently verified",
+          "partially verified": "◐ Partly verified (see the checklist)",
           "withheld": "✕ Withheld — did not pass verification"}
 EXAMPLES_DATA = ["Explain this dataset in simple terms.", "Which group has the highest total?",
                  "What trends do you notice?", "Find unusual records.", "What should we do next?",

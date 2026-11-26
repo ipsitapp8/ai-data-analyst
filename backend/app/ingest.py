@@ -105,6 +105,10 @@ def _to_number(series: pd.Series) -> tuple[pd.Series | None, str]:
     out = series.map(conv)
     if out.notna().sum() < 0.95 * len(s):
         return None, ""
+    # A value that does not parse but holds a digit (ICD codes V57, E909; '12 kg') is data, not a missing
+    # marker like 'n/a' or '-': converting would silently blank it, so the column stays text.
+    if s[out.loc[s.index].isna()].str.contains(r"\d").any():
+        return None, ""
     kinds = []
     if re.search(r"[$€£₹¥]", sample):
         kinds.append("currency symbols removed")

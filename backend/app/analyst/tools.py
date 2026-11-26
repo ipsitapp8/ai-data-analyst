@@ -10,6 +10,7 @@ scikit-learn Random Forests (ml.py) and the business analyses (business.py).
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 import numpy as np
@@ -144,6 +145,21 @@ def check_supplied_inputs(rows: list[dict], message: str | None) -> None:
                 raise InvalidCall(f"predict: the value '{value}' for '{col}' was not given in your message")
 
 
+def resolve_column(name: Any, columns) -> str | None:
+    """The dataset's own name for `name`: the exact name if it exists; otherwise the single column that differs only
+    in letter case (product_code -> Product_Code). None if there is no such column. Several case-variants with no
+    exact match raise InvalidCall (ambiguous): Silt never guesses between them."""
+    if not isinstance(name, str):
+        return None
+    if name in columns:
+        return name
+    hits = [c for c in columns if isinstance(c, str) and c.casefold() == name.casefold()]
+    if len(hits) > 1:
+        raise InvalidCall(f"the column name {name!r} is ambiguous: it matches {', '.join(repr(h) for h in hits)} "
+                          "except for letter case; use the exact name")
+    return hits[0] if hits else None
+
+
 def validate_call(call: Any, df: pd.DataFrame, message: str | None = None) -> dict:
     """The call, cleaned, or InvalidCall with the reason. `message` is the
     user's message: prediction inputs must appear in it."""
@@ -175,10 +191,13 @@ def validate_call(call: Any, df: pd.DataFrame, message: str | None = None) -> di
             raise InvalidCall(f"compute_metric: '{clean['column']}' is not numeric, so {agg} does not apply")
     _role_guard(name, clean, df)
     if name == "predict":
+        rows = []
         for row in clean["rows"]:
-            unknown = [c for c in row if c not in df.columns]
+            unknown = [c for c in row if resolve_column(c, df.columns) is None]
             if unknown:
                 raise InvalidCall(f"predict: no column named {unknown[0]!r}")
+            rows.append({resolve_column(c, df.columns): v for c, v in row.items()})
+        clean["rows"] = rows
         check_supplied_inputs(clean["rows"], message)
     return {"tool": name, "args": clean}
 
@@ -186,8 +205,13 @@ def validate_call(call: Any, df: pd.DataFrame, message: str | None = None) -> di
 def _check(tool: str, arg: str, typ: str, kind: str | None, v: Any, df: pd.DataFrame) -> Any:
     where = f"{tool}.{arg}"
     if typ == "column":
-        if not isinstance(v, str) or v not in df.columns:
+        try:
+            resolved = resolve_column(v, df.columns)
+        except InvalidCall as e:
+            raise InvalidCall(f"{where}: {e}") from None
+        if resolved is None:
             raise InvalidCall(f"{where}: no column named {v!r}")
+        v = resolved
         if kind == "groupable":
             # a breakdown: categories, or a number with few distinct values (an hour of day, a year, a rating)
             if not (kind_of(df[v]) == "categorical" or (kind_of(df[v]) == "numeric" and df[v].nunique() <= 50)):
@@ -230,15 +254,41 @@ def _check(tool: str, arg: str, typ: str, kind: str | None, v: Any, df: pd.DataF
             raise InvalidCall(f"{where}: filters are a list")
         out = []
         for f in v:
-            if not isinstance(f, dict) or f.get("column") not in df.columns or f.get("op") not in OPS:
+            col = resolve_column(f.get("column"), df.columns) if isinstance(f, dict) else None
+            if col is None or f.get("op") not in OPS:
                 raise InvalidCall(f"{where}: each filter needs an existing column and an operator in {OPS}")
-            out.append({"column": f["column"], "op": f["op"], "value": f.get("value")})
+            period = _partial_date_period(df[col], f["op"], f.get("value"))
+            if period is not None:
+                # "stay_date == 2025-02" means the whole of February 2025, not its first day
+                out += [{"column": col, "op": ">=", "value": period[0]}, {"column": col, "op": "<", "value": period[1]}]
+                continue
+            out.append({"column": col, "op": f["op"], "value": f.get("value")})
         return out
     if typ == "rows":
         if not isinstance(v, list) or not all(isinstance(r, dict) for r in v) or len(v) > 50:
             raise InvalidCall(f"{where}: up to 50 rows, each an object of column -> value")
         return v
     raise InvalidCall(f"{where}: unsupported argument type {typ}")
+
+
+_PARTIAL_DATE = re.compile(r"^\s*(\d{4})(?:-(\d{1,2}))?\s*$")
+
+
+def _partial_date_period(s: pd.Series, op, value) -> tuple[str, str] | None:
+    """An equality filter on a date column whose value names a whole year ("2024") or month ("2025-02"): the
+    [start, next start) of that period. None for anything else (a full date, another operator, a non-date column)."""
+    if op != "==" or not isinstance(value, (str, int)) or not pd.api.types.is_datetime64_any_dtype(s):
+        return None
+    m = _PARTIAL_DATE.match(str(value))
+    if not m:
+        return None
+    y, mo = int(m.group(1)), m.group(2)
+    if mo is None:
+        return f"{y}-01-01", f"{y + 1}-01-01"
+    mo = int(mo)
+    if not 1 <= mo <= 12:
+        return None
+    return f"{y}-{mo:02d}-01", (f"{y + 1}-01-01" if mo == 12 else f"{y}-{mo + 1:02d}-01")
 
 
 # ------------------------------------------------------------------ executors --
