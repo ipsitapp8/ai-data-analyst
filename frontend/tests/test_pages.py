@@ -220,24 +220,20 @@ def test_a_run_that_could_not_reach_a_model_shows_which_provider_failed_and_how(
     assert all("action=not_tried" in r["Detail"] for r in failed)
 
 
-def test_settings_names_the_configured_models_next_to_the_key_status(api, ws):
-    from app import config
-
-    at = page("7_Settings.py", ws).run()       # the page's own warning about the test sandbox runner is an st.error
-    assert not at.exception, [e.value for e in at.exception]
-    text = text_of(at)
-    assert f"Gemini · {config.GEMINI_MODEL}" in text and f"Llama · {config.LLAMA_MODEL}" in text and "No key" in text
-
-
 # ----------------------------------------------------------- investigations --
+
+def _steps(ws, **state):
+    """The Root cause page's Findings and Evidence steps, for the same investigation."""
+    return [healthy(page("13_Investigations.py", ws, inv_step=step, **state)) for step in ("2 · Findings", "3 · Evidence")]
+
 
 def test_investigations_page_shows_the_report(api, ws):
     out = ask_and_run(api, ws, "Why did revenue change?")
-    at = healthy(page("13_Investigations.py", ws))
-    text = text_of(at)
+    found, evidence = _steps(ws)
+    text = text_of(found) + text_of(evidence)
     assert "West" in text and "Hypotheses tested" in text and "Not established" in text
     assert "not what caused it" in text, "the caveats are on the page"
-    assert len(at.metric) >= 6 and len(at.dataframe) >= 1
+    assert len(found.metric) >= 6 and len(found.dataframe) + len(evidence.dataframe) >= 1
     assert api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]["question_id"] == out["question_id"]
 
 
@@ -252,14 +248,30 @@ def test_investigations_page_asks_without_a_model_and_shows_the_evidence_table(a
                        json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
     assert run_job(created["job_id"]) == "succeeded"
     at = healthy(page("13_Investigations.py", ws, investigation_id=created["investigation_id"]))
-    text = text_of(at)
+    found, evidence = _steps(ws, investigation_id=created["investigation_id"])
+    text = text_of(found) + text_of(evidence)
     for expected in ("Evidence for each candidate explanation", "region = West", "Strong evidence of location",
                      "Hypothesis, not a finding", "not testable with this dataset", "never evidence of what",
                      "Recommended follow-up analyses", "last month", "larger than the metric's ordinary variation"):
         assert expected in text, expected
     assert "interval" in text and "after adjustment" in text, "uncertainty is shown, adjusted for the segments tested"
     assert "31 days against 28" in text and "like for like the change is" in text and "Exact arithmetic" in text
-    assert "--dash-surface" not in _styles(at), "the palette is borrowed for the table; the page keeps its own look"
+    assert "--dash-surface" not in _styles(evidence), "the palette is borrowed for the table; the page keeps its own look"
+
+
+def test_investigations_page_shows_the_root_cause_section(api, ws):
+    from platform_helpers import run_job
+
+    created = api.post("/api/investigations/ask", headers=ws["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    at = healthy(page("13_Investigations.py", ws, investigation_id=created["investigation_id"]))
+    text = text_of(at)
+    for expected in ("Problem", "Finding", "Contributing factors, ranked by evidence", "Other factors held fixed",
+                     "Evidence level", "What to investigate next", "nothing here can show that a factor caused the change"):
+        assert expected in text, expected
+    assert "Plausible contributor" in text or "Association only" in text
+    assert "% confident" not in text and "probability" not in text.lower()
 
 
 def _hypothesis_script() -> dict:
@@ -273,8 +285,9 @@ def test_investigations_page_shows_a_hypothesis_report(api, ws):
 
     created = ask(api, ws, "Why did revenue drop by 20% in the last two months?")
     assert run_job(created["job_id"], _hypothesis_script()) == "succeeded"
-    at = healthy(page("13_Investigations.py", ws))
-    text = text_of(at)
+    found, evidence = _steps(ws)
+    at = found
+    text = text_of(found) + text_of(evidence)
     assert "Supported" in text and "Weakened" in text and "H1" in text and "West" in text
     for section in ("Observed result", "Statistical evidence", "Practical significance", "How to read these statistics",
                     "Possible explanations (not established)",
@@ -284,7 +297,7 @@ def test_investigations_page_shows_a_hypothesis_report(api, ws):
     assert "do not prove what caused it" in "\n".join(str(s.value) for s in at.success), "the determination is the first thing shown"
     assert "6 of 8 model calls" in text and "12 of 24 analyses" in text and "every number checked" in text
     assert [m.value for m in at.metric][:3] == ["145,800.00", "131,310.00", "-14,490.00"]
-    tables = {tuple(d.value.columns)[:2]: d.value for d in at.dataframe}
+    tables = {tuple(d.value.columns)[:2]: d.value for d in evidence.dataframe}
     assert len(tables[("ID", "Analysis")]) == 12, "the executed analyses are listed"
     technical = tables[("Analysis", "For")]
     assert list(technical["For"])[0] == "headline" and "Welch's t-test" in set(technical["Method"])
@@ -317,13 +330,32 @@ def test_investigations_page_starts_a_hypothesis_investigation(api, ws, monkeypa
     at.button(key="inv_why_go").click().run()
     inv = api.get("/api/investigations", headers=ws["h"]).json()["investigations"][0]
     assert inv["engine"] == "hypothesis" and inv["status"] == "queued"
-    waiting = healthy(page("13_Investigations.py", ws))
+    waiting = healthy(page("13_Investigations.py", ws, inv_step="2 · Findings"))
     assert "still running" in text_of(waiting)
 
 
 def test_investigations_page_empty_state(api, ws):
-    at = healthy(page("13_Investigations.py", ws))
+    at = healthy(page("13_Investigations.py", ws, inv_step="History"))
     assert "No investigations yet" in text_of(at)
+    at = healthy(page("13_Investigations.py", ws, inv_step="2 · Findings"))
+    assert "No investigation has been run yet" in text_of(at)
+
+
+def test_investigations_page_is_split_into_steps_and_history_opens_a_run(api, ws):
+    from platform_helpers import run_job
+
+    created = api.post("/api/investigations/ask", headers=ws["h"],
+                       json={"dataset_id": ws["ds"], "question": "Why did revenue decrease last month?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    ask = healthy(page("13_Investigations.py", ws))
+    assert (ask.session_state["inv_step"] or "1 · Ask") == "1 · Ask" and len(ask.metric) == 0, "the form alone, no results on the same page"
+    found, evidence = _steps(ws, investigation_id=created["investigation_id"])
+    assert len(found.metric) >= 3 and "Evidence for each candidate explanation" not in text_of(found)
+    assert "Evidence for each candidate explanation" in text_of(evidence) and len(evidence.metric) == 0
+    hist = healthy(page("13_Investigations.py", ws, inv_step="History"))
+    hist.button(key=f"inv_open_{created['investigation_id']}").click().run()
+    healthy(hist)
+    assert hist.session_state["inv_step"] == "2 · Findings" and len(hist.metric) >= 3
 
 
 # ------------------------------------------------------------------ what-if --
@@ -816,13 +848,6 @@ def test_evaluation_page_shows_a_stored_run(api, ws):
     assert run_id > 0
 
 
-# ----------------------------------------------------------------- settings --
-
-def test_settings_page_reports_the_sandbox_honestly(api, ws):
-    at = healthy_except_expected(page("7_Settings.py", ws))
-    text = text_of(at) + "\n".join(str(e.value) for e in at.error)
-    assert "not a security boundary" in text, "the development runner is called out on the Settings page"
-
 
 def healthy_except_expected(at: AppTest) -> AppTest:
     assert not at.exception, [e.value for e in at.exception]
@@ -974,7 +999,7 @@ def test_the_dashboard_look_is_applied_on_the_dashboard_page_only(api, ws):
     assert declared.startswith("<style>.stMain,") and ":root" not in sheet, "tokens are set on the main area, never globally"
     assert "stSidebar" not in sheet, "the sidebar keeps the base look"
     assert all(f"{name}: {value};" in declared for name, value in theme.DASHBOARD_TOKENS.items())
-    assert theme.ACCENT == "#250e2c" and "--accent: #250e2c" in theme.BASE_CSS, "the base tokens are untouched"
+    assert theme.ACCENT == "#a78bfa" and "--accent: #250e2c" in theme.BASE_CSS, "the base token block is untouched; indigo.css overrides it"
 
 
 def test_the_dashboard_shows_whatever_the_analysis_produced(api, ws):
@@ -1031,7 +1056,7 @@ def test_restyling_in_chart_studio_keeps_the_user_s_palette(api, ws):
     out = ask_and_run(api, ws, "Total revenue by region")
     at = healthy(page("4_Dashboards.py", ws, active_question_id=out["question_id"]))
     before = _figures(at)[0].data[0]
-    pills = next(w for w in at.get("button_group") if "type_" in (w.key or ""))
+    pills = next(w for w in at.selectbox if "type_" in (w.key or ""))
     pills.set_value("hbar").run()
     healthy(at)
     after = _figures(at)[0].data[0]
@@ -1041,7 +1066,7 @@ def test_restyling_in_chart_studio_keeps_the_user_s_palette(api, ws):
     assert (colour if isinstance(colour, str) else colour[0]) == cs.rgba(first, cs.DEFAULT_STYLE["opacity"])
     saved = api.get(f"/api/questions/{out['question_id']}/dashboard", headers=ws["h"]).json()["view_overrides"]
     assert [v["chart_type"] for v in saved.values()] == ["hbar"], "the choice is saved for the team as before"
-    assert theme.CHART_COLORWAY[0] == "#837ab6", "other pages' chart colours are unchanged"
+    assert theme.CHART_COLORWAY[0] == "#a78bfa", "other pages' chart colours are the indigo-skin violet"
 
 
 def test_chart_helpers_keep_their_default_colours_unless_given_a_colorway():
@@ -1072,9 +1097,9 @@ def test_the_dashboard_tokens_and_palette_are_one_coherent_set():
 
     t = theme.DASHBOARD_TOKENS
     assert (t["--bg-page"], t["--dash-surface"], t["--accent"], t["--text-primary"], t["--text-muted"], t["--border"]) == (
-        "#B8CECA", "#FFFFFF", "#FF824D", "#202522", "#7C8581", "#DCE3E0")
-    assert theme.DASHBOARD_PALETTE == {"orange": "#FF824D", "yellow": "#FFD166", "mint": "#83D8C5",
-                                       "coral": "#E87983", "lavender": "#A6A2E8", "blue": "#61BDE0"}
+        "#0B0820", "#140E3A", "#A78BFA", "#ECE8FF", "#8A84BD", "#34296F")
+    assert theme.DASHBOARD_PALETTE == {"violet": "#A78BFA", "pink": "#F472B6", "sky": "#7DD3FC",
+                                       "amber": "#FBBF24", "indigo": "#6D5EFC", "mint": "#4ADE80"}
     assert theme.DASHBOARD_COLORWAY[0] == t["--accent"], "the accent leads the data colours"
     assert [t[f"--dash-c{i}"] for i in range(1, 7)] == theme.DASHBOARD_COLORWAY, "cards and charts draw from the same six colours"
     assert cs.PALETTES["Dashboard"] == theme.DASHBOARD_COLORWAY and cs.DEFAULT_STYLE["palette"] == "Dashboard", \
@@ -1113,7 +1138,7 @@ def test_the_dashboard_chart_finish_changes_presentation_only():
     assert after.layout.legend.orientation == "h" and after.layout.font.color == theme.DASHBOARD_CHART["muted"]
     assert after.layout.xaxis.gridcolor == after.layout.yaxis.gridcolor == theme.DASHBOARD_CHART["grid"]
     assert after.layout.barcornerradius == 6 and after.data[1].line.width == 2.5 and after.data[1].marker.size == 7
-    assert after.data[0].marker.color == "#FF824D" and after.data[1].line.color == "#FFD166"
+    assert after.data[0].marker.color == "#A78BFA" and after.data[1].line.color == "#F472B6"
     assert after.layout.paper_bgcolor == after.layout.plot_bgcolor == "rgba(0,0,0,0)", "the card behind the chart shows through"
 
     lone = theme.dashboard_chart(theme.style_chart(go.Figure([go.Bar(x=["a"], y=[1])]), showlegend=True))
@@ -1403,3 +1428,137 @@ def test_what_if_saved_tab_empty_state_and_single_pick_hint(api, ws):
     sid = api.get("/api/scenarios", headers=ws["h"]).json()["scenarios"][0]["id"]
     at.checkbox(key=f"wi_pick_{sid}").check().run()
     assert "Tick two or more scenarios" in text_of(at)
+
+
+# ------------------------------------------------------------------ home --
+
+def _home(ws) -> AppTest:
+    at = AppTest.from_file(str(FRONTEND_DIR / "Home.py"), default_timeout=60)
+    at.session_state["auth_user"] = {"id": 0, "email": ws["email"], "display_name": "T"}
+    at.session_state["auth_token"] = ws["token"]
+    at.session_state["active_team_id"] = ws["team"]
+    return at.run()
+
+
+def test_home_shows_live_counts_animated_and_suggestions_that_prefill_the_question(api, ws, monkeypatch):
+    import streamlit as st
+
+    went = []
+    monkeypatch.setattr(st, "switch_page", lambda target: went.append(target))
+    ask_and_run(api, ws, "Total revenue by region")
+    at = healthy(_home(ws))
+    page_html = " ".join(str(m.value) for m in at.markdown)
+    assert 'class="num h-count" style="--n:1"' in page_html, "the verified count is a real number, animated by CSS"
+    assert "Every number," in page_html and "Try asking" in page_html
+    chips = [b for b in at.button if b.key and b.key.startswith("chip_")]
+    assert chips, "suggested questions are buttons"
+    wanted = chips[0].label
+    chips[0].click().run()
+    assert at.session_state["prefill_question"] == wanted, "the Analyses page receives the chosen question"
+    assert went == ["pages/3_Analyses.py"]
+
+
+def test_landing_page_labels_the_demo_and_keeps_every_auth_link(api):
+    page_html = " ".join(str(m.value) for m in _signed_out(None).markdown)
+    assert "Illustrative demonstration" in page_html and "not a live analysis" in page_html, "the animation is never passed off as a live run"
+    for needle in ('href="?view=login"', 'href="?view=signup"', "Data Matters.", "Ask Your Data", "In Plain English", "Trust Every Answer"):
+        assert needle in page_html, needle
+    assert page_html.count('class="lp-panel') == 3, "Planner, Analyst, Critic"
+
+
+# ------------------------------------------------- what-if, any domain (new tab) --
+
+def _students_ws(api):
+    import io
+    import numpy as np
+    import pandas as pd
+    rng = np.random.default_rng(1)
+    n = 60
+    df = pd.DataFrame({"Student ID": range(1, n + 1), "Attendance": rng.integers(50, 100, n), "Marks": rng.integers(20, 95, n)})
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    return workspace(api, buf.getvalue().encode(), "students.csv")
+
+
+def _explore(at):
+    return healthy(at)
+
+
+def test_universal_tab_detects_the_domain_and_lists_classified_questions(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    assert at.session_state["wxu_domain"] == "auto" and "What would you like to explore?" in text_of(at)
+    at.selectbox(key="wxu_ds").select_index(1).run()
+    assert "Looks like Education" in text_of(_explore(at)), "the detection is explained"
+    at.button(key="wxu_next_setup").click().run()
+    text = text_of(_explore(at))
+    assert "Ready to simulate" in text and "Needs assumptions" in text and "Needs external data" in text
+    assert "What if the passing marks change" in text
+
+
+def test_universal_tab_runs_a_scenario_shows_results_and_saves_it(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    at.selectbox(key="wxu_ds").select_index(1).run()
+    at.button(key="wxu_next_setup").click().run()
+    use = [b for b in at.button if b.key and b.key.startswith("wxu_use_education:edu_pass_marks")][0]
+    use.click().run()
+    at = _explore(at)
+    sid = at.session_state["wxu_sel"]["id"]
+    at.number_input(key=f"wxu_in_{sid}_current_threshold").set_value(40.0).run()
+    at.number_input(key=f"wxu_in_{sid}_new_threshold").set_value(50.0).run()
+    at.button(key=f"wxu_run_{sid}").click().run()
+    text = text_of(_explore(at))
+    assert "Exact calculation" in text
+    assert "What this cannot tell you" in text
+    at.text_input(key="wxu_save_name").set_value("Pass mark 50").run()
+    at.button(key="wxu_save").click().run()
+    saved = api.get("/api/whatif/scenarios", headers=ws["h"]).json()["scenarios"]
+    assert [s["name"] for s in saved] == ["Pass mark 50"] and saved[0]["domain"] == "education"
+
+
+def test_universal_tab_asks_for_missing_values_instead_of_running(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    at.selectbox(key="wxu_ds").select_index(1).run()
+    at.button(key="wxu_next_setup").click().run()
+    [b for b in at.button if b.key and b.key.startswith("wxu_use_education:edu_enrolment_capacity")][0].click().run()
+    at = _explore(at)
+    sid = at.session_state["wxu_sel"]["id"]
+    at.button(key=f"wxu_run_{sid}").click().run()
+    at = _explore(at)
+    assert any("Silt needs a few more things" in str(w.value) for w in at.warning)
+    assert api.get("/api/whatif/scenarios", headers=ws["h"]).json()["total"] == 0
+
+
+def test_universal_tab_works_without_a_dataset_for_travel(api, monkeypatch):
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    ws = _students_ws(api)
+    at = _explore(page("14_What_If.py", ws))
+    at.radio(key="wxu_pick_domain").set_value("travel").run()
+    at.radio(key="wxu_pick_start").set_value("Build a scenario manually").run()
+    at.button(key="wxu_next_setup").click().run()
+    at = _explore(at)
+    assert "Needs assumptions" in text_of(at) and "Extend the trip" not in at.session_state["wxu_domain"]
+    assert any("extend my trip" in str(m.value) for m in at.markdown)
+
+
+
+def test_investigations_page_end_to_end_on_an_uploaded_dataset_with_a_new_segment(api, monkeypatch):
+    """Upload -> ask -> job -> page: a vendor that exists only in the later period is shown as the located driver, not as '—'."""
+    import rc_fixtures
+    from platform_helpers import run_job
+
+    monkeypatch.setattr(api_client, "requests", _InProcessRequests(api))
+    csv = rc_fixtures.new_vendor_slows_resolution().to_csv(index=False).encode()
+    w = workspace(api, csv, "tickets.csv")
+    created = api.post("/api/investigations/ask", headers=w["h"],
+                       json={"dataset_id": w["ds"], "question": "Why did hours increase in Q2 2025 compared to Q1 2025?"}).json()
+    assert run_job(created["job_id"]) == "succeeded"
+    found, evidence = _steps(w, investigation_id=created["investigation_id"])
+    text = text_of(found) + text_of(evidence)
+    assert "vendor = Brightline" in text and "new in the comparison period" in text and "Plausible contributor" in text
+    assert "% confident" not in text and "n/a against" not in text

@@ -84,7 +84,8 @@ def get_client() -> genai.Client:
             raise RuntimeError(
                 "GEMINI_API_KEY is not set. Copy .env.example to .env and add your key."
             )
-        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+        _client = genai.Client(api_key=config.GEMINI_API_KEY,
+                               http_options=types.HttpOptions(timeout=config.GEMINI_REQUEST_TIMEOUT_SECONDS * 1000))
     return _client
 
 
@@ -99,6 +100,9 @@ class MalformedOutput(RuntimeError):
 
 
 _FILTERED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE"}
+# Kinds of unusable reply that are worth one more try on the same model (see config.GEMINI_MALFORMED_RETRIES).
+MALFORMED_RETRYABLE = frozenset({"empty_response", "no_function_call", "prose_instead_of_function_call", "malformed_function_call"})
+_MALFORMED_RETRY_WAIT_SECONDS = 1.5
 
 
 def diagnose_response(response: Any, tool_name: str) -> dict:
@@ -265,6 +269,20 @@ def log_provider_event(provider: str, tool_name: str, failure: dict, *, attempt:
     runtime.record_event("provider", f"{provider}:{failure['kind']}", detail)
 
 
+def _thinking_config():
+    """Gemini 3 models spend part of max_output_tokens on internal "thinking". With the small limits used for structured
+    answers (a triage verdict, a plan) that budget runs out before the answer is written (finish_reason MAX_TOKENS), so the
+    run fails. Keep thinking low for these calls. Older model names do not take a level, so they are left alone."""
+    if str(config.GEMINI_MODEL).startswith("gemini-3"):
+        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    return None
+
+
+def _output_limit(max_tokens: int) -> int:
+    """Headroom for the little thinking that is still done, so a short answer is never cut off."""
+    return max_tokens + 2048 if str(config.GEMINI_MODEL).startswith("gemini-3") else max_tokens
+
+
 def call_tool_gemini(
     system: str,
     user_content: str,
@@ -299,7 +317,8 @@ def call_tool_gemini(
         contents=user_content,
         config=types.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=max_tokens,
+            max_output_tokens=_output_limit(max_tokens),
+            thinking_config=_thinking_config(),
             tools=[types.Tool(function_declarations=[function_decl])],
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
@@ -378,8 +397,27 @@ def call_tool(
     next_step = "failover_to_llama" if backup else "give_up_no_backup_provider"
     tries = config.GEMINI_RATE_LIMIT_RETRIES + 1
 
+    # Llama (Groq) first when it is the configured primary; Gemini then becomes the backup below.
+    llama_tried = False
+    if config.LLM_PRIMARY == "llama" and config.LLAMA_API_KEY:
+        llama_tried = True
+        started = time.monotonic()
+        try:
+            out = llm_client_llama.call_tool(**kwargs)
+            LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
+            return out
+        except runtime.RunAborted:
+            raise
+        except Exception as e:  # noqa: BLE001 - hand the step to Gemini
+            failures.append(f"llama({config.LLAMA_MODEL}): {e}")
+            reasons.append(_failed("llama", config.LLAMA_MODEL, e))
+            log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1,
+                               action="failover_to_gemini" if config.GEMINI_API_KEY else "give_up",
+                               error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
+
     if config.GEMINI_API_KEY:
         attempt = 0
+        malformed_retries = 0
         while True:
             started = time.monotonic()
             try:
@@ -424,8 +462,18 @@ def call_tool(
                                    elapsed_ms=_elapsed_ms(started))
                 break
             except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
-                # Includes MalformedOutput: the model answered without the required structured
-                # output. Not retried here (unchanged behaviour): the backup provider gets the step.
+                # MalformedOutput: the model answered without the required structured output. A transient
+                # kind (empty reply, prose, a malformed call) gets a bounded retry on Gemini first; anything
+                # else, or once that is used up, hands the step to the backup provider.
+                if (isinstance(e, MalformedOutput) and e.diagnosis.get("category") in MALFORMED_RETRYABLE
+                        and malformed_retries < config.GEMINI_MALFORMED_RETRIES):
+                    malformed_retries += 1
+                    wait_s = _MALFORMED_RETRY_WAIT_SECONDS * _jitter()
+                    log_provider_event("gemini", tool_name, classify_failure(e), attempt=malformed_retries,
+                                       max_attempts=config.GEMINI_MALFORMED_RETRIES + 1, action="retry", wait_s=wait_s,
+                                       error_type=type(e).__name__, model=config.GEMINI_MODEL, elapsed_ms=_elapsed_ms(started))
+                    time.sleep(wait_s)
+                    continue
                 failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
                 reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
                 log_provider_event("gemini", tool_name, classify_failure(e), attempt=attempt + 1, max_attempts=tries,
@@ -436,7 +484,9 @@ def call_tool(
         failures.append("gemini: no GEMINI_API_KEY set")
         reasons.append(_not_tried("gemini", "not_configured"))
 
-    if not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
+    if llama_tried:
+        pass  # already tried first; its failure is recorded above
+    elif not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
         failures.append("llama: failover disabled (LLM_FAILOVER_ENABLED=false)")
         reasons.append(_not_tried("llama", "disabled"))
     elif config.LLAMA_API_KEY:
@@ -472,7 +522,8 @@ def call_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
         contents=user_content,
         config=types.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=max_tokens,
+            max_output_tokens=_output_limit(max_tokens),
+            thinking_config=_thinking_config(),
         ),
     )
     return (response.text or "").strip()

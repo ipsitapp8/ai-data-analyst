@@ -20,6 +20,8 @@ qid = st.session_state.get("active_question_id")
 
 if not qid:
     page_header("Audit Trail", "Full traceability for every analysis.")
+    from style.theme import page_intro
+    page_intro('A record of every analysis: the question, the exact code that ran, the result and the checks. Use it to prove where a number came from.', ['Pick an analysis', 'Read what was asked, what code ran and what the checker said'])
     try:
         questions = list_questions()
     except ApiError as e:

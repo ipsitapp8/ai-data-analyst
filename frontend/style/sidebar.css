@@ -1,0 +1,119 @@
+/* Silt sidebar: the last stylesheet loaded, so it has the final word over the older skins.
+   Direction: a quiet editorial rail. One flat plum surface with a hairline edge (no rounded container, no glass, no glow),
+   small mono-weight section labels, muted lavender-grey items, a restrained violet active row with a thin accent bar.
+   Everything here is scoped to the sidebar; no page content is touched. */
+@media (min-width: 769px) {
+  section[data-testid="stSidebar"] { width: 248px !important; min-width: 248px !important; max-width: 248px !important; }
+}
+section[data-testid="stSidebar"] { background: #0a0918 !important; border-right: 1px solid rgba(255,255,255,.07) !important; box-shadow: none !important; }
+section[data-testid="stSidebar"] > div, [data-testid="stSidebarContent"] {
+  background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+[data-testid="stSidebarContent"] { overflow-y: auto !important; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.14) transparent; }
+[data-testid="stSidebarContent"]::-webkit-scrollbar { width: 6px; } [data-testid="stSidebarContent"]::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 3px; }
+[data-testid="stSidebarUserContent"] { padding: 0 !important; }
+[data-testid="stSidebarUserContent"] > [data-testid="stVerticalBlock"], [data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"] { gap: 0 !important; min-height: calc(100vh - 8px); }
+
+/* ------------------------------------------------------------------ brand */
+.stApp .sb-brand { display: flex; align-items: center; gap: 12px; padding: 20px 18px 18px; border-bottom: 1px solid rgba(255,255,255,.06); margin-bottom: 10px; }
+.stApp .sb-logo { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; background: #1b1708; border: 1px solid rgba(243,178,79,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); flex: 0 0 38px; }
+.stApp .sb-wm { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stApp .sb-wm b { font: 650 17px/1 "Inter", "Poppins", system-ui, sans-serif; letter-spacing: -.01em; color: #f4f2fb; }
+.stApp .sb-wm span { font: 400 11.5px/1 "Inter", "Poppins", system-ui, sans-serif; color: #8d88ae; }
+
+/* --------------------------------------------------------------- sections */
+.stApp .st-key-nav { padding: 0 10px 12px !important; }
+.stApp .st-key-nav [data-testid="stVerticalBlock"] { gap: 2px !important; }
+.stApp [data-testid="stSidebar"] [data-testid="stMarkdownContainer"]:has(.sb-sec), .stApp [data-testid="stSidebar"] [data-testid="stMarkdown"]:has(.sb-sec) { margin: 0 !important; height: auto !important; }
+.stApp .sb-sec { font: 600 10.5px/1 "Inter", "Poppins", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #6f6a92; padding: 18px 10px 8px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,.06); }
+.stApp .st-key-nav [data-testid="stElementContainer"]:first-child .sb-sec { border-top: 0; margin-top: 0; padding-top: 6px; }
+
+/* ------------------------------------------------------------------ items */
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button {
+  position: relative; width: 100% !important; min-height: 38px !important; height: 38px !important; padding: 0 12px 0 40px !important; margin: 0 !important;
+  display: flex !important; align-items: center !important; justify-content: flex-start !important; text-align: left !important;
+  background: transparent !important; border: 0 !important; border-radius: 6px !important; box-shadow: none !important; transform: none !important;
+  color: #9a96b9 !important; opacity: 1 !important; transition: background .15s ease, color .15s ease; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button p, .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button div {
+  font: 500 14px/1.2 "Inter", "Poppins", system-ui, sans-serif !important; letter-spacing: 0 !important; color: inherit !important; text-align: left !important; margin: 0 !important; justify-content: flex-start !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button::before {
+  content: "" !important; position: absolute !important; left: 13px !important; top: 50% !important; width: 18px !important; height: 18px !important; margin-top: -9px !important;
+  background: currentColor !important; filter: none !important; opacity: .9 !important; border-radius: 0 !important; box-shadow: none !important;
+  -webkit-mask: var(--icon) center / contain no-repeat !important; mask: var(--icon) center / contain no-repeat !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button::after { content: none !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:hover:not(:disabled) { background: rgba(255,255,255,.045) !important; color: #e8e5f8 !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:focus-visible { outline: 2px solid rgba(167,139,250,.6) !important; outline-offset: -2px; }
+/* the page you are on: a restrained violet row, brighter text, a thin accent bar on the left */
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled { background: rgba(243,178,79,.10) !important; color: #fff !important; box-shadow: inset 2px 0 0 #f3b24f !important; cursor: default; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled p { font-weight: 600 !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled::before { filter: none !important; opacity: 1 !important; }
+
+/* ------------------------------------------------- workspace / account card */
+.stApp [data-testid="stSidebar"] [data-testid="stLayoutWrapper"]:has(> .st-key-sb_account) { position: sticky !important; bottom: 0 !important; margin-top: auto; z-index: 5; background: #100c20; }
+.stApp [data-testid="stSidebar"] .st-key-sb_account { padding: 12px 10px 14px; background: #0a0918; border-top: 1px solid rgba(255,255,255,.07); }
+.stApp [data-testid="stSidebar"] .st-key-sb_account button {
+  position: relative; width: 100% !important; min-height: 54px !important; padding: 9px 30px 9px 56px !important; display: flex !important; align-items: flex-start !important; justify-content: flex-start !important; text-align: left !important;
+  background: rgba(255,255,255,.045) !important; border: 1px solid rgba(255,255,255,.07) !important; border-radius: 8px !important; box-shadow: none !important; color: #f1eefb !important; }
+.stApp [data-testid="stSidebar"] .st-key-sb_account button:hover { background: rgba(255,255,255,.075) !important; border-color: rgba(255,255,255,.12) !important; }
+.stApp [data-testid="stSidebar"] .st-key-sb_account button p { font: 600 13.5px/1.2 "Inter", "Poppins", system-ui, sans-serif !important; color: #f1eefb !important; margin: 3px 0 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 118px; }
+.stApp [data-testid="stSidebar"] .st-key-sb_account button::before { content: var(--ini, "S"); position: absolute; left: 11px; top: 50%; width: 34px; height: 34px; margin-top: -17px; border-radius: 50%; display: grid; place-items: center;
+  background: #1b1708; border: 1px solid rgba(243,178,79,.55); color: #f3b24f; font: 600 14px/1 "Inter", "Poppins", system-ui, sans-serif; }
+.stApp [data-testid="stSidebar"] .st-key-sb_account button::after { content: var(--sub, ""); position: absolute; left: 56px; bottom: 9px; right: 30px; font: 400 11.5px/1.2 "Inter", "Poppins", system-ui, sans-serif; color: #8d88ae; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stApp [data-testid="stSidebar"] .st-key-sb_account button [data-testid="stIconMaterial"], .stApp [data-testid="stSidebar"] .st-key-sb_account button svg { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: #8d88ae !important; }
+[data-testid="stPopoverBody"] { min-width: 236px; background: #181230 !important; border: 1px solid rgba(255,255,255,.1) !important; border-radius: 8px !important; box-shadow: 0 14px 36px rgba(0,0,0,.55) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; padding: 10px !important; }
+[data-testid="stPopoverBody"] [class*="st-key-nav_logout"] button { position: relative; width: 100% !important; height: 38px !important; min-height: 38px !important; padding: 0 12px 0 40px !important; display: flex !important; align-items: center !important; justify-content: flex-start !important;
+  background: transparent !important; border: 0 !important; border-top: 1px solid rgba(255,255,255,.07) !important; border-radius: 6px !important; box-shadow: none !important; color: #9a96b9 !important; margin-top: 6px !important; }
+[data-testid="stPopoverBody"] [class*="st-key-nav_logout"] button p { font: 500 14px/1.2 "Inter", "Poppins", system-ui, sans-serif !important; color: inherit !important; margin: 0 !important; }
+[data-testid="stPopoverBody"] [class*="st-key-nav_logout"] button::before { content: "" !important; position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; margin-top: -9px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+[data-testid="stPopoverBody"] [class*="st-key-nav_logout"] button:hover { background: rgba(255,255,255,.05) !important; color: #f2eefc !important; }
+
+/* small screens: Streamlit overlays the sidebar; keep it comfortably sized and let it scroll */
+@media (max-width: 768px) {
+  /* the rail floats over the page instead of pushing it aside: the content keeps its full width underneath */
+  section[data-testid="stSidebar"] { position: fixed !important; top: 0; left: 0; height: 100vh !important; width: 264px !important; min-width: 0 !important; max-width: 86vw !important; z-index: 1000; box-shadow: 8px 0 30px rgba(0,0,0,.5) !important; }
+  section[data-testid="stSidebar"][aria-expanded="false"] { box-shadow: none !important; }
+}
+
+/* "More" fold: no box, just a quiet label that opens the secondary pages */
+.stApp .st-key-nav [data-testid="stExpander"] { border: 0 !important; background: transparent !important; margin-top: 6px; }
+.stApp .st-key-nav [data-testid="stExpander"] details { border: 0 !important; background: transparent !important; }
+.stApp .st-key-nav [data-testid="stExpander"] summary { padding: 8px 10px !important; color: #8d88b0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; border-top: 1px solid rgba(255,255,255,.06); }
+.stApp .st-key-nav [data-testid="stExpander"] summary:hover { color: #fff; background: transparent; }
+.stApp .st-key-nav [data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 0 !important; }
+
+/* flat, not glowing: the logo mark and every avatar are plain, the glyph is amber */
+.stApp .sb-logo svg { stroke: #f3b24f !important; }
+.stApp .silt-tb-avatar { background: #1b1708 !important; border: 1px solid rgba(243,178,79,.55) !important; color: #f3b24f !important; }
+.stApp .st-key-home_ctas button[kind="primary"], .stApp .st-key-home_ctas button[kind="primary"]:hover {
+  background: #f3b24f !important; background-image: none !important; color: #1d1406 !important; border: 1px solid #f3b24f !important; border-radius: 4px !important; box-shadow: none !important; }
+.stApp .st-key-home_ctas button[kind="primary"]::after { background: none !important; box-shadow: none !important; }
+.stApp .st-key-home_ctas button[kind="secondary"] { border-radius: 4px !important; }
+.stApp [data-testid="stSidebar"], .stApp section[data-testid="stSidebar"] > div { background: #0a0918 !important; border-right: 1px solid rgba(242,239,231,.11) !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:hover:not(:disabled) { background: rgba(255,255,255,.045) !important; border-color: transparent !important; color: #f2efe7 !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled, .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled:hover {
+  background: rgba(243,178,79,.10) !important; border-color: transparent !important; box-shadow: inset 2px 0 0 #f3b24f !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button::before { filter: invert(.8) !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled::before { filter: brightness(0) invert(1) !important; }
+html body .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled, html body .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled:hover {
+  background: rgba(243,178,79,.10) !important; background-image: none !important; box-shadow: inset 2px 0 0 #f3b24f !important; border-color: transparent !important; }
+
+/* Home row sat on the brand divider: keep the nav clear of the brand block and make every row full width */
+.stApp .sb-brand { position: relative; z-index: 1; margin-bottom: 16px !important; }
+.stApp .st-key-nav { position: relative; z-index: 0; padding-top: 6px !important; }
+.stApp .st-key-nav [data-testid="stElementContainer"], .stApp .st-key-nav .stButton { width: 100% !important; margin: 0 !important; }
+.stApp .st-key-nav .stButton > button { width: 100% !important; transform: none !important; }
+
+/* Top-right account pill: solid so page headings scrolling underneath never show through it */
+html body .stApp .silt-topbar { background: #0f0d1f !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 10px !important; box-shadow: 0 6px 18px rgba(0,0,0,.45) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html body .stApp .st-key-topbar_logout { background: transparent !important; }
+html body .stApp .st-key-topbar_logout button { background: #17142b !important; border: 1px solid rgba(255,255,255,.14) !important; border-radius: 8px !important; }
+
+/* File uploader: the icon glyph rendered as stray text ("uploadupload", "add") and the file list scrolled sideways.
+   Hide the glyphs, keep the real labels, and stop the list from overflowing. */
+html body .stApp [data-testid="stFileUploaderDropzone"] [data-testid="stIconMaterial"],
+html body .stApp [data-testid="stFileUploaderDropzone"] button span[class*="material"] { display: none !important; }
+html body .stApp [data-testid="stFileUploaderDropzone"] { padding: 12px 14px !important; min-height: 0 !important; overflow: hidden !important; }
+html body .stApp [data-testid="stFileUploaderDropzone"] button { white-space: nowrap; }
+html body .stApp [data-testid="stFileUploader"] section, html body .stApp [data-testid="stFileUploader"] [data-testid="stFileUploaderFileList"] { overflow-x: hidden !important; scrollbar-width: none; max-width: 100%; }
+html body .stApp [data-testid="stFileUploader"] *::-webkit-scrollbar { display: none; }
+html body .stApp [data-testid="stFileUploaderFile"] { max-width: 100% !important; }

@@ -1,7 +1,7 @@
 /* ================= dashboard pages ================= */
-.stApp .stMain { --bg-page: transparent; --bg-card: rgba(255,255,255,.5); --bg-inset: rgba(255,255,255,.35); --bg-card-hover: rgba(255,255,255,.7);
-  --border: rgba(255,255,255,.75); --border-strong: rgba(21,21,21,.14); --dash-surface: rgba(255,255,255,.28); --accent-ink: #7c3aed; --accent-bg: #f3ecfd;
-  --dash-shadow: 0 30px 70px rgba(70,30,120,.16); --dash-card-shadow: var(--glass-sh); }
+.stApp .stMain { --bg-page: transparent; --bg-card: rgba(24,17,60,.66); --bg-inset: rgba(12,8,36,.55); --bg-card-hover: rgba(40,29,98,.80);
+  --border: rgba(167,139,250,.20); --border-strong: rgba(167,139,250,.32); --dash-surface: rgba(20,14,54,.50); --accent-ink: #c4b5fd; --accent-bg: rgba(139,92,246,.18);
+  --dash-shadow: 0 30px 70px rgba(3,2,16,.6); --dash-card-shadow: var(--glass-sh); }
 .stApp .stMain [data-testid="stMainBlockContainer"] {
   background: linear-gradient(145deg, rgba(255,255,255,.42), rgba(255,255,255,.16)) !important; border: 1px solid rgba(255,255,255,.8) !important;
   -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);

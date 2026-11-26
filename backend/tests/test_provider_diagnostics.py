@@ -255,3 +255,40 @@ def test_the_question_completes_through_the_sandbox_when_a_model_answers(client,
     assert trace["usage"]["sandbox_runs"] >= 1 and trace["usage"]["llm_calls"] >= 4
     assert not [e for e in trace["events"] if e["kind"] == "provider"], "no provider failure on a healthy run"
     assert dash["narrative"].startswith("3 of 5 cities"), "Pune 4.4, Mumbai 4.3, Kochi 4.3; Delhi 3.9 and Jaipur 3.7 are out"
+
+
+def test_llama_defaults_point_at_groq_so_a_model_name_alone_never_selects_another_endpoint(monkeypatch):
+    import importlib
+
+    for var in ("LLAMA_MODEL", "LLAMA_BASE_URL"):
+        monkeypatch.delenv(var, raising=False)
+    cfg = importlib.reload(config)
+    try:
+        assert cfg.LLAMA_MODEL == "openai/gpt-oss-20b" and cfg.LLAMA_BASE_URL == "https://api.groq.com/openai/v1"
+        monkeypatch.setenv("LLAMA_MODEL", "   ")
+        monkeypatch.setenv("LLAMA_BASE_URL", "")
+        cfg = importlib.reload(config)
+        assert cfg.LLAMA_BASE_URL == "https://api.groq.com/openai/v1", "blank counts as unset"
+        monkeypatch.setenv("LLAMA_BASE_URL", "https://example.test/v1")
+        assert importlib.reload(config).LLAMA_BASE_URL == "https://example.test/v1", "an explicit setting still wins"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+def test_llama_can_answer_first_and_gemini_is_then_the_backup(both_keys, monkeypatch):
+    monkeypatch.setattr(config, "LLM_PRIMARY", "llama")
+    monkeypatch.setattr(llama, "call_tool", lambda **kw: {"via": "llama"})
+    monkeypatch.setattr(llm_client, "call_tool_gemini", _raise(AssertionError("Gemini must not be called")))
+    assert llm_client.call_tool(**KW) == {"via": "llama"}
+    monkeypatch.setattr(llama, "call_tool", _raise(AuthenticationError(401, "invalid_api_key")))
+    monkeypatch.setattr(llm_client, "call_tool_gemini", lambda **kw: {"via": "gemini"})
+    assert llm_client.call_tool(**KW) == {"via": "gemini"}
+
+
+@pytest.mark.parametrize("raw", ['{"reasoning": "x", "formula_explanation": "y"}', '{"code": "  "}', "not json", "[1, 2]"])
+def test_an_unusable_llama_reply_is_a_failure_so_the_step_moves_to_gemini(both_keys, monkeypatch, raw):
+    schema = {"required": ["reasoning", "formula_explanation", "code"]}
+    assert llama._checked_args(raw, schema)[1] is not None
+    good = '{"reasoning": "r", "formula_explanation": "f", "code": "print(1)"}'
+    assert llama._checked_args(good, schema) == ({"reasoning": "r", "formula_explanation": "f", "code": "print(1)"}, None)

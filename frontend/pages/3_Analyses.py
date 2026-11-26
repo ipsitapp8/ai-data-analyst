@@ -45,6 +45,8 @@ qid = st.session_state.get("active_question_id")
 # ---------------------------------------------------------------- new run --
 if not qid:
     page_header("New Analysis", "Ask a question in plain English — the agent does the rest.")
+    from style.theme import page_intro
+    page_intro('Ask a question about your data in everyday language. Silt writes and runs the analysis, and a second model checks every number before you see it.', ['Choose the dataset to ask about', 'Type your question, or pick an example', 'Press run and wait for the verified answer', 'A dashboard and a report are created automatically'], tip='No dataset yet? Upload a CSV or Excel file on the Datasets page first.')
 
     try:
         datasets = list_datasets()
@@ -53,7 +55,7 @@ if not qid:
         st.error(f"Backend unreachable: {e}")
 
     if not datasets:
-        st.info("No dataset yet — upload a CSV first.")
+        st.info("No dataset yet. Silt answers from your own data, so upload a CSV or Excel file on the Datasets page first.")
         if st.button("Go to Datasets  →", type="primary", key="an_go_ds"):
             st.switch_page("pages/2_Datasets.py")
         st.stop()
@@ -331,14 +333,14 @@ def _render_live_run(qid: int) -> None:
                 go.Pie(
                     values=[overall, max(100 - overall, 0)], hole=0.72, sort=False,
                     direction="clockwise", rotation=0,
-                    marker=dict(colors=[ring, "#f0f0f2"], line=dict(width=0)),
+                    marker=dict(colors=[ring, "rgba(167,139,250,0.16)"], line=dict(width=0)),
                     textinfo="none", hoverinfo="skip",
                 )
             )
             fig.add_annotation(text=f"<b>{overall}%</b>", x=0.5, y=0.55, showarrow=False,
-                               font=dict(size=25, color="#18181b", family="system-ui, sans-serif"))
+                               font=dict(size=25, color="#ece8ff", family="system-ui, sans-serif"))
             fig.add_annotation(text="Overall Progress", x=0.5, y=0.38, showarrow=False,
-                               font=dict(size=11, color="#71717a", family="system-ui, sans-serif"))
+                               font=dict(size=11, color="#a9a3d6", family="system-ui, sans-serif"))
             plot(fig, height=200)
 
             html(

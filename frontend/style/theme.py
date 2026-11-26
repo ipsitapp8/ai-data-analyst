@@ -38,9 +38,9 @@ ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 # Chart data gets real, distinct color even though the UI chrome around it
 # stays flat and neutral -- that split is normal (Excel, Grafana, Tableau all
 # do it): plain chrome, legible/vivid data encoding.
-CHART_COLORWAY = ["#837ab6", "#cc8db3", "#250e2c", "#f6a5c0", "#9d85b6", "#64748b"]
-ACCENT = "#250e2c"      # deep plum -- the one interactive/brand UI color
-ACCENT_2 = "#94a3b8"    # slate -- in-progress/secondary state
+CHART_COLORWAY = ["#a78bfa", "#f472b6", "#7dd3fc", "#fbbf24", "#6d5efc", "#4ade80"]
+ACCENT = "#a78bfa"      # violet -- the one interactive/brand UI color on the indigo skin
+ACCENT_2 = "#7dd3fc"    # sky -- in-progress/secondary state
 
 BASE_CSS = """
 <style>
@@ -498,39 +498,39 @@ hr { border-color: var(--border) !important; }
 # pages/4_Dashboards.py), and only to the main area, dialogs and popovers --
 # the sidebar and every other page keep the base tokens above.
 DASHBOARD_PALETTE: dict[str, str] = {
-    "orange": "#FF824D", "yellow": "#FFD166", "mint": "#83D8C5",
-    "coral": "#E87983", "lavender": "#A6A2E8", "blue": "#61BDE0",
+    "violet": "#A78BFA", "pink": "#F472B6", "sky": "#7DD3FC",
+    "amber": "#FBBF24", "indigo": "#6D5EFC", "mint": "#4ADE80",
 }
-# Orange leads; the pastels follow for further series. chart_studio's "Dashboard"
+# Violet leads; the pink, sky and amber follow for further series. chart_studio's "Dashboard"
 # palette is this same list (a test keeps the two in step).
 DASHBOARD_COLORWAY = list(DASHBOARD_PALETTE.values())
 DASHBOARD_TOKENS: dict[str, str] = {
-    "--bg-page": "#B8CECA",
-    "--bg-card": "#FFFFFF",
-    "--bg-card-hover": "#F6F9F8",
-    "--bg-inset": "#F4F7F6",
-    "--border": "#DCE3E0",
-    "--border-strong": "#C6D1CD",
-    "--text-primary": "#202522",
-    "--text-secondary": "#58615D",
-    "--text-muted": "#7C8581",
-    "--accent": DASHBOARD_PALETTE["orange"],
-    "--accent-dim": "#F26E36",
-    "--accent-ink": "#B4470F",        # orange dark enough to read as text on white
-    "--accent-bg": "#FFF1EA",
-    "--accent-border": "#FFD0BB",
+    "--bg-page": "#0B0820",
+    "--bg-card": "#1B1347",
+    "--bg-card-hover": "#261A5E",
+    "--bg-inset": "#120D33",
+    "--border": "#34296F",
+    "--border-strong": "#4C3D9A",
+    "--text-primary": "#ECE8FF",
+    "--text-secondary": "#B6B0E0",
+    "--text-muted": "#8A84BD",
+    "--accent": DASHBOARD_PALETTE["violet"],
+    "--accent-dim": "#8B5CF6",
+    "--accent-ink": "#C4B5FD",        # light violet that reads as text on the indigo surface
+    "--accent-bg": "rgba(139,92,246,0.18)",
+    "--accent-border": "rgba(167,139,250,0.38)",
     "--radius-lg": "16px",
     "--radius-md": "12px",
     "--radius-sm": "8px",
-    "--dash-surface": "#FFFFFF",
+    "--dash-surface": "#140E3A",
     "--dash-surface-radius": "28px",
     "--dash-gap": "20px",
-    "--dash-shadow": "0 1px 2px rgba(32,37,34,0.05), 0 18px 40px rgba(32,37,34,0.08)",
-    "--dash-card-shadow": "0 1px 2px rgba(32,37,34,0.04), 0 4px 12px rgba(32,37,34,0.03)",
+    "--dash-shadow": "0 1px 2px rgba(3,2,16,0.4), 0 18px 40px rgba(3,2,16,0.5)",
+    "--dash-card-shadow": "0 1px 2px rgba(3,2,16,0.4), 0 4px 12px rgba(3,2,16,0.3)",
     **{f"--dash-c{i}": colour for i, colour in enumerate(DASHBOARD_PALETTE.values(), start=1)},
 }
 # Plotly draws on a canvas that page CSS cannot reach, so the chart's own colours are set here.
-DASHBOARD_CHART = {"text": "#202522", "muted": "#7C8581", "grid": "#EDF1EF", "line": "#DCE3E0"}
+DASHBOARD_CHART = {"text": "#ece8ff", "muted": "#a9a3d6", "grid": "rgba(167,139,250,0.12)", "line": "rgba(167,139,250,0.28)"}
 
 # .stMain is the main scroll area (its data-testid varies with the page's content)
 _DASHBOARD_SCOPE = '.stMain, [data-testid="stDialog"], [data-baseweb="popover"]'
@@ -688,7 +688,8 @@ def inject_dashboard_theme() -> None:
     """Call after page_setup() on a page that should use the dashboard look."""
     st.markdown(dashboard_theme_css(), unsafe_allow_html=True)
     glass = (Path(__file__).with_name("dashboard_glass.css")).read_text(encoding="utf-8")
-    st.markdown("<style>" + " ".join(line.strip() for line in glass.splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
+    indigo = (Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8")   # re-assert after the dashboard sheet
+    st.markdown("<style>" + " ".join(line.strip() for line in (glass + chr(10) + indigo).splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
 
 
 def esc(value) -> str:
@@ -725,32 +726,32 @@ def html(markup: str) -> None:
 _FONTS_LINK = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@400;500;600;700'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500'
     '&display=swap" rel="stylesheet">'
 )
 
 # Line icons for the sidebar nav, drawn as CSS masks so they inherit the row's colour.
-_NAV_ICONS = {
-    "home": '<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/>',
-    "overview": '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
-    "datasets": '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    "analyses": '<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>',
-    "scheduled": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    "dashboards": '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
-    "reports": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M8.5 13h7M8.5 17h5"/>',
-    "audit": '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2"/>',
-    "workspaces": '<path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/>',
-    "team_overview": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5a3 3 0 0 1 0 6M18 14c1.8.6 3 2.4 3 4.5"/>',
-    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
-    "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
-    "copilot": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
-    "analyst": '<path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2 8 12.7 4 8.8l5.5-.8z"/>',
-    "investigations": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M8 10.5h5M10.5 8v5"/>',
-    "what_if": '<path d="M4 18c4 0 4-12 8-12s4 12 8 12"/><path d="M4 21h16"/>',
-    "data_quality": '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M12 8v5M12 16v.5"/>',
-    "semantic": '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7"/>',
-    "evaluation": '<path d="M9 3h6v4l4 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L9 7z"/><path d="M8 14h8"/>',
-    "discussion": '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/>',
+_NAV_ICONS = {   # Lucide (lucide.dev), one consistent stroke family
+    "home": '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    "overview": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    "datasets": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+    "analyses": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
+    "analyst": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    "investigations": '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    "what_if": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+    "copilot": '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+    "scheduled": '<path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/>',
+    "dashboards": '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+    "reports": '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    "audit": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+    "data_quality": '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+    "semantic": '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+    "evaluation": '<path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/>',
+    "discussion": '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    "team_overview": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    "workspaces": '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
+    "settings": '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+    "logout": '<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>',
 }
 
 
@@ -770,28 +771,35 @@ def _nav_icon_css() -> str:
 # elements, so nothing else on a page changes.
 _READABLE_TEXT_CSS = (
     "<style>"
-    "[data-testid='stChatMessage']{background:#ffffff;border:1px solid #e4e4ee;border-radius:10px;}"
-    "[data-testid='stChatMessage'] *,[data-testid='stExpander'] *{color:#1f2330;}"
-    "[data-testid='stChatMessage'] th,[data-testid='stChatMessage'] td{border:1px solid #e4e4ee;padding:2px 8px;}"
-    # The text colour above is dark, so code chips and code blocks need a light
-    # background too; a dark-mode browser otherwise gives them a dark one.
+    "[data-testid='stChatMessage']{background:rgba(24,17,60,.7);border:1px solid rgba(167,139,250,.22);border-radius:10px;}"
+    "[data-testid='stChatMessage'] *,[data-testid='stExpander'] *{color:#ece8ff;}"
+    "[data-testid='stChatMessage'] th,[data-testid='stChatMessage'] td{border:1px solid rgba(167,139,250,.22);padding:2px 8px;}"
+    # light text on the indigo surface: code chips and blocks get a deep, translucent background
     "[data-testid='stChatMessage'] code,[data-testid='stChatMessage'] pre,"
-    "[data-testid='stExpander'] code,[data-testid='stExpander'] pre{background:#eef0f5 !important;}"
+    "[data-testid='stExpander'] code,[data-testid='stExpander'] pre{background:rgba(8,5,26,.8) !important;}"
     "[data-testid='stExpander'] summary,[data-testid='stExpander'] [data-testid='stJson']"
-    "{background:#f6f7fb !important;}"
-    "[data-testid='stTabs'] [role='tab'][aria-selected='false'] p{color:#5b6070 !important;}"
+    "{background:rgba(24,17,60,.55) !important;}"
+    "[data-testid='stTabs'] [role='tab'][aria-selected='false'] p{color:#a9a3d6 !important;}"
     "[data-testid='stSelectbox'] input,[data-testid='stSelectbox'] p,[data-testid='stMultiSelect'] input,"
-    "[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,[data-testid='stNumberInput'] input,"
-    "[data-testid='stWidgetLabel'] p"
-    "{color:#1f2330 !important;-webkit-text-fill-color:#1f2330 !important;}"
+    "[data-testid='stTextInput'] input,[data-testid='stTextArea'] textarea,[data-testid='stNumberInput'] input"
+    "{color:#ece8ff !important;-webkit-text-fill-color:#ece8ff !important;}"
+    "[data-testid='stWidgetLabel'] p{color:#b6b0e0 !important;-webkit-text-fill-color:#b6b0e0 !important;}"
     "</style>"
 )
+
+
+def _sidebar_css() -> str:
+    """The sidebar's final stylesheet (style/sidebar.css). Loaded after every other skin so it has the last word."""
+    raw = Path(__file__).with_name("sidebar.css").read_text(encoding="utf-8")
+    return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
 
 
 def inject_base_css() -> None:
     skin = (Path(__file__).with_name("silt.css")).read_text(encoding="utf-8") + "\n" + (
         Path(__file__).with_name("glass.css")).read_text(encoding="utf-8") + "\n" + (
-        Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8")
+        Path(__file__).with_name("mindset.css")).read_text(encoding="utf-8") + "\n" + (
+        Path(__file__).with_name("indigo.css")).read_text(encoding="utf-8") + chr(10) + (
+        Path(__file__).with_name("workbench.css")).read_text(encoding="utf-8")
     # Flatten to one line: markdown ends an HTML block at the first blank line,
     # which would spill the rest of the stylesheet onto the page as text.
     skin = " ".join(line.strip() for line in skin.splitlines() if line.strip())
@@ -799,6 +807,18 @@ def inject_base_css() -> None:
     st.markdown(_FONTS_LINK, unsafe_allow_html=True)
     st.markdown(f"<style>{skin} {_nav_icon_css()}</style>", unsafe_allow_html=True)
     st.markdown(_READABLE_TEXT_CSS, unsafe_allow_html=True)
+    st.markdown(_ONBOARD_HANDOFF_CSS, unsafe_allow_html=True)
+    st.markdown(_sidebar_css(), unsafe_allow_html=True)
+
+
+# After "Create workspace" the next run (the real page) can take several seconds on a slow backend or database, and
+# Streamlit keeps the previous run's forms on screen, dimmed, until it finishes. Those stale onboarding cards are hidden and a
+# short message is shown instead, so it reads as "loading" rather than as a broken, repeated form.
+_ONBOARD_HANDOFF_CSS = """<style>
+[class*="st-key-card_onboard"]:has([data-stale="true"]), [class*="st-key-onb_logout"]:has([data-stale="true"]) { display: none !important; }
+[data-testid="stMainBlockContainer"]:has([class*="st-key-card_onboard"] [data-stale="true"])::before {
+  content: "Setting up your workspace…"; display: block; margin: 22vh auto 0; text-align: center; font-size: 1.05rem; color: #bdb9cc; letter-spacing: .01em; }
+</style>"""
 
 
 def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
@@ -806,7 +826,7 @@ def page_setup(title: str, sidebar: bool = True, public: bool = False) -> None:
         page_title=f"{title} · SILT",
         page_icon="▤",
         layout="wide",
-        initial_sidebar_state="expanded" if sidebar else "collapsed",
+        initial_sidebar_state="auto" if sidebar else "collapsed",
     )
     if public:
         # Anonymous read-only pages (share links): no gates, no team, no nav.
@@ -907,6 +927,16 @@ def _consume_invite_param() -> None:
     st.query_params.clear()
 
 
+def _reload_page() -> None:
+    """Load the page afresh after a workspace step. Redrawing in place left the onboarding card on screen above
+    the new page (the browser kept that block when the next run drew over it); a full load starts from a clean page,
+    and the sign-in cookie brings the user straight back to Home."""
+    import streamlit.components.v1 as components
+    st.markdown("<style>[class*='st-key-card_onboard']{display:none !important}</style>", unsafe_allow_html=True)
+    components.html("<script>window.parent.location.reload();</script>", height=0)
+    st.stop()
+
+
 def _require_team_onboarding() -> None:
     """Full-screen first-run step for a logged-in user with no team: accept a
     pending invite or create a workspace, with no app nav shown. Every
@@ -952,7 +982,8 @@ def _require_team_onboarding() -> None:
                         try:
                             accept_invite(inv["team_id"])
                             invalidate_workspaces_cache()
-                            st.rerun()
+                            st.session_state["_go_home"] = True
+                            _reload_page()
                         except ApiError as e:
                             st.error(f"Could not accept: {e}")
         html("<div style='height:14px'></div>")
@@ -973,7 +1004,8 @@ def _require_team_onboarding() -> None:
                     st.session_state["active_community_id"] = community["id"]
                     st.session_state["active_team_id"] = team["id"]
                     invalidate_workspaces_cache()
-                    st.rerun()
+                    st.session_state["_go_home"] = True
+                    _reload_page()
                 except ApiError as e:
                     st.error(f"Could not create workspace: {e}")
 
@@ -988,7 +1020,8 @@ def _require_team_onboarding() -> None:
                 invalidate_workspaces_cache()
                 st.session_state["active_team_id"] = result["team_id"]
                 st.session_state["active_community_id"] = result["community_id"]
-                st.rerun()
+                st.session_state["_go_home"] = True
+                _reload_page()
             except ApiError as e:
                 st.error(f"Could not use that invitation: {e}")
 
@@ -1024,8 +1057,14 @@ NAV_PAGES = [
     ("discussion", "Discussion", "pages/18_Discussion.py"),
     ("workspaces", "Workspaces", "pages/8_Workspaces.py"),
     ("team_overview", "Team overview", "pages/9_Team_Overview.py"),
-    ("settings", "Settings", "pages/7_Settings.py"),
 ]
+
+
+# Everyday pages sit in the rail; the rest are one click away under "More" (nothing is removed, and the section opens by
+# itself when you are on one of its pages). Every key is a key of NAV_PAGES.
+NAV_MAIN = ["home", "overview", "datasets", "analyses", "analyst", "investigations", "what_if", "dashboards", "reports"]
+NAV_MORE = ["copilot", "scheduled", "audit", "data_quality", "semantic", "evaluation",
+            "discussion", "team_overview", "workspaces"]
 
 
 @st.cache_data(ttl=5)
@@ -1125,14 +1164,11 @@ def _active_workspace_name(user: dict | None) -> str:
 def render_topbar() -> None:
     """Fixed top strip, right-aligned: live backend status and the active workspace."""
     user = current_user()
-    alive = _backend_alive()
     name = _active_workspace_name(user)
     initials = "".join(w[0] for w in (user or {}).get("display_name", name).split()[:2]).upper() or "•"
     html(
         f"""
         <div class="silt-topbar">
-          <div class="silt-tb-status"><span class="silt-dot {'silt-dot-on' if alive else 'silt-dot-off'}"></span>
-            {'Backend online' if alive else 'Backend unreachable'}</div>
           <div class="silt-tb-user"><div class="silt-tb-avatar">{esc(initials)}</div>
             <div class="silt-tb-ws">{esc(name)}</div></div>
         </div>
@@ -1146,33 +1182,68 @@ def render_topbar() -> None:
                 st.rerun()
 
 
+_LOGO_MARK = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" '
+    'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
+)
 _LOGO = (
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#837ab6" stroke-width="2" '
     'stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>'
 )
 
 
+def _account_card() -> None:
+    """The workspace / account selector at the foot of the sidebar: a card showing where you are; it opens the workspace
+    switcher and Log out. Only the label is new, the switcher and the log-out button are the existing ones."""
+    user = current_user() or {}
+    active_team = st.session_state.get("active_team_id")
+    workspace, team = _active_workspace_name(user), ""
+    try:
+        for c in _cached_my_workspaces()["communities"]:
+            for t in c["teams"]:
+                if t["id"] == active_team:
+                    workspace, team = c["name"], t["name"]
+    except ApiError:
+        pass
+    who = (user.get("display_name") or user.get("email") or "Account").strip()
+    initial = (workspace[:1] or who[:1] or "S").upper()
+    sub = f"{team} \u00b7 {who}" if team else who
+    css_str = lambda v: '"' + str(v).replace("\\", "").replace('"', "").replace("\n", " ")[:42] + '"'
+    st.markdown(f"<style>.st-key-sb_account button{{--ini:{css_str(initial)};--sub:{css_str(sub)};}}</style>", unsafe_allow_html=True)
+    with st.container(key="sb_account"):
+        with st.popover(workspace or "Workspace", use_container_width=True):
+            _render_workspace_switcher()
+            if current_user() and st.button("Log out", key="nav_logout"):
+                logout()
+                st.rerun()
+
+
 def render_sidebar(current: str) -> None:
-    """Logo, icon nav rail, workspace switcher, log-out; plus the top status strip."""
+    """Brand, grouped navigation, and the workspace / account card; plus the top status strip."""
     render_topbar()
     if st.session_state.get("flash"):
         st.success(st.session_state.pop("flash"))
     if st.session_state.get("flash_error"):
         st.error(st.session_state.pop("flash_error"))
     with st.sidebar:
-        html(f'<div class="silt-brand2">{_LOGO}<div class="n">Silt</div></div>')
+        html(f'<div class="sb-brand"><div class="sb-logo">{_LOGO_MARK}</div>'
+             '<div class="sb-wm"><b>Silt</b><span>Data intelligence</span></div></div>')
         with st.container(key="nav"):
             unread = _unread_alert_count()
-            for key, label, target in NAV_PAGES:
-                shown = f"{label}  ·  {unread}" if key == "scheduled" and unread else label
+            pages = {key: (label, target) for key, label, target in NAV_PAGES}
+
+            def _item(key: str) -> None:
+                label, target = pages[key]
+                shown = f"{label}  \u00b7  {unread}" if key == "scheduled" and unread else label
                 if st.button(shown, key=f"nav_{key}", disabled=(key == current)):
                     st.switch_page(target)
-            if current_user() and st.button("Log out", key="nav_logout"):
-                logout()
-                st.rerun()
 
-        html('<div class="silt-ws-label">Workspace</div>')
-        _render_workspace_switcher()
+            for key in NAV_MAIN:
+                _item(key)
+            with st.expander("More", expanded=current in NAV_MORE):
+                for key in NAV_MORE:
+                    _item(key)
+        _account_card()
 
 
 def require_active_team(title: str = "") -> None:
@@ -1369,22 +1440,22 @@ def style_chart(fig: go.Figure, height: int = 300, showlegend: bool = False,
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#52525b", family="Inter, system-ui, sans-serif", size=12),
+        font=dict(color="#b6b0e0", family="Inter, system-ui, sans-serif", size=12),
         colorway=colorway,
         margin=dict(l=8, r=8, t=8, b=8),
         height=height,
         showlegend=showlegend,
-        legend=dict(font=dict(color="#52525b"), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#d4d4d8",
-                        font=dict(color="#18181b", family="Inter, system-ui, sans-serif")),
+        legend=dict(font=dict(color="#b6b0e0"), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#1b1347", bordercolor="#4c3d9a",
+                        font=dict(color="#ece8ff", family="Inter, system-ui, sans-serif")),
         # empty string, not None -- None leaves the title node in place and
         # Plotly renders a literal "undefined" tspan above the plot
         title=dict(text=""),
     )
-    fig.update_xaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
-                     color="#71717a", showline=False, ticks="")
-    fig.update_yaxes(gridcolor="#f0f0f2", zerolinecolor="#e4e4e7",
-                     color="#71717a", showline=False, ticks="")
+    fig.update_xaxes(gridcolor="rgba(167,139,250,0.12)", zerolinecolor="rgba(167,139,250,0.28)",
+                     color="#a9a3d6", showline=False, ticks="")
+    fig.update_yaxes(gridcolor="rgba(167,139,250,0.12)", zerolinecolor="rgba(167,139,250,0.28)",
+                     color="#a9a3d6", showline=False, ticks="")
     if recolor:
         _recolor_traces(fig, colorway)
     return fig
@@ -1487,7 +1558,7 @@ def dashboard_chart(fig: go.Figure, own_traces: bool = False) -> go.Figure:
         font=dict(color=c["muted"], family=family, size=12),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     font=dict(color=c["muted"], size=12), bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor=c["line"], font=dict(color=c["text"], family=family)),
+        hoverlabel=dict(bgcolor="#1b1347", bordercolor=c["line"], font=dict(color=c["text"], family=family)),
         margin=dict(l=8, r=8, t=40 if legend_shown else 12, b=8),
     )
     axis = dict(gridcolor=c["grid"], zerolinecolor=c["line"], linecolor=c["line"], color=c["muted"],
@@ -1646,3 +1717,34 @@ def _inspect_dialog() -> None:
     if st.button("Close", key="inspect_close"):
         st.session_state["_inspect_open"] = False
         st.rerun()
+
+
+_INTRO_CSS = """<style>
+.pi { margin: 4px 0 26px; max-width: 760px; }
+.pi .pi-lede { font: 400 15.5px/1.65 "Inter", system-ui, sans-serif; color: #b4b0c6; margin: 0; }
+.pi details { margin-top: 14px; }
+.pi summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: 500 13.5px/1 "Inter", system-ui, sans-serif; color: #d9d5e8; padding: 7px 0; }
+.pi summary::-webkit-details-marker { display: none; }
+.pi summary::before { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; margin-right: 2px; }
+.pi details[open] summary::before { transform: rotate(45deg); }
+.pi summary:hover { color: #f3b24f; }
+.pi .pi-steps { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 0 28px; margin: 10px 0 0; padding: 16px 0 0; border-top: 1px solid rgba(242,239,231,.10); list-style: none; counter-reset: pi; }
+@media (max-width: 760px) { .pi .pi-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pi .pi-steps li { counter-increment: pi; font: 400 14px/1.55 "Inter", system-ui, sans-serif; color: #b4b0c6; padding: 0 0 14px; }
+.pi .pi-steps li::before { content: counter(pi, decimal-leading-zero); display: block; font: 500 12px/1 "JetBrains Mono", ui-monospace, Consolas, monospace; color: #f3b24f; margin-bottom: 8px; letter-spacing: .04em; }
+.pi .pi-note { margin: 2px 0 0; font: 400 13px/1.55 "Inter", system-ui, sans-serif; color: #8c88a3; }
+</style>"""
+
+
+def page_intro(purpose: str, steps: list[str] | None = None, tip: str | None = None) -> None:
+    """A short plain-language description under a page title, with the steps folded behind "How it works".
+    Written for someone seeing the page for the first time. Static text only; it never calls the backend."""
+    body = f'<p class="pi-lede">{esc(purpose)}</p>'
+    if steps:
+        items = "".join(f"<li>{esc(s)}</li>" for s in steps)
+        note = f'<p class="pi-note">{esc(tip)}</p>' if tip else ""
+        body += f'<details><summary>How it works</summary><ol class="pi-steps" style="--n:{min(len(steps), 4)}">{items}</ol>{note}</details>'
+    elif tip:
+        body += f'<p class="pi-note" style="margin-top:8px;">{esc(tip)}</p>'
+    st.markdown(_INTRO_CSS, unsafe_allow_html=True)
+    html(f'<div class="pi">{body}</div>')

@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import config, data_quality, fallbacks, jobs, provenance
+from app import config, data_quality, fallbacks, jobs, provenance, stored_files
 from app.database import get_db, init_db
 from app.dataset_versions import add_version, latest_version, version_count
 from app.logging_config import setup_logging
@@ -35,6 +35,7 @@ from app.profiling import load_and_profile_csv
 from app.routers.auth import router as auth_router
 from app.routers.alerts import router as alerts_router
 from app.routers.chat import router as chat_router
+from app.routers.copilot_history import router as copilot_history_router
 from app.routers.insights import router as insights_router
 from app.routers.correlations import router as correlations_router
 from app.routers.chart_views import router as chart_views_router
@@ -48,6 +49,7 @@ from app.routers.quality import router as quality_router
 from app.routers.scenario_evidence import router as scenario_evidence_router
 from app.routers.scenario_models import router as scenario_models_router
 from app.routers.scenarios import router as scenarios_router
+from app.routers.whatif import router as whatif_router
 from app.routers.semantic import router as semantic_router
 from app.routers.analyst import router as analyst_router
 from app.routers.inspect import router as inspect_router
@@ -98,6 +100,7 @@ app.include_router(insights_router)
 app.include_router(correlations_router)
 app.include_router(alerts_router)
 app.include_router(chat_router)
+app.include_router(copilot_history_router)
 app.include_router(scheduled_router)
 app.include_router(chart_views_router)
 app.include_router(jobs_router)
@@ -107,6 +110,7 @@ app.include_router(org_router)
 app.include_router(quality_router)
 app.include_router(copilot_router)
 app.include_router(scenarios_router)
+app.include_router(whatif_router)
 app.include_router(scenario_models_router)
 app.include_router(scenario_evidence_router)
 app.include_router(semantic_router)
@@ -118,6 +122,8 @@ app.include_router(analyst_router)
 def on_startup() -> None:
     setup_logging()
     init_db()
+    from app import stored_files
+    stored_files.restore_missing()
     # Recovery first, then workers: jobs cut off by the last shutdown are back
     # in the queue (or failed, if out of attempts) before anything new starts.
     jobs.start_workers()
@@ -259,6 +265,7 @@ def _dataset_out(db: Session, d: Dataset) -> DatasetProfile:
         uploaded_at=latest.uploaded_at if latest else d.uploaded_at,
         version=latest.version_number if latest else 1,
         version_count=version_count(db, d.id),
+        file_available=stored_files.available(db, latest.filepath if latest else d.filepath),
     )
 
 
@@ -273,6 +280,21 @@ def upload_dataset(
     dest_path, profile = _save_and_profile_upload(file, sheet)
     name = file.filename if not sheet else f"{file.filename} [{sheet}]"
 
+    # The same file uploaded again must not create a second copy: match on name + content hash.
+    digest = provenance.file_sha256(str(dest_path))
+    if digest:
+        for existing in db.query(Dataset).filter(Dataset.team_id == team.id, Dataset.filename == name).all():
+            current = latest_version(db, existing)
+            if current is not None and provenance.fingerprint(db, current) == digest:
+                try:
+                    if str(dest_path) != str(current.filepath):
+                        Path(dest_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+                out = _dataset_out(db, existing)
+                out.already_existed = True
+                return out
+
     dataset = Dataset(
         team_id=team.id,
         filename=name,
@@ -285,6 +307,9 @@ def upload_dataset(
     db.commit()
     db.refresh(dataset)
     version = add_version(db, dataset, filename=name, filepath=str(dest_path), profile=profile)
+    if digest and not version.content_sha256:
+        version.content_sha256 = digest
+        db.commit()
     _after_new_version(db, dataset, version)
     return _dataset_out(db, dataset)
 

@@ -112,7 +112,13 @@ def infer_spec(profile: dict, question: str, resolved_metrics: list[dict] | None
             formula, label = f'sum("{numeric[0]}")', f"Total {numeric[0]}"
     if formula is None:
         return None
-    return {"formula": formula, "label": label, "filters": filters, "time_column": time_cols[0], "question": question}
+    notes: list[str] = []
+    if not filters:
+        from app import root_cause as rc
+        used = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", formula))
+        filters, notes = rc.infer_scope(profile, question, {time_cols[0], *used})
+    return {"formula": formula, "label": label, "filters": filters, "time_column": time_cols[0], "question": question,
+            "scope_notes": notes}
 
 
 _MONTHS = {m: i + 1 for i, m in enumerate(
@@ -545,7 +551,7 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
             "the totals is the difference in length, and there is no material change to explain."), **base}
 
     requested = spec.get("dimensions")
-    exclude = {time_column, *formula.columns}
+    exclude = {time_column, *formula.columns, *(f["column"] for f in base_filters if f["op"] in ("==", "in"))}
     dims = [d for d in requested if d in df.columns and d not in exclude] if requested \
         else candidate_dimensions(profile, exclude)
     skipped = dims[budget.max_dimensions:]
@@ -704,8 +710,21 @@ def investigate(df: pd.DataFrame, profile: dict, spec: dict, budget: Budget | No
                       "y": [pvm["price_effect"], pvm["volume_effect"], pvm["entry_exit_effect"], delta]}],
             "layout": {"title": {"text": "Price, volume and entry/exit effects"}}}})
 
+    root_cause = None
+    if budget.exhausted == "":
+        try:
+            from app import root_cause as rc
+            root_cause = rc.diagnose(
+                df, profile, formula=formula, label=label, base_filters=base_filters, time_column=time_column,
+                period_a=period_a, period_b=period_b, fa=fa, fb=fb, scale=scale, delta=explain, base=base,
+                dimensions=dimensions, ranked=ranked, question=spec.get("question") or "", inputs=spec,
+                within_noise=within_noise, comparability=comparability, spec_notes=list(spec.get("scope_notes") or []),
+                budget=Budget(max_engine_calls=240, max_seconds=20.0))
+        except (me.FormulaError, ValueError, KeyError, TypeError) as e:   # the decomposition stands without it
+            root_cause = {"error": f"The root-cause evidence layer could not run: {e}"}
+
     return {
-        **base, "status": "complete" if conclusive else "inconclusive", "summary": summary,
+        **base, "status": "complete" if conclusive else "inconclusive", "summary": summary, "root_cause": root_cause,
         "decomposition_method": "additive" if formula.is_additive else "rate_and_mix" if parts else "not_decomposable",
         "dimensions": dimensions, "ranked_contributors": ranked[:15], "price_volume": pvm,
         "drilldowns": drilldowns, "hypotheses": hypotheses, "unresolved": unresolved,

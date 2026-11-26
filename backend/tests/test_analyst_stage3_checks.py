@@ -9,7 +9,7 @@ import pytest
 from app.analyst import calc, intent, nl_planner, orchestrator, scope, verify
 from app.analyst.data import load_table
 
-from test_analyst_stage1_guards import _orders  # noqa: F401
+from test_analyst_stage1_guards import _orders, pinned_clock  # noqa: F401
 
 TODAY = pd.Timestamp("2026-11-17")
 

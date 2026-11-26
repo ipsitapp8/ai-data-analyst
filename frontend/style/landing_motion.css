@@ -1,0 +1,285 @@
+/* Landing page only: every rule hangs off .lm-scope, which exists only on the signed-out landing view, so the sign-in
+   page and the app are untouched. Same design language as the Home, Root-cause and What-if pages: gold accent, serif
+   headlines, mono labels, hairline cards with small corners. The blob and the page background are left as they are. */
+.stApp:has(.lm-scope) {
+  --lm-ink: #f2efe7; --lm-ink-2: #bdb9cc; --lm-ink-3: #8c88a3;
+  --lm-line: rgba(242,239,231,.11); --lm-line-2: rgba(242,239,231,.22); --lm-panel: rgba(255,255,255,.03);
+  --lm-card: rgba(14,11,32,.82);
+  --lm-amber: #f3b24f; --lm-amber-hi: #ffc66e; --lm-amber-soft: rgba(243,178,79,.14);
+  --lm-serif: "Newsreader", "Source Serif 4", Georgia, serif; --lm-sans: "Inter", system-ui, sans-serif; --lm-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+/* ------------------------------------------------------------------ hero */
+.stApp:has(.lm-scope) .lp-kicker { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
+  font: 500 11px/1 var(--lm-mono) !important; letter-spacing: .16em !important; text-transform: uppercase !important; color: var(--lm-ink-3) !important; display: inline-flex !important; align-items: center !important; gap: 12px !important; }
+.stApp:has(.lm-scope) .lp-kicker .dot { width: 22px !important; height: 1px !important; border-radius: 0 !important; background: var(--lm-amber) !important; box-shadow: none !important; animation: none !important; }
+.stApp:has(.lm-scope) .lp-title { font: 500 clamp(2.7rem, 5.2vw, 4.7rem)/1.04 var(--lm-serif) !important; letter-spacing: -.025em !important; color: var(--lm-ink) !important; animation: none !important; }
+.stApp:has(.lm-scope) .lp-title .l1 { display: block; font: italic 400 clamp(1.5rem, 2.4vw, 2.1rem)/1.2 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink-3) !important; -webkit-text-fill-color: var(--lm-ink-3) !important; margin-bottom: 8px; }
+.stApp:has(.lm-scope) .lp-title .grad { font-style: italic !important; background: none !important; color: var(--lm-amber-hi) !important; -webkit-text-fill-color: var(--lm-amber-hi) !important; }
+.stApp:has(.lm-scope) .lp-sub { font: 400 16.5px/1.65 var(--lm-sans) !important; color: var(--lm-ink-2) !important; animation: none !important; }
+.stApp:has(.lm-scope) .lp-ctas { animation: none !important; }
+
+/* the three agent cards around the blob */
+.stApp:has(.lm-scope) .lp-panel { background: var(--lm-card) !important; border: 1px solid var(--lm-line-2) !important; border-radius: 6px !important; box-shadow: none !important; }
+.stApp:has(.lm-scope) .lp-panel.on { border-color: rgba(243,178,79,.7) !important; box-shadow: 0 0 36px rgba(243,178,79,.14) !important; }
+.stApp:has(.lm-scope) .lp-ptag { font: 500 10px/1 var(--lm-mono) !important; letter-spacing: .14em !important; color: var(--lm-amber) !important; }
+.stApp:has(.lm-scope) .lp-ptag i { background: var(--lm-amber) !important; box-shadow: none !important; border-radius: 1px !important; }
+.stApp:has(.lm-scope) .lp-ptitle { font: 500 20px/1.2 var(--lm-serif) !important; letter-spacing: -.005em !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-pline { font: 400 13px/1.45 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+.stApp:has(.lm-scope) .lp-pline.lp-dim { color: var(--lm-ink-3) !important; }
+.stApp:has(.lm-scope) .lp-pmeter b { background: var(--lm-amber) !important; }
+.stApp:has(.lm-scope) .lp-core-cap { font: 400 11px/1.4 var(--lm-mono) !important; color: var(--lm-ink-3) !important; }
+
+/* hero rise-in, driven by the script so each piece can follow the one before it */
+@keyframes lm-intro { from { opacity: 0; transform: translateY(30px); filter: blur(7px); } to { opacity: 1; transform: none; filter: none; } }
+.stApp:has(.lm-scope) .lm-intro { animation: lm-intro 1s cubic-bezier(.2,.7,.2,1) both !important; }
+
+/* scroll cue */
+.stApp:has(.lm-scope) .lm-cue { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 4vh 0 0; font: 500 10px/1 var(--lm-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--lm-ink-3); }
+.stApp:has(.lm-scope) .lm-cue i { width: 1px; height: 38px; background: linear-gradient(var(--lm-amber), transparent); transform-origin: top; animation: lm-cue 2.2s ease-in-out infinite; }
+@keyframes lm-cue { 0% { transform: scaleY(0); opacity: 0; } 40% { opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+
+/* ------------------------------------------------------------ the strip */
+.stApp:has(.lm-scope) .lp-strip { background: transparent !important; border-color: var(--lm-line) !important; }
+.stApp:has(.lm-scope) .lp-strip span, .stApp:has(.lm-scope) .lp-strip span:nth-child(2), .stApp:has(.lm-scope) .lp-strip span:nth-child(4) {
+  font: 500 12px/1.2 var(--lm-mono) !important; letter-spacing: .14em !important; text-transform: uppercase !important; color: var(--lm-ink-2) !important; }
+
+/* ------------------------------------------------------------- sections */
+.stApp:has(.lm-scope) .lp-eyebrow { background: none !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; font: 500 10.5px/1 var(--lm-mono) !important; letter-spacing: .16em !important; color: var(--lm-amber) !important;
+  display: inline-flex !important; align-items: center; gap: 12px; }
+.stApp:has(.lm-scope) .lp-eyebrow::before, .stApp:has(.lm-scope) .lp-eyebrow::after { content: ""; width: 22px; height: 1px; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .lp-h2 { font: 500 clamp(2.1rem, 4vw, 3.4rem)/1.08 var(--lm-serif) !important; letter-spacing: -.02em !important; color: var(--lm-ink) !important; margin: 18px 0 40px !important; }
+.stApp:has(.lm-scope) .lp-h2 .w, .stApp:has(.lm-scope) .lm-big .w { display: inline-block; opacity: 0; transform: translateY(.55em); filter: blur(5px); font: inherit !important; color: inherit !important;
+  transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1), filter .7s; transition-delay: calc(var(--i) * 85ms); }
+.stApp:has(.lm-scope) .lp-h2.lm-in .w, .stApp:has(.lm-scope) .lm-big.lm-in .w { opacity: 1; transform: none; filter: none; }
+.stApp:has(.lm-scope) .lp-h2.lm-r, .stApp:has(.lm-scope) .lm-big.lm-r { opacity: 1; transform: none; }                /* the words carry the motion */
+.stApp:has(.lm-scope) .lp-h2.lm-now .w, .stApp:has(.lm-scope) .lm-big.lm-now .w { transition: none; }
+
+/* feature cards */
+.stApp:has(.lm-scope) .lp-feats { gap: 24px !important; }
+.stApp:has(.lm-scope) .lp-feat { --mx: 50%; --my: 0px; --py: 0px; translate: 0 var(--py); position: relative; overflow: hidden; background: var(--lm-panel) !important; border: 1px solid var(--lm-line) !important; border-radius: 6px !important; box-shadow: none !important; padding: 14px 14px 28px !important; }
+.stApp:has(.lm-scope) .lp-feat::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(280px circle at var(--mx) var(--my), rgba(243,178,79,.16), transparent 70%); }
+.stApp:has(.lm-scope) .lp-feat::after { content: ""; position: absolute; left: 0; top: 0; height: 1px; width: 100%; background: var(--lm-amber); transform: scaleX(0); transform-origin: left; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.stApp:has(.lm-scope) .lp-feat:hover { border-color: var(--lm-line-2) !important; }
+.stApp:has(.lm-scope) .lp-feat:hover::before { opacity: 1; }
+.stApp:has(.lm-scope) .lp-feat:hover::after { transform: scaleX(1); }
+.stApp:has(.lm-scope) .lp-feat > b { position: relative; font: 500 24px/1.15 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink) !important; margin: 20px 10px 8px !important; }
+.stApp:has(.lm-scope) .lp-feat > p { position: relative; font: 400 14.5px/1.6 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+.stApp:has(.lm-scope) .lp-fvis { border-radius: 4px !important; position: relative; }
+
+/* steps */
+.stApp:has(.lm-scope) .lp-steps { --lm-p: 0; }
+.stApp:has(.lm-scope) .lp-steps::before { border-top: 1px solid var(--lm-line-2) !important; }
+.stApp:has(.lm-scope) .lp-steps::after { content: ""; position: absolute; left: 6%; right: 6%; top: 22px; border-top: 1px solid var(--lm-amber); transform-origin: left; transform: scaleX(var(--lm-p)); }
+.stApp:has(.lm-scope) .lp-steps em { border-radius: 6px !important; background: #0f0b24 !important; border: 1px solid var(--lm-line-2) !important; color: var(--lm-amber) !important; font: 500 14px/1 var(--lm-mono) !important; box-shadow: none !important; position: relative; z-index: 1;
+  transition: border-color .8s ease .25s, box-shadow .8s ease .25s; }
+.stApp:has(.lm-scope) .lp-steps > div.lm-in em { border-color: var(--lm-amber) !important; box-shadow: 0 0 0 4px rgba(243,178,79,.08), 0 0 26px rgba(243,178,79,.28) !important; }
+.stApp:has(.lm-scope) .lp-steps b { font: 500 22px/1.15 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-steps p { font: 400 14px/1.55 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+
+/* ------------------------------------------- reveal as you scroll.
+   Hidden only after the script has marked an element (.lm-r) and until it enters the screen (.lm-in). */
+.stApp:has(.lm-scope) .lm-r { opacity: 0; transform: translateY(30px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); will-change: opacity, transform; }
+.stApp:has(.lm-scope) .lm-r.lm-in { opacity: 1; transform: none; }
+.stApp:has(.lm-scope) .lm-r.lm-now { transition: none !important; }
+
+@media (max-width: 760px) { .stApp:has(.lm-scope) .lp-feat { translate: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .stApp:has(.lm-scope) .lm-r { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .stApp:has(.lm-scope) .lm-intro { animation: none !important; }
+  .stApp:has(.lm-scope) .lp-feat { translate: none; }
+  .stApp:has(.lm-scope) .lp-h2 .w, .stApp:has(.lm-scope) .lm-big .w { opacity: 1; transform: none; filter: none; transition: none; }
+  .stApp:has(.lm-scope) .lm-cue i { animation: none; }
+  .stApp:has(.lm-scope) .lp-steps::after { transform: none; }
+}
+
+/* ============================================================ every tool, grouped */
+.stApp:has(.lm-scope) .lm-all-sub { max-width: 60ch; margin: -18px auto 44px; font: 400 16px/1.6 var(--lm-sans) !important; color: var(--lm-ink-2) !important; text-align: center; }
+.stApp:has(.lm-scope) .lm-groups { text-align: left; }
+.stApp:has(.lm-scope) .lm-fgroup { display: grid; grid-template-columns: 250px 1fr; gap: 36px; padding: 38px 0 40px; border-top: 1px solid var(--lm-line); }
+.stApp:has(.lm-scope) .lm-fgroup:last-child { border-bottom: 1px solid var(--lm-line); }
+.stApp:has(.lm-scope) .lm-fhead .k { font: 500 10.5px/1 var(--lm-mono) !important; letter-spacing: .16em !important; color: var(--lm-amber) !important; margin-bottom: 14px; }
+.stApp:has(.lm-scope) .lm-fhead .t { font: 500 28px/1.12 var(--lm-serif) !important; letter-spacing: -.015em !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lm-fcards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.stApp:has(.lm-scope) .lm-fcard { --mx: 50%; --my: 0px; position: relative; overflow: hidden; background: var(--lm-panel) !important; border: 1px solid var(--lm-line) !important; border-radius: 6px !important; padding: 20px 22px 22px !important; }
+.stApp:has(.lm-scope) .lm-fcard::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(240px circle at var(--mx) var(--my), rgba(243,178,79,.16), transparent 70%); }
+.stApp:has(.lm-scope) .lm-fcard::after { content: ""; position: absolute; left: 0; top: 0; height: 1px; width: 100%; background: var(--lm-amber); transform: scaleX(0); transform-origin: left; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.stApp:has(.lm-scope) .lm-fcard:hover { border-color: var(--lm-line-2) !important; }
+.stApp:has(.lm-scope) .lm-fcard:hover::before { opacity: 1; }
+.stApp:has(.lm-scope) .lm-fcard:hover::after { transform: scaleX(1); }
+.stApp:has(.lm-scope) .lm-fcard .n { position: relative; font: 500 10px/1 var(--lm-mono) !important; letter-spacing: .14em !important; text-transform: uppercase; color: var(--lm-amber) !important; margin-bottom: 12px; }
+.stApp:has(.lm-scope) .lm-fcard > b { position: relative; display: block; font: 500 21px/1.18 var(--lm-serif) !important; letter-spacing: -.01em !important; color: var(--lm-ink) !important; margin: 0 0 8px; }
+.stApp:has(.lm-scope) .lm-fcard > p { position: relative; margin: 0; font: 400 14px/1.55 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+@media (max-width: 980px) { .stApp:has(.lm-scope) .lm-fgroup { grid-template-columns: 1fr; gap: 20px; } }
+@media (max-width: 640px) { .stApp:has(.lm-scope) .lm-fcards { grid-template-columns: 1fr; } }
+
+/* ============================================================ the finale */
+.stApp:has(.lm-scope) .lm-finale { margin: 14vh calc(50% - 50vw) 0; width: 100vw; padding-bottom: 5vh; }
+.stApp:has(.lm-scope) .lm-marq { overflow: hidden; padding: 12px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.stApp:has(.lm-scope) .lm-marq .track { display: flex; gap: 14px; width: max-content; animation: lm-marq 46s linear infinite; }
+.stApp:has(.lm-scope) .lm-marq.rev .track { animation-direction: reverse; animation-duration: 58s; }
+.stApp:has(.lm-scope) .lm-marq:hover .track { animation-play-state: paused; }
+.stApp:has(.lm-scope) .lm-marq span { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; padding: 10px 18px; border: 1px solid var(--lm-line-2); border-radius: 4px; background: rgba(14,11,32,.55);
+  font: 500 12px/1 var(--lm-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--lm-ink-2); }
+.stApp:has(.lm-scope) .lm-marq span i { width: 6px; height: 6px; border-radius: 50%; background: var(--lm-amber); box-shadow: 0 0 10px rgba(243,178,79,.7); }
+@keyframes lm-marq { to { transform: translateX(-50%); } }
+
+@property --lm-ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes lm-spin { to { --lm-ang: 360deg; } }
+.stApp:has(.lm-scope) .lm-final-card { position: relative; width: min(1060px, 86vw); margin: 7vh auto 7vh; padding: 64px 40px 48px; text-align: center; border: 1px solid transparent; border-radius: 10px;
+  background: linear-gradient(rgba(12,9,28,.88), rgba(12,9,28,.88)) padding-box, conic-gradient(from var(--lm-ang), rgba(243,178,79,0) 0 52%, rgba(243,178,79,.9) 74%, #fff1cc 84%, rgba(243,178,79,0) 100%) border-box;
+  animation: lm-spin 7s linear infinite; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 30px 90px rgba(0,0,0,.35); }
+.stApp:has(.lm-scope) .lm-final-card .lp-eyebrow { margin-bottom: 6px; }
+.stApp:has(.lm-scope) .lm-big { font: 500 clamp(2.6rem, 6vw, 5rem)/1.04 var(--lm-serif) !important; letter-spacing: -.025em !important; color: var(--lm-ink) !important; margin: 14px 0 18px !important; }
+.stApp:has(.lm-scope) .lm-big em { font-style: italic; color: var(--lm-amber-hi); }
+.stApp:has(.lm-scope) .lm-big em .w { color: var(--lm-amber-hi) !important; }
+.stApp:has(.lm-scope) .lm-final-card > p { max-width: 52ch; margin: 0 auto 30px; font: 400 17px/1.6 var(--lm-sans) !important; color: var(--lm-ink-2) !important; }
+.stApp:has(.lm-scope) .lm-cta { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center; position: relative; }
+.stApp:has(.lm-scope) .lm-cta::before { content: ""; position: absolute; left: 6%; right: 38%; top: 50%; height: 60px; transform: translateY(-50%); background: radial-gradient(closest-side, rgba(243,178,79,.28), transparent); filter: blur(14px); animation: lm-halo 3.2s ease-in-out infinite; z-index: -1; }
+@keyframes lm-halo { 0%, 100% { opacity: .35; transform: translateY(-50%) scale(.9); } 50% { opacity: 1; transform: translateY(-50%) scale(1.12); } }
+.stApp:has(.lm-scope) .lm-proof { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 26px; margin-top: 30px; font: 400 13px/1.4 var(--lm-sans); color: var(--lm-ink-3); }
+.stApp:has(.lm-scope) .lm-proof span::before { content: "\2713"; color: var(--lm-amber); margin-right: 8px; font-weight: 700; }
+.stApp:has(.lm-scope) .lm-foot { width: min(1060px, 86vw); margin: 4vh auto 0; padding-top: 18px; border-top: 1px solid var(--lm-line); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font: 400 11px/1.4 var(--lm-mono); letter-spacing: .06em; color: var(--lm-ink-3); }
+@media (prefers-reduced-motion: reduce) {
+  .stApp:has(.lm-scope) .lm-marq .track, .stApp:has(.lm-scope) .lm-final-card, .stApp:has(.lm-scope) .lm-cta::before { animation: none; }
+}
+
+/* ====================================================== a small animation inside every tool card
+   One 6.5 s loop per card. Items appear in order (s1 ... s5), bars grow, a line draws. Everything is paused until the card
+   has scrolled into view (.lm-in), so the loop starts when you reach it. */
+.stApp:has(.lm-scope) .vis { position: relative; height: 112px; margin-bottom: 20px; padding: 13px 15px; display: flex; flex-direction: column; justify-content: center; gap: 9px; overflow: hidden;
+  background: rgba(4,3,14,.5); border: 1px solid var(--lm-line); border-radius: 4px; font: 400 12.5px/1.2 var(--lm-sans); color: var(--lm-ink-2); }
+.stApp:has(.lm-scope) .vis * { animation-play-state: paused; }
+.stApp:has(.lm-scope) .lm-fcard.lm-in .vis *, .stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis *, .stApp:has(.lm-scope) .lp-steps > div.lm-in .vis * { animation-play-state: running; }
+.stApp:has(.lm-scope) .vis .s1 { animation: lm-s1 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s2 { animation: lm-s2 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s3 { animation: lm-s3 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s4 { animation: lm-s4 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .s5 { animation: lm-s5 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .vis .gx1 { animation: lm-gx1 6.5s ease infinite both; } .stApp:has(.lm-scope) .vis .gx2 { animation: lm-gx2 6.5s ease infinite both; } .stApp:has(.lm-scope) .vis .gx3 { animation: lm-gx3 6.5s ease infinite both; }
+@keyframes lm-s1 { 0%, 3% { opacity: 0; transform: translateY(9px) scale(.96); } 9%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s2 { 0%, 17% { opacity: 0; transform: translateY(9px) scale(.96); } 23%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s3 { 0%, 31% { opacity: 0; transform: translateY(9px) scale(.96); } 37%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s4 { 0%, 45% { opacity: 0; transform: translateY(9px) scale(.96); } 51%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-s5 { 0%, 59% { opacity: 0; transform: translateY(9px) scale(.96); } 65%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-gx1 { 0%, 5% { transform: scaleX(0); } 24%, 88% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+@keyframes lm-gx2 { 0%, 19% { transform: scaleX(0); } 38%, 88% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+@keyframes lm-gx3 { 0%, 33% { transform: scaleX(0); } 52%, 88% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+@keyframes lm-gy { 0%, 5% { transform: scaleY(0); } 26%, 88% { transform: scaleY(1); } 96%, 100% { transform: scaleY(0); } }
+@keyframes lm-draw { 0%, 5% { stroke-dashoffset: 100; } 42%, 88% { stroke-dashoffset: 0; } 96%, 100% { stroke-dashoffset: 100; } }
+@keyframes lm-arc { 0%, 5% { stroke-dashoffset: 100; } 45%, 88% { stroke-dashoffset: 28; } 96%, 100% { stroke-dashoffset: 100; } }
+@keyframes lm-knob { 0%, 8% { left: 16%; } 36%, 62% { left: 74%; } 90%, 100% { left: 16%; } }
+@keyframes lm-sdots { 0%, 17% { opacity: 0; } 22%, 38% { opacity: 1; } 44%, 100% { opacity: 0; } }
+@keyframes lm-dot { 0%, 100% { transform: translateY(0); opacity: .45; } 50% { transform: translateY(-4px); opacity: 1; } }
+@keyframes lm-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes lm-type { 0%, 14% { clip-path: inset(0 100% 0 0); } 38%, 88% { clip-path: inset(0 0 0 0); } 96%, 100% { clip-path: inset(0 100% 0 0); } }
+@keyframes lm-pulse { 0% { box-shadow: 0 0 0 0 rgba(243,178,79,.55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(243,178,79,0); } }
+
+.stApp:has(.lm-scope) .vis .row { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 10px; }
+.stApp:has(.lm-scope) .vis i { display: block; font-style: normal; }
+.stApp:has(.lm-scope) .vis .row > i, .stApp:has(.lm-scope) .v-data .file i { height: 6px; border-radius: 3px; background: rgba(243,178,79,.16); overflow: hidden; }
+.stApp:has(.lm-scope) .vis .row > i u, .stApp:has(.lm-scope) .v-data .file i u { display: block; height: 100%; width: var(--w, 100%); border-radius: 3px; background: var(--lm-amber); transform-origin: left; }
+.stApp:has(.lm-scope) .vis .stamp { align-self: flex-start; padding: 5px 9px; border: 1px solid var(--lm-amber); border-radius: 3px; font: 500 11px/1 var(--lm-mono); letter-spacing: .08em; color: var(--lm-amber); text-transform: uppercase; }
+.stApp:has(.lm-scope) .vis b { font-weight: 500; }
+
+/* Analyses: a question, then the answer typed out */
+.stApp:has(.lm-scope) .v-type .q { align-self: flex-end; padding: 7px 12px; border-radius: 4px; border: 1px solid rgba(243,178,79,.5); background: rgba(243,178,79,.1); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-type .a { align-self: flex-start; padding: 7px 12px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--lm-ink); animation: none; opacity: 1; transform: none; clip-path: inset(0 100% 0 0); animation: lm-type 6.5s steps(18, end) infinite both; }
+.stApp:has(.lm-scope) .v-type .a u { display: inline-block; width: 1px; height: 12px; margin-left: 3px; background: var(--lm-amber); vertical-align: -2px; animation: lm-caret .8s steps(2) infinite; }
+/* Copilot */
+.stApp:has(.lm-scope) .v-chat .u { align-self: flex-end; padding: 7px 12px; border-radius: 4px; background: rgba(243,178,79,.1); border: 1px solid rgba(243,178,79,.5); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-chat .r { position: absolute; left: 15px; bottom: 14px; padding: 7px 12px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-chat .dots { position: absolute; left: 15px; bottom: 16px; display: flex; gap: 4px; padding: 9px 11px; border-radius: 4px; background: rgba(255,255,255,.06); animation: lm-sdots 6.5s infinite both; }
+.stApp:has(.lm-scope) .v-chat .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--lm-amber); animation: lm-dot .9s ease-in-out infinite; } .stApp:has(.lm-scope) .v-chat .dots i:nth-child(2) { animation-delay: .15s; } .stApp:has(.lm-scope) .v-chat .dots i:nth-child(3) { animation-delay: .3s; }
+/* Drill-down: a trail of filters */
+.stApp:has(.lm-scope) .v-drill { flex-direction: row; flex-wrap: wrap; align-content: center; align-items: center; gap: 8px 6px; }
+.stApp:has(.lm-scope) .v-drill span { padding: 6px 10px; border: 1px solid var(--lm-line-2); border-radius: 3px; color: var(--lm-ink); background: rgba(255,255,255,.04); }
+.stApp:has(.lm-scope) .v-drill span.s4 { border-color: var(--lm-amber); color: var(--lm-amber-hi); } .stApp:has(.lm-scope) .v-drill b { color: var(--lm-ink-3); }
+/* Datasets: a file loads, versions stack up */
+.stApp:has(.lm-scope) .v-data .file { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 4px; background: rgba(255,255,255,.05); } .stApp:has(.lm-scope) .v-data .file em { font: 500 12px/1 var(--lm-mono); font-style: normal; color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-data .vers { display: flex; gap: 8px; } .stApp:has(.lm-scope) .v-data .vers span { padding: 5px 10px; border-radius: 3px; border: 1px solid var(--lm-line-2); font: 500 11px/1 var(--lm-mono); color: var(--lm-ink-2); } .stApp:has(.lm-scope) .v-data .vers span.s5 { border-color: var(--lm-amber); color: var(--lm-amber-hi); }
+/* Critic, Audit trail */
+.stApp:has(.lm-scope) .v-crit p, .stApp:has(.lm-scope) .v-log p { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-crit p i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #0c0a1c; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .v-log { padding-left: 38px; } .stApp:has(.lm-scope) .v-log::before { content: ""; position: absolute; left: 18px; top: 18px; bottom: 18px; width: 1px; background: var(--lm-line-2); }
+.stApp:has(.lm-scope) .v-log p u { position: absolute; left: -25px; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; box-sizing: border-box; border-radius: 50%; background: #0f0b24; border: 2px solid var(--lm-amber); }
+.stApp:has(.lm-scope) .v-log p { padding-left: 0; position: relative; }
+/* Semantic layer */
+.stApp:has(.lm-scope) .v-sem code { font: 500 14px/1 var(--lm-mono); color: var(--lm-ink); padding: 9px 12px; border-radius: 4px; background: rgba(255,255,255,.06); align-self: flex-start; }
+/* Root cause, Evaluation, What-if */
+.stApp:has(.lm-scope) .v-rc .hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; } .stApp:has(.lm-scope) .v-rc .hd b { font: 500 22px/1 var(--lm-serif); color: var(--lm-amber-hi); }
+.stApp:has(.lm-scope) .v-wi .row { grid-template-columns: 62px 1fr; } .stApp:has(.lm-scope) .v-wi .sl { height: 4px; border-radius: 2px; background: rgba(242,239,231,.14); position: relative; }
+.stApp:has(.lm-scope) .v-wi .knob { position: absolute; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; background: var(--lm-amber); box-shadow: 0 0 0 4px rgba(243,178,79,.18); animation: lm-knob 6.5s ease-in-out infinite both; }
+.stApp:has(.lm-scope) .v-wi .row b { font: 500 17px/1 var(--lm-serif); color: var(--lm-ink); }
+/* Data quality: a line that drifts */
+.stApp:has(.lm-scope) .v-dq svg { width: 100%; height: 100%; position: absolute; inset: 0; padding: 12px 14px 22px; box-sizing: border-box; overflow: visible; }
+.stApp:has(.lm-scope) .v-dq path { fill: none; stroke: var(--lm-amber); stroke-width: 2; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 100; vector-effect: non-scaling-stroke; animation: lm-draw 6.5s ease infinite both; }
+.stApp:has(.lm-scope) .v-dq circle { fill: var(--lm-amber-hi); } .stApp:has(.lm-scope) .v-dq .tag { position: absolute; left: 14px; bottom: 10px; font: 500 10px/1 var(--lm-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--lm-amber); }
+/* Alerts */
+.stApp:has(.lm-scope) .v-al { gap: 8px; } .stApp:has(.lm-scope) .v-al .toast { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 4px; background: rgba(255,255,255,.06); } .stApp:has(.lm-scope) .v-al .toast i { flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--lm-amber); }
+.stApp:has(.lm-scope) .v-al .toast i.pulse { animation: lm-pulse 1.6s ease-out infinite; } .stApp:has(.lm-scope) .v-al .toast b { display: block; color: var(--lm-ink); font-size: 12px; } .stApp:has(.lm-scope) .v-al .toast span { font-size: 11px; color: var(--lm-ink-3); } .stApp:has(.lm-scope) .v-al .toast.dim { opacity: .8; }
+/* Dashboards: bars that rise */
+.stApp:has(.lm-scope) .v-db { flex-direction: row; align-items: flex-end; gap: 12px; padding-bottom: 14px; }
+.stApp:has(.lm-scope) .v-db i { flex: 1; height: var(--h); border-radius: 3px 3px 0 0; background: linear-gradient(var(--lm-amber), rgba(243,178,79,.25)); transform-origin: bottom; animation: lm-gy 6.5s ease infinite both; animation-delay: calc(var(--n) * .22s); }
+/* Reports: lines are written, then stamped */
+.stApp:has(.lm-scope) .v-rp { gap: 8px; } .stApp:has(.lm-scope) .v-rp .l { margin: 0; height: 6px; border-radius: 3px; background: rgba(242,239,231,.22); transform-origin: left; } .stApp:has(.lm-scope) .v-rp .l.short { width: 60%; }
+/* Scheduled */
+.stApp:has(.lm-scope) .v-sc { flex-direction: row; align-items: center; gap: 14px; } .stApp:has(.lm-scope) .v-sc svg { width: 54px; height: 54px; transform: rotate(-90deg); flex: 0 0 54px; }
+.stApp:has(.lm-scope) .v-sc .track { fill: none; stroke: rgba(242,239,231,.14); stroke-width: 4; } .stApp:has(.lm-scope) .v-sc .arc { fill: none; stroke: var(--lm-amber); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: lm-arc 6.5s ease infinite both; }
+.stApp:has(.lm-scope) .v-sc b { display: block; font: 500 16px/1.2 var(--lm-serif); color: var(--lm-ink); } .stApp:has(.lm-scope) .v-sc span { font: 500 11px/1.3 var(--lm-mono); color: var(--lm-amber); }
+/* Workspaces */
+.stApp:has(.lm-scope) .v-ws { flex-direction: row; flex-wrap: wrap; align-content: center; gap: 8px; } .stApp:has(.lm-scope) .v-ws .t { padding: 8px 12px; border-radius: 4px; border: 1px solid var(--lm-line-2); color: var(--lm-ink); background: rgba(255,255,255,.04); } .stApp:has(.lm-scope) .v-ws .t::before { content: "\25A0"; color: var(--lm-amber); margin-right: 8px; font-size: 9px; }
+.stApp:has(.lm-scope) .v-ws em { width: 100%; font: 500 11px/1 var(--lm-mono); font-style: normal; letter-spacing: .08em; text-transform: uppercase; color: var(--lm-ink-3); }
+/* Shared links */
+.stApp:has(.lm-scope) .v-sh { flex-direction: row; align-items: center; gap: 10px; } .stApp:has(.lm-scope) .v-sh .link { padding: 8px 12px; border-radius: 4px; border: 1px solid var(--lm-line-2); font: 500 12px/1 var(--lm-mono); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .v-sh .dash { flex: 1; height: 0; border-top: 1px dashed var(--lm-amber); } .stApp:has(.lm-scope) .v-sh .badge { padding: 6px 10px; border-radius: 3px; background: var(--lm-amber-soft); color: var(--lm-amber-hi); font: 500 11px/1 var(--lm-mono); letter-spacing: .08em; text-transform: uppercase; }
+/* Discussion */
+.stApp:has(.lm-scope) .v-ds p { margin: 0; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--lm-ink); } .stApp:has(.lm-scope) .v-ds p.me { margin-left: 22px; background: rgba(243,178,79,.1); }
+.stApp:has(.lm-scope) .v-ds p i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--lm-amber); color: #0c0a1c; font: 600 10px/1 var(--lm-mono); }
+
+/* the three 'Why Silt' cards get the same life: lines appear one after another when the card arrives */
+.stApp:has(.lm-scope) .lp-chat > span:nth-child(1), .stApp:has(.lm-scope) .lp-checks > span:nth-child(1), .stApp:has(.lm-scope) .lp-log > span:nth-child(1) { animation: lm-s1 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .lp-chat > span:nth-child(2), .stApp:has(.lm-scope) .lp-checks > span:nth-child(2), .stApp:has(.lm-scope) .lp-log > span:nth-child(2) { animation: lm-s2 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .lp-checks > span:nth-child(3), .stApp:has(.lm-scope) .lp-log > span:nth-child(3) { animation: lm-s3 6.5s cubic-bezier(.2,.7,.2,1) infinite both; }
+.stApp:has(.lm-scope) .lp-feat .lp-fvis span, .stApp:has(.lm-scope) .lp-feat .lp-fvis i { animation-play-state: paused; }
+.stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis span, .stApp:has(.lm-scope) .lp-feat.lm-in .lp-fvis i { animation-play-state: running; }
+
+/* the group title stays in view while its cards scroll past */
+.stApp:has(.lm-scope) .lm-fhead { position: sticky; top: 120px; align-self: start; }
+
+@media (prefers-reduced-motion: reduce) { .stApp:has(.lm-scope) .vis *, .stApp:has(.lm-scope) .lp-chat > span, .stApp:has(.lm-scope) .lp-checks > span, .stApp:has(.lm-scope) .lp-log > span { animation: none !important; opacity: 1 !important; transform: none !important; clip-path: none !important; stroke-dashoffset: 0 !important; } }
+
+/* ====================================================== How it works: each step shows what happens */
+.stApp:has(.lm-scope) .lp-steps .vis { margin: 20px 0 0; height: 122px; }
+.stApp:has(.lm-scope) .lp-steps .vis p { font: 400 12.5px/1.2 var(--lm-sans) !important; color: var(--lm-ink) !important; }
+.stApp:has(.lm-scope) .lp-steps { padding-bottom: 6px; }
+/* a data packet runs along the line from step to step */
+.stApp:has(.lm-scope) .lp-steps .packet { position: absolute; top: 19px; left: 6%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #fff4d6; box-shadow: 0 0 14px 4px rgba(243,178,79,.8); z-index: 2; pointer-events: none; animation: lm-pack 5.5s cubic-bezier(.5,0,.5,1) infinite; }
+@keyframes lm-pack { 0% { left: 6%; opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { left: 94%; opacity: 0; } }
+/* 1: a file drops into the box and loads */
+.stApp:has(.lm-scope) .v-up .drop { height: 48px; border: 1px dashed var(--lm-line-2); border-radius: 4px; display: grid; place-items: center; overflow: hidden; background: rgba(243,178,79,.04); }
+.stApp:has(.lm-scope) .v-up .file { padding: 6px 12px; border-radius: 3px; background: rgba(243,178,79,.12); border: 1px solid rgba(243,178,79,.5); font: 500 12px/1 var(--lm-mono); color: var(--lm-ink); animation: lm-fall 6.5s cubic-bezier(.3,1.4,.5,1) infinite both; }
+.stApp:has(.lm-scope) .v-up .prog { height: 5px; border-radius: 3px; background: rgba(243,178,79,.16); overflow: hidden; }
+.stApp:has(.lm-scope) .v-up .prog u { display: block; height: 100%; background: var(--lm-amber); transform-origin: left; }
+.stApp:has(.lm-scope) .v-up .ok { font: 500 11px/1 var(--lm-mono); color: var(--lm-amber); }
+@keyframes lm-fall { 0%, 3% { opacity: 0; transform: translateY(-40px); } 14% { opacity: 1; transform: none; } 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+/* 3: code appears, runs, finishes */
+.stApp:has(.lm-scope) .v-code code { display: block; font: 500 12.5px/1.2 var(--lm-mono); color: var(--lm-ink); background: rgba(255,255,255,.06); padding: 6px 9px; border-radius: 3px; }
+.stApp:has(.lm-scope) .v-code .run, .stApp:has(.lm-scope) .v-code .done { position: absolute; left: 15px; bottom: 13px; display: flex; align-items: center; gap: 8px; font: 500 11px/1 var(--lm-mono); color: var(--lm-amber); }
+.stApp:has(.lm-scope) .v-code .run { animation: lm-srun 6.5s infinite both; } .stApp:has(.lm-scope) .v-code .done { animation: lm-sdone 6.5s infinite both; }
+.stApp:has(.lm-scope) .v-code .run i { width: 10px; height: 10px; border: 2px solid var(--lm-amber); border-right-color: transparent; border-radius: 50%; animation: lm-rot .8s linear infinite; }
+@keyframes lm-srun { 0%, 34% { opacity: 0; } 38%, 56% { opacity: 1; } 60%, 100% { opacity: 0; } }
+@keyframes lm-sdone { 0%, 58% { opacity: 0; transform: translateY(6px); } 64%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+@keyframes lm-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .stApp:has(.lm-scope) .lp-steps .packet { animation: none; opacity: 0; } .stApp:has(.lm-scope) .v-code .run { display: none; } }
+
+/* multi-column footer */
+.stApp:has(.lm-scope) .lm-footer { width: min(1180px, 88vw); margin: 10vh auto 0; padding: 56px 0 28px; border-top: 1px solid var(--lm-line); }
+.stApp:has(.lm-scope) .lf-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 40px; }
+.stApp:has(.lm-scope) .lf-logo { font: 600 2rem/1 var(--lm-serif); font-style: italic; color: var(--lm-ink); }
+.stApp:has(.lm-scope) .lf-brand p { margin: 14px 0 0; max-width: 30ch; font: 400 15px/1.6 var(--lm-sans); color: var(--lm-ink-2); }
+.stApp:has(.lm-scope) .lf-col h4 { margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--lm-line); font: 600 1.05rem/1.2 var(--lm-serif); color: var(--lm-ink); }
+.stApp:has(.lm-scope) .lf-col a, .stApp:has(.lm-scope) .lf-col span { display: block; padding: 7px 0; font: 400 14.5px/1.4 var(--lm-sans); color: var(--lm-ink-2); text-decoration: none; }
+.stApp:has(.lm-scope) .lf-col a:hover { color: var(--lm-amber); }
+.stApp:has(.lm-scope) .lf-bar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--lm-line); font: 400 11px/1.4 var(--lm-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--lm-ink-3); }
+@media (max-width: 800px) { .stApp:has(.lm-scope) .lf-grid { grid-template-columns: 1fr 1fr; } .stApp:has(.lm-scope) .lf-brand { grid-column: 1 / -1; } }

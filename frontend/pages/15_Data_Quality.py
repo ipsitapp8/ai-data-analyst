@@ -14,6 +14,8 @@ page_setup("Data quality")
 render_sidebar("data_quality")
 require_active_team("Data quality")
 page_header("Data quality and drift", "What changed in the data itself, kept separate from changes in the business.")
+from style.theme import page_intro
+page_intro('Checks that the data itself is healthy: missing values, columns that changed shape, and numbers that suddenly look different. It keeps data problems separate from real changes in your business.', ['Pick a dataset', 'Read the problems found, most serious first', 'Fix the file and upload it again if something looks wrong'])
 
 try:
     datasets = list_datasets()
@@ -21,7 +23,7 @@ except ApiError as e:
     st.error(f"Backend unreachable: {e}")
     st.stop()
 if not datasets:
-    st.info("No dataset yet — upload a CSV first.")
+    st.info("No dataset yet. Silt answers from your own data, so upload a CSV or Excel file on the Datasets page first.")
     st.stop()
 
 active = st.session_state.get("active_dataset_id")

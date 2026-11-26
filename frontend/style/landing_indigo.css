@@ -1,0 +1,73 @@
+/* Landing and sign-in on the deep-indigo skin. Loaded after landing.css; same palette as indigo.css and the hero scene. */
+:root { --lp-ink: #ece8ff !important; --lp-soft: #a9a3d6 !important; --lp-line: rgba(167,139,250,.18) !important; }
+html, body { background: #0b0820 !important; }
+.stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"] {
+  background: radial-gradient(46% 36% at 100% 0%, rgba(236,111,168,.22) 0%, rgba(236,111,168,0) 70%), radial-gradient(44% 36% at 0% 0%, rgba(109,94,252,.34) 0%, rgba(109,94,252,0) 70%), #0b0820 !important; color: #ece8ff; }
+
+/* nav */
+.stApp .lp-brand, .stApp .lp-brand:hover, .stApp .lp-brand svg { color: #ece8ff !important; }
+.stApp .lp-navpill { background: rgba(24,17,60,.72); border-color: rgba(167,139,250,.28); box-shadow: 0 10px 30px rgba(3,2,16,.5), inset 0 1px 0 rgba(255,255,255,.08); }
+.stApp .lp-navpill a { color: #ece8ff; background: rgba(124,92,255,.28); box-shadow: none; }
+.stApp .lp-navpill a.off { background: transparent; color: #a9a3d6; }
+.stApp .lp-navpill a:hover { background: rgba(124,92,255,.40); }
+.stApp .lp-nav a.lp-ghost { color: #ece8ff; }
+.stApp .lp-nav a.lp-pill, .stApp .lp-btn.dark, .stApp .st-key-auth_card [data-testid="stBaseButton-primaryFormSubmit"] {
+  background: linear-gradient(135deg, #6d5efc, #a855f7) !important; border: 1px solid rgba(196,181,253,.4) !important; color: #fff !important;
+  box-shadow: 0 12px 30px rgba(124,92,255,.42), inset 0 1px 0 rgba(255,255,255,.25) !important; }
+.stApp .lp-nav a.lp-pill:hover, .stApp .lp-btn.dark:hover, .stApp .st-key-auth_card [data-testid="stBaseButton-primaryFormSubmit"]:hover { background: linear-gradient(135deg, #7a6cff, #b46cff) !important; filter: none; }
+.stApp .lp-btn.light, .stApp .lp-nav a.lp-ghost:hover { background: rgba(40,29,98,.62) !important; color: #ece8ff !important; border: 1px solid rgba(167,139,250,.34) !important; box-shadow: 0 8px 22px rgba(3,2,16,.5) !important; }
+
+/* hero */
+.stApp .lp-grid, .stApp .lp-blobs .g { background-image: linear-gradient(rgba(167,139,250,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,.10) 1px, transparent 1px); }
+.stApp .lp-glow { background: radial-gradient(34% 44% at 66% 42%, rgba(124,92,255,.55) 0%, rgba(124,92,255,0) 100%), radial-gradient(30% 40% at 28% 58%, rgba(56,120,255,.38) 0%, rgba(56,120,255,0) 100%), radial-gradient(26% 36% at 52% 20%, rgba(236,111,168,.32) 0%, rgba(236,111,168,0) 100%); }
+.stApp .lp-plus::before, .stApp .lp-plus::after { background: #a78bfa; }
+.stApp .lp-title, .stApp .lp-hero .lp-title { color: #ece8ff !important; }
+.stApp .lp-title .fade { color: rgba(167,139,250,.55); }
+.stApp .lp-sub, .stApp .lp-hero .lp-sub { color: #b6b0e0 !important; }
+
+/* floating cards */
+.stApp .lp-float { background: rgba(24,17,60,.80); border-color: rgba(167,139,250,.30); box-shadow: 0 22px 50px rgba(3,2,16,.6), inset 0 1px 0 rgba(255,255,255,.08); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.stApp .lp-c1 .who, .stApp .lp-c2 .who, .stApp .lp-c1 .wk, .stApp .lp-c2 .wk { color: #ece8ff; }
+.stApp .lp-c1 small, .stApp .lp-c2 small { color: #a9a3d6; }
+.stApp .lp-bar { background: rgba(167,139,250,.2); } .stApp .lp-bar i { background: linear-gradient(90deg, #6d5efc, #f472b6); }
+.stApp .lp-c3 { box-shadow: 0 0 0 6px rgba(167,139,250,.28), 0 26px 50px rgba(109,94,252,.5); border-color: rgba(196,181,253,.6); background: linear-gradient(150deg, #8b5cf6 0%, #5b3df0 100%); }
+.stApp .lp-c3 .t { background: rgba(255,255,255,.95); color: #1b1347; }
+.stApp .lp-dark { background: rgba(20,14,58,.92); border: 1px solid rgba(167,139,250,.3); } .stApp .lp-purp { background: linear-gradient(135deg, #6d5efc, #a855f7); }
+.stApp .lp-arrow { background: #a78bfa; }
+
+/* strip, sections */
+.stApp .lp-strip { color: rgba(220,214,255,.7); border-color: rgba(167,139,250,.18); }
+.stApp .lp-eyebrow { color: #c4b5fd; background: rgba(139,92,246,.2); border: 1px solid rgba(167,139,250,.3); }
+.stApp .lp-h2 { color: #ece8ff !important; }
+.stApp .lp-feat { background: rgba(24,17,60,.66); border-color: rgba(167,139,250,.22); box-shadow: 0 14px 40px rgba(3,2,16,.5), inset 0 1px 0 rgba(255,255,255,.06); }
+.stApp .lp-feat:hover { box-shadow: 0 26px 56px rgba(3,2,16,.65), 0 0 0 1px rgba(167,139,250,.4); }
+.stApp .lp-feat b { color: #ece8ff; } .stApp .lp-feat p { color: #a9a3d6; }
+.stApp .lp-fvis { background: radial-gradient(70% 90% at 80% 0%, rgba(124,92,255,.35), transparent), radial-gradient(70% 90% at 0% 100%, rgba(236,111,168,.22), transparent), rgba(10,7,32,.7); }
+.stApp .lp-chat .u { background: linear-gradient(135deg, #6d5efc, #a855f7); color: #fff; } .stApp .lp-chat .a { background: rgba(40,29,98,.8); color: #ece8ff; box-shadow: none; }
+.stApp .caret { background: #f472b6; }
+.stApp .lp-checks span, .stApp .lp-log span { background: rgba(40,29,98,.7); color: #ece8ff; box-shadow: none; }
+.stApp .lp-checks i { background: rgba(74,222,128,.18); color: #4ade80; }
+.stApp .lp-log u { background: #a78bfa; box-shadow: 0 0 0 4px rgba(167,139,250,.2); }
+.stApp .lp-steps::before { border-top-color: rgba(167,139,250,.3); }
+.stApp .lp-steps em { background: linear-gradient(135deg, #6d5efc, #a855f7); box-shadow: 0 8px 22px rgba(124,92,255,.4); }
+.stApp .lp-steps b { color: #ece8ff; } .stApp .lp-steps p { color: #a9a3d6; }
+.stApp .lp-final { background: radial-gradient(50% 120% at 85% 0%, rgba(168,85,247,.6), transparent), radial-gradient(40% 100% at 5% 100%, rgba(56,120,255,.4), transparent), #120d33; border: 1px solid rgba(167,139,250,.25); }
+
+/* sign-in */
+.stApp .lp-blobs .b1 { background: #6d5efc; } .stApp .lp-blobs .b2 { background: #a855f7; } .stApp .lp-blobs .b3 { background: #ec6fa8; } .stApp .lp-blobs .b4 { background: #3b82f6; }
+.stApp .lp-blobs i { opacity: .30; }
+.stApp .st-key-auth_card { background: linear-gradient(145deg, rgba(40,29,98,.72) 0%, rgba(18,13,51,.72) 100%) !important; border: 1px solid rgba(167,139,250,.30) !important;
+  box-shadow: 0 30px 70px rgba(3,2,16,.65), inset 0 1px 0 rgba(255,255,255,.10) !important; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.stApp .lp-card-title { color: #ece8ff; } .stApp .lp-card-sub, .stApp .lp-or { color: #a9a3d6; }
+.stApp .lp-or::before, .stApp .lp-or::after { background: rgba(167,139,250,.25); }
+.stApp .st-key-auth_card [data-testid="stTextInputRootElement"] { background: rgba(10,7,32,.7) !important; border: 1px solid rgba(167,139,250,.30) !important; }
+.stApp .st-key-auth_card input { color: #ece8ff !important; -webkit-text-fill-color: #ece8ff !important; }
+.stApp .st-key-auth_card [data-testid="stTextInputRootElement"]:focus-within { border-color: #a78bfa !important; box-shadow: 0 0 0 3px rgba(167,139,250,.28) !important; }
+.stApp .st-key-auth_card label, .stApp .st-key-auth_card label p { color: #b6b0e0 !important; }
+.stApp .st-key-auth_card button[role="tab"], .stApp .st-key-auth_card button[role="tab"] p { color: #a9a3d6 !important; }
+.stApp .st-key-auth_card button[role="tab"][aria-selected="true"], .stApp .st-key-auth_card button[role="tab"][aria-selected="true"] p { color: #ece8ff !important; }
+.stApp .st-key-auth_card [data-baseweb="tab-border"] { background: rgba(167,139,250,.2) !important; }
+.stApp .st-key-auth_card [data-baseweb="tab-highlight"] { background-color: #a78bfa !important; }
+.stApp .st-key-google_login button { background: rgba(40,29,98,.6) !important; color: #ece8ff !important; border: 1px solid rgba(167,139,250,.34) !important; box-shadow: none !important; }
+.stApp .st-key-google_login button p { color: #ece8ff !important; }
+.stApp .lp-chip { background: linear-gradient(145deg, rgba(40,29,98,.72), rgba(18,13,51,.6)); border-color: rgba(167,139,250,.3); color: #ece8ff; box-shadow: 0 18px 40px rgba(3,2,16,.55); }

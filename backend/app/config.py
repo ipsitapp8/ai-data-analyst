@@ -45,16 +45,26 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.6-flash"
 # Bounded retry-with-backoff for the free tier's per-minute rate limit (429),
 # tried before failing over to Llama -- most 429s clear within a retry or two.
 GEMINI_RATE_LIMIT_RETRIES = int(os.getenv("GEMINI_RATE_LIMIT_RETRIES", "2"))
+# Gemini sometimes answers without the required structured output (an empty reply, prose, a malformed
+# function call), most often while it is overloaded. One more try on Gemini costs seconds and often succeeds,
+# where failing straight over to the backup model ends the run whenever the backup is not healthy.
+# Truncated, filtered, blocked and wrong-function replies are never retried: asking again does not change them.
+GEMINI_MALFORMED_RETRIES = int(os.getenv("GEMINI_MALFORMED_RETRIES", "1"))
+# One Gemini request may not take longer than this. Without a limit an overloaded Gemini holds a request for
+# minutes before answering 503, and the whole run hits its time limit before it can fail over to the backup.
+GEMINI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMINI_REQUEST_TIMEOUT_SECONDS", "75"))
 GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "30"))
 
 # --- Llama (Critic only) ---
 # A second, different model family for the Critic's independent verification --
 # genuinely independent means a different model, not just a different prompt on
-# the same one. Defaults to Meta's official Llama API (OpenAI-compatible); point
-# LLAMA_BASE_URL at Groq/Together/OpenRouter/etc instead if that's what your key is for.
+# the same one. Defaults to Groq's OpenAI-compatible API with openai/gpt-oss-20b, the
+# setup this project runs on: a key that Groq issued is rejected with a 401 by any other
+# endpoint, so a model name set without LLAMA_BASE_URL must not silently point somewhere else.
+# Point LLAMA_BASE_URL (and LLAMA_MODEL) at Meta's Llama API, Together, OpenRouter, etc. if your key is for one of those.
 LLAMA_API_KEY = _secret("LLAMA_API_KEY")
-LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "Llama-4-Maverick-17B-128E-Instruct-FP8"
-LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.llama.com/compat/v1/"
+LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "openai/gpt-oss-20b"
+LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.groq.com/openai/v1"
 
 # --- Sandbox ---
 # "docker" (recommended, isolated) or "subprocess" (dev-only fallback, NOT isolated)
@@ -112,6 +122,9 @@ CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "")
 # read into memory/disk -- otherwise an arbitrarily large upload can exhaust
 # either.
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))  # 200 MB
+# Uploaded files up to this size are also kept in the database, so a host with a
+# throw-away disk (Render's free tier) can put them back after a restart. 0 turns it off.
+STORE_UPLOAD_BYTES = int(os.getenv("STORE_UPLOAD_BYTES", str(25 * 1024 * 1024)))  # 25 MB
 
 # --- Outbound email (team invites) ---
 # Gmail SMTP by default: SMTP_USER is the full Gmail address, SMTP_PASSWORD is
@@ -201,6 +214,9 @@ RUN_MAX_COST_USD = float(os.getenv("RUN_MAX_COST_USD", "0"))
 
 # --- Providers ---
 # When false, a Gemini failure fails the run instead of continuing on Llama.
+# Which provider answers first: "gemini" or "llama" (the LLAMA_* endpoint, Groq by default). The other is the
+# backup. Gemini is the default: the small Groq model writes unreliable analysis code (unclosed brackets, wrong columns).
+LLM_PRIMARY = (os.getenv("LLM_PRIMARY", "gemini").strip().lower() or "gemini")
 LLM_FAILOVER_ENABLED = _bool("LLM_FAILOVER_ENABLED", "true")
 # USD per 1M tokens, "input,output". Estimates only; override per deployment.
 LLM_PRICE_GEMINI = os.getenv("LLM_PRICE_GEMINI", "0.30,2.50")

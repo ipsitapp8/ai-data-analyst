@@ -22,20 +22,20 @@ THEMES = {
         "shadow": "0 6px 24px rgba(76,52,170,0.08)", "warn_bg": "#fff7e8", "warn_text": "#7a4a00",
     },
     "dark": {
-        "bg": "linear-gradient(180deg,#14111f 0%,#181428 50%,#1b1730 100%)",
-        "surface": "rgba(38,32,62,0.72)", "surface_solid": "#221d36", "page": "#1b1730", "border": "rgba(167,139,250,0.22)",
-        "text": "#ece9ff", "muted": "#b3abd6", "accent": "#a78bfa", "accent_soft": "rgba(167,139,250,0.14)",
-        "user_bg": "linear-gradient(135deg,#5b3fd1 0%,#7a5ae6 100%)", "user_text": "#ffffff",
-        "input_bg": "#221d36", "input_text": "#f4f2ff", "placeholder": "#9a93c0", "caret": "#c4b5fd",
-        "code_bg": "#2c2546", "table_head": "#2a2343", "table_border": "#3a3260", "grid": "#332c52",
-        "palette": ["#9a7cf5", "#0fa392", "#b07a06", "#ec4899", "#4f8ff7"],
-        "shadow": "0 6px 24px rgba(0,0,0,0.35)", "warn_bg": "#3a2e12", "warn_text": "#ffd98a",
+        "bg": "transparent",
+        "surface": "rgba(255,255,255,0.028)", "surface_solid": "#12101f", "page": "transparent", "border": "rgba(242,239,231,0.16)",
+        "text": "#f2efe7", "muted": "#a8a4bd", "accent": "#f3b24f", "accent_soft": "rgba(243,178,79,0.14)",
+        "user_bg": "#2a2210", "user_text": "#f2efe7",
+        "input_bg": "#0b0a16", "input_text": "#f2efe7", "placeholder": "#8c88a3", "caret": "#f3b24f",
+        "code_bg": "rgba(8,5,26,0.85)", "table_head": "#1b1930", "table_border": "#2a2840", "grid": "#2a2840",
+        "palette": ["#f3b24f", "#7dd3fc", "#a78bfa", "#4ade80", "#f472b6"],
+        "shadow": "0 6px 24px rgba(0,0,0,0.35)", "warn_bg": "rgba(251,191,36,0.14)", "warn_text": "#fbbf24",
     },
 }
 
 
-def css(theme: str = "light") -> str:
-    t = THEMES.get(theme, THEMES["light"])
+def css(theme: str = "dark") -> str:
+    t = THEMES.get(theme, THEMES["dark"])
     msg = "[data-testid='stChatMessage']"
     rules = f"""
 :root {{ --cp-text:{t['text']}; --cp-muted:{t['muted']}; --cp-accent:{t['accent']}; }}
@@ -44,8 +44,8 @@ def css(theme: str = "light") -> str:
 .block-container {{ max-width:1180px !important; }}
 .cp-shell {{ max-width:880px; margin:0 auto; }}
 .cp-title {{ font-size:1.6rem; font-weight:700; margin:0; color:{t['text']}; letter-spacing:-0.01em; }}
-.cp-title span {{ background:linear-gradient(90deg,{t['accent']},#c084fc); -webkit-background-clip:text;
-  background-clip:text; color:transparent; }}
+.cp-title span {{ color:{t['accent']};
+  }}
 .cp-sub {{ color:{t['muted']}; margin:2px 0 10px 0; font-size:.92rem; }}
 .cp-pill {{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:.78rem; font-weight:600;
   background:{t['accent_soft']}; color:{t['accent']}; border:1px solid {t['border']}; }}
@@ -265,3 +265,15 @@ def unique_labels(labels: dict) -> dict:
     for label in labels.values():
         seen[label] = seen.get(label, 0) + 1
     return {k: (f"{v} · #{str(k)[:6]}" if seen[v] > 1 else v) for k, v in labels.items()}
+
+
+# ------------------------------------------------------------------- chat artwork --
+from urllib.parse import quote as _quote
+
+TABLE_ICON = ('<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#43d9a3" stroke-width="2" '
+              'stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/>'
+              '<path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>')
+_LOGO_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" '
+             'stroke="#f3b24f" stroke-width="2.2" stroke-linecap="round"><path d="M5 20L17 4M9 21l10-13M4 15l8-11"/></svg>')
+from pathlib import Path as _Path
+LOGO_AVATAR = str(_Path(__file__).with_name("silt_avatar.png"))

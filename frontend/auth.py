@@ -16,13 +16,171 @@ import os
 from pathlib import Path
 
 import streamlit as st
+
+from landing_scene import LANDING_SCENE_HTML
 import streamlit.components.v1 as components
 
 _SESSION_KEY = "_auth_ok"
 
+def _lp_words(text: str, start: int = 0) -> str:
+    """A title split into words, so each can rise in turn when it scrolls into view."""
+    import html as _h
+    return " ".join(f'<span class="w" style="--i:{start + i}">{_h.escape(w)}</span>' for i, w in enumerate(text.split()))
+
+
+# Every tool in the product, grouped. Names and one-liners follow what each page of the app says it does.
+_LP_GROUPS = [
+    ("Ask", "Questions in, answers out.", [
+        ("Analyses", "Ask in plain English", "An agent plans the analysis, writes the code and runs it in a sandbox."),
+        ("Silt Copilot", "Chat with your data", "Free-form questions, calculations and follow-ups in one conversation."),
+        ("Drill-down", "Break a metric down", "Filter and split one metric step by step, with rules only."),
+        ("Datasets", "Bring your data", "Upload CSV or Excel files, keep versions and explore your sources."),
+    ]),
+    ("Verify", "Nothing reaches you unchecked.", [
+        ("Critic", "A second model checks it", "An independent model re-verifies every number before the answer reaches you."),
+        ("Audit trail", "Every step is logged", "Full traceability for each analysis: the plan, the code and the evidence."),
+        ("Semantic layer", "One definition per metric", "Approved metric definitions that analyses use instead of guessing."),
+        ("Evaluation", "Measured against references", "Regression results for the pipeline and each of its parts."),
+    ]),
+    ("Investigate", "Find what moved, and where.", [
+        ("Root cause", "Where did the number move?", "Locate where a metric changed between two periods. Computed from your data."),
+        ("Data quality", "Spot drift early", "What changed in the data itself, kept separate from changes in the business."),
+        ("Alerts", "Hear about changes first", "What changed, went unusual or failed verification, in one feed."),
+    ]),
+    ("Decide", "Look ahead, then share it.", [
+        ("What-if", "Test a decision first", "Change an input and see the range of outcomes, with the evidence behind each."),
+        ("Dashboards", "Verified dashboards", "Generated from verified analyses, ready to read at a glance."),
+        ("Reports", "Packaged answers", "Every completed analysis, packaged and verified."),
+    ]),
+    ("Operate", "Run it as a team.", [
+        ("Scheduled", "Re-run automatically", "Tracked questions re-run on the latest data without anyone asking again."),
+        ("Workspaces", "Isolated by team", "Communities hold teams, and each team is its own isolated workspace."),
+        ("Shared links", "Share a result", "Send a read-only link to an analysis, no account needed to view it."),
+        ("Discussion", "Notes with context", "Comments pinned to an analysis or a dataset, so the context stays with it."),
+    ]),
+]
+
+
+# A small looping animation per tool, shown at the top of its card. Pure markup: the motion is CSS, and it only plays
+# once the card has scrolled into view.
+_LP_VIS = {
+    "Analyses": '<div class="vis v-type"><span class="q s1">Which region grew fastest?</span><span class="a s2">West, up 18.4%<u></u></span></div>',
+    "Silt Copilot": '<div class="vis v-chat"><span class="u s1">Why did March dip?</span><span class="dots"><i></i><i></i><i></i></span><span class="r s3">Mostly West: 8.4 of 12.4 points</span></div>',
+    "Drill-down": '<div class="vis v-drill"><span class="s1">Revenue</span><b class="s2">&rsaquo;</b><span class="s2">West</span><b class="s3">&rsaquo;</b><span class="s3">Q3</span><b class="s4">&rsaquo;</b><span class="s4">Online</span></div>',
+    "Datasets": '<div class="vis v-data"><div class="file s1"><em>sales.csv</em><i><u class="gx1"></u></i></div><div class="vers"><span class="s3">v1</span><span class="s4">v2</span><span class="s5">v3</span></div></div>',
+    "Critic": '<div class="vis v-crit"><p class="s1"><i>&#10003;</i>Totals match source</p><p class="s2"><i>&#10003;</i>No double counting</p><p class="s3"><i>&#10003;</i>12 of 12 reproduced</p></div>',
+    "Audit trail": '<div class="vis v-log"><p class="s1"><u></u>Plan saved</p><p class="s2"><u></u>Code executed</p><p class="s3"><u></u>Evidence kept</p></div>',
+    "Semantic layer": '<div class="vis v-sem"><code class="s1">Revenue = SUM(amount)</code><span class="stamp s3">&#10003; approved</span></div>',
+    "Evaluation": '<div class="vis v-eval"><div class="row"><span>Planner</span><i><u class="gx1"></u></i></div><div class="row"><span>Executor</span><i><u class="gx2"></u></i></div><div class="row"><span>Critic</span><i><u class="gx3"></u></i></div></div>',
+    "Root cause": '<div class="vis v-rc"><div class="hd s1"><span>Revenue, Q2 to Q3</span><b>&minus;12.4%</b></div><div class="row"><span>West</span><i><u class="gx1" style="--w:70%"></u></i></div><div class="row"><span>Online</span><i><u class="gx2" style="--w:34%"></u></i></div></div>',
+    "Data quality": '<div class="vis v-dq"><svg viewBox="0 0 200 60" preserveAspectRatio="none"><path pathLength="100" d="M0 42 L28 38 L56 40 L84 36 L112 39 L140 22 L170 12 L200 8"/><circle class="s4" cx="140" cy="22" r="4"/></svg><span class="tag s4">drift detected</span></div>',
+    "Alerts": '<div class="vis v-al"><div class="toast s1"><i class="pulse"></i><div><b>Revenue looks unusual</b><span>West &middot; just now</span></div></div><div class="toast s3 dim"><i></i><div><b>A check failed verification</b><span>Scheduled run &middot; 06:00</span></div></div></div>',
+    "What-if": '<div class="vis v-wi"><div class="row"><span>Price</span><i class="sl"><u class="knob"></u></i></div><div class="row"><span>Revenue</span><b class="s2">118k &ndash; 131k</b></div></div>',
+    "Dashboards": '<div class="vis v-db"><i style="--h:46%;--n:0"></i><i style="--h:72%;--n:1"></i><i style="--h:58%;--n:2"></i><i style="--h:88%;--n:3"></i><i style="--h:66%;--n:4"></i></div>',
+    "Reports": '<div class="vis v-rp"><p class="l s1"></p><p class="l s2"></p><p class="l short s3"></p><span class="stamp s4">&#10003; verified</span></div>',
+    "Scheduled": '<div class="vis v-sc"><svg viewBox="0 0 44 44"><circle class="track" cx="22" cy="22" r="18"/><circle class="arc" cx="22" cy="22" r="18" pathLength="100"/></svg><div><b class="s1">Every Monday</b><span class="s2">next run 06:00</span></div></div>',
+    "Workspaces": '<div class="vis v-ws"><span class="t s1">Sales</span><span class="t s2">Finance</span><span class="t s3">Ops</span><em class="s4">Each team is isolated</em></div>',
+    "Shared links": '<div class="vis v-sh"><span class="link s1">shared link</span><span class="dash"></span><span class="badge s3">view only</span></div>',
+    "Discussion": '<div class="vis v-ds"><p class="s1"><i>A</i>Check the West drop?</p><p class="s3 me"><i>B</i>Pinned to Q3 analysis</p></div>',
+}
+
+
+def _lp_feature_grid() -> str:
+    """The full tool list as one markup string: a labelled block per group, a small card per tool."""
+    import html as _h
+    total = sum(len(g[2]) for g in _LP_GROUPS)
+    out = ['<div class="lp-sec lm-all"><div class="lp-eyebrow">Everything inside</div>',
+           f'<h2 class="lp-h2">{_lp_words("Every tool, in one workspace.")}</h2>',
+           f'<p class="lm-all-sub">{total} tools across asking, verifying, investigating, deciding and running your analytics.</p>',
+           '<div class="lm-groups">']
+    for gi, (name, line, items) in enumerate(_LP_GROUPS, 1):
+        cards = "".join(
+            f'<div class="lm-fcard">{_LP_VIS.get(tag, "")}<div class="n">{_h.escape(tag)}</div><b>{_h.escape(title)}</b><p>{_h.escape(text)}</p></div>'
+            for tag, title, text in items)
+        out.append(f'<div class="lm-fgroup"><div class="lm-fhead"><div class="k">{gi:02d} / {_h.escape(name.upper())}</div>'
+                   f'<div class="t">{_h.escape(line)}</div></div><div class="lm-fcards">{cards}</div></div>')
+    out.append('</div></div>')
+    return "".join(out)
+
+
+def _lp_ticker() -> str:
+    """The tool names as a loop for the closing ticker (the list is doubled so the loop has no seam)."""
+    import html as _h
+    names = [tag for _, _, items in _LP_GROUPS for tag, _, _ in items]
+    chips = "".join(f'<span><i></i>{_h.escape(n)}</span>' for n in names)
+    return chips + chips
+
+
+# Scroll choreography for the landing page. Runs in Streamlit's same-origin component iframe and reaches up to the page:
+# the first things rise in on load, the lower sections appear one by one as they come into view, feature columns drift at
+# different speeds, a light follows the cursor over each card and the steps line draws with the scroll. Elements are
+# hidden only after they are marked, so if this does not run everything is simply visible.
+_LP_REVEAL_JS = """
+<script>
+(function () {
+  var w, d;
+  try { w = window.parent; d = w.document; } catch (e) { return; }
+  if (!('IntersectionObserver' in w)) return;
+  if (w.__lmStop) { try { w.__lmStop(); } catch (e) {} }
+  w.__lmIntroAt = Date.now();
+  var SEL = '.lp-strip span,.lp-eyebrow,.lp-h2,.lm-all-sub,.lp-feat,.lm-fgroup,.lm-fcard,.lp-steps>div,.lm-marq,.lm-final-card,.lm-big';
+  var STAGGER = '.lp-strip span,.lp-feat,.lm-fcard,.lp-steps>div';
+  var INTRO = ['.lp-kicker', '.lp-title', '.lp-sub', '.lp-ctas'];
+  var io = new w.IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('lm-in'); io.unobserve(e.target); } });
+  }, { threshold: 0.15, rootMargin: '0px 0px -5% 0px' });
+  function intro() {
+    if (Date.now() - w.__lmIntroAt > 2500) return;
+    INTRO.forEach(function (sel, i) {
+      d.querySelectorAll(sel).forEach(function (el) {
+        if (el.__lmi) return; el.__lmi = 1;
+        el.style.animationDelay = (i * 140) + 'ms'; el.classList.add('lm-intro');
+      });
+    });
+  }
+  function scan() {
+    intro();
+    var H = w.innerHeight;
+    d.querySelectorAll(SEL).forEach(function (el) {
+      if (el.__lm) return; el.__lm = 1;
+      var par = el.parentElement, idx = par ? Array.prototype.indexOf.call(par.children, el) : 0;
+      if (el.matches(STAGGER)) el.style.transitionDelay = (idx * 90) + 'ms';
+      if (el.classList.contains('lp-feat')) el.setAttribute('data-par', [0, 0.03, 0.06][idx % 3]);
+      if (el.classList.contains('lp-feat') || el.classList.contains('lm-fcard')) {
+        el.addEventListener('mousemove', function (e) { var b = el.getBoundingClientRect(); el.style.setProperty('--mx', (e.clientX - b.left) + 'px'); el.style.setProperty('--my', (e.clientY - b.top) + 'px'); });
+      }
+      el.classList.add('lm-r');
+      if (el.getBoundingClientRect().top < H * 0.92) el.classList.add('lm-now', 'lm-in');
+      else io.observe(el);
+    });
+  }
+  function line() {
+    d.querySelectorAll('.lp-feat[data-par]').forEach(function (el) {
+      var r = el.getBoundingClientRect(), off = r.top + r.height / 2 - w.innerHeight / 2;
+      el.style.setProperty('--py', (-off * parseFloat(el.getAttribute('data-par'))).toFixed(1) + 'px');
+    });
+    var s = d.querySelector('.lp-steps'); if (!s) return;
+    var r = s.getBoundingClientRect(), p = (w.innerHeight * 0.85 - r.top) / (w.innerHeight * 0.5);
+    s.style.setProperty('--lm-p', Math.max(0, Math.min(1, p)).toFixed(3));
+  }
+  var raf = 0;
+  function tick() { if (raf) return; raf = w.requestAnimationFrame(function () { raf = 0; scan(); line(); }); }
+  var mo = new w.MutationObserver(tick);
+  mo.observe(d.body, { childList: true, subtree: true });
+  d.addEventListener('scroll', tick, true);
+  w.addEventListener('resize', tick);
+  w.__lmStop = function () { io.disconnect(); mo.disconnect(); d.removeEventListener('scroll', tick, true); w.removeEventListener('resize', tick); };
+  tick();
+})();
+</script>"""
+
+
 def _landing_css() -> str:
     """Landing/sign-in stylesheet (style/landing.css), flattened like _gate_css."""
     raw = (Path(__file__).parent / "style" / "landing.css").read_text(encoding="utf-8")
+    raw += chr(10) + (Path(__file__).parent / "style" / "landing_indigo.css").read_text(encoding="utf-8")
+    raw += chr(10) + (Path(__file__).parent / "style" / "landing_hero.css").read_text(encoding="utf-8")
+    raw += chr(10) + (Path(__file__).parent / "style" / "landing_motion.css").read_text(encoding="utf-8")
     return "<style>" + " ".join(line.strip() for line in raw.splitlines() if line.strip()) + "</style>"
 
 
@@ -36,7 +194,7 @@ def _gate_css() -> str:
 _GATE_FONTS = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700'
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500'
     '&display=swap" rel="stylesheet">'
 )
 _GATE_LOGO = (
@@ -212,6 +370,7 @@ def _sign_in_with_google_if_ready() -> bool:
     st.session_state[_USER_SESSION_KEY] = result["user"]
     st.session_state["auth_token"] = result["access_token"]
     st.session_state["_set_cookie"] = result["access_token"]
+    st.session_state["_go_home"] = True
     return True
 
 
@@ -228,6 +387,23 @@ def logout() -> None:
     st.session_state["_clear_cookie"] = True
 
 
+def go_home_if_asked() -> None:
+    """After an explicit sign-in or workspace step, land on Home whichever page the browser tab was on.
+
+    Signing in re-runs the page the tab already had open, so someone who logged out from Analyses came back
+    to Analyses. The flag is set only by those explicit steps (never by a page refresh or a deep link), is
+    used once, and is ignored when the tab is already on Home."""
+    if not st.session_state.pop("_go_home", None):
+        return
+    try:
+        from urllib.parse import urlparse
+        path = urlparse(str(getattr(st.context, "url", "") or "")).path.strip("/")
+    except Exception:  # noqa: BLE001 - if the address cannot be read, stay where we are
+        return
+    if path:
+        st.switch_page("Home.py")
+
+
 def require_login() -> None:
     """Per-user login/signup, layered on top of require_password()'s shared
     deployment gate. Halts rendering with a Login/Sign up form until the
@@ -241,6 +417,7 @@ def require_login() -> None:
         pending = st.session_state.pop("_set_cookie", None)
         if pending:
             _write_cookie(pending)
+        go_home_if_asked()
         return
 
     if _restore_session_from_cookie():
@@ -264,29 +441,35 @@ def require_login() -> None:
 
     if view not in ("login", "signup"):
         st.markdown(
+            '<div class="lm-scope"></div>'
             f'<div class="lp-nav"><a class="lp-brand" href="?" target="_self">{_GATE_LOGO}Silt</a>'
             '<div class="lp-navpill"><a href="?" target="_self">Home</a><a class="off" href="?view=login" target="_self">Log in</a></div>'
             '<div class="lp-nav-r"><a class="lp-pill" href="?view=signup" target="_self">Get started &#8599;</a></div></div>'
-            '<div class="lp-hero"><div class="lp-glow"></div><div class="lp-grid"></div>'
-            '<div class="lp-float lp-c1"><div class="who"><span class="lp-av" style="background:#837ab6">Q</span><div>Which region grew fastest?'
-            '<small>Asked Wed 14 Oct, 2026</small></div></div><div class="wk">Step 3 of 4 &middot; Running analysis</div>'
-            '<div class="lp-bar"><i style="width:75%"></i></div></div>'
-            '<div class="lp-float lp-c2"><div class="who"><span class="lp-av" style="background:#16a34a">&#10003;</span><div>Independent check passed'
-            '<small>Critic model &middot; 0 issues</small></div></div><div class="wk">Verified &middot; 12 of 12 numbers</div>'
-            '<div class="lp-bar"><i style="width:100%"></i></div></div>'
-            '<div class="lp-float lp-c3"><small>Analysis by</small><b>Silt Agent</b><em>Sales</em><em>Growth</em>'
-            '<div class="t">Q3 &middot; 2,481 rows</div></div>'
-            '<div class="lp-dark"><span class="lp-av">&#9881;</span><div>Planner agent<small>Plans the analysis</small></div></div>'
-            '<div class="lp-purp"><span class="lp-av">&#10003;</span><div>Critic agent<small>Checks every number</small></div></div>'
-            '<h1 class="lp-title">Data Matters.<br>Ask Your Data<br><span class="fade">In Plain English</span><br>Trust Every Answer</h1>'
+            '<div class="lp-aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div><div class="lp-spot" aria-hidden="true"></div>'
+            '<div class="lp-hero2"><div class="lp-hcopy">'
+            '<div class="lp-kicker"><span class="dot"></span>Autonomous AI data analyst</div>'
+            '<h1 class="lp-title"><span class="l1">Data Matters.</span>Ask Your Data<br><span class="grad">In Plain English</span><br>Trust Every Answer</h1>'
             '<p class="lp-sub">An autonomous AI data analyst for teams. An agent plans, runs and explains the analysis, '
             'and an independent model checks it before it reaches you.</p>'
             '<div class="lp-ctas"><a class="lp-btn light" href="?view=login" target="_self">Log in</a>'
-            '<a class="lp-btn dark" href="?view=signup" target="_self">Get Started &rarr;</a></div></div>'
+            '<a class="lp-btn dark" href="?view=signup" target="_self">Get Started <span class="arr">&rarr;</span></a></div></div>'
+            '<div class="lp-core-stage" id="lp-core">'
+            '<div class="lp-panel lp-p1"><div class="lp-ptag"><i></i>PLANNER &middot; 01</div><div class="lp-ptitle">Plans the analysis</div>'
+            '<div class="lp-pline">&ldquo;Which region grew fastest?&rdquo;</div><div class="lp-pline lp-dim">3 steps &middot; group by region</div>'
+            '<div class="lp-pmeter"><b></b></div></div>'
+            '<div class="lp-panel lp-p2"><div class="lp-ptag"><i></i>ANALYST &middot; 02</div><div class="lp-ptitle">Runs it in a sandbox</div>'
+            '<div class="lp-pline">Q3 &middot; 2,481 rows</div><div class="lp-pline lp-dim">code, result and evidence logged</div>'
+            '<div class="lp-pmeter"><b></b></div></div>'
+            '<div class="lp-panel lp-p3"><div class="lp-ptag"><i></i>CRITIC &middot; 03</div><div class="lp-ptitle">Checks it independently</div>'
+            '<div class="lp-pline">12 of 12 numbers reproduced</div><div class="lp-pline lp-dim">a second model, a second method</div>'
+            '<div class="lp-pmeter"><b></b></div></div>'
+            '<div class="lp-core-cap">Illustrative demonstration &middot; sample question, not a live analysis</div>'
+            '</div></div>'
+            '<div class="lm-cue"><span>Scroll</span><i></i></div>'
             '<div class="lp-strip"><span>CSV &amp; Excel</span><span>PostgreSQL</span><span>Sandboxed Python</span>'
             '<span>Audit trail</span><span>Scheduled reports</span></div>'
             '<div class="lp-sec"><div class="lp-eyebrow">Why Silt</div>'
-            '<h2 class="lp-h2">An analyst that shows its work.</h2>'
+            f'<h2 class="lp-h2">{_lp_words("An analyst that shows its work.")}</h2>'
             '<div class="lp-feats">'
             '<div class="lp-feat"><div class="lp-fvis"><div class="lp-chat"><span class="u">Which region grew fastest?</span>'
             '<span class="a">West, up 18.4% quarter over quarter.<i class="caret"></i></span></div></div>'
@@ -298,17 +481,44 @@ def require_login() -> None:
             '<span><u></u>Grouped by region</span><span><u></u>Compared Q2 vs Q3</span></div></div>'
             '<b>Every step is logged</b><p>See the plan, the code and the evidence behind each answer in the audit trail.</p></div>'
             '</div></div>'
+            f'{_lp_feature_grid()}'
             '<div class="lp-sec"><div class="lp-eyebrow">How it works</div>'
-            '<h2 class="lp-h2">From question to trusted answer.</h2>'
-            '<div class="lp-steps"><div><em>1</em><b>Upload your data</b><p>CSV, Excel or a database.</p></div>'
-            '<div><em>2</em><b>Ask a question</b><p>The planner agent writes the analysis.</p></div>'
-            '<div><em>3</em><b>Run in a sandbox</b><p>Code executes in isolation.</p></div>'
-            '<div><em>4</em><b>Verified answer</b><p>The critic signs off, then you see it.</p></div></div></div>'
-            '<div class="lp-final"><h2>Ready to trust your numbers?</h2>'
-            '<p>Create a workspace and ask your first question in minutes.</p>'
-            '<a class="lp-btn light" href="?view=signup" target="_self">Get Started &rarr;</a></div>',
+            f'<h2 class="lp-h2">{_lp_words("From question to trusted answer.")}</h2>'
+            '<div class="lp-steps"><i class="packet"></i>'
+            '<div><em>1</em><b>Upload your data</b><p>CSV, Excel or a database.</p>'
+            '<div class="vis v-up"><div class="drop"><span class="file">sales.csv</span></div><div class="prog"><u class="gx2"></u></div>'
+            '<span class="ok s3">&#10003; 2,481 rows loaded</span></div></div>'
+            '<div><em>2</em><b>Ask a question</b><p>The planner agent writes the analysis.</p>'
+            '<div class="vis v-type"><span class="q s1">Which region grew fastest?</span><span class="a s2">West, up 18.4%<u></u></span></div></div>'
+            '<div><em>3</em><b>Run in a sandbox</b><p>Code executes in isolation.</p>'
+            '<div class="vis v-code"><code class="s1">df.groupby("region")</code><code class="s2">.sum().sort_values()</code>'
+            '<span class="run"><i></i>running in sandbox</span><span class="done">&#10003; result ready</span></div></div>'
+            '<div><em>4</em><b>Verified answer</b><p>The critic signs off, then you see it.</p>'
+            '<div class="vis v-crit"><p class="s1"><i>&#10003;</i>Totals match source</p><p class="s2"><i>&#10003;</i>No double counting</p>'
+            '<p class="s3"><i>&#10003;</i>12 of 12 reproduced</p></div></div></div></div>'
+            f'<div class="lm-finale"><div class="lm-marq"><div class="track">{_lp_ticker()}</div></div>'
+            '<div class="lm-final-card"><div class="lp-eyebrow">Your turn</div>'
+            f'<h2 class="lm-big">{_lp_words("Ask your")} <em>{_lp_words("first question.", 2)}</em></h2>'
+            '<p>Create a workspace, upload a CSV and get a verified answer in minutes.</p>'
+            '<div class="lm-cta"><a class="lp-btn dark" href="?view=signup" target="_self">Get Started <span class="arr">&rarr;</span></a>'
+            '<a class="lp-btn light" href="?view=login" target="_self">Log in</a></div>'
+            '<div class="lm-proof"><span>Runs in a secure sandbox</span><span>Every number verified</span><span>Fully auditable</span></div></div>'
+            f'<div class="lm-marq rev"><div class="track">{_lp_ticker()}</div></div>'
+            '<footer class="lm-footer"><div class="lf-grid">'
+            '<div class="lf-brand"><div class="lf-logo">Silt</div>'
+            '<p>An autonomous data analyst. Ask in plain English, get an answer a second model has checked.</p></div>'
+            '<div class="lf-col"><h4>Product</h4><a href="?view=signup" target="_self">Get started</a>'
+            '<a href="?view=login" target="_self">Log in</a><span>CSV &amp; Excel upload</span><span>Scheduled reports</span></div>'
+            '<div class="lf-col"><h4>Analysis</h4><span>Ask in plain English</span><span>Root cause</span>'
+            '<span>What-if scenarios</span><span>Data quality</span></div>'
+            '<div class="lf-col"><h4>Trust</h4><span>Runs in a secure sandbox</span><span>Independent critic</span>'
+            '<span>Full audit trail</span><span>Semantic layer</span></div></div>'
+            '<div class="lf-bar"><span>&copy; 2026 Silt</span><span>Verified &middot; Auditable &middot; Actionable</span></div></footer></div>',
             unsafe_allow_html=True,
         )
+        with st.container(key="lp_scene"):
+            st.iframe(LANDING_SCENE_HTML, height=200)
+        components.html(_LP_REVEAL_JS, height=0)
         st.stop()
 
     # ---- sign-in page ----
@@ -348,6 +558,7 @@ def require_login() -> None:
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
                     st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state["_go_home"] = True
                     st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:
@@ -369,6 +580,7 @@ def require_login() -> None:
                     st.session_state[_USER_SESSION_KEY] = result["user"]
                     st.session_state["auth_token"] = result["access_token"]
                     st.session_state["_set_cookie"] = result["access_token"]
+                    st.session_state["_go_home"] = True
                     st.session_state.pop("_logged_out", None)
                     st.rerun()
                 except ApiError as e:

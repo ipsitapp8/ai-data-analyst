@@ -143,6 +143,8 @@ class DatasetProfile(BaseModel):
     uploaded_at: dt.datetime
     version: int = 1
     version_count: int = 1
+    file_available: bool = True   # False when the file is gone and no saved copy exists
+    already_existed: bool = False  # True when an upload matched a dataset the team already had
 
     class Config:
         from_attributes = True

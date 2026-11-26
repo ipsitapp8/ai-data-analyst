@@ -2,18 +2,35 @@
 price versus volume, tested hypotheses, and what could not be established."""
 from __future__ import annotations
 
+from pathlib import Path as _Path
+
 import pandas as pd
 import streamlit as st
 
 from api_client import (ApiError, ask_investigation, create_hypothesis_investigation, create_investigation, get_investigation,
                         get_investigation_statistics, list_datasets, list_investigations, list_metrics)
-from style.theme import (DASHBOARD_TOKENS, badge, esc, figure_from_json, html, page_header, page_setup, plot, render_sidebar,
+from style.theme import (DASHBOARD_TOKENS, badge, esc, figure_from_json, html, page_setup, plot, render_sidebar,
                          require_active_team)
 
 page_setup("Root cause")
 render_sidebar("investigations")
 require_active_team("Root-cause investigations")
-page_header("Root-cause investigations", "Locate where a metric changed. Descriptive evidence, clearly separated from cause.")
+_FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+          '<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500'
+          '&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">')
+_css = (_Path(__file__).resolve().parents[1] / "style" / "investigations.css").read_text(encoding="utf-8")
+# one line, because markdown ends an HTML block at the first blank line
+st.markdown(_FONTS + "<style>" + " ".join(line.strip() for line in _css.splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
+html('<div class="iv-scope"></div>'
+     '<div class="iv-eyebrow">Root cause</div>'
+     '<h1 class="iv-title">Where did the number <em>move</em>?</h1>'
+     '<p class="iv-lede">Locate where a metric changed between two periods. The evidence is descriptive and is kept clearly '
+     'separate from cause.</p>'
+     '<div class="iv-rule"></div>')
+from style.theme import page_intro
+page_intro("Use this when a number went up or down and you want to know why. For example: revenue fell in March, so which region or product caused it?",
+           ["Choose the dataset and the number to investigate", "Pick the two periods to compare, such as February and March", "Read which segments moved it most, and what could not be explained"],
+           tip="Results show where the change came from. They do not prove what caused it.")
 
 try:
     datasets = list_datasets()
@@ -23,9 +40,36 @@ except ApiError as e:
     st.error(f"Backend unreachable: {e}")
     st.stop()
 
-with st.expander("New investigation", expanded=not listing["investigations"]):
+
+def _use_example(text: str) -> None:
+    st.session_state["inv_question"] = text
+
+
+STEPS = ["1 · Ask", "2 · Findings", "3 · Evidence", "History"]
+S = st.session_state
+if S.get("investigation_id") is not None and "inv_step" not in S:
+    S["inv_step"] = STEPS[1]            # coming back from a run: show what it found
+step = st.segmented_control("Step", STEPS, key="inv_step", label_visibility="collapsed", selection_mode="single") or STEPS[0]
+
+if step != STEPS[0]:
+    # results steps: keep the title as a slim header so the findings start near the top of the screen
+    st.markdown("<style>.stApp .stMain:has(.iv-scope) .iv-lede, .stApp .stMain:has(.iv-scope) .iv-rule, .stApp .stMain:has(.iv-scope) .pi { display: none !important; }"
+                ".stApp .stMain:has(.iv-scope) .iv-title { font-size: 1.7rem !important; margin: 0 0 12px !important; }"
+                ".stApp .stMain:has(.iv-scope) .iv-eyebrow { margin: -3rem 0 6px !important; }"
+                ".stApp .stMain:has(.iv-scope) [data-testid='stMainBlockContainer'] { padding-top: 2.6rem !important; }</style>",
+                unsafe_allow_html=True)
+
+
+def _go(target: str, inv_id: int | None = None) -> None:
+    """Button callback: move to a step (and optionally open an investigation)."""
+    S["inv_step"] = target
+    if inv_id is not None:
+        S["investigation_id"] = inv_id
+
+
+if step == STEPS[0]:
     if not datasets:
-        st.info("Upload a dataset first.")
+        st.info("No dataset yet. Root cause compares your own numbers across two periods, so upload a CSV or Excel file on the Datasets page first.")
     else:
         ds = st.selectbox("Dataset", datasets, format_func=lambda d: d["filename"], key="inv_ds")
         cols = ds["profile"].get("columns", [])
@@ -42,81 +86,108 @@ with st.expander("New investigation", expanded=not listing["investigations"]):
             if not categorical:
                 st.info("This dataset has no categorical column (region, product, channel). The change can be measured and "
                         "tested, but not located in any segment.")
-            html('<div class="ds-section-title">Ask why</div>')
-            why = st.text_area("Question", key="inv_question", height=70,
-                               placeholder="Why did revenue drop in the last two months?", label_visibility="collapsed")
+            why = st.text_area("What do you want to understand?", key="inv_question", height=110,
+                               placeholder="Why did revenue drop in the last two months?")
             st.caption("Name a numeric column and, if you like, a period: “last month”, “the last 14 days”, “in March”. "
                        "Periods are read against the dataset's own dates.")
+            first, second = numeric[0].replace("_", " "), (numeric[1] if len(numeric) > 1 else numeric[0]).replace("_", " ")
+            examples = [f"Why did {first} drop in the last two months?", f"What changed in {first} last month?",
+                        f"Why did {second} move recently?"]
+            for i, (box, text) in enumerate(zip(st.columns(3), examples)):
+                box.button(text, key=f"iv_ex_{i}", on_click=_use_example, args=(text,), use_container_width=True)
             too_short = len((why or "").strip()) < 8
-            if st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short):
-                try:
-                    out = ask_investigation(ds["id"], why.strip())
-                    st.session_state["active_question_id"] = out["question_id"]
-                    st.session_state["investigation_id"] = out["investigation_id"]
-                    st.switch_page("pages/3_Analyses.py")
-                except ApiError as e:
-                    st.error(str(e))
-            st.caption("The button above uses no AI model: every figure is computed from your data. The one below also has a "
-                       "model propose competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
-            if st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short):
-                try:
-                    out = create_hypothesis_investigation(ds["id"], why.strip())
-                    st.session_state["active_question_id"] = out["question_id"]
-                    st.session_state["investigation_id"] = out["investigation_id"]
-                    st.switch_page("pages/3_Analyses.py")
-                except ApiError as e:
-                    st.error(str(e))
-            html('<div class="ds-section-title" style="margin-top:14px;">Or specify the metric yourself (no model)</div>')
-            usable = [m for m in metrics if m.get("dataset_id") in (None, ds["id"])]
-            source = st.radio("Metric", ["A column", "An approved metric", "A formula"], horizontal=True, key="inv_src")
-            formula, label = "", ""
-            if source == "A column" and numeric:
-                agg = st.selectbox("Aggregation", ["sum", "avg", "count", "median"], key="inv_agg")
-                col = st.selectbox("Column", numeric, key="inv_col")
-                formula, label = f'{agg}("{col}")', f"{agg.title()} of {col}"
-            elif source == "An approved metric":
-                if usable:
-                    m = st.selectbox("Approved metric", usable, format_func=lambda m: f"{m['name']} = {m['formula']}", key="inv_metric")
-                    formula, label = m["formula"], m["name"]
-                else:
-                    st.caption("No approved metric applies to this dataset. Define one on the Semantic layer page.")
-            else:
-                formula = st.text_input("Formula", placeholder="sum(revenue) / sum(units)", key="inv_formula")
-                label = st.text_input("Label", key="inv_label")
-            c1, c2 = st.columns(2)
-            with c1:
-                time_col = st.selectbox("Date column", time_cols, key="inv_time")
-            with c2:
-                dims = st.multiselect("Dimensions to examine (empty = automatic)", categorical, key="inv_dims")
-            manual = st.checkbox("Choose the two periods myself (otherwise the time range is split at its midpoint)", key="inv_manual")
-            pa = pb = None
-            if manual:
-                p1, p2, p3, p4 = st.columns(4)
-                a0 = p1.date_input("Earlier period: from", key="inv_a0")
-                a1 = p2.date_input("Earlier period: before", key="inv_a1")
-                b0 = p3.date_input("Later period: from", key="inv_b0")
-                b1 = p4.date_input("Later period: to", key="inv_b1")
-                pa, pb = [a0.isoformat(), a1.isoformat()], [b0.isoformat(), b1.isoformat()]
-            if st.button("Investigate  →", type="primary", key="inv_go", disabled=not formula):
-                try:
-                    out = create_investigation({"dataset_id": ds["id"], "formula": formula, "label": label,
-                                                "time_column": time_col, "dimensions": dims or None,
-                                                "period_a": pa, "period_b": pb})
-                    st.session_state["active_question_id"] = out["question_id"]
-                    st.session_state["investigation_id"] = out["investigation_id"]
-                    st.switch_page("pages/3_Analyses.py")
-                except ApiError as e:
-                    st.error(str(e))
-    st.caption("Asking a “why did … change?” question on the Analyses page starts an investigation automatically.")
 
-rows = listing["investigations"]
-if not rows:
-    html('<div class="ds-row-meta" style="padding:16px 0;">No investigations yet.</div>')
+            st.write("")
+            card_a, card_b = st.columns(2, gap="medium")
+            with card_a:
+                with st.container(key="iv_card_a"):
+                    html('<div class="iv-k">01 · From the data</div><div class="iv-t">Compute it directly</div>')
+                    st.caption("Investigate uses no AI model: every figure is computed from your data.")
+                    ask_clicked = st.button("Investigate  →", type="primary", key="inv_ask_go", disabled=too_short)
+            with card_b:
+                with st.container(key="iv_card_b"):
+                    html('<div class="iv-k">02 · With hypotheses</div><div class="iv-t">Test competing explanations</div>')
+                    st.caption("A model proposes competing hypotheses, each tested by a fixed analysis; it needs a configured model provider.")
+                    hyp_clicked = st.button("Investigate with hypotheses  →", key="inv_why_go", disabled=too_short)
+            if ask_clicked or hyp_clicked:
+                try:
+                    start = ask_investigation if ask_clicked else create_hypothesis_investigation
+                    out = start(ds["id"], why.strip())
+                    st.session_state["active_question_id"] = out["question_id"]
+                    st.session_state["investigation_id"] = out["investigation_id"]
+                    st.switch_page("pages/3_Analyses.py")
+                except ApiError as e:
+                    st.error(str(e))
+
+            st.write("")
+            with st.expander("Or define the metric yourself (no model)"):
+                usable = [m for m in metrics if m.get("dataset_id") in (None, ds["id"])]
+                source = st.radio("Metric", ["A column", "An approved metric", "A formula"], horizontal=True, key="inv_src")
+                formula, label = "", ""
+                if source == "A column" and numeric:
+                    ca, cc = st.columns(2)
+                    agg = ca.selectbox("Aggregation", ["sum", "avg", "count", "median"], key="inv_agg")
+                    col = cc.selectbox("Column", numeric, key="inv_col")
+                    formula, label = f'{agg}("{col}")', f"{agg.title()} of {col}"
+                elif source == "An approved metric":
+                    if usable:
+                        m = st.selectbox("Approved metric", usable, format_func=lambda m: f"{m['name']} = {m['formula']}", key="inv_metric")
+                        formula, label = m["formula"], m["name"]
+                    else:
+                        st.caption("No approved metric applies to this dataset. Define one on the Semantic layer page.")
+                else:
+                    formula = st.text_input("Formula", placeholder="sum(revenue) / sum(units)", key="inv_formula")
+                    label = st.text_input("Label", key="inv_label")
+                c1, c2 = st.columns(2)
+                with c1:
+                    time_col = st.selectbox("Date column", time_cols, key="inv_time")
+                with c2:
+                    dims = st.multiselect("Dimensions to examine (empty = automatic)", categorical, key="inv_dims")
+                manual = st.checkbox("Choose the two periods myself (otherwise the time range is split at its midpoint)", key="inv_manual")
+                pa = pb = None
+                if manual:
+                    p1, p2, p3, p4 = st.columns(4)
+                    a0 = p1.date_input("Earlier period: from", key="inv_a0")
+                    a1 = p2.date_input("Earlier period: before", key="inv_a1")
+                    b0 = p3.date_input("Later period: from", key="inv_b0")
+                    b1 = p4.date_input("Later period: to", key="inv_b1")
+                    pa, pb = [a0.isoformat(), a1.isoformat()], [b0.isoformat(), b1.isoformat()]
+                if st.button("Investigate  →", type="primary", key="inv_go", disabled=not formula):
+                    try:
+                        out = create_investigation({"dataset_id": ds["id"], "formula": formula, "label": label,
+                                                    "time_column": time_col, "dimensions": dims or None,
+                                                    "period_a": pa, "period_b": pb})
+                        st.session_state["active_question_id"] = out["question_id"]
+                        st.session_state["investigation_id"] = out["investigation_id"]
+                        st.switch_page("pages/3_Analyses.py")
+                    except ApiError as e:
+                        st.error(str(e))
+    st.caption("Asking a “why did … change?” question on the Analyses page starts an investigation automatically.")
     st.stop()
 
+rows = listing["investigations"]
 STATUS = {"complete": ("Complete", "verified"), "inconclusive": ("Inconclusive", "warn"), "failed": ("Failed", "error"),
           "queued": ("Queued", "running"), "running": ("Running", "running")}
-pick = st.selectbox("Investigation", rows, key="inv_pick",
+
+if step == STEPS[3]:
+    if not rows:
+        html('<div class="ds-row-meta" style="padding:16px 0;">No investigations yet. Start one in step 1.</div>')
+        st.button("Start an investigation  →", type="primary", on_click=_go, args=(STEPS[0],), key="inv_h_new")
+    for r in rows:
+        lab, kd = STATUS.get(r["status"], (r["status"], "neutral"))
+        c_a, c_b = st.columns([6, 1.3], vertical_alignment="center")
+        title = r["params"].get("label") or r["params"].get("formula") or r["params"].get("question", "")
+        c_a.markdown(f'<div style="display:flex;gap:10px;align-items:center;">{badge(lab, kd)}'
+                     f'<span class="ds-row-title">#{r["id"]} · {esc(str(title)[:90])}</span></div>', unsafe_allow_html=True)
+        c_b.button("Open", key=f"inv_open_{r['id']}", on_click=_go, args=(STEPS[1], r["id"]), width="stretch")
+    st.stop()
+
+if not rows:
+    st.info("No investigation has been run yet.")
+    st.button("Start an investigation  →", type="primary", on_click=_go, args=(STEPS[0],), key="inv_none_new")
+    st.stop()
+
+pick = st.selectbox("Investigation", rows, key="inv_pick", label_visibility="collapsed",
                     index=next((i for i, r in enumerate(rows) if r["id"] == st.session_state.get("investigation_id")), 0),
                     format_func=lambda r: f"#{r['id']} · {r['params'].get('label') or r['params'].get('formula') or r['params'].get('question', '')[:70]} · {r['status']}")
 try:
@@ -413,6 +484,105 @@ def _evidence_section(report: dict) -> None:
                   if family.get("comparisons") else ""))
 
 
+_TIER_TAG = {"plausible_contributor": ("Plausible contributor", "strong"), "association": ("Association only", "weak")}
+_HELD = {"holds": "holds", "vanishes": "disappears", "attenuated": "shrinks", "unclear": "inconclusive",
+         "not_separable": "not separable", "no_gap": "—"}
+
+
+def _pct_text(v, digits: int = 1) -> str:
+    return "—" if v is None else f"{v * 100:+.{digits}f}%"
+
+
+def _own_change_text(f: dict, e: dict) -> str:
+    """A segment present in one period only has no % change; say so instead of a bare dash."""
+    presence = f.get("presence", "both")
+    if presence == "new":
+        return "new in the comparison period"
+    if presence == "lost":
+        return "absent from the comparison period"
+    return _pct_text(e.get("change_pct"))
+
+
+def _root_cause_section(rc: dict) -> None:
+    """Problem, finding, ranked factors with the evidence behind each, what was held fixed, and what to do next."""
+    if not rc or rc.get("error"):
+        if rc and rc.get("error"):
+            st.caption(rc["error"])
+        return
+    pr, dg = rc.get("problem") or {}, rc.get("diagnosis") or {}
+    scope = pr.get("scope") or "all rows"
+    base, comp = pr.get("baseline") or ["", ""], pr.get("comparison") or ["", ""]
+    html('<div class="ds-section-title" style="margin-top:14px;">Problem</div>')
+    st.markdown(
+        f"**{esc(pr.get('outcome', ''))}** {'rose' if pr.get('direction') == 'increase' else 'fell'} "
+        f"{_pct_text((pr.get('change_pct') or 0) / 100) if pr.get('change_pct') is not None else ''} "
+        f"between {esc(str(base[0])[:10])} – {esc(str(base[1])[:10])} and {esc(str(comp[0])[:10])} – {esc(str(comp[1])[:10])} "
+        f"(periods: {esc(str(pr.get('periods_source', '')))}). Scope: {esc(scope)}. "
+        f"{pr.get('rows_baseline', 0):,} baseline rows, {pr.get('rows_comparison', 0):,} comparison rows.")
+    _bullets("Ambiguities in the question", pr.get("ambiguities") or [])
+    html('<div class="ds-section-title" style="margin-top:14px;">Finding</div>')
+    st.markdown(f"**{dg.get('headline', '')}**")
+    cs = rc.get("causal_status") or {}
+    if cs.get("text"):
+        st.caption(cs["text"])
+
+    for chart in rc.get("charts") or []:
+        plot(figure_from_json(chart["plotly_json"]), height=320)
+
+    factors = rc.get("factors") or []
+    if factors:
+        html('<div class="ds-section-title" style="margin-top:14px;">Contributing factors, ranked by evidence</div>')
+        body = []
+        for f in factors:
+            e = f["evidence"]
+            label, cls = _TIER_TAG.get(f["tier"], (f.get("tier_label", ""), "weak"))
+            held = [f"{_HELD.get(t['result'], t['result'])} · {esc(t['against'])}" for t in (f.get("adjustment") or {}).get("tests", [])[:3]]
+            share = e.get("share_of_change")
+            width = 0 if share is None or share < 0 else min(share, 1.0) * 100
+            limits = list(f.get("failed_checks") or []) + [x for x in (f.get("limitations") or []) if x not in (f.get("failed_checks") or [])]
+            body.append(
+                f'<tr><td><b>{esc(f["factor"])}</b><div class="rc-muted">{esc(f.get("role", ""))}</div></td>'
+                f'<td>{esc(_n(e.get("value_a")))} → {esc(_n(e.get("value_b")))}'
+                f'<div class="rc-muted">{e.get("rows_a", 0):,} → {e.get("rows_b", 0):,} rows</div></td>'
+                f'<td>{esc(_own_change_text(f, e))} vs {esc(_pct_text(e.get("rest_change_pct")))} elsewhere'
+                f'<div class="rc-muted">{"" if share is None else f"{share * 100:.0f}% of the change"}</div>'
+                f'<div class="rc-bar"><span style="width:{width:.0f}%"></span></div></td>'
+                f'<td>{"<br>".join(held) or "not tested"}</td>'
+                f'<td><span class="rc-tag rc-{cls}">{esc(label)}</span>'
+                f'<div class="rc-muted">data quality: {esc(f.get("evidence_quality", ""))}'
+                f'{" · same direction in both halves" if f.get("consistent_across_halves") else ""}</div></td>'
+                f'<td>{esc("; ".join(limits)) or "none noted"}</td></tr>')
+        st.markdown(_EVIDENCE_CSS + '<div class="rc-panel"><table><thead><tr><th>Factor</th><th>Baseline → comparison</th>'
+                    '<th>Change vs the rest</th><th>Other factors held fixed</th><th>Evidence level</th><th>Limitations</th></tr></thead><tbody>'
+                    + "".join(body) + "</tbody></table></div>", unsafe_allow_html=True)
+        lead = factors[0]
+        if lead.get("why_it_matters"):
+            st.caption("Lead factor: " + lead["why_it_matters"])
+    sub = rc.get("sub_location")
+    if sub:
+        st.caption(f"Inside {sub['within']}, the change sits mainly in {sub['dimension']} = {sub['segment']} "
+                   f"({sub['a']:,.0f} → {sub['b']:,.0f}, {abs(sub['share']) * 100:.0f}% of that factor's change).")
+
+    nums = [n for n in rc.get("numeric_factors") or [] if n.get("moved")]
+    if nums:
+        html('<div class="ds-section-title" style="margin-top:14px;">Numeric variables that shifted</div>')
+        st.dataframe(pd.DataFrame([{
+            "Variable": n["column"], "Mean before": round(n["mean_a"], 3), "Mean after": round(n["mean_b"], 3),
+            "Change %": round(n["mean_change_pct"] * 100, 1), "Standardised difference": round(n["std_diff"], 2),
+            "Row-level relationship before (rho)": (n.get("relationship") or {}).get("a", {}).get("rho"),
+            "Row-level relationship after (rho)": (n.get("relationship") or {}).get("b", {}).get("rho")} for n in nums]),
+            use_container_width=True, hide_index=True)
+        st.caption("A variable that moved is an association to check, not a driver. Spearman rho is the rank relationship with the "
+                   "outcome inside each period; the p-values behind “moved” are Holm-adjusted.")
+
+    _bullets("Data checks", [c.get("text", "") if isinstance(c, dict) else str(c) for c in rc.get("data_checks") or []])
+    if rc.get("next_steps"):
+        _bullets("What to investigate next", rc["next_steps"])
+    with st.expander("How to read this, and how it was computed"):
+        for line in (rc.get("how_to_read") or []) + (rc.get("method_notes") or []):
+            html(f'<div class="ds-row-meta" style="padding:3px 0;">• {esc(line)}</div>')
+
+
 if inv.get("engine") == "hypothesis" and inv["status"] in ("queued", "running"):
     st.info("This investigation is still running. Open it on the Analyses page to watch progress, or reload this page.")
     _evidence_line(inv.get("evidence") or {})
@@ -430,30 +600,52 @@ if not report or report.get("error"):
 # The AI route was asked for but could not finish: said once, before the deterministic result.
 fallback_explained = _fallback_section(inv)
 
+FINDINGS, EVIDENCE = step == STEPS[1], step == STEPS[2]
 
-if inv.get("question_id") and st.button("Open the dashboard and evidence for this investigation  →", key="inv_dash"):
+
+def _next_button() -> None:
+    if FINDINGS:
+        st.write("")
+        st.button("See the evidence behind this  →", type="primary", on_click=_go, args=(STEPS[2],), key="inv_to_evidence")
+    else:
+        st.write("")
+        st.button("←  Back to the findings", on_click=_go, args=(STEPS[1],), key="inv_to_findings")
+
+
+if FINDINGS and inv.get("question_id") and st.button("Open the dashboard and evidence for this investigation  →", key="inv_dash"):
     st.session_state["active_question_id"] = inv["question_id"]
     st.switch_page("pages/4_Dashboards.py")
 
 if report.get("engine") == "hypothesis":
     u, totals, periods = report.get("understanding") or {}, report.get("totals") or {}, report.get("periods") or {}
     determination = report.get("determination") or {}
-    (st.success if determination.get("code") == "explanations_supported" else st.warning)(determination.get("text") or "")
-    if totals.get("a") is not None and totals.get("b") is not None:
-        k1, k2, k3 = st.columns(3)
-        k1.metric(f"Earlier ({str(periods['a'][0])[:10]} → {str(periods['a'][1])[:10]})", f"{totals['a']:,.2f}")
-        k2.metric(f"Later ({str(periods['b'][0])[:10]} → {str(periods['b'][1])[:10]})", f"{totals['b']:,.2f}")
-        k3.metric("Change", f"{totals.get('change') or 0:,.2f}",
-                  f"{totals['change_pct']:+.1f}%" if totals.get("change_pct") is not None else None)
+    if FINDINGS:
+        (st.success if determination.get("code") == "explanations_supported" else st.warning)(determination.get("text") or "")
+        if totals.get("a") is not None and totals.get("b") is not None:
+            k1, k2, k3 = st.columns(3)
+            k1.metric(f"Earlier ({str(periods['a'][0])[:10]} → {str(periods['a'][1])[:10]})", f"{totals['a']:,.2f}")
+            k2.metric(f"Later ({str(periods['b'][0])[:10]} → {str(periods['b'][1])[:10]})", f"{totals['b']:,.2f}")
+            k3.metric("Change", f"{totals.get('change') or 0:,.2f}",
+                      f"{totals['change_pct']:+.1f}%" if totals.get("change_pct") is not None else None)
+        if u:
+            metric = u.get("metric") or {}
+            st.caption(f"Question read as: {metric.get('label', '')} = {metric.get('formula', '')} ({metric.get('source', '')}); "
+                       f"population: {u.get('population', 'all rows')}; periods: {u.get('periods_source', '')}.")
+        for chart in report.get("charts") or []:
+            plot(figure_from_json(chart["plotly_json"]), height=320)
+        c1, c2 = st.columns(2)
+        with c1:
+            _bullets("Observed result", report.get("observed_facts") or [], "Nothing was measured.")
+        with c2:
+            _bullets("Possible explanations (not established)", report.get("possible_explanations") or [], "None offered.")
+            _bullets("Suggested follow-up analyses", report.get("follow_ups") or [], "None suggested.")
+        _next_button()
+        st.stop()
+
+    # ---- Evidence
     if u:
-        metric = u.get("metric") or {}
-        st.caption(f"Question read as: {metric.get('label', '')} = {metric.get('formula', '')} ({metric.get('source', '')}); "
-                   f"population: {u.get('population', 'all rows')}; periods: {u.get('periods_source', '')}.")
         _bullets("Assumptions made", u.get("assumptions") or [])
         _bullets("Information the question did not give", u.get("missing_information") or [])
-    for chart in report.get("charts") or []:
-        plot(figure_from_json(chart["plotly_json"]), height=320)
-
     counts = report.get("hypothesis_counts") or {}
     html('<div class="ds-section-title" style="margin-top:14px;">Hypotheses tested · '
          + esc(", ".join(f"{n} {HYP_STATUS.get(s, (s,))[0].lower()}" for s, n in ((s, counts.get(s)) for s in HYP_STATUS) if n) or "none") + '</div>')
@@ -465,13 +657,6 @@ if report.get("engine") == "hypothesis":
         with st.expander(f"Proposed by the model but rejected before testing ({len(report['rejected_hypotheses'])})"):
             for r in report["rejected_hypotheses"]:
                 html(f'<div class="ds-row-meta" style="padding:4px 0;">• <b>{esc(r.get("statement") or "")}</b> — {esc(r.get("reason") or "")}</div>')
-
-    c1, c2 = st.columns(2)
-    with c1:
-        _bullets("Observed result", report.get("observed_facts") or [], "Nothing was measured.")
-    with c2:
-        _bullets("Possible explanations (not established)", report.get("possible_explanations") or [], "None offered.")
-        _bullets("Suggested follow-up analyses", report.get("follow_ups") or [], "None suggested.")
     _statistics_section(report, inv.get("evidence"))
     _bullets("Data quality", report.get("data_quality") or [], "No data-quality problem was detected in the two periods.")
     _bullets("Limitations", report.get("limitations") or [])
@@ -489,53 +674,63 @@ if report.get("engine") == "hypothesis":
                f"Summary written by {'the model, with every number checked against executed results' if summary.get('source') == 'model' else 'a fixed template (' + str(summary.get('rejected_reason') or 'no model text used') + ')'}. "
                f"Dataset fingerprint {(repro.get('dataset_fingerprint') or '')[:12]}…"
                + (" Resumed after an interruption." if report.get("resumed") else ""))
+    _next_button()
     st.stop()
 
+# ---- the direct (no model) investigation ---------------------------------------------------------------------
 totals, periods = report.get("totals") or {}, report.get("periods") or {}
-if totals.get("a") is not None:
-    k1, k2, k3 = st.columns(3)
-    k1.metric(f"Earlier ({str(periods['a'][0])[:10]} → {str(periods['a'][1])[:10]})", f"{totals['a']:,.2f}")
-    k2.metric(f"Later ({str(periods['b'][0])[:10]} → {str(periods['b'][1])[:10]})", f"{totals['b']:,.2f}")
-    k3.metric("Change", f"{totals.get('change', 0):,.2f}",
-              f"{totals['change_pct']:+.1f}%" if totals.get("change_pct") is not None else None)
-    st.caption(f"Periods: {periods.get('source', '')}. Method: {report.get('decomposition_method', '').replace('_', ' ')}.")
-    if totals.get("length_adjusted"):
-        lfl_pct = totals.get("like_for_like_pct")
-        st.caption(f"The later period is {totals['days_b']:g} days against {totals['days_a']:g}. That difference in length alone "
-                   f"accounts for {_n(totals.get('length_effect'), True)} of the change; like for like the change is "
-                   f"{_n(totals.get('like_for_like_change'), True)}" + (f" ({lfl_pct:+.1f}%)." if lfl_pct is not None else "."))
-    overall = (report.get("change_evidence") or {}).get("overall")
-    if overall:
-        st.caption("Is the change larger than the metric's ordinary variation? " + _stat_text(overall)
-                   + ("" if overall.get("status") != "ok" else
-                      " — yes." if overall.get("significant") else " — no, it is within ordinary variation."))
-for issue in (report.get("comparability") or {}).get("issues") or []:
-    st.warning(f"The two periods are not fully comparable: {issue}.")
-if report.get("status") == "inconclusive" and not report.get("ranked_contributors"):
-    st.info("Nothing could be located for this question. " + " ".join(report.get("unresolved") or []))
+if FINDINGS:
+    if totals.get("a") is not None:
+        k1, k2, k3 = st.columns(3)
+        k1.metric(f"Earlier ({str(periods['a'][0])[:10]} → {str(periods['a'][1])[:10]})", f"{totals['a']:,.2f}")
+        k2.metric(f"Later ({str(periods['b'][0])[:10]} → {str(periods['b'][1])[:10]})", f"{totals['b']:,.2f}")
+        k3.metric("Change", f"{totals.get('change', 0):,.2f}",
+                  f"{totals['change_pct']:+.1f}%" if totals.get("change_pct") is not None else None)
+        st.caption(f"Periods: {periods.get('source', '')}. Method: {report.get('decomposition_method', '').replace('_', ' ')}.")
+        if totals.get("length_adjusted"):
+            lfl_pct = totals.get("like_for_like_pct")
+            st.caption(f"The later period is {totals['days_b']:g} days against {totals['days_a']:g}. That difference in length alone "
+                       f"accounts for {_n(totals.get('length_effect'), True)} of the change; like for like the change is "
+                       f"{_n(totals.get('like_for_like_change'), True)}" + (f" ({lfl_pct:+.1f}%)." if lfl_pct is not None else "."))
+        overall = (report.get("change_evidence") or {}).get("overall")
+        if overall:
+            st.caption("Is the change larger than the metric's ordinary variation? " + _stat_text(overall)
+                       + ("" if overall.get("status") != "ok" else
+                          " — yes." if overall.get("significant") else " — no, it is within ordinary variation."))
+    for issue in (report.get("comparability") or {}).get("issues") or []:
+        st.warning(f"The two periods are not fully comparable: {issue}.")
+    if report.get("status") == "inconclusive" and not report.get("ranked_contributors"):
+        st.info("Nothing could be located for this question. " + " ".join(report.get("unresolved") or []))
 
-for chart in report.get("charts") or []:
-    plot(figure_from_json(chart["plotly_json"]), height=320)
+    for chart in report.get("charts") or []:
+        plot(figure_from_json(chart["plotly_json"]), height=320)
 
-_evidence_section(report)
+    _root_cause_section(report.get("root_cause"))
 
-if report.get("ranked_contributors"):
-    html('<div class="ds-section-title" style="margin-top:14px;">Contributors, ranked by measured contribution and evidence quality</div>')
-    st.dataframe(pd.DataFrame([{
-        "Dimension": r["dimension"], "Segment": r["segment"], "Contribution": round(r["contribution"], 2),
-        "Share of change %": None if r["share_of_change"] is None else round(r["share_of_change"] * 100, 1),
-        "Rows earlier": r["rows_a"], "Rows later": r["rows_b"], "Same direction in both halves": r["consistent_across_halves"],
-        "Evidence quality": r["evidence_quality"]} for r in report["ranked_contributors"]]),
-        use_container_width=True, hide_index=True)
+    if report.get("ranked_contributors"):
+        html('<div class="ds-section-title" style="margin-top:14px;">Contributors, ranked by measured contribution and evidence quality</div>')
+        st.dataframe(pd.DataFrame([{
+            "Dimension": r["dimension"], "Segment": r["segment"], "Contribution": round(r["contribution"], 2),
+            "Share of change %": None if r["share_of_change"] is None else round(r["share_of_change"] * 100, 1),
+            "Rows earlier": r["rows_a"], "Rows later": r["rows_b"], "Same direction in both halves": r["consistent_across_halves"],
+            "Evidence quality": r["evidence_quality"]} for r in report["ranked_contributors"]]),
+            use_container_width=True, hide_index=True)
 
-pv = report.get("price_volume")
-if pv:
-    html('<div class="ds-section-title" style="margin-top:14px;">Price and volume</div>')
-    st.caption(f"{pv['basis']}. {pv['note']}")
-    a, b, c = st.columns(3)
-    a.metric("Price effect", f"{pv['price_effect']:,.2f}")
-    b.metric("Volume effect", f"{pv['volume_effect']:,.2f}")
-    c.metric("Entry / exit", f"{pv['entry_exit_effect']:,.2f}")
+    pv = report.get("price_volume")
+    if pv:
+        html('<div class="ds-section-title" style="margin-top:14px;">Price and volume</div>')
+        st.caption(f"{pv['basis']}. {pv['note']}")
+        a, b, c = st.columns(3)
+        a.metric("Price effect", f"{pv['price_effect']:,.2f}")
+        b.metric("Volume effect", f"{pv['volume_effect']:,.2f}")
+        c.metric("Entry / exit", f"{pv['entry_exit_effect']:,.2f}")
+    _next_button()
+    st.stop()
+
+# ---- Evidence
+_detail = st.expander("Segment decomposition detail") if report.get("root_cause") and not report["root_cause"].get("error") else st.container()
+with _detail:
+    _evidence_section(report)
 
 if report.get("hypotheses"):
     html('<div class="ds-section-title" style="margin-top:14px;">Hypotheses tested</div>')
@@ -562,3 +757,4 @@ b = report.get("budget") or {}
 st.caption(f"Bounded run: {b.get('engine_calls', 0)} computations in {b.get('seconds', 0)}s"
            + (f"; stopped at its {b['exhausted'].replace('_', ' ')} limit" if b.get("exhausted") else "")
            + f". Dataset fingerprint {((report.get('provenance') or {}).get('dataset_fingerprint') or '')[:12]}…")
+_next_button()

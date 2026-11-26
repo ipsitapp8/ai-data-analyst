@@ -1,0 +1,189 @@
+/* Deep-indigo skin: loaded after every other stylesheet (and again after the dashboard stylesheet), so it wins.
+   One palette for the whole site, taken from the hero scene: midnight indigo, violet, magenta-pink, amber spark. */
+:root, .stApp, .stApp .stMain {
+  --indigo-0: #070516; --indigo-1: #0b0820; --indigo-2: #120d33; --indigo-3: #1b1347; --indigo-4: #261a5e;
+  --violet: #a78bfa; --violet-2: #8b5cf6; --pink: #f472b6; --amber: #fbbf24; --sky: #7dd3fc;
+
+  --ink: #ece8ff !important; --ink-soft: #a9a3d6 !important;
+  --line: rgba(167,139,250,.16) !important; --line-strong: rgba(167,139,250,.30) !important;
+  --surface: rgba(24,17,60,.72) !important; --page: #0b0820 !important;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4) !important;
+  --shadow-md: 0 12px 34px rgba(3,2,16,.55), 0 2px 6px rgba(3,2,16,.4) !important;
+  --shadow-lg: 0 28px 70px rgba(3,2,16,.65), 0 4px 12px rgba(3,2,16,.4) !important;
+  --liquid: linear-gradient(135deg, #6d5efc 0%, #a855f7 52%, #ec6fa8 100%) !important;
+  --purple: #a78bfa !important;
+  --glass-fill: linear-gradient(180deg, rgba(60,44,140,.55) 0%, rgba(30,21,78,.55) 100%) !important;
+  --glass-edge: rgba(167,139,250,.28) !important;
+  --glass-shadow: 0 8px 24px rgba(3,2,16,.5), 0 1px 3px rgba(3,2,16,.4) !important;
+  --glass-gloss: inset 0 1px 0 rgba(255,255,255,.10), inset 0 -8px 14px rgba(124,92,255,.10) !important;
+  --glass-bg: rgba(27,19,71,.62) !important; --glass-line: rgba(167,139,250,.22) !important;
+  --glass-sh: 0 18px 44px rgba(3,2,16,.55), inset 0 1px 0 rgba(255,255,255,.09) !important;
+  --plum-glass: linear-gradient(135deg, #6d5efc, #a855f7) !important;
+
+  --bg-base: #0b0820 !important; --bg-page: transparent !important; --bg-card: rgba(24,17,60,.66) !important;
+  --bg-card-hover: rgba(40,29,98,.80) !important; --bg-inset: rgba(12,8,36,.55) !important;
+  --border: rgba(167,139,250,.18) !important; --border-strong: rgba(167,139,250,.32) !important;
+  --text-primary: #ece8ff !important; --text-secondary: #b6b0e0 !important; --text-muted: #8a84bd !important;
+  --accent: #a78bfa !important; --accent-dim: #8b5cf6 !important; --accent-bg: rgba(139,92,246,.18) !important;
+  --accent-border: rgba(167,139,250,.38) !important; --accent-ink: #c4b5fd !important;
+  --accent2: #7dd3fc !important; --accent2-dim: #38bdf8 !important; --accent2-bg: rgba(56,189,248,.14) !important; --accent2-border: rgba(125,211,252,.34) !important;
+  --ok: #4ade80 !important; --ok-bg: rgba(74,222,128,.13) !important; --ok-border: rgba(74,222,128,.35) !important;
+  --warn: #fbbf24 !important; --warn-bg: rgba(251,191,36,.13) !important; --warn-border: rgba(251,191,36,.35) !important;
+  --error: #f87171 !important; --error-bg: rgba(248,113,113,.13) !important; --error-border: rgba(248,113,113,.38) !important;
+  color-scheme: dark;
+}
+
+/* page: midnight gradient, soft violet/pink/blue glows, faint grid */
+html, body { background: #0b0820 !important; color: var(--ink); }
+.stApp, [data-testid="stAppViewContainer"], .stMain { background: transparent !important; color: var(--ink); }
+.stApp::before {
+  background:
+    radial-gradient(circle at center, rgba(124,92,255,.34) 0%, rgba(124,92,255,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(236,111,168,.20) 0%, rgba(236,111,168,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(56,120,255,.24) 0%, rgba(56,120,255,0) 62%) no-repeat,
+    radial-gradient(circle at center, rgba(251,191,36,.07) 0%, rgba(251,191,36,0) 62%) no-repeat !important;
+  background-size: 56vw 56vw, 50vw 50vw, 60vw 60vw, 38vw 38vw !important;
+}
+.stApp::after {
+  background-image: linear-gradient(rgba(167,139,250,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,.07) 1px, transparent 1px) !important;
+}
+
+/* type */
+h1, h2, h3, h4, h5, .ds-page-title, .ds-section-title, .h-hero, .h-how-title, .ds-stat-value { color: var(--ink) !important; }
+.h-hero span { background: linear-gradient(90deg, #a78bfa, #f472b6) !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important; color: transparent !important; }
+p, label, li, span, small, [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"], [data-testid="stWidgetLabel"] { color: inherit; }
+.ds-page-sub, .h-lede, .h-step-desc, .h-proof, .h-strip-eyebrow, .h-how-eyebrow, .h-try { color: var(--ink-soft) !important; }
+.h-lede em, .h-lede b, .h-lede strong { color: var(--ink) !important; }
+a { color: #c4b5fd; }
+
+/* sidebar and top bar */
+[data-testid="stSidebar"], section[data-testid="stSidebar"] > div { background: linear-gradient(180deg, rgba(20,14,54,.92), rgba(11,8,32,.92)) !important; border-right: 1px solid var(--line) !important; }
+.stApp [data-testid="stSidebar"] .stButton > button, .stApp [class*="st-key-nav_"] button { color: var(--ink-soft) !important; }
+.stApp [class*="st-key-nav_"] button[kind="primary"], .stApp [data-testid="stSidebar"] button[kind="primary"] {
+  background: linear-gradient(135deg, #6d5efc, #a855f7) !important; color: #fff !important; border-color: transparent !important; box-shadow: 0 8px 22px rgba(124,92,255,.35) !important; }
+.silt-topbar, [class*="silt-tb"], .st-key-topbar { background: rgba(20,14,54,.78) !important; border-color: var(--line) !important; color: var(--ink) !important; }
+.silt-tb-avatar { background: linear-gradient(135deg, #6d5efc, #ec6fa8) !important; color: #fff !important; }
+
+/* buttons */
+button[kind="primary"], .stFormSubmitButton > button, button[kind="primaryFormSubmit"],
+.stApp .stMain button[kind="primary"], .stApp .stMain button[kind="primary"]:hover, .stApp [data-baseweb="popover"] button[kind="primary"] {
+  background: linear-gradient(135deg, #6d5efc 0%, #a855f7 100%) !important; color: #fff !important; border: 1px solid rgba(196,181,253,.35) !important;
+  box-shadow: 0 10px 26px rgba(124,92,255,.38), inset 0 1px 0 rgba(255,255,255,.22) !important;
+}
+button[kind="primary"]:hover, .stFormSubmitButton > button:hover { filter: brightness(1.12); box-shadow: 0 14px 34px rgba(124,92,255,.5), inset 0 1px 0 rgba(255,255,255,.28) !important; }
+button[kind="primary"] p, .stFormSubmitButton > button p { color: #fff !important; }
+button[kind="secondary"], .stButton > button:not([kind="primary"]), .stDownloadButton > button {
+  background: rgba(40,29,98,.55) !important; color: var(--ink) !important; border: 1px solid var(--line-strong) !important; box-shadow: var(--glass-shadow) !important; }
+button[kind="secondary"]:hover, .stButton > button:not([kind="primary"]):hover, .stDownloadButton > button:hover { background: rgba(70,52,160,.55) !important; border-color: rgba(196,181,253,.55) !important; color: #fff !important; }
+button[kind="secondary"] p, .stButton > button:not([kind="primary"]) p, .stDownloadButton > button p { color: inherit !important; }
+.st-key-home_ctas button[kind="primary"]::after { background: linear-gradient(135deg, #f472b6, #a855f7) !important; }
+.stApp [class*="st-key-home_chips"] button { background: rgba(30,21,78,.62) !important; color: var(--ink-soft) !important; border: 1px solid var(--line) !important; }
+.stApp [class*="st-key-home_chips"] button:hover { color: #fff !important; border-color: #a78bfa !important; background: rgba(60,44,140,.6) !important; }
+
+/* cards, containers, panels, tabs, expanders */
+.stApp .ds-card, .stApp [class*="st-key-card"], .stApp [class*="st-key-flat"], .stApp [class*="st-key-chartcard_"], .stApp [data-testid="stMetric"],
+.stApp [data-testid="stExpander"], .stApp [data-testid="stForm"], .stApp .h-snap, .stApp .h-strip, .stApp .h-step-ico, .stApp .h-tile,
+.stApp [data-testid="stVerticalBlockBorderWrapper"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]) {
+  background: var(--glass-bg) !important; border: 1px solid var(--glass-line) !important; box-shadow: var(--glass-sh) !important; color: var(--ink);
+}
+.stApp [class*="st-key-card"]:hover, .stApp [class*="st-key-chartcard_"]:hover, .stApp .ds-card:hover, .stApp [data-testid="stMetric"]:hover {
+  box-shadow: 0 26px 60px rgba(3,2,16,.7), 0 0 0 1px rgba(167,139,250,.35), inset 0 1px 0 rgba(255,255,255,.10) !important; }
+.stApp .stMain [data-testid="stMainBlockContainer"] { background: linear-gradient(145deg, rgba(27,19,71,.55), rgba(14,10,40,.50)) !important; border: 1px solid rgba(167,139,250,.20) !important; box-shadow: 0 30px 70px rgba(3,2,16,.6), inset 0 1px 0 rgba(255,255,255,.07) !important; }
+.stTabs [data-baseweb="tab-list"] { background: rgba(14,10,40,.5); border-color: var(--line); }
+.stTabs [aria-selected="true"] { background: var(--glass-fill) !important; color: #fff !important; }
+.stTabs [data-baseweb="tab"] { color: var(--ink-soft) !important; }
+.stApp .stMain .st-key-card_narr { border-left: 4px solid #a78bfa !important; }
+hr { border-color: var(--line) !important; }
+
+/* inputs, selects, uploader, popovers, menus */
+.stApp input, .stApp textarea, .stApp [data-baseweb="input"], .stApp [data-baseweb="textarea"], .stApp [data-baseweb="select"] > div,
+.stApp [data-testid="stNumberInput"] input, .stApp [data-testid="stDateInput"] input {
+  background: rgba(12,8,36,.72) !important; color: var(--ink) !important; border: 1px solid var(--line-strong) !important; box-shadow: none !important; -webkit-text-fill-color: var(--ink) !important; }
+.stApp input::placeholder, .stApp textarea::placeholder { color: #7d77ad !important; -webkit-text-fill-color: #7d77ad !important; }
+.stApp input:focus, .stApp textarea:focus, .stApp [data-baseweb="select"]:focus-within > div { border-color: #a78bfa !important; box-shadow: 0 0 0 3px rgba(167,139,250,.28) !important; }
+.stApp [data-testid="stFileUploaderDropzone"] { background: rgba(12,8,36,.6) !important; border: 1.5px dashed rgba(167,139,250,.42) !important; color: var(--ink-soft) !important; }
+[data-baseweb="popover"] > div, [data-baseweb="menu"], [role="listbox"], [data-baseweb="calendar"] { background: #140e3a !important; color: var(--ink) !important; border: 1px solid var(--line-strong) !important; }
+[role="option"], [data-baseweb="menu"] li { color: var(--ink) !important; background: transparent !important; }
+[role="option"]:hover, [role="option"][aria-selected="true"], [data-baseweb="menu"] li:hover { background: rgba(124,92,255,.28) !important; }
+[data-baseweb="select"] svg, [data-baseweb="select"] span, [data-baseweb="select"] div { color: var(--ink) !important; }
+[data-testid="stDialog"] > div, [data-testid="stDialog"] [role="dialog"] { background: #120d33 !important; color: var(--ink) !important; border: 1px solid var(--line-strong) !important; }
+[data-testid="stTooltipContent"], [data-baseweb="tooltip"] > div { background: #1b1347 !important; color: var(--ink) !important; }
+
+/* tables, code, alerts */
+[data-testid="stDataFrame"], [data-testid="stTable"], table { color: var(--ink) !important; }
+[data-testid="stDataFrame"] { border: 1px solid var(--line) !important; border-radius: 14px; overflow: hidden; --gdg-bg-cell: #120d33; --gdg-bg-header: #1b1347; --gdg-text-dark: #ece8ff; --gdg-text-header: #c4b5fd; --gdg-border-color: rgba(167,139,250,.14); --gdg-bg-cell-medium: #160f3d; }
+table th { background: rgba(60,44,140,.4) !important; color: #d8d0ff !important; } table td { border-color: var(--line) !important; }
+[data-testid="stCode"], pre, code { background: rgba(8,5,26,.8) !important; color: #e0dbff !important; border-color: var(--line) !important; }
+[data-testid="stAlert"] { background: rgba(40,29,98,.5) !important; border: 1px solid var(--line-strong) !important; color: var(--ink) !important; }
+[data-testid="stAlert"] p, [data-testid="stAlert"] div { color: var(--ink) !important; }
+[data-testid="stMetricValue"], [data-testid="stMetricLabel"] { color: var(--ink) !important; }
+[data-testid="stSlider"] [role="slider"] { background: #a78bfa !important; }
+[data-testid="stProgress"] > div > div > div { background: linear-gradient(90deg, #6d5efc, #f472b6) !important; }
+
+/* badges and status chips keep their meaning, re-tinted for dark */
+.ds-badge { background: rgba(124,92,255,.18); color: #d8d0ff; border-color: rgba(167,139,250,.34); }
+.ds-badge-ok, .ds-badge-verified { background: var(--ok-bg) !important; color: var(--ok) !important; border-color: var(--ok-border) !important; }
+.ds-badge-warn, .ds-badge-caveats { background: var(--warn-bg) !important; color: var(--warn) !important; border-color: var(--warn-border) !important; }
+.ds-badge-error, .ds-badge-unverified { background: var(--error-bg) !important; color: var(--error) !important; border-color: var(--error-border) !important; }
+.ds-badge-neutral { background: rgba(167,139,250,.12) !important; color: var(--ink-soft) !important; }
+
+/* home: hero stage sits flush with the page now */
+
+.h-footer, .h-footer div { color: var(--ink-soft) !important; }
+.h-footer b { color: var(--violet) !important; }
+.h-snap-row { border-color: var(--line) !important; } .h-snap-row .t { color: var(--ink) !important; }
+.h-tile-num, .h-snap-head, .h-step-name { color: var(--ink) !important; } .h-step-ico { color: #c4b5fd !important; }
+.h-strip > div { color: var(--ink) !important; border-color: var(--line) !important; } .h-strip svg { color: #a78bfa !important; }
+.h-badge { background: rgba(30,21,78,.7) !important; color: var(--ink) !important; border: 1px solid var(--line) !important; }
+.h-badge .tag { background: linear-gradient(135deg, #6d5efc, #a855f7) !important; color: #fff !important; }
+
+/* sidebar nav: quiet items, the current page (a disabled button) is the violet pill */
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button {
+  background: transparent !important; border: 1px solid transparent !important; box-shadow: none !important; color: var(--ink-soft) !important;
+  -webkit-backdrop-filter: none; backdrop-filter: none; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:hover:not(:disabled) { background: rgba(124,92,255,.18) !important; color: #fff !important; border-color: rgba(167,139,250,.30) !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled, .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled:hover {
+  background: linear-gradient(135deg, #6d5efc, #a855f7) !important; color: #fff !important; opacity: 1 !important; border-color: rgba(196,181,253,.4) !important;
+  box-shadow: 0 8px 22px rgba(124,92,255,.38), inset 0 1px 0 rgba(255,255,255,.2) !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled p, .stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled * { color: #fff !important; opacity: 1 !important; }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button::before { filter: invert(.85) sepia(.2) saturate(2) hue-rotate(215deg); }
+.stApp [data-testid="stSidebar"] [class*="st-key-nav_"] button:disabled::before { filter: brightness(0) invert(1); }
+.h-ask-ico { background: linear-gradient(135deg, #6d5efc, #ec6fa8) !important; color: #fff !important; }
+
+/* expanders, labels */
+.stApp [data-testid="stExpander"] details, .stApp [data-testid="stExpander"] summary, .stApp [data-testid="stExpander"] [data-testid="stExpanderDetails"] { background: transparent !important; color: var(--ink) !important; }
+.stApp [data-testid="stExpander"] summary:hover { background: rgba(124,92,255,.12) !important; }
+.stApp [data-testid="stExpander"] summary svg { color: var(--ink-soft) !important; fill: var(--ink-soft) !important; }
+.stApp [data-testid="stWidgetLabel"], .stApp [data-testid="stWidgetLabel"] *, .stApp label, .stApp label p { color: var(--ink-soft) !important; }
+.stApp [data-testid="stCheckbox"] label, .stApp [data-testid="stRadio"] label, .stApp [data-testid="stToggle"] label { color: var(--ink) !important; }
+
+/* paint cost: one static backdrop and lighter blur (the stacked 22px blur + saturate + drifting glows made big pages janky) */
+.stApp::before { animation: none !important; }
+.stApp .ds-card, .stApp [class*="st-key-card"], .stApp [class*="st-key-flat"], .stApp [class*="st-key-chartcard_"], .stApp [data-testid="stMetric"],
+.stApp [data-testid="stExpander"], .stApp [data-testid="stForm"], .stApp .h-snap, .stApp .h-strip, .stApp .h-step-ico, .stApp .h-tile, .stApp .h-float,
+.stApp [data-testid="stVerticalBlockBorderWrapper"], .stApp .stMain [data-testid="stMainBlockContainer"], .stApp .stMain .st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button {
+  -webkit-backdrop-filter: blur(10px) !important; backdrop-filter: blur(10px) !important; }
+
+/* hover states: stay translucent violet, never light grey (light text on a light hover was unreadable) */
+.stApp .ds-row:hover, .stApp .ds-table tr:hover, .stApp tbody tr:hover { background: rgba(124,92,255,.16) !important; }
+.stApp .ds-row:hover *, .stApp tbody tr:hover * { color: inherit; }
+.stApp .st-key-nav .stButton > button:hover { background: rgba(124,92,255,.18) !important; color: #fff !important; }
+.stApp .stMain .st-key-dash_kpis [class*="st-key-kpi_"] .stButton > button:hover:not(:disabled) { border-color: rgba(196,181,253,.6) !important; }
+
+/* text fields: the glass skin painted these 50% white; they must be deep indigo with light text, everywhere (workspace form, chat, uploads) */
+.stApp [data-testid="stTextInputRootElement"], .stApp [data-testid="stTextAreaRootElement"], .stApp [data-testid="stNumberInputRootElement"],
+.stApp [data-baseweb="select"] > div, .stApp [data-testid="stFileUploaderDropzone"], .stApp .stTextInput input, .stApp .stTextArea textarea, .stApp [data-testid="stChatInput"] > div {
+  background: rgba(12,8,36,.72) !important; border: 1px solid rgba(167,139,250,.32) !important; box-shadow: none !important; color: #ece8ff !important; }
+.stApp [data-testid="stTextInputRootElement"] input, .stApp [data-testid="stTextAreaRootElement"] textarea, .stApp [data-testid="stNumberInputRootElement"] input, .stApp [data-testid="stChatInput"] textarea {
+  background: transparent !important; border: none !important; color: #ece8ff !important; -webkit-text-fill-color: #ece8ff !important; caret-color: #c4b5fd; }
+.stApp [data-testid="stTextInputRootElement"]:focus-within, .stApp [data-testid="stTextAreaRootElement"]:focus-within, .stApp [data-testid="stNumberInputRootElement"]:focus-within {
+  border-color: #a78bfa !important; box-shadow: 0 0 0 3px rgba(167,139,250,.28) !important; }
+.stApp [data-testid="stTextInputRootElement"] input::placeholder, .stApp [data-testid="stTextAreaRootElement"] textarea::placeholder, .stApp [data-testid="stChatInput"] textarea::placeholder {
+  color: #7d77ad !important; -webkit-text-fill-color: #7d77ad !important; opacity: 1; }
+.stApp input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #140e3a inset !important; -webkit-text-fill-color: #ece8ff !important; }
+
+/* selected tab: a violet pill (the glass fill rendered as a dark olive blob) */
+.stApp .stTabs [data-baseweb="tab"][aria-selected="true"], .stApp .stTabs [aria-selected="true"] {
+  background: rgba(124,92,255,.30) !important; box-shadow: inset 0 0 0 1px rgba(196,181,253,.38) !important; color: #fff !important; }
+.stApp .stTabs [data-baseweb="tab"][aria-selected="true"] p { color: #fff !important; }
+.stApp .stTabs [data-baseweb="tab-highlight"] { background-color: #a78bfa !important; }

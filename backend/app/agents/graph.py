@@ -100,7 +100,8 @@ def route_after_executor(state: AgentState) -> str:
 
 
 def route_after_critic(state: AgentState) -> str:
-    if state.get("critic_verdict") == "verified":
+    if state.get("critic_verdict") in ("verified", "unverified"):
+        # "unverified" = the verifier itself broke; re-planning can't fix that.
         return "dashboard"
     if state.get("revision_count", 0) < config.MAX_CRITIC_REVISIONS:
         return "revise"
@@ -214,6 +215,13 @@ def run_question_graph(question_id: int) -> str:
                 question.dataset_version_id = version.id
                 db.commit()
         csv_path = version.filepath if version else dataset.filepath
+        from app import stored_files
+        csv_path = stored_files.resolve(csv_path)
+        if not csv_path:
+            mark_terminal(question_id, "failed",
+                          "This dataset's file is no longer on the server (the server's disk is cleared on "
+                          "restart and no saved copy exists). Please upload the file again.")
+            return "failed"
         profile = version.profile_json if version else dataset.profile_json
 
         initial_state: AgentState = {

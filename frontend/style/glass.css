@@ -218,3 +218,42 @@ button:disabled { opacity: 0.55; }
 .st-key-topbar_logout { position: fixed !important; top: 19px; right: 24px; z-index: 1000003; width: auto !important; }
 .st-key-topbar_logout button { padding: 0.3em 1.1em !important; min-height: 0 !important; font-size: 0.82rem !important; }
 @media (max-width: 900px) { .st-key-topbar_logout { right: 18px; } }
+
+/* ---- home: dynamic hero ---------------------------------------------------- */
+@property --n { syntax: '<integer>'; inherits: false; initial-value: 0; }
+.h-count { counter-reset: n var(--n); animation: h-countup 1.1s cubic-bezier(.2,.7,.2,1) 1; }
+.h-count::after { content: counter(n); }
+@keyframes h-countup { from { --n: 0; } }
+
+.h-ask-q { flex: 1; min-width: 0; }
+
+.h-running { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 0.72rem; font-weight: 600; color: #6b5fa3; }
+
+.h-try { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin: 22px 0 8px; }
+.stApp [class*="st-key-home_chips"] { display: flex; flex-direction: column; gap: 6px; max-width: 560px; }
+.stApp [class*="st-key-home_chips"] button {
+  justify-content: flex-start; text-align: left; border-radius: 999px; padding: 6px 16px; min-height: 0;
+  font-size: 0.84rem; font-weight: 500; color: var(--ink-soft);
+  background: rgba(255,255,255,.7); border: 1px solid var(--line);
+  transition: transform .15s ease, color .15s ease, border-color .15s ease;
+}
+.stApp [class*="st-key-home_chips"] button > div, .stApp [class*="st-key-home_chips"] button p { justify-content: flex-start; text-align: left; width: 100%; }
+.stApp [class*="st-key-home_chips"] button:hover { transform: translateX(4px); color: var(--ink); border-color: #837ab6; }
+
+/* ---- home hero: the particle scene is a transparent, fixed backdrop behind the whole page; glass cards float where the sphere forms ---- */
+.stApp [class*="st-key-home_stage"] { position: relative; min-height: 470px; background: none; border-radius: 0; box-shadow: none; }
+.stApp [class*="st-key-home_stage"] iframe, .stApp [class*="st-key-home_stage"] [data-testid="stIFrame"] {
+  position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: -1 !important;
+  pointer-events: none !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; display: block;
+  color-scheme: dark !important; }
+.stApp:has([class*="st-key-home_stage"]) .stMain [data-testid="stMainBlockContainer"] {
+  background: none !important; border: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.stApp [class*="st-key-home_stage"] > [data-testid="stLayoutWrapper"] { position: absolute; top: 0; left: 0; right: 0; height: 470px; pointer-events: none; }
+.stApp [class*="st-key-home_stage"] > [data-testid="stLayoutWrapper"] * { pointer-events: none; }
+.stApp [class*="st-key-home_stage"] .h-stage { position: absolute; top: 0; left: 0; right: 0; height: 470px; min-height: 0; }
+.stApp [class*="st-key-home_stage"] .h-ask-list { display: none; }
+.stApp [class*="st-key-home_stage"] .h-ask { top: 18px; right: 18px; width: min(250px, 46%); }
+.stApp [class*="st-key-home_stage"] .h-metric { left: auto; right: 18px; bottom: auto; top: 112px; width: min(205px, 40%); }
+.stApp [class*="st-key-home_stage"] .h-stage-title { right: 22px; bottom: 20px; color: #fff; text-shadow: 0 2px 24px rgba(20,10,60,.6); font-size: clamp(1.3rem, 2vw, 1.9rem); }
+
+@media (prefers-reduced-motion: reduce) { .h-count { animation: none; } }

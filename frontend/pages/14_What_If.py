@@ -16,13 +16,20 @@ from what_if_library import editing_banner, library_tab
 from what_if_grid import grid_section
 from what_if_models import builder_tab, model_choices
 from what_if_segments import segments_tab
+from what_if_universal import explore_tab
 from what_if_time import MAPPING_FIELDS, baseline_caption, compare_tab, legend, period_picker, version_picker
 from what_if_decision import (break_even_section, goal_seek_section, simulation_section, verification_panel)
 
 page_setup("What-if")
 render_sidebar("what_if")
 require_active_team("What-if simulator")
-page_header("What-if simulator", "Change prices, costs, volume or conversion and see the arithmetic. Scenarios, not forecasts.")
+# Page-scoped skin (style/whatif.css): every rule hangs off .wx-scope, so no other page is affected.
+from pathlib import Path as _Path
+_css = " ".join((_Path(__file__).resolve().parents[1] / "style" / f).read_text(encoding="utf-8") for f in ("whatif.css", "whatif_result.css"))
+st.markdown("<style>" + " ".join(line.strip() for line in _css.splitlines() if line.strip()) + "</style>", unsafe_allow_html=True)
+html('<div class="wx-scope"></div><div class="wx-eyebrow">What-if</div>'
+     '<h1 class="wx-title">What would you like to explore?</h1>'
+     '<p class="wx-lede">Explore possibilities, test assumptions and understand potential outcomes before making a decision.</p>')
 
 try:
     catalog = scenario_models()
@@ -33,9 +40,13 @@ except ApiError as e:
     st.error(f"Backend unreachable: {e}")
     st.stop()
 
-st.warning(catalog["disclaimer"])
+html(f'<div class="wx-note">{esc(catalog["disclaimer"])}</div>')
+from style.theme import page_intro
+page_intro("Test a change before you make it. For example: what happens to profit if price goes up 5%, or to bed use if admissions double?",
+           ["Step 1: choose your field (domain) and how to begin; pick a dataset if you have one", "Step 2: pick a question, or type your own goal", "Step 3: enter the numbers, press Run, and read the result"],
+           tip="Results are calculations from your numbers and assumptions. They are not predictions.")
 models = model_choices(catalog["models"], custom_models)
-build_tab, segments_tab_, periods_tab, models_tab, saved_tab = st.tabs(["Build a scenario", "Segments", "Compare periods",
+explore_tab_, build_tab, segments_tab_, periods_tab, models_tab, saved_tab = st.tabs(["Explore any scenario", "Business scenario", "Segments", "Compare periods",
                                                                          f"Custom models ({len(custom_models)})", f"Saved scenarios ({len(saved)})"])
 
 
@@ -204,6 +215,9 @@ def render_build():
             st.rerun()
         except ApiError as e:
             st.error(str(e))
+
+with explore_tab_:
+    explore_tab(datasets)
 
 with build_tab:
     render_build()
