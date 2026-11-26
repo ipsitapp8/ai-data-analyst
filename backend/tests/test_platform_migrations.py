@@ -13,7 +13,8 @@ from app import database, models
 
 NEW_TABLES = {"analysis_jobs", "run_events", "evidence_records", "run_manifests", "investigations", "dq_snapshots",
               "dq_configs", "dq_incidents", "copilot_sessions", "copilot_turns", "scenarios", "semantic_metrics",
-              "semantic_metric_versions", "semantic_terms", "semantic_relationships", "eval_runs", "eval_results"}
+              "semantic_metric_versions", "semantic_terms", "semantic_relationships", "eval_runs", "eval_results",
+              "copilot_conversations", "copilot_messages"}
 
 
 @pytest.mark.skipif(database._IS_POSTGRES, reason="exercises the SQLite additive-migration path")

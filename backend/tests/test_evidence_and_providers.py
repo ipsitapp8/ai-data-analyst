@@ -757,19 +757,22 @@ def test_the_page_states_whether_the_statistics_are_complete_or_partial(client, 
     assert jobs.run_inline(done["job_id"]) == "succeeded"
     ids = {i["question_id"]: i["id"] for i in client.get("/api/investigations", headers=ws["h"]).json()["investigations"]}
 
-    at = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=ids[partial["question_id"]]))
-    text = shown(at)
-    assert "What was computed and what this result is based on" in text
-    assert "A4" in text and "level shift" in text and "Newey-West" in text, "the valid result is still shown"
-    assert "Evidence: Complete" not in text and "Technical details of the statistical methods" not in text
+    found, evidence = steps(pages, ws, ids[partial["question_id"]])
+    for at in (found, evidence):                                       # the fallback is explained on both steps
+        text = shown(at)
+        assert "What was computed and what this result is based on" in text
+        assert "A4" in text and "level shift" in text and "Newey-West" in text, "the valid result is still shown"
+        assert "Evidence: Complete" not in text and "Technical details of the statistical methods" not in text
+        assert "Did the report below use the computed evidence? No. It was produced separately." in text and "dataset version" in text
+        assert not at.warning and len(at.info) == 1, "one explanation, as information"
+    text = shown(evidence)
     assert "Hypotheses tested" in text and "West" in text, "the deterministic report itself is unchanged"
-    assert "Did the report below use the computed evidence? No. It was produced separately." in text and "dataset version" in text
-    assert not at.warning and len(at.info) == 1, "one explanation, as information"
 
-    at = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=ids[done["question_id"]]))
-    text = shown(at)
+    found, evidence = steps(pages, ws, ids[done["question_id"]])
+    text = shown(evidence)
     assert "Evidence: Complete" in text and "its report is built on them" in text and "Computed on dataset version" in text
-    assert "Partial statistical evidence" not in text and not at.warning
+    for at in (found, evidence):
+        assert "Partial statistical evidence" not in shown(at) and not at.warning
 
 
 def test_running_migrations_does_not_silence_application_logging():
@@ -820,6 +823,12 @@ def frontend_pages(client, monkeypatch):
     return pages
 
 
+def steps(pages, ws, investigation_id: int) -> list:
+    """The Root cause page's Findings and Evidence steps for one investigation."""
+    return [pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=investigation_id, inv_step=step))
+            for step in ("2 · Findings", "3 · Evidence")]
+
+
 def shown(at) -> str:
     """Everything a user can read on the page: markup removed, HTML entities decoded."""
     import html as html_lib
@@ -863,15 +872,16 @@ def test_fallback_with_no_evidence_is_explained_to_the_user(client, ws, gemini, 
         assert OUTPUT_MARKER not in payload and SECRET_KEY not in payload and "shard-7" not in payload, "no raw provider text in the API"
 
     pages = frontend_pages(client, monkeypatch)
-    at = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
-    assert [str(i.value) for i in at.info] == [fb["message"]], "said once, as information, not as an error"
-    text = shown(at)
-    assert "Partial statistical evidence" not in text and "Evidence: Complete" not in text and not at.warning
-    assert "Hypotheses tested" in text and "West" in text, "the deterministic report is still shown"
+    found, evidence = steps(pages, ws, inv["id"])
+    for at in (found, evidence):
+        assert [str(i.value) for i in at.info] == [fb["message"]], "said once, as information, not as an error"
+        assert "Partial statistical evidence" not in shown(at) and "Evidence: Complete" not in shown(at) and not at.warning
+    assert "Hypotheses tested" in shown(evidence) and "West" in shown(evidence), "the deterministic report is still shown"
+    text = shown(found) + "\n" + shown(evidence)
     analyses = pages.healthy(pages.page("3_Analyses.py", ws, active_question_id=created["question_id"]))
     route_line = shown(analyses)
     assert "Root-cause investigator · deterministic (fallback: the AI investigation could not complete" in route_line
-    for page_text in (text, route_line, raw(at), raw(analyses)):          # visible text, and the raw HTML behind it
+    for page_text in (text, route_line, raw(found), raw(evidence), raw(analyses)):   # visible text, and the raw HTML behind it
         assert OUTPUT_MARKER not in page_text and SECRET_KEY not in page_text and "shard-7" not in page_text and "Traceback" not in page_text
 
 
@@ -890,19 +900,20 @@ def test_fallback_with_partial_evidence_is_explained_once_in_one_section(client,
     assert "did not complete" in ev["note"] and "does not use them" in ev["note"]
 
     pages = frontend_pages(client, monkeypatch)
-    at = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
-    text = shown(at)
-    assert [str(i.value) for i in at.info] == [fb["message"]] and not at.warning, "one information box and no second warning"
-    assert text.count("The AI investigation could not complete") == 1
-    mentions = [line.strip() for line in text.splitlines() if "partial evidence" in line.lower()]
-    assert len(mentions) == 2 and text.lower().count("partial evidence") == 2, mentions
-    assert fb["message"] in mentions, "once in the information box"
-    assert [m for m in mentions if m.startswith("Computed before the AI model was lost (partial evidence): 7 analyses on dataset version")] \
-        == [m for m in mentions if m != fb["message"]], "and once as the label of the computed results"
-    assert len(set(mentions)) == 2
-    assert ev["note"] not in text and "Partial statistical evidence — not part of this report" not in text, \
-        "the separate partial-evidence block is gone: its content is in the one section"
-    assert text.count("What was computed and what this result is based on") == 1
+    found, evidence = steps(pages, ws, inv["id"])
+    for at in (found, evidence):                      # each step carries the one section, once
+        text = shown(at)
+        assert [str(i.value) for i in at.info] == [fb["message"]] and not at.warning, "one information box and no second warning"
+        assert text.count("The AI investigation could not complete") == 1
+        mentions = [line.strip() for line in text.splitlines() if "partial evidence" in line.lower()]
+        assert len(mentions) == 2 and text.lower().count("partial evidence") == 2, mentions
+        assert fb["message"] in mentions, "once in the information box"
+        assert [m for m in mentions if m.startswith("Computed before the AI model was lost (partial evidence): 7 analyses on dataset version")] \
+            == [m for m in mentions if m != fb["message"]], "and once as the label of the computed results"
+        assert len(set(mentions)) == 2
+        assert ev["note"] not in text and "Partial statistical evidence — not part of this report" not in text, \
+            "the separate partial-evidence block is gone: its content is in the one section"
+        assert text.count("What was computed and what this result is based on") == 1
 
     # 1. which evidence was computed
     assert f"Computed before the AI model was lost (partial evidence): 7 analyses on dataset version {ev['dataset_version_id']}" in text
@@ -911,18 +922,21 @@ def test_fallback_with_partial_evidence_is_explained_once_in_one_section(client,
     assert 'style="padding:4px 0 4px 18px;">• <b>A4</b>' in raw(at), "set in under its heading line in the merged section"
     # 2. which results came from the deterministic fallback
     assert "Deterministic fallback result: everything below this section" in text and "produced by the deterministic investigator after the fallback" in text
-    assert text.index("What was computed and what this result is based on") < text.index("Contributors, ranked"), "explained before the result it describes"
+    findings = shown(found)
+    assert findings.index("What was computed and what this result is based on") < findings.index("Contributors, ranked"), \
+        "explained before the result it describes"
     # 3. whether the final report used the computed evidence
     relation = ("It compares the same metric over the same periods." if ev["matches_report_framing"]
                 else "It compares a different metric or different periods, so the two are not directly comparable.")
     assert f"Did the report below use the computed evidence? No. It was produced separately. {relation}" in text
     assert "Evidence: Complete" not in text and "Hypotheses tested" in text and "West" in text
-    for marker in (OUTPUT_MARKER, SECRET_KEY, "Traceback"):
-        assert marker not in text and marker not in raw(at), "not in the visible text and not in the raw HTML either"
+    for at in (found, evidence):
+        for marker in (OUTPUT_MARKER, SECRET_KEY, "Traceback"):
+            assert marker not in shown(at) and marker not in raw(at), "not in the visible text and not in the raw HTML either"
 
     # Partial evidence that was NOT followed by a fallback report keeps its own labelled block, as before.
     monkeypatch.setattr("app.fallbacks.describe", lambda db, inv: None)
-    alone = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
+    _, alone = steps(pages, ws, inv["id"])
     alone_text = shown(alone)
     assert "Partial statistical evidence — not part of this report" in alone_text and len(alone.warning) == 1 and not alone.info
     assert "What was computed and what this result is based on" not in alone_text and alone_text.count("A4") == 1
@@ -970,7 +984,7 @@ def test_the_empty_statistics_message_follows_the_same_indentation_choice(client
     merged = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
     assert 'style="padding:4px 0 4px 18px;">The run left analysis results but no statistical tests.' in raw(merged)
     monkeypatch.setattr("app.fallbacks.describe", lambda db, inv: None)
-    alone = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
+    _, alone = steps(pages, ws, inv["id"])
     assert 'style="padding:4px 0;">The run left analysis results but no statistical tests.' in raw(alone)
 
 
@@ -991,10 +1005,10 @@ def test_a_completed_ai_investigation_and_a_plain_deterministic_one_show_no_fall
 
     pages = frontend_pages(client, monkeypatch)
     for inv_id, question_id in ((inv["id"], done["question_id"]), (manual["investigation_id"], manual["question_id"])):
-        at = pages.healthy(pages.page("13_Investigations.py", ws, investigation_id=inv_id))
-        assert not at.info and not at.warning and "could not complete" not in shown(at)
+        for at in steps(pages, ws, inv_id):
+            assert not at.info and not at.warning and "could not complete" not in shown(at)
         assert "(fallback" not in shown(pages.healthy(pages.page("3_Analyses.py", ws, active_question_id=question_id)))
-    assert "Evidence: Complete" in shown(pages.page("13_Investigations.py", ws, investigation_id=inv["id"]))
+    assert "Evidence: Complete" in shown(steps(pages, ws, inv["id"])[1])
 
 
 @pytest.mark.parametrize("fault,phrase,detail", [
