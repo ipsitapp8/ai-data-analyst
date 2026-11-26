@@ -260,8 +260,10 @@ with st.container(key="cp_head"):
     if n_col.button("New chat", icon=":material/add:", type="primary", width="stretch", key="cp_new"):
         start_new_chat()
 
-def add_file(f) -> None:
-    """Upload a file attached in the message box. Data files become datasets, PDFs become documents."""
+def add_file(f, rerun: bool = True) -> bool:
+    """Upload a file attached in the message box. Data files become datasets, PDFs become documents.
+    Returns True when the file was added. With rerun=False the page carries on, so a question sent together with the
+    attachment is still queued (re-running here used to drop it)."""
     name, data = f.name, f.getvalue()
     try:
         with st.spinner(f"Uploading and reading {name}…"):
@@ -289,9 +291,12 @@ def add_file(f) -> None:
         else:
             conv.update(target)
         S["cp_upload_n"] += 1
-        st.rerun()
+        if rerun:
+            st.rerun()
+        return True
     except ApiError as e:
         st.error(f"**{name}** could not be added: " + re.sub(r"^\d{3}: ", "", str(e)))
+        return False
 
 
 # --------------------------------------------------------------------- context bar --
@@ -440,9 +445,19 @@ composer = st.chat_input("Silt is answering… you can queue another question" i
                          accept_file="multiple", file_type=["csv", "xlsx", "xls", "pdf"], key=f"cp_in_{S['cp_upload_n']}")
 q = None
 if composer:
-    for f in (composer.files or []):
-        add_file(f)
     q = (composer.text or "").strip() or None
+    added = [add_file(f, rerun=False) for f in (composer.files or [])]
+    if added:
+        if not all(added):
+            if q:
+                st.warning("Your question was not sent, because an attached file could not be added (see above).")
+            q = None
+        elif not q:
+            st.rerun()                   # attachment only: show it selected
+        else:
+            # the upload may have opened a new conversation on the new file: ask the question there
+            conv = S["cp_convs"][S["cp_active"]]
+            has_source = bool(conv["dataset_id"] or conv["doc_id"])
     if q and not has_source:
         st.warning("Choose a dataset above, or attach a file, before asking.")
         q = None

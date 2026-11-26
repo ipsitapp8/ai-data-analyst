@@ -256,8 +256,9 @@ def establish(message: str, df: pd.DataFrame, memory: dict | None = None) -> dic
     except Exception:  # noqa: BLE001 - the scope never fails because the reader could not read a message
         req = None
     if req is not None:
+        scoped = set(entities)          # columns already scoped above; every long-column name given is kept ("TCS and Accenture")
         for c, v in req.entities:
-            if c in df.columns and df[c].nunique() > 50 and c not in entities:
+            if c in df.columns and df[c].nunique() > 50 and c not in scoped:
                 entities.setdefault(c, [])
                 if v not in entities[c]:
                     entities[c].append(v)

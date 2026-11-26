@@ -1484,6 +1484,9 @@ def _dispatch_turn(message, df, memory, model_on, filename, started, chart_kind)
     out = _ask_compare_values(message, dfs, model_on, started)
     if out is not None:
         return out
+    out = _ask_value_distribution(message, df, model_on, started)
+    if out is not None:
+        return out
     out = _ask_compare_columns(message, dfs, model_on, started)
     if out is not None:
         return out
@@ -1780,9 +1783,15 @@ def _dataset_reply(message, df, memory, model_on, started, previous) -> dict:
     from app.analyst.data import find_column
     words = [w for w in re.findall(r"[a-z]+", message.lower()) if len(w) > 3 and w not in _STOPWORDS
              and w not in _ANALYSIS_WORDS]
+    from app.analyst import intent
+    # a word is known when it is part of a column's name (plurals too: "companies" for company_type) or of a value the
+    # question names -- including values of long text columns ("Accenture" among 4,000 company names)
+    named = named_values(df, message) + intent.names_in_long_columns(message, df, [])[0]
     known = {t for c in df.columns for t in re.split(r"[^a-z0-9]+", str(c).lower())} | {
-        w for _, v in named_values(df, message) for w in re.findall(r"[a-z]+", v.lower())}
-    unknown = [w for w in dict.fromkeys(words) if w not in known and w.rstrip("s") not in known and not find_column(df, w)]
+        w for _, v in named for w in re.findall(r"[a-z]+", v.lower())}
+    known_lemmas = {intent.lemma(t) for t in known if t}
+    unknown = [w for w in dict.fromkeys(words) if w not in known and w.rstrip("s") not in known
+               and re.sub(r"ies$", "y", w) not in known and intent.lemma(w) not in known_lemmas and not find_column(df, w)]
     parts = [f"I couldn't turn **“{message.strip()}”** into an analysis of this dataset."]
     sw = _SWITCH.search(message)
     refers = bool(_REFER.search(message)) and bool(memory.get("last_calc") or memory.get("last_answer"))
@@ -2569,7 +2578,8 @@ def _ask_compare_values(message, df, model_on, started) -> dict | None:
     from app.analyst.data import find_column, kind_of
     if not re.search(r"\b(compare|comparison|versus|vs\.?|difference between|differ)\b", message, re.I):
         return None
-    hits = calc.named_values(df, message)
+    from app.analyst import intent
+    hits = list(dict.fromkeys(calc.named_values(df, message) + intent.names_in_long_columns(message, df, [])[0]))
     by_col: dict[str, list[str]] = {}
     for c, v in hits:
         by_col.setdefault(c, []).append(v)
@@ -2577,10 +2587,14 @@ def _ask_compare_values(message, df, model_on, started) -> dict | None:
     if len(pick) != 1:
         return None
     col, vals = pick[0]
+    low = message.lower()
+    vals = sorted(vals, key=lambda v: low.find(v.lower()) if v.lower() in low else len(low))   # in the order asked
     nums = [c for c in find_column(df, message) if kind_of(df[c]) == "numeric" and c != col]
     if not nums:
         return None
     sub = df[df[col].astype(str).isin(vals)]
+    if sub[col].astype(str).value_counts().reindex(vals).eq(1).all():
+        return _compare_records(col, vals, nums, sub, model_on, started)
     try:
         r = tools.run({"tool": "compare_groups", "args": {"outcome": nums[0], "group": col}}, sub, {})
     except Exception:  # noqa: BLE001
@@ -2589,6 +2603,79 @@ def _ask_compare_values(message, df, model_on, started) -> dict | None:
                   charts=present.charts("compare_groups", r),
                   calls=[{"tool": "compare_groups", "status": "ok", "result": _jsonable(r)}],
                   notes=[f"Compared only the {col.replace('_', ' ')} values you named: " + ", ".join(vals) + "."])
+
+
+def _compare_records(col, vals, nums, sub, model_on, started) -> dict:
+    """Each named value is one record ("Compare TCS and Accenture" on a table of companies): a group comparison has
+    nothing to test, so the named measures are set side by side exactly as recorded, with the difference."""
+    rows = {v: sub[sub[col].astype(str) == v].iloc[0] for v in vals}
+    fmt = lambda x: "—" if pd.isna(x) else f"{x:,.2f}".rstrip("0").rstrip(".")
+    head = "| " + col.replace("_", " ") + " | " + " | ".join(n.replace("_", " ") for n in nums) + " |"
+    lines = [head, "|---|" + "---:|" * len(nums)]
+    lines += ["| **" + v + "** | " + " | ".join(fmt(rows[v][n]) for n in nums) + " |" for v in vals]
+    summary = []
+    for n in nums:
+        got = {v: rows[v][n] for v in vals if pd.notna(rows[v][n])}
+        if len(got) < 2:
+            summary.append(f"- **{n.replace('_', ' ')}**: not recorded for " + ", ".join(v for v in vals if v not in got) + ".")
+            continue
+        hi, lo = max(got, key=got.get), min(got, key=got.get)
+        summary.append(f"- **{n.replace('_', ' ')}**: " + (f"equal ({fmt(got[hi])})." if got[hi] == got[lo] else
+                       f"**{hi}** is higher ({fmt(got[hi])} vs {fmt(got[lo])} for {lo}, a difference of {fmt(got[hi] - got[lo])})."))
+    answer = (f"**{' vs '.join(vals)}** — each is one record in this data, so their values are compared directly:\n\n"
+              + "\n".join(lines) + "\n\n" + "\n".join(summary))
+    result = {"column": col, "values": vals, "measures": nums,
+              "records": {v: {n: (None if pd.isna(rows[v][n]) else float(rows[v][n])) for n in nums} for v in vals}}
+    charts = [c for n in nums for c in present._bar(f"{n.replace('_', ' ')}: {' vs '.join(vals)}", col, n,  # noqa: SLF001
+                                                       [{col: v, n: result["records"][v][n]} for v in vals
+                                                        if result["records"][v][n] is not None])]
+    return _reply(answer, "tool", model_on, started, charts=charts,
+                  calls=[{"tool": "compare_records", "status": "ok", "result": result}],
+                  notes=[f"Compared the {col.replace('_', ' ')} values you named, one record each: " + ", ".join(vals) + "."])
+
+
+_DISTRIBUTION = re.compile(r"\b(distribution|breakdown|break-down|split|composition|mix|proportions?)\b", re.I)
+
+
+def _ask_value_distribution(message, df, model_on, started) -> dict | None:
+    """'Show the distribution of public and private companies': the question names two or more values of one category
+    column (company_type: Public, Private) and no measure, so it asks how the records are spread over that column --
+    a group-by count. The named values are shown with the rest of the column, so the counts add up to every record."""
+    from app.analyst.data import find_column, kind_of
+    if not _DISTRIBUTION.search(message):
+        return None
+    by_col: dict[str, list[str]] = {}
+    for c, v in calc.named_values(df, message):
+        by_col.setdefault(c, []).append(v)
+    pick = [(c, v) for c, v in by_col.items() if len(v) >= 2 and kind_of(df[c]) == "categorical"]
+    if len(pick) != 1 or any(kind_of(df[c]) == "numeric" for c in find_column(df, message)):
+        return None
+    col, vals = pick[0]
+    counts = df[col].astype("string").value_counts(dropna=True)
+    n, named_total = len(df), int(counts.reindex(vals).fillna(0).sum())
+    other = counts.drop(labels=[v for v in vals if v in counts.index])
+    missing = int(df[col].isna().sum())
+    label = col.replace("_", " ")
+    pc = lambda k, d: f"{100 * k / d:.1f}%" if d else "—"
+    lines = [f"| {label} | records | share of all {n:,} records | share of {' + '.join(vals)} |", "|---|---:|---:|---:|"]
+    lines += [f"| **{v}** | {int(counts.get(v, 0)):,} | {pc(int(counts.get(v, 0)), n)} | {pc(int(counts.get(v, 0)), named_total)} |"
+              for v in vals]
+    if len(other):
+        lines.append(f"| other {label} values ({len(other)}) | {int(other.sum()):,} | {pc(int(other.sum()), n)} | — |")
+    if missing:
+        lines.append(f"| no {label} recorded | {missing:,} | {pc(missing, n)} | — |")
+    top = max(vals, key=lambda v: int(counts.get(v, 0)))
+    answer = (f"**Distribution of {label}: {', '.join(vals)}** — records counted by `{col}`.\n\n" + "\n".join(lines)
+              + f"\n\n**{top}** is the larger group: {int(counts.get(top, 0)):,} of the {named_total:,} records that are "
+              + " or ".join(vals) + f" ({pc(int(counts.get(top, 0)), named_total)}).")
+    result = {"column": col, "counts": {v: int(counts.get(v, 0)) for v in vals},
+              "other": int(other.sum()), "other_values": len(other), "missing": missing, "records": n}
+    return _reply(answer, "tool", model_on, started,
+                  charts=present._bar(f"Records by {label}", col, "records",  # noqa: SLF001
+                                      [{col: v, "records": int(counts.get(v, 0))} for v in vals]),
+                  calls=[{"tool": "count_by", "status": "ok", "args": {"group": col, "values": vals}, "result": result}],
+                  notes=[f"Grouped by {col} and counted the records in each value; the values you named are "
+                         + ", ".join(vals) + "."])
 
 
 _WHICH_TOP = re.compile(r"\bwhich\s+([a-z]+)\s+(?:has|had|have|is|was|shows?|got|gets)\s+(?:the\s+)?(highest|lowest|"

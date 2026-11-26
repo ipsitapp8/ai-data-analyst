@@ -756,7 +756,8 @@ def _stated_share(message: str, df: pd.DataFrame, roles: dict, r: "Request", low
 
 _NAME_PREP = (r"(?:for|of|by|from|about|to|with|versus|vs\.?|than|against|in|at|only|just|except|excluding|including|"
               r"and|or|is|are|was|were|did|does|has|have|had)")
-_NAMED = re.compile(rf"\b{_NAME_PREP}\s+(?:the\s+)?((?:[A-Z][\w'’.-]*[A-Za-z])(?:\s+[A-Z][\w'’-]*[A-Za-z]){{0,3}})"
+# "Compare TCS and Accenture": the first name follows the comparison verb (capitalised at the start of a sentence)
+_NAMED = re.compile(rf"(?:\b{_NAME_PREP}|(?i:\b(?:compare|compared|comparing|between)))\s+(?:the\s+)?((?:[A-Z][\w'’.-]*[A-Za-z])(?:\s+[A-Z][\w'’-]*[A-Za-z]){{0,3}})"
                     r"(?:'s|’s)?")
 _KNOWN_NAMES = set("""january february march april may june july august september october november december jan feb mar
 apr jun jul aug sep sept oct nov dec monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur
