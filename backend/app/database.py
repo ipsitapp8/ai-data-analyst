@@ -9,7 +9,7 @@ is unset, which is the backward-compatibility guarantee for this module.
 from __future__ import annotations
 
 import json
-from functools import partial
+import math
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
@@ -20,10 +20,26 @@ from app.config import DATABASE_URL
 _dialect = make_url(DATABASE_URL).get_backend_name()
 _IS_POSTGRES = _dialect == "postgresql"
 
-# Same fallback the old json.dumps(profile, default=str) call relied on for
-# stray non-JSON-native values (e.g. numpy scalars) -- applied engine-wide now
-# that JSON columns serialize automatically instead of at each call site.
-_json_serializer = partial(json.dumps, default=str)
+def _storable(value):
+    """`value` with what Postgres cannot store in a JSON column taken out: NaN and infinity (not JSON at all) become
+    null, and NUL characters are dropped. Generated analysis code produces both -- the "change from the previous
+    month" of the first month is NaN."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {_storable(k): _storable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_storable(v) for v in value]
+    return value
+
+
+def _json_serializer(value) -> str:
+    # default=str is the same fallback the old json.dumps(profile, default=str) call relied on for stray
+    # non-JSON-native values (e.g. numpy scalars) -- applied engine-wide now that JSON columns serialize
+    # automatically instead of at each call site.
+    return json.dumps(_storable(value), default=str, allow_nan=False)
 
 if _IS_POSTGRES:
     engine = create_engine(
