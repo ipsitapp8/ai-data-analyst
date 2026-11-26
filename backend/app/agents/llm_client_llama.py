@@ -21,7 +21,7 @@ import logging
 
 from openai import BadRequestError, OpenAI
 
-from app import config, runtime
+from app import config, llm_gateway, runtime
 
 log = logging.getLogger(__name__)
 _client: OpenAI | None = None
@@ -34,7 +34,10 @@ def get_client() -> OpenAI:
             raise RuntimeError(
                 "LLAMA_API_KEY is not set. Copy .env.example to .env and add your key."
             )
-        _client = OpenAI(api_key=config.LLAMA_API_KEY, base_url=config.LLAMA_BASE_URL)
+        # A bounded timeout (the SDK default is 10 minutes) and no SDK-level retries: retries and fallback are the
+        # gateway's (app/llm_gateway.py), so one step never makes hidden duplicate calls past its deadline.
+        _client = OpenAI(api_key=config.LLAMA_API_KEY, base_url=config.LLAMA_BASE_URL,
+                         timeout=config.LLAMA_REQUEST_TIMEOUT_SECONDS, max_retries=0)
     return _client
 
 
@@ -61,6 +64,9 @@ def call_tool(
                               int((time.monotonic() - started) * 1000))
         return dict(out)
     client = get_client()
+    per_call = llm_gateway.current_attempt_timeout()
+    if per_call:
+        client = client.with_options(timeout=per_call)
     tools = [{"type": "function", "function": {"name": tool_name, "description": tool_description,
                                                "parameters": tool_schema}}]
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user_content}]
@@ -70,7 +76,9 @@ def call_tool(
     attempts = [(forced, max_tokens), ("required", max_tokens + 2048), ("required", max_tokens + 4096)]
     response = None
     last_error: Exception | None = None
-    for choice, budget in attempts:
+    for i, (choice, budget) in enumerate(attempts):
+        if i and time.monotonic() - started + config.LLM_MIN_ATTEMPT_SECONDS > (per_call or float("inf")):
+            break                                   # no time left in this attempt's budget for a looser retry
         try:
             response = client.chat.completions.create(
                 model=config.LLAMA_MODEL, max_tokens=budget, messages=messages, tools=tools, tool_choice=choice,
@@ -100,7 +108,7 @@ def call_tool(
 
     runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,
                           fallback=_fallback, ok=False)
-    raise RuntimeError(problem)
+    raise llm_gateway.InvalidOutput(problem)
 
 
 def _checked_args(raw: str, schema: dict[str, Any]) -> tuple[dict | None, str | None]:

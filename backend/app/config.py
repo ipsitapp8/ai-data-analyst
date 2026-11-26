@@ -222,6 +222,27 @@ LLM_FAILOVER_ENABLED = _bool("LLM_FAILOVER_ENABLED", "true")
 LLM_PRICE_GEMINI = os.getenv("LLM_PRICE_GEMINI", "0.30,2.50")
 LLM_PRICE_LLAMA = os.getenv("LLM_PRICE_LLAMA", "0.20,0.60")
 
+# --- LLM gateway (app/llm_gateway.py) ---
+# One model step (all retries and the fallback together) never takes longer than this, nor past the run's deadline.
+LLM_REQUEST_DEADLINE_SECONDS = float(os.getenv("LLM_REQUEST_DEADLINE_SECONDS", "120"))
+# An attempt is not started with less time than this left; a retry also keeps this much back for the fallback.
+LLM_MIN_ATTEMPT_SECONDS = float(os.getenv("LLM_MIN_ATTEMPT_SECONDS", "5"))
+LLM_FALLBACK_RESERVE_SECONDS = float(os.getenv("LLM_FALLBACK_RESERVE_SECONDS", "15"))
+# Circuit breaker, per provider: this many timeouts / rate limits / outages within the window open it for the cooldown;
+# then a single probe call decides whether it closes again.
+LLM_BREAKER_FAILURES = int(os.getenv("LLM_BREAKER_FAILURES", "5"))
+LLM_BREAKER_WINDOW_SECONDS = float(os.getenv("LLM_BREAKER_WINDOW_SECONDS", "30"))
+LLM_BREAKER_COOLDOWN_SECONDS = float(os.getenv("LLM_BREAKER_COOLDOWN_SECONDS", "30"))
+# An exhausted quota opens the circuit at once, for the provider's Retry-After or this long; never retried in a loop.
+LLM_QUOTA_COOLDOWN_SECONDS = float(os.getenv("LLM_QUOTA_COOLDOWN_SECONDS", "300"))
+# A 429 asking to wait longer than this is treated as an exhausted quota rather than a short burst limit.
+LLM_QUOTA_RETRY_AFTER_SECONDS = float(os.getenv("LLM_QUOTA_RETRY_AFTER_SECONDS", "120"))
+# A provider that refused its API key is skipped for this long (not a circuit failure: a key does not fix itself).
+LLM_AUTH_HOLD_SECONDS = float(os.getenv("LLM_AUTH_HOLD_SECONDS", "300"))
+# The Llama-compatible endpoint: per-request timeout, and retries of a transient failure (the gateway's, not the SDK's).
+LLAMA_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLAMA_REQUEST_TIMEOUT_SECONDS", "60"))
+LLAMA_TRANSIENT_RETRIES = int(os.getenv("LLAMA_TRANSIENT_RETRIES", "1"))
+
 # --- Retention ---
 # Sandbox workspaces of finished analyses older than this are deleted. Database
 # records (plans, logs, evidence, manifests) are never deleted by this.

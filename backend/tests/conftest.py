@@ -70,6 +70,15 @@ def unique_email() -> str:
 
 
 @pytest.fixture(autouse=True)
+def _reset_llm_gateway():
+    """Circuit breakers are process-global: one test's simulated outage must not open a circuit for the next."""
+    from app import llm_gateway
+    llm_gateway.reset()
+    yield
+    llm_gateway.reset()
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limits():
     """The in-memory auth rate limiter is process-global; without this,
     unrelated tests would trip each other's login/signup limits."""

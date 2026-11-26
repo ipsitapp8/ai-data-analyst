@@ -21,7 +21,7 @@ from platform_helpers import ask, job_row, question_row, workspace
 
 import test_statistics as stat_fixtures
 from app import analysis_ops as ops
-from app import config, hypothesis_engine as he, jobs, runtime
+from app import config, hypothesis_engine as he, jobs, llm_gateway, runtime
 from app.agents import llm_client
 from app.agents.hypothesis import PROVENANCE_KEY, SUPERSEDED_MARK, DbStore
 from app.database import SessionLocal
@@ -183,6 +183,7 @@ def test_repeated_503s_stop_at_the_configured_limit(gemini, caplog, monkeypatch)
 
     for retries, calls, sleeps in ((0, 1, []), (1, 2, [5.0]), (4, 5, [5.0, 20.0, 20.0, 20.0])):
         monkeypatch.setattr(config, "GEMINI_RATE_LIMIT_RETRIES", retries)
+        llm_gateway.reset()   # per-call retry bound only: the circuit breaker (opened by the 503s above) is tested separately
         fake = gemini(FakeGemini(always={"submit_thing": overloaded}))
         fake.sleeps.clear()
         with pytest.raises(runtime.ProviderUnavailable):

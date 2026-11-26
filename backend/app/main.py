@@ -138,6 +138,14 @@ def on_shutdown() -> None:
     jobs.stop_workers()
 
 
+def _gateway_status() -> dict:
+    from app import llm_gateway
+    try:
+        return llm_gateway.status()
+    except Exception:  # noqa: BLE001 - health check must report, not raise
+        return {}
+
+
 @app.get("/api/health")
 def health(db: Session = Depends(get_db)):
     from sqlalchemy import text
@@ -166,6 +174,8 @@ def health(db: Session = Depends(get_db)):
         "gemini_model": config.GEMINI_MODEL,
         "llama_model": config.LLAMA_MODEL,
         "llm_failover_enabled": config.LLM_FAILOVER_ENABLED,
+        # Per provider: circuit state, last failure kind, latency, counts. Identifiers and numbers only, never keys.
+        "llm_gateway": _gateway_status(),
         "app_version": config.APP_VERSION,
         "jobs": {"queue_depth": queue.get("queue_depth", 0), "running": queue.get("running", 0),
                  "workers": config.JOB_WORKERS},

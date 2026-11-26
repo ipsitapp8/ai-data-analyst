@@ -988,8 +988,12 @@ def _complete(prompt: str, max_tokens: int) -> str:
     req = urllib.request.Request(planner.MODEL_URL.rstrip("/") + "/completions", body,
                                  {"Content-Type": "application/json",
                                   "Authorization": "Bearer " + os.getenv("ANALYST_MODEL_KEY", "local")})
-    with urllib.request.urlopen(req, timeout=planner.MODEL_TIMEOUT) as r:
-        return json.load(r)["choices"][0]["text"]
+    from app import llm_gateway
+
+    def call() -> str:
+        with urllib.request.urlopen(req, timeout=planner.MODEL_TIMEOUT) as r:
+            return json.load(r)["choices"][0]["text"]
+    return llm_gateway.guarded(llm_gateway.local_provider(planner.MODEL_URL), call)
 
 
 class _Unparsed:

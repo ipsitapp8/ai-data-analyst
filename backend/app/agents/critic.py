@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from app import config, knowledge, runtime
+from app import config, knowledge, llm_gateway, runtime
 from app.agents import llm_client
 from app.agents import llm_client_llama as llama_client
 from app.agents import prompts
@@ -32,9 +32,13 @@ def _critic_call_tool(**kwargs) -> tuple[dict, str]:
     """
     if runtime.get_provider_override() is not None:
         return llama_client.call_tool(**kwargs), "scripted-critic"
+    # Both calls go through the gateway: each provider's circuit breaker, one deadline for the pair.
+    deadline = llm_gateway.Deadline()
     if config.LLAMA_API_KEY:
         try:
-            return llama_client.call_tool(**kwargs), f"llama:{config.LLAMA_MODEL}"
+            out = llm_gateway.guarded("llama", lambda: llama_client.call_tool(**kwargs), deadline=deadline,
+                                      timeout=config.LLAMA_REQUEST_TIMEOUT_SECONDS, wait_ok=not config.GEMINI_API_KEY)
+            return out, f"llama:{config.LLAMA_MODEL}"
         except runtime.RunAborted:
             raise
         except Exception as e:  # noqa: BLE001 - any provider failure should degrade, not kill the run
@@ -42,7 +46,9 @@ def _critic_call_tool(**kwargs) -> tuple[dict, str]:
                            "Verification will NOT be cross-model.", type(e).__name__)
     # call_tool_gemini, not call_tool: the latter fails back over to Llama,
     # which we already know just failed here.
-    return llm_client.call_tool_gemini(**kwargs), f"gemini-fallback:{config.GEMINI_MODEL}"
+    out = llm_gateway.guarded("gemini", lambda: llm_client.call_tool_gemini(**kwargs), deadline=deadline,
+                              timeout=config.GEMINI_REQUEST_TIMEOUT_SECONDS, fallback=bool(config.LLAMA_API_KEY))
+    return out, f"gemini-fallback:{config.GEMINI_MODEL}"
 
 logger = logging.getLogger(__name__)
 

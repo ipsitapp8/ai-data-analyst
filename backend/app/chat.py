@@ -131,6 +131,9 @@ def _local_url() -> str | None:
     url = os.getenv("ANALYST_MODEL_URL")
     if not url:
         return None
+    from app import llm_gateway
+    if llm_gateway.local_unavailable(url):
+        return None                    # its circuit is open: the cloud path answers
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/models", timeout=2) as r:
             return url if r.status == 200 else None
@@ -140,17 +143,18 @@ def _local_url() -> str | None:
 
 def _local_answer(url: str, user: str) -> dict:
     from openai import OpenAI
+    from app import llm_gateway
     client = OpenAI(base_url=url, api_key=os.getenv("ANALYST_MODEL_KEY", "local"),
-                    timeout=float(os.getenv("ANALYST_MODEL_TIMEOUT", "60")))
+                    timeout=float(os.getenv("ANALYST_MODEL_TIMEOUT", "60")), max_retries=0)
     system = ANSWER_SYSTEM + (" Describe a chart only by its title and the figures the context states -- never features "
                               "such as trend lines, clusters or outliers the context does not mention. If asked what to "
                               "investigate next, name other columns from the dataset profile as candidates, say they are "
                               "not yet analysed, and set needs_new_analysis with a concrete question to run." +
                               ' Reply with ONE JSON object and nothing else: {"answer": "...", "sources": ["..."], '
                               '"needs_new_analysis": false, "suggested_question": ""}.')
-    r = client.chat.completions.create(model=os.getenv("ANALYST_MODEL_NAME", "default_model"), temperature=0,
-                                       max_tokens=700, messages=[{"role": "system", "content": system},
-                                                                 {"role": "user", "content": user}])
+    r = llm_gateway.guarded(llm_gateway.local_provider(url), lambda: client.chat.completions.create(
+        model=os.getenv("ANALYST_MODEL_NAME", "default_model"), temperature=0, max_tokens=700,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}]))
     text = (r.choices[0].message.content or "").strip()
     m = re.search(r"\{.*\}", text, re.S)
     if m:
@@ -194,10 +198,16 @@ def answer_question(db: Session, question: Question, dash: Dashboard, message: s
         user += f"\nConversation so far:\n{_history_text(history)}\n"
     user += f"\nNew question: {message}"
     url = _local_url()
+    out = None
     if url:
+        try:
+            out = _local_answer(url, user)
+        except Exception as e:  # noqa: BLE001 - the local server failed mid-answer: same as not running, the cloud path answers
+            logger.warning("local analyst model failed (%s); answering with the cloud providers", type(e).__name__)
+            out = None
+    if out is not None:
         # the local analyst model answers from this analysis only; every number it states is then checked against the
         # analysis context deterministically (no second model is needed, and none can be unavailable)
-        out = _local_answer(url, user)
         answer = str(out.get("answer", "")).strip()
         claims = [] if out.get("needs_new_analysis") else _numbers_supported(answer, context, message)
         return {"answer": answer, "sources": [str(x) for x in out.get("sources") or []][:8],

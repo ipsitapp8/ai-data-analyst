@@ -73,6 +73,10 @@ class ProviderUnavailable(RunAborted, RuntimeError):
         "network": "the provider could not be reached over the network",
         "bad_request": "the provider rejected the request",
         "malformed_output": "the model did not return a usable answer",
+        "quota_exhausted": "its usage quota is used up",
+        "circuit_open": "not called, because it failed repeatedly in the last minute (it is retried after a short pause)",
+        "no_time": "not called, because the time allowed for this step was used up",
+        "auth_rejected": "not called, because it refused the configured API key a few minutes ago",
     }
 
     def __init__(self, message: str = "", failures: list[dict] | None = None):
