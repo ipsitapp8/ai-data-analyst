@@ -34,7 +34,10 @@ def get_client() -> OpenAI:
             raise RuntimeError(
                 "LLAMA_API_KEY is not set. Copy .env.example to .env and add your key."
             )
-        _client = OpenAI(api_key=config.LLAMA_API_KEY, base_url=config.LLAMA_BASE_URL)
+        # The SDK's one retry backs off with jitter and honours Retry-After. Without a timeout a stuck request could
+        # hold a run until its deadline.
+        _client = OpenAI(api_key=config.LLAMA_API_KEY, base_url=config.LLAMA_BASE_URL,
+                         timeout=config.LLAMA_REQUEST_TIMEOUT_SECONDS, max_retries=1)
     return _client
 
 
@@ -96,6 +99,8 @@ def call_tool(
                                       fallback=_fallback)
                 return args
             problem = f"Llama's '{tool_name}' reply was unusable: {bad}"
+            # `bad` names the missing field or the JSON fault, never any of the reply's content.
+            log.warning("llama unusable reply tool=%s reason=%s", tool_name, bad)
             break
 
     runtime.note_llm_call("llama", config.LLAMA_MODEL, tool_name, tokens_in, tokens_out, elapsed_ms,

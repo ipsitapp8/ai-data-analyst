@@ -180,6 +180,8 @@ class StatusResponse(BaseModel):
     job: dict[str, Any] | None = None
     # Set only when a model-driven investigation fell back to the deterministic investigator.
     fallback: dict[str, Any] | None = None
+    # Set only when the results were published without an AI model (usage limit, outage).
+    ai_notice: str | None = None
 
 
 class CriticRejection(BaseModel):

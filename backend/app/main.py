@@ -17,6 +17,7 @@ from app.database import get_db, init_db
 from app.dataset_versions import add_version, latest_version, version_count
 from app.logging_config import setup_logging
 from app.models import (
+    RunEvent,
     AnalysisJob,
     AuditTrail,
     CriticReview,
@@ -522,6 +523,8 @@ def get_status(
                 break
 
     job = db.query(AnalysisJob).filter_by(question_id=question_id).first()
+    offline_event = (db.query(RunEvent).filter(RunEvent.question_id == question_id, RunEvent.kind == "ai_fallback")
+                     .order_by(RunEvent.id.desc()).first())
     return StatusResponse(
         question_id=question.id,
         question_text=question.text,
@@ -535,6 +538,7 @@ def get_status(
         clarification=question.clarification_json,
         job=jobs.job_out(job) if job else None,
         fallback=fallbacks.describe(db, db.query(Investigation).filter_by(question_id=question_id).first()),
+        ai_notice=(offline_event.detail_json or {}).get("message") if offline_event else None,
     )
 
 

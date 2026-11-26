@@ -46,7 +46,8 @@ def _provider_failure(db: Session, question_id: int | None) -> dict | None:
         return None
     # A provider that was never called (no key, failover off) is recorded too; the failure that
     # explains the fallback is the last request that was actually made, when there was one.
-    tried = [e for e in events if (e.detail_json or {}).get("kind") not in ("not_configured", "disabled")]
+    tried = [e for e in events if (e.detail_json or {}).get("kind") not in ("not_configured", "disabled")
+             and (e.detail_json or {}).get("action") != "skipped_cooling_down"]
     events = tried or events
     last = events[-1].detail_json or {}
     kind = last.get("kind") if last.get("kind") in _WHY else "other"

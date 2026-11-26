@@ -78,6 +78,16 @@ def _reset_rate_limits():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _reset_provider_holds():
+    """The provider circuit breaker is process-global: a test that exhausts a (fake) provider must not make the next
+    test skip it."""
+    from app.agents import breaker
+    breaker.reset()
+    yield
+    breaker.reset()   # nor leave a hold behind for tests outside this folder
+
+
 import pytest  # noqa: E402
 
 
