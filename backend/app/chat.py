@@ -13,7 +13,11 @@ the unsupported claims, so the UI never presents an ungrounded answer as solid.
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+import re
+import urllib.request
 
 from sqlalchemy.orm import Session
 
@@ -119,6 +123,69 @@ def _history_text(history: list[dict]) -> str:
     return "\n".join(lines)
 
 
+_NUM = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?")
+
+
+def _local_url() -> str | None:
+    """The local analyst model (ANALYST_MODEL_URL, the Copilot's planner server) when it is being served."""
+    url = os.getenv("ANALYST_MODEL_URL")
+    if not url:
+        return None
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/models", timeout=2) as r:
+            return url if r.status == 200 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _local_answer(url: str, user: str) -> dict:
+    from openai import OpenAI
+    client = OpenAI(base_url=url, api_key=os.getenv("ANALYST_MODEL_KEY", "local"),
+                    timeout=float(os.getenv("ANALYST_MODEL_TIMEOUT", "60")))
+    system = ANSWER_SYSTEM + (" Describe a chart only by its title and the figures the context states -- never features "
+                              "such as trend lines, clusters or outliers the context does not mention. If asked what to "
+                              "investigate next, name other columns from the dataset profile as candidates, say they are "
+                              "not yet analysed, and set needs_new_analysis with a concrete question to run." +
+                              ' Reply with ONE JSON object and nothing else: {"answer": "...", "sources": ["..."], '
+                              '"needs_new_analysis": false, "suggested_question": ""}.')
+    r = client.chat.completions.create(model=os.getenv("ANALYST_MODEL_NAME", "default_model"), temperature=0,
+                                       max_tokens=700, messages=[{"role": "system", "content": system},
+                                                                 {"role": "user", "content": user}])
+    text = (r.choices[0].message.content or "").strip()
+    m = re.search(r"\{.*\}", text, re.S)
+    if m:
+        try:
+            out = json.loads(m.group(0))
+            if isinstance(out, dict) and str(out.get("answer", "")).strip():
+                return out
+        except json.JSONDecodeError:
+            pass
+    return {"answer": text, "sources": [], "needs_new_analysis": False, "suggested_question": ""}
+
+
+def _numbers_supported(answer: str, context: str, message: str) -> list[str]:
+    """Numbers in the answer that appear neither in the analysis context nor in the question (rounding allowed)."""
+    pool = []
+    for t in _NUM.findall(context + " " + message):
+        try:
+            pool.append(float(t.replace(",", "")))
+        except ValueError:
+            pass
+    bad = []
+    for t in _NUM.findall(answer):
+        try:
+            v = float(t.replace(",", ""))
+        except ValueError:
+            continue
+        if abs(v) <= 31 and v.is_integer():
+            continue                                    # counts, step numbers, ranks
+        dp = len(t.split(".")[1]) if "." in t else 0
+        tol = 0.5 * 10 ** -dp + 1e-9
+        if not any(abs(round(p, dp) - v) <= tol or abs(p - v) <= tol for p in pool):
+            bad.append(t)
+    return bad
+
+
 def answer_question(db: Session, question: Question, dash: Dashboard, message: str,
                     history: list[dict]) -> dict:
     context = build_context(db, question, dash)
@@ -126,6 +193,19 @@ def answer_question(db: Session, question: Question, dash: Dashboard, message: s
     if history:
         user += f"\nConversation so far:\n{_history_text(history)}\n"
     user += f"\nNew question: {message}"
+    url = _local_url()
+    if url:
+        # the local analyst model answers from this analysis only; every number it states is then checked against the
+        # analysis context deterministically (no second model is needed, and none can be unavailable)
+        out = _local_answer(url, user)
+        answer = str(out.get("answer", "")).strip()
+        claims = [] if out.get("needs_new_analysis") else _numbers_supported(answer, context, message)
+        return {"answer": answer, "sources": [str(x) for x in out.get("sources") or []][:8],
+                "needs_new_analysis": bool(out.get("needs_new_analysis")),
+                "suggested_question": str(out.get("suggested_question") or "").strip()[:300],
+                "verified": None if out.get("needs_new_analysis") else not claims,
+                "unsupported_claims": [f"the number {c} is not in this analysis" for c in claims][:6],
+                "checked_by": "number check against the analysis context", "answered_by": "local:" + url}
     out = llm_client.call_tool(
         system=ANSWER_SYSTEM, user_content=user, tool_name="submit_answer",
         tool_schema=ANSWER_TOOL_SCHEMA, tool_description="Submit the grounded answer.",
