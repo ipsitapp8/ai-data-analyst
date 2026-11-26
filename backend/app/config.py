@@ -54,6 +54,11 @@ GEMINI_MALFORMED_RETRIES = int(os.getenv("GEMINI_MALFORMED_RETRIES", "1"))
 # minutes before answering 503, and the whole run hits its time limit before it can fail over to the backup.
 GEMINI_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GEMINI_REQUEST_TIMEOUT_SECONDS", "75"))
 GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "30"))
+# After a provider reports its usage limit (or fails twice in a row) it is left alone for this long, so later steps
+# and later runs do not spend quota and minutes asking again. 0 turns this off.
+LLM_COOLDOWN_SECONDS = int(os.getenv("LLM_COOLDOWN_SECONDS", "60"))
+# The longer pause when the exhausted limit is a daily one (or zero): asking again within minutes cannot succeed.
+LLM_QUOTA_COOLDOWN_SECONDS = int(os.getenv("LLM_QUOTA_COOLDOWN_SECONDS", "900"))
 
 # --- Llama (Critic only) ---
 # A second, different model family for the Critic's independent verification --
@@ -65,6 +70,7 @@ GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = int(os.getenv("GEMINI_RATE_LIMIT_MAX_WAIT_S
 LLAMA_API_KEY = _secret("LLAMA_API_KEY")
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "openai/gpt-oss-20b"
 LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.groq.com/openai/v1"
+LLAMA_REQUEST_TIMEOUT_SECONDS = int(os.getenv("LLAMA_REQUEST_TIMEOUT_SECONDS", "60"))
 
 # --- Sandbox ---
 # "docker" (recommended, isolated) or "subprocess" (dev-only fallback, NOT isolated)

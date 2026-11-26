@@ -43,7 +43,8 @@ ANSWER_TOOL_SCHEMA = {
         "suggested_question": {"type": "string",
                                "description": "If needs_new_analysis, a self-contained question to run as a new analysis; else empty."},
     },
-    "required": ["answer", "sources", "needs_new_analysis", "suggested_question"],
+    # suggested_question is empty whenever no new analysis is needed, so it cannot be required (see triage)
+    "required": ["answer", "sources", "needs_new_analysis"],
 }
 
 CHECK_TOOL_SCHEMA = {

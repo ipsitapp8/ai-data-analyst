@@ -188,6 +188,9 @@ def _render_live_run(qid: int) -> None:
 
     html("<div style='height:18px'></div>")
 
+    if status.get("ai_notice"):
+        st.warning(status["ai_notice"])
+
     if status["status"] == "needs_clarification":
         clar = status.get("clarification") or {}
         with st.container(key="card_clarify"):

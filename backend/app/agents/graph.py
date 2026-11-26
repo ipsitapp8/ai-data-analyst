@@ -18,6 +18,11 @@
                                           │
                                        publish ───────────────────> END
 
+A model that cannot be reached at triage, planner, executor or hypothesis leads to
+`offline` (app/agents/offline.py), which publishes what can be computed without
+one; compile handles the same failure itself. A provider outage is never a
+rejection of the question.
+
 Every loop is bounded: the Executor by MAX_EXECUTOR_RETRIES per step, and the
 two edges into prepare_revision share one budget, MAX_CRITIC_REVISIONS. When
 that budget is spent the run still ends at publish, with the verdict the
@@ -36,6 +41,7 @@ from app.agents.dashboard import compile_node, publish_node, route_after_verify,
 from app.agents.deterministic import compare_node, fast_node, investigate_node
 from app.agents.executor import executor_node
 from app.agents.hypothesis import hypothesis_node
+from app.agents.offline import offline_node
 from app.agents.planner import planner_node
 from app.agents.router import router_node
 from app.agents.state import AgentState, mark_terminal
@@ -58,6 +64,8 @@ def prepare_revision_node(state: AgentState) -> dict:
         parts.append(state.get("critic_summary", "") + (
             ("\nSpecific issues:\n- " + "\n- ".join(issues)) if issues else ""))
     return {
+        # kept in case the model cannot be reached for the second pass
+        "prior_results": [r for r in state.get("step_results", []) if r.get("success")],
         "revision_count": state.get("revision_count", 0) + 1,
         "revision_feedback": "\n\n".join(p for p in parts if p) or "The previous attempt was rejected.",
         "step_results": [],
@@ -87,11 +95,19 @@ def route_after_router(state: AgentState) -> str:
 
 
 def route_after_hypothesis(state: AgentState) -> str:
+    if state.get("ai_unavailable"):
+        return "offline"
     # No model could be reached at the first step: use the deterministic investigator.
     return "investigate" if state.get("hypothesis_fallback") else "done"
 
 
+def route_after_planner(state: AgentState) -> str:
+    return "offline" if state.get("ai_unavailable") else "executor"
+
+
 def route_after_executor(state: AgentState) -> str:
+    if state.get("ai_unavailable"):
+        return "offline"
     if state.get("failed"):
         return "failed"
     if state["step_index"] >= len(state["plan"]):
@@ -109,6 +125,8 @@ def route_after_critic(state: AgentState) -> str:
 
 
 def route_after_triage(state: AgentState) -> str:
+    if state.get("ai_unavailable"):
+        return "offline"
     return "rejected" if state.get("rejected") else "planner"
 
 
@@ -121,16 +139,31 @@ def _traced(name: str, fn):
     return node
 
 
+def _needs_model(name: str, fn):
+    """A node that cannot work without a model hands the run to `offline` when none can be reached."""
+    traced = _traced(name, fn)
+
+    def node(state: AgentState) -> dict:
+        try:
+            return traced(state)
+        except runtime.ProviderUnavailable as e:
+            return {"ai_unavailable": e}
+
+    node.__name__ = f"{name}_node"
+    return node
+
+
 def build_graph():
     graph = StateGraph(AgentState)
     for name, fn in (
-        ("router", router_node), ("triage", triage_node), ("planner", planner_node),
-        ("executor", executor_node), ("critic", critic_node), ("prepare_revision", prepare_revision_node),
+        ("router", router_node), ("critic", critic_node), ("prepare_revision", prepare_revision_node),
         ("compile", compile_node), ("verify", verify_node), ("publish", publish_node),
-        ("fast", fast_node), ("investigate", investigate_node), ("hypothesis", hypothesis_node),
-        ("compare", compare_node),
+        ("fast", fast_node), ("investigate", investigate_node), ("compare", compare_node), ("offline", offline_node),
     ):
         graph.add_node(name, _traced(name, fn))
+    for name, fn in (("triage", triage_node), ("planner", planner_node), ("executor", executor_node),
+                     ("hypothesis", hypothesis_node)):
+        graph.add_node(name, _needs_model(name, fn))
 
     graph.set_entry_point("router")
     graph.add_conditional_edges(
@@ -138,18 +171,20 @@ def build_graph():
         {"clarify": END, "fast": "fast", "investigate": "investigate", "hypothesis": "hypothesis", "compare": "compare",
          "triage": "triage"},
     )
-    graph.add_conditional_edges("hypothesis", route_after_hypothesis, {"investigate": "investigate", "done": END})
+    graph.add_conditional_edges("hypothesis", route_after_hypothesis,
+                                {"investigate": "investigate", "offline": "offline", "done": END})
+    graph.add_edge("offline", END)
     graph.add_edge("fast", END)
     graph.add_edge("compare", END)
     graph.add_edge("investigate", END)
     graph.add_conditional_edges(
         "triage", route_after_triage,
-        {"planner": "planner", "rejected": END},
+        {"planner": "planner", "offline": "offline", "rejected": END},
     )
-    graph.add_edge("planner", "executor")
+    graph.add_conditional_edges("planner", route_after_planner, {"executor": "executor", "offline": "offline"})
     graph.add_conditional_edges(
         "executor", route_after_executor,
-        {"executor": "executor", "critic": "critic", "failed": END},
+        {"executor": "executor", "critic": "critic", "offline": "offline", "failed": END},
     )
     graph.add_conditional_edges(
         "critic", route_after_critic,

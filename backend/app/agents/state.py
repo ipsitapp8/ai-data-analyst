@@ -74,6 +74,10 @@ class AgentState(TypedDict, total=False):
     investigation_id: int
     hypothesis_fallback: bool
 
+    # set when no model could be reached (app/agents/offline.py)
+    ai_unavailable: Any
+    prior_results: list[StepResult]
+
 
 def update_stage(question_id: int, stage: str, detail: str = "") -> None:
     """Record progress. Also the run's main checkpoint: every node calls this

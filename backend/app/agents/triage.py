@@ -31,7 +31,10 @@ TRIAGE_TOOL_SCHEMA = {
             "description": "If rejected, 2-3 questions this dataset's columns could actually answer.",
         },
     },
-    "required": ["is_analyzable", "reason", "suggestions"],
+    # Only the verdict is required: an accepted question has no reason and no suggestions. Requiring them made a
+    # correct reply from the backup model (reason "") count as unusable, so every rate limit on the first provider
+    # failed the whole run here.
+    "required": ["is_analyzable"],
 }
 
 # Below this, it cannot be a real question -- skip the API call entirely.
@@ -77,21 +80,10 @@ User's question: {question!r}
     except Exception as e:  # noqa: BLE001 - a triage outage must not block real questions
         if isinstance(e, runtime.RunAborted) and not isinstance(e, runtime.ProviderUnavailable):
             raise  # cancelled, past deadline or over budget: stop here
-        text = str(e)
-        if "429" in text or "RESOURCE_EXHAUSTED" in text:
-            # Letting this through would spend the remaining quota on a run that
-            # is going to die at the planner anyway, with a far uglier error.
-            return {
-                "rejected": True,
-                "rejection_reason": (
-                    "The AI service has hit its usage limit, so no analysis can run right now. "
-                    "This clears by itself: try again in a few minutes. If it keeps happening, the "
-                    "site's AI quota needs to be raised by whoever runs this deployment."
-                ),
-                "suggestions": [],
-            }
         if isinstance(e, runtime.ProviderUnavailable):
-            raise  # no model at all: the Planner would fail the same way one step later
+            # No model at all. That says nothing about the question, so it is never "rejected": the graph answers it
+            # with the rule-based engine, or reports the provider failure (app/agents/offline.py).
+            raise
         logger.warning("Triage check failed (%s); allowing the question through.", type(e).__name__)
         return {"rejected": False}
 

@@ -17,7 +17,7 @@ from google import genai
 from google.genai import errors, types
 
 from app import config, runtime
-from app.agents import llm_client_llama
+from app.agents import breaker, llm_client_llama
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,47 @@ def _retry_delay_seconds(error: errors.ClientError, attempt: int) -> float:
                 match = re.match(r"([\d.]+)", str(item.get("retryDelay", "")))
                 if match:
                     return min(float(match.group(1)), config.GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS)
-    default = _DEFAULT_BACKOFF_SECONDS[min(attempt, len(_DEFAULT_BACKOFF_SECONDS) - 1)]
+    default = _DEFAULT_BACKOFF_SECONDS[min(attempt, len(_DEFAULT_BACKOFF_SECONDS) - 1)] * _jitter()
     return min(default, config.GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS)
+
+
+# Quota names are provider identifiers ("GenerateRequestsPerDayPerProjectPerModel-FreeTier"); anything else is dropped.
+_QUOTA_ID = re.compile(r"[A-Za-z0-9_.\-]{1,120}")
+
+
+def _error_details(error: BaseException) -> list[dict]:
+    details = getattr(error, "details", None)
+    body = details.get("error", details) if isinstance(details, dict) else None
+    items = body.get("details") if isinstance(body, dict) else None
+    return [i for i in (items or []) if isinstance(i, dict)]
+
+
+def quota_violations(error: BaseException) -> list[tuple[str, str]]:
+    """[(quota id, limit)] a 429 names. Identifiers and numbers only, never the error's message."""
+    out = []
+    for item in _error_details(error):
+        if str(item.get("@type", "")).endswith("QuotaFailure"):
+            for v in item.get("violations") or []:
+                name, limit = str(v.get("quotaId", "")), str(v.get("quotaValue", ""))
+                if _QUOTA_ID.fullmatch(name):
+                    out.append((name, limit if limit.isdigit() else "?"))
+    return out[:5]
+
+
+def quota_exhausted(error: BaseException) -> bool:
+    """A limit that waiting a few seconds cannot clear: a daily quota, or a quota of zero (the plan does not include
+    this model)."""
+    return any("perday" in name.lower() or limit == "0" for name, limit in quota_violations(error))
+
+
+def _provider_wait(error: BaseException) -> float | None:
+    """How long the provider itself asked us to wait, uncapped."""
+    for item in _error_details(error):
+        if str(item.get("@type", "")).endswith("RetryInfo"):
+            match = re.match(r"([\d.]+)", str(item.get("retryDelay", "")))
+            if match:
+                return float(match.group(1))
+    return _retry_after_seconds(error)
 
 _client: genai.Client | None = None
 
@@ -269,6 +308,33 @@ def log_provider_event(provider: str, tool_name: str, failure: dict, *, attempt:
     runtime.record_event("provider", f"{provider}:{failure['kind']}", detail)
 
 
+def _hold(provider: str, model: str, error: BaseException) -> None:
+    """After a call has failed for good, keep the provider on hold if the failure calls for it, and say so in the log."""
+    failure = classify_failure(error)
+    exhausted = failure["kind"] == "rate_limited" and quota_exhausted(error)
+    for name, limit in quota_violations(error):
+        logger.warning("provider_quota provider=%s model=%s quota_id=%s limit=%s", provider, model, name, limit)
+    other = config.GEMINI_API_KEY if provider == "llama" else (config.LLAMA_API_KEY and config.LLM_FAILOVER_ENABLED)
+    if failure["kind"] != "rate_limited" and not other:
+        return  # a passing fault with nowhere else to go: keep asking, since skipping would remove any chance
+    seconds = breaker.failed(provider, model, failure, retry_after=_provider_wait(error), quota_exhausted=exhausted)
+    if seconds:
+        logger.warning("provider_hold provider=%s model=%s kind=%s seconds=%.0f quota_exhausted=%s", provider, model,
+                       failure["kind"], seconds, exhausted)
+
+
+def _on_hold(provider: str, model: str, tool_name: str) -> dict | None:
+    """The failure record for a provider that is on hold (no request is made), else None."""
+    held = breaker.blocked(provider, model)
+    if held is None:
+        return None
+    failure = {"kind": held["kind"], "category": "cooling_down", "status": held["status"], "finish_reasons": None,
+               "retryable": False, "provider_status": STATUS_UNSPECIFIED}
+    log_provider_event(provider, tool_name, failure, attempt=0, max_attempts=0, action="skipped_cooling_down",
+                       model=model)
+    return {"provider": provider, "kind": held["kind"], "status": held["status"], "model": model}
+
+
 def _thinking_config():
     """Gemini 3 models spend part of max_output_tokens on internal "thinking". With the small limits used for structured
     answers (a triage verdict, a plan) that budget runs out before the answer is written (finish_reason MAX_TOKENS), so the
@@ -399,12 +465,19 @@ def call_tool(
 
     # Llama (Groq) first when it is the configured primary; Gemini then becomes the backup below.
     llama_tried = False
+    held_llama = None
     if config.LLM_PRIMARY == "llama" and config.LLAMA_API_KEY:
         llama_tried = True
+        held_llama = _on_hold("llama", config.LLAMA_MODEL, tool_name)
+        if held_llama:
+            failures.append(f"llama({config.LLAMA_MODEL}): on hold after a recent failure")
+            reasons.append(held_llama)
+    if llama_tried and not held_llama:
         started = time.monotonic()
         try:
             out = llm_client_llama.call_tool(**kwargs)
             LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
+            breaker.succeeded("llama", config.LLAMA_MODEL)
             return out
         except runtime.RunAborted:
             raise
@@ -414,8 +487,13 @@ def call_tool(
             log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1,
                                action="failover_to_gemini" if config.GEMINI_API_KEY else "give_up",
                                error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
+            _hold("llama", config.LLAMA_MODEL, e)
 
-    if config.GEMINI_API_KEY:
+    held_gemini = _on_hold("gemini", config.GEMINI_MODEL, tool_name) if config.GEMINI_API_KEY else None
+    if held_gemini:
+        failures.append(f"gemini({config.GEMINI_MODEL}): on hold after a recent failure")
+        reasons.append(held_gemini)
+    elif config.GEMINI_API_KEY:
         attempt = 0
         malformed_retries = 0
         while True:
@@ -423,12 +501,13 @@ def call_tool(
             try:
                 out = call_tool_gemini(**kwargs)
                 LAST_PROVIDER = f"gemini:{config.GEMINI_MODEL}"
+                breaker.succeeded("gemini", config.GEMINI_MODEL)
                 return out
             except runtime.RunAborted:
                 raise  # cancelled / over budget: not a provider failure, never fail over
             except errors.ClientError as e:
                 failure = classify_failure(e)
-                if e.code == 429 and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
+                if e.code == 429 and attempt < config.GEMINI_RATE_LIMIT_RETRIES and not quota_exhausted(e):
                     wait_s = _retry_delay_seconds(e, attempt)
                     attempt += 1
                     log_provider_event("gemini", tool_name, failure, attempt=attempt, max_attempts=tries, action="retry",
@@ -441,6 +520,7 @@ def call_tool(
                 log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
                                    action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
                                    elapsed_ms=_elapsed_ms(started))
+                _hold("gemini", config.GEMINI_MODEL, e)
                 break
             except errors.ServerError as e:
                 # Transient 5xx: the provider's side, and usually brief. Retried with spaced,
@@ -460,6 +540,7 @@ def call_tool(
                 log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
                                    action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
                                    elapsed_ms=_elapsed_ms(started))
+                _hold("gemini", config.GEMINI_MODEL, e)
                 break
             except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
                 # MalformedOutput: the model answered without the required structured output. A transient
@@ -479,6 +560,7 @@ def call_tool(
                 log_provider_event("gemini", tool_name, classify_failure(e), attempt=attempt + 1, max_attempts=tries,
                                    action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
                                    elapsed_ms=_elapsed_ms(started))
+                _hold("gemini", config.GEMINI_MODEL, e)
                 break
     else:
         failures.append("gemini: no GEMINI_API_KEY set")
@@ -489,11 +571,15 @@ def call_tool(
     elif not config.LLM_FAILOVER_ENABLED and config.GEMINI_API_KEY:
         failures.append("llama: failover disabled (LLM_FAILOVER_ENABLED=false)")
         reasons.append(_not_tried("llama", "disabled"))
+    elif config.LLAMA_API_KEY and (held_llama := _on_hold("llama", config.LLAMA_MODEL, tool_name)):
+        failures.append(f"llama({config.LLAMA_MODEL}): on hold after a recent failure")
+        reasons.append(held_llama)
     elif config.LLAMA_API_KEY:
         started = time.monotonic()
         try:
             out = llm_client_llama.call_tool(**kwargs, _fallback=bool(config.GEMINI_API_KEY))
             LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
+            breaker.succeeded("llama", config.LLAMA_MODEL)
             logger.info("Served by Llama (%s).", config.LLAMA_MODEL)
             return out
         except runtime.RunAborted:
@@ -503,6 +589,7 @@ def call_tool(
             reasons.append(_failed("llama", config.LLAMA_MODEL, e))
             log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1, action="give_up",
                                error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
+            _hold("llama", config.LLAMA_MODEL, e)
     else:
         failures.append("llama: no LLAMA_API_KEY set")
         reasons.append(_not_tried("llama", "not_configured"))

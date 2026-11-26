@@ -18,7 +18,7 @@ import os
 import uuid
 
 from app import config, memory, provenance, runtime, verification
-from app.agents import llm_client, prompts
+from app.agents import llm_client, offline, prompts
 from app.agents.state import AgentState, update_stage
 from app.database import SessionLocal
 from app.models import Dashboard, Dataset, DatasetVersion, Question
@@ -112,13 +112,19 @@ Critic verdict: {state.get('critic_verdict')}
 Critic summary: {state.get('critic_summary')}
 Critic issues: {state.get('critic_issues')}
 """
-    output = llm_client.call_tool(
-        system=prompts.DASHBOARD_SYSTEM,
-        user_content=user_content,
-        tool_name="compile_dashboard",
-        tool_schema=COMPILE_TOOL_SCHEMA,
-        tool_description="Submit the compiled dashboard.",
-    )
+    try:
+        output = llm_client.call_tool(
+            system=prompts.DASHBOARD_SYSTEM,
+            user_content=user_content,
+            tool_name="compile_dashboard",
+            tool_schema=COMPILE_TOOL_SCHEMA,
+            tool_description="Submit the compiled dashboard.",
+        )
+    except runtime.ProviderUnavailable as e:
+        if not offline.allowed(question_id):
+            raise
+        # The calculations are finished; only the writer is missing. Publish them without it.
+        return {"draft": offline.draft_from_steps(step_results), "ai_unavailable": e}
 
     # Resolve chart file basenames back to full plotly JSON content.
     chart_by_step = {r["step_index"]: r.get("chart_paths", []) for r in step_results}
@@ -156,7 +162,9 @@ def verify_node(state: AgentState) -> dict:
     records = verification.build_evidence(
         kpis=draft["kpis"], charts=draft["charts"], narrative=draft["narrative"],
         narrative_element_id=draft["narrative_element_id"], steps=steps_index(state["step_results"]),
-        critic=critic_info(state), dataset=dataset_ev, question_text=state["question_text"],
+        critic=critic_info(state), dataset=dataset_ev,
+        question_text=(offline.described(state, state["step_results"]) if state.get("ai_unavailable")
+                       else state["question_text"]),
     )
     failed = verification.has_required_failure(records)
     runtime.record_event("verification", "evidence", {**verification.summarize(records), "required_failure": failed})
@@ -165,6 +173,8 @@ def verify_node(state: AgentState) -> dict:
 
 
 def route_after_verify(state: AgentState) -> str:
+    if state.get("ai_unavailable"):
+        return "publish"  # a second planning pass needs the model that could not be reached
     if state.get("verification_failed") and state.get("revision_count", 0) < config.MAX_CRITIC_REVISIONS:
         return "revise"
     return "publish"  # includes "still failing after the recovery pass": published as UNVERIFIED
@@ -236,6 +246,12 @@ def publish_node(state: AgentState) -> dict:
     verified = state.get("critic_verdict") == "verified"
     base_state = compute_verdict_state(state.get("critic_verdict"), state.get("revision_count", 0))
     verification_summary = state.get("critic_summary") or ("Not independently verified." if not verified else "")
+    unavailable = state.get("ai_unavailable")
+    if unavailable:
+        message = offline.notice(unavailable, "The results were computed from your data; the summary restates them "
+                                              "without AI.")
+        offline.announce(message, "narration")
+        verification_summary = f"{message}\n\n{verification_summary}".strip()
     dashboard = publish_dashboard(
         question_id=state["question_id"], kpis=draft["kpis"], charts=draft["charts"],
         narrative=draft["narrative"], narrative_element_id=draft["narrative_element_id"],

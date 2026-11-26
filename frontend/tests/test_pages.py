@@ -220,6 +220,24 @@ def test_a_run_that_could_not_reach_a_model_shows_which_provider_failed_and_how(
     assert all("action=not_tried" in r["Detail"] for r in failed)
 
 
+def test_a_calculation_made_without_a_model_is_shown_with_a_warning_and_its_dashboard(api, ws):
+    """Keys are blank here, as when every provider is out of quota: the figures are still computed and viewable."""
+    from platform_helpers import ask, run_job
+
+    created = ask(api, ws, "Show the monthly revenue trend")
+    assert run_job(created["job_id"]) == "succeeded"
+    at = healthy(page("3_Analyses.py", ws, active_question_id=created["question_id"]))
+    warnings = " ".join(str(w.value) for w in at.warning)
+    assert "AI narration is temporarily unavailable" in warnings
+    text = text_of(at)
+    assert "Needs review" in text and "Not analyzable" not in text and "usage limit has" not in text
+    assert any(b.key == "an_dash" for b in at.button), "the results can be opened"
+    dashboard = healthy(page("4_Dashboards.py", ws, active_question_id=created["question_id"]))
+    shown = text_of(dashboard)
+    assert "Total revenue by month" in shown and "AI narration is temporarily unavailable" in shown
+    assert "Could not render" not in shown
+
+
 # ----------------------------------------------------------- investigations --
 
 def _steps(ws, **state):

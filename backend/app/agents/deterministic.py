@@ -20,13 +20,14 @@ from app.models import ExecutionLog, Investigation, Plan, Question
 
 
 def _record_step(question_id: int, description: str, goal: str, code: str, result: dict, formula: str,
-                 data_slice: dict) -> int:
+                 data_slice: dict,
+                 reasoning: str = "Answered by the deterministic engine; no model call was needed.") -> int:
     """A plan row and an execution-log row, so status, the audit trail and
     Inspect work exactly as they do for a model-driven run."""
     db = SessionLocal()
     try:
         db.add(Plan(question_id=question_id, steps_json=[{"id": 1, "description": description, "goal": goal}],
-                    reasoning="Answered by the deterministic engine; no model call was needed.", revision=0))
+                    reasoning=reasoning, revision=0))
         # Committed before the log on purpose: the status endpoint shows the
         # logs created at or after the latest plan.
         db.commit()
