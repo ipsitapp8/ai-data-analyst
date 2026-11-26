@@ -248,6 +248,35 @@ def _stem(w: str) -> str:
     return w
 
 
+def _named_whole(c, low: str) -> bool:
+    """The clause names column c as whole words (patient_bill / "patient bill"); never as part of a longer word -- the
+    column "age" is not named by "average", "rate" not by "separate"."""
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(f)}(?![a-z0-9])", low)
+               for f in {str(c).lower(), str(c).lower().replace("_", " ")} if f)
+
+
+def plan_mismatch(d, df: pd.DataFrame, prof: dict) -> str | None:
+    """Checked before a part is computed, whichever reader built it (rules or the model decomposer): the plan must
+    compute what its clause asks. A measure the clause does not name, or a grouping the clause names ("compare with
+    other departments", "by department") that the plan leaves out, would answer a different question -- the part is
+    returned for clarification instead. None when the plan matches its clause."""
+    if d.kind not in ("stat", "breakdown", "ranking") or not d.clause:
+        return None
+    low = d.clause.lower()
+    named = measures_in(d.clause, df, prof)
+    if named:
+        extra = [m for m in d.measures if m not in named]
+        if extra:
+            return (f"“{d.clause.strip()}” names {', '.join(f'`{m}`' for m in named)}, but the plan also used "
+                    f"{', '.join(f'`{m}`' for m in extra)}, which it does not ask about; nothing was substituted")
+    group = _group_col(d.clause, df, prof, exclude=tuple(d.entities))
+    if group and d.kind == "stat" and not d.group_by and not d.entities:
+        return (f"“{d.clause.strip()}” compares across `{group}`, but the plan computed one figure over all records; "
+                f"ask for it per {str(group).replace('_', ' ')} (for example: average {', '.join(d.measures[:1]) or 'value'} "
+                f"by {str(group).replace('_', ' ')})")
+    return None
+
+
 def measures_in(text: str, df: pd.DataFrame, prof: dict) -> list:
     """Measure columns the clause names (by column name or its words); most specific first."""
     low = text.lower()
@@ -257,7 +286,7 @@ def measures_in(text: str, df: pd.DataFrame, prof: dict) -> list:
         toks = {_stem(t) for t in _tokens(c)} - {"of", "the", "num", "number"}
         if not toks:
             continue
-        exact = str(c).lower() in low or str(c).lower().replace("_", " ") in low
+        exact = _named_whole(c, low)
         overlap = len(toks & words) / len(toks)
         if exact or overlap >= 0.99 or (len(toks) >= 2 and overlap >= 0.5 and (toks & words) - {"hour", "total", "amount"}):
             hits.append((0 if exact else 1, -overlap, prof["measures"].index(c), c))
@@ -351,7 +380,8 @@ def _group_col(text: str, df: pd.DataFrame, prof: dict, exclude=()) -> str | Non
             continue
         name = str(c).lower().replace("_", " ")
         stems = {_stem(t) for t in _tokens(c)}
-        if re.search(rf"\b(?:by|per|for each|each|across|among|of all|which)\s+(?:the\s+)?{re.escape(name)}s?\b", low) or \
+        if re.search(rf"\b(?:by|per|for each|each|across|among|of all|which|other|all|every|all other)\s+(?:the\s+)?"
+                     rf"{re.escape(name)}s?\b", low) or \
                 (stems and stems <= {_stem(w) for w in re.findall(r"[a-z]+", low)} and _RANK.search(low)):
             return c
     return None

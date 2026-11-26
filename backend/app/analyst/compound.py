@@ -656,6 +656,11 @@ def execute(ds: list[Deliverable], df: pd.DataFrame, filename: str | None = None
         if blocked:
             d.status, d.detail = "blocked", f"it depends on item {blocked[0]}, which could not be completed"
             continue
+        from app.analyst.deliverables import plan_mismatch
+        why = plan_mismatch(d, df, prof)
+        if why:                              # the plan would answer a different question: ask, compute nothing
+            d.status, d.detail = "needs_input", why
+            continue
         try:
             dfd = df
             if d.date_from or d.date_to:
