@@ -309,3 +309,33 @@ def test_saved_chat_survives_a_new_session_and_can_be_searched_renamed_and_delet
 
     fresh.button(key=f"dl_{cid}").click().run()
     assert api.get("/api/copilot/conversations", headers=ws["h"]).json()["conversations"] == []
+
+
+def test_a_question_sent_with_an_attached_file_is_answered_on_that_file(api, ws, monkeypatch):
+    """Send with a CSV attached and a question typed: the page used to upload the file and re-run before queueing the
+    question, so the question vanished and (in a chat that had messages) an empty new conversation opened."""
+    import types
+
+    import streamlit as st_mod
+    at = healthy(page("12_Copilot.py", ws))
+    _ask(at, "Explain this dataset in simple terms.")
+    first = at.session_state["cp_active"]
+    csv = pd.DataFrame({"team": ["A", "B", "A", "C"], "cost": [10.0, 20.0, 30.0, 5.0]}).to_csv(index=False).encode()
+    attached = types.SimpleNamespace(name="team_costs.csv", getvalue=lambda: csv)
+    real_chat_input, sent = st_mod.chat_input, []
+
+    def chat_input(*a, **k):                         # AppTest cannot attach files: hand the page one submitted message
+        real_chat_input(*a, **k)
+        if not sent:
+            sent.append(1)
+            return types.SimpleNamespace(text="Which team has the highest total cost?", files=[attached])
+        return None
+    monkeypatch.setattr(st_mod, "chat_input", chat_input)
+    healthy(at.run())
+    conv = at.session_state["cp_convs"][at.session_state["cp_active"]]
+    assert at.session_state["cp_active"] != first                     # a new file is a new conversation
+    assert len(at.session_state["cp_convs"][first]["log"]) == 1        # the old one is kept
+    assert [t["q"] for t in conv["log"]] == ["Which team has the highest total cost?"]
+    answer = conv["log"][0]["r"]
+    assert "error" not in answer, answer
+    assert "**A**" in answer["answer"] and "40" in answer["answer"]    # A: 10 + 30 = 40, computed from the new file
