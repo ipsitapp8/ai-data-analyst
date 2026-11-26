@@ -49,8 +49,19 @@ def _cell(v):
 
 @router.get("/status")
 def status(user: User = Depends(get_current_user)):
+    import os
+    import urllib.request
+    dec = os.getenv("ANALYST_DECOMPOSER_URL")
+    dec_ok = None
+    if dec:
+        try:
+            with urllib.request.urlopen(dec.rstrip("/") + "/models", timeout=1.5) as r:
+                dec_ok = r.status == 200
+        except Exception:  # noqa: BLE001
+            dec_ok = False
     return {"model_url": planner.MODEL_URL, "model_name": planner.MODEL_LABEL, "model_available": planner.model_available(),
-            "served": model_info.served(planner.MODEL_URL)}
+            "served": model_info.served(planner.MODEL_URL),
+            "decomposer_url": dec or planner.MODEL_URL, "decomposer_available": dec_ok if dec else planner.model_available()}
 
 
 @router.get("/datasets/{dataset_id}/schema")

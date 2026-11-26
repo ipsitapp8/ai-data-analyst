@@ -128,6 +128,50 @@ def _matches(written: str, v: float) -> bool:
     return False
 
 
+def repair_roundings(text: str, evidence: Any, question: str = "") -> tuple[str, list[tuple[str, str]]]:
+    """Correct a model's last-digit rounding slips: a decimal number that is not a rounding of any result value at
+    the precision it is written with, but is exactly one unit (in its last written digit) away from the correct
+    rounding of ONE result value -- 16.69 for 16.6962 (-> 16.70), p 0.049 for 0.0496 (-> 0.050), 12.34% for
+    0.12346 (-> 12.35%) -- or is that value rounded more coarsely and padded with zeros (5,663.60 for 5,663.5805
+    -> 5,663.58). The precision the model chose is kept; values themselves are never rounded. Integers,
+    numbers already grounded, numbers from the question, and anything ambiguous or further off are left alone, so
+    `ungrounded` still rejects them. Returns (text, [(written, corrected), ...])."""
+    pool = evidence_numbers(evidence)
+    asked = evidence_numbers(question)
+    fixes: list[tuple[str, str]] = []
+
+    def one(m: re.Match) -> str:
+        w = m.group(0)
+        if "." not in w:
+            return w
+        n = float(w.replace(",", ""))
+        if abs(n) in FREE_NUMBERS or any(_matches(w, v) for v in pool | asked):
+            return w
+        unit = Decimal(1).scaleb(-_decimals(w))
+        dw = Decimal(w.replace(",", "").lstrip("-"))
+        pct = text[m.end():m.end() + 1] == "%"
+        found = set()
+        places = _decimals(w)
+        pads = len(w) - len(w.rstrip("0")) if places else 0        # 5,663.60: written as 2 dp, rounded at 1 dp
+        for v in pool:
+            for c in ((abs(v) * 100,) if pct else ()) + (abs(v),):
+                if math.isfinite(c):
+                    d = Decimal(repr(c))
+                    r = d.quantize(unit, rounding=ROUND_HALF_UP)
+                    coarser = any(d.quantize(Decimal(1).scaleb(-(places - k)), rounding=ROUND_HALF_UP) == dw
+                                  for k in range(1, min(pads, places) + 1))
+                    if abs(r - dw) <= unit or coarser:
+                        found.add(r)
+        if len(found) != 1:
+            return w
+        r = found.pop()
+        new = ("-" if w.startswith("-") else "") + (f"{r:,.{places}f}" if "," in w else f"{r:.{places}f}")
+        fixes.append((w, new))
+        return new
+
+    return _NUM.sub(one, text or ""), fixes
+
+
 def ungrounded(text: str, evidence: Any, question: str = "") -> list[str]:
     """Numbers in `text` that no tool result (or the user's own question) contains."""
     pool = evidence_numbers(evidence) | evidence_numbers(question)

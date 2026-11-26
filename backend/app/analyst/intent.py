@@ -188,6 +188,11 @@ def read(message: str, df: pd.DataFrame, prof: dict | None = None) -> Request:
     if hit is not None and hit[0] is df:
         return copy.deepcopy(hit[1])
     r = _read(message, df, prof)
+    if r.group is not None and r.group in r.denominators:
+        # the grouping column is never also the divisor: "mean adr per property" is the mean for each property (the
+        # same rule _read applies when the grouping is found first; here it may be found after the denominator)
+        r.denominators = [d for d in r.denominators if d != r.group]
+        r.per = bool(r.denominators)
     if len(_READ_CACHE) > 256:
         _READ_CACHE.clear()
     _READ_CACHE[key] = (df, copy.deepcopy(r))
@@ -223,7 +228,12 @@ def _read(message: str, df: pd.DataFrame, prof: dict | None = None) -> Request:
             continue
         w = re.sub(r"[^a-z0-9]+", " ", str(c).lower()).strip()
         from app.analyst.scope import _negated
-        if re.search(rf"\b{_GROUP_WORDS}\s+(?:\w+\s+){{0,2}}?{re.escape(w)}s?\b", low_g) and c not in [
+        split = re.sub(r"[^a-z0-9]+", " ", semantics._words(str(c))).split()  # noqa: SLF001
+        if len(split) >= 2 and split[-1] in ("code", "cd", "id"):
+            wp = rf"(?:{re.escape(w)}|{re.escape(' '.join(split[:-1]))})"    # "the depots" for depotCode
+        else:
+            wp = re.escape(w)
+        if re.search(rf"\b{_GROUP_WORDS}\s+(?:\w+\s+){{0,2}}?{wp}s?\b", low_g) and c not in [
                 x for x, v in named_values(df, message) if not _negated(message, v)]:   # "excluding East" still groups
             yes_no = roles[c]["role"] == "flag" and roles[c].get("positive") and not roles[c].get("positive_is_minority")
             if yes_no and not re.search(rf"\b(?:by|between|across|versus|vs)\s+{re.escape(w)}", low):

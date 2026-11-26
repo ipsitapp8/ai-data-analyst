@@ -120,6 +120,62 @@ class PlanRejected(ValueError):
     pass
 
 
+# The JSON type every step argument must have. Checked before any other check reads the step, so a plan whose
+# arguments have the wrong shape (an entities list, a column given as an object, ...) is rejected with a reason the
+# model can repair, never crashes the turn.
+_SCALAR = (str, int, float, bool)
+ARG_TYPES: dict[str, tuple] = {
+    "id": (str,), "op": (str,), "label": (str,), "from": (str,),
+    "entities": (dict,), "except": (dict,), "period": (dict,),
+    "where": (list, dict),               # {column: value} is a known slip _normalise repairs
+    "name": (str,), "formula": (str,), "unit": (str,),
+    "fn": (str,), "column": (str,), "by": (str,), "per": (str,),
+    "a": (str,), "b": (str,), "broadcast": (bool,),
+    "n": (int, float, str), "order": (str,),
+    "days": (int, float, str), "history_start": (str,), "history_end": (str,),
+    "target": (int, float, str), "base": (str,), "a_label": (str,), "b_label": (str,),
+    "changes": (list,), "k": (int, float), "exclude": (list, str), "columns": (list, str),
+}
+
+
+def shape_problems(steps: list) -> list[str]:
+    """Structural problems in a program's steps: wrong JSON types, nested where a value belongs, malformed filters."""
+    out: list[str] = []
+    for i, st in enumerate(steps):
+        if not isinstance(st, dict):
+            out.append(f"step {i + 1} must be a JSON object")
+            continue
+        sid = st.get("id") if isinstance(st.get("id"), str) else f"#{i + 1}"
+        for k, v in st.items():
+            want = ARG_TYPES.get(k)
+            if v is None or want is None:
+                continue                      # unknown keys are reported by the argument check
+            if isinstance(v, bool) and bool not in want:
+                out.append(f"step '{sid}': '{k}' must be {' or '.join(t.__name__ for t in want)}, not true/false")
+            elif not isinstance(v, want):
+                out.append(f"step '{sid}': '{k}' must be {' or '.join(t.__name__ for t in want)}, not {type(v).__name__}")
+        for key in ("entities", "except"):
+            for c, vals in (st.get(key) if isinstance(st.get(key), dict) else {}).items():
+                vs = vals if isinstance(vals, list) else [vals]
+                if not all(isinstance(x, _SCALAR) for x in vs):
+                    out.append(f"step '{sid}': {key} values for '{c}' must be plain values")
+        wh = st.get("where")
+        if isinstance(wh, dict) and not ({"column", "op"} <= set(wh)) and \
+                not all(isinstance(k, str) and isinstance(v, _SCALAR) for k, v in wh.items()):
+            out.append(f"step '{sid}': a where written as {{column: value}} needs plain values")
+        for w in wh if isinstance(wh, list) else []:
+            if not isinstance(w, dict) or not isinstance(w.get("column"), str) or not isinstance(w.get("op"), str) \
+                    or isinstance(w.get("value"), dict):
+                out.append(f"step '{sid}': each where condition must be {{\"column\":..,\"op\":..,\"value\":..}}")
+        per = st.get("period") if isinstance(st.get("period"), dict) else {}
+        if any(v is not None and not isinstance(v, str) for v in per.values()):
+            out.append(f"step '{sid}': period start/end must be date tokens")
+        for ch in st.get("changes") if isinstance(st.get("changes"), list) else []:
+            if not isinstance(ch, dict):
+                out.append(f"step '{sid}': each change must be a JSON object")
+    return out
+
+
 # ------------------------------------------------------------------ grounding --
 def anchor_date(df: pd.DataFrame) -> tuple[pd.Timestamp, str]:
     """'Today' for period tokens: the real date, or the last recorded date when the records end well before it (a
@@ -360,6 +416,9 @@ def check(plan: dict, df: pd.DataFrame, inputs: dict, message: str, prof: dict, 
         raise PlanRejected("a program needs a non-empty 'steps' list")
     if len(steps) > MAX_STEPS:
         raise PlanRejected(f"too many steps ({len(steps)}; at most {MAX_STEPS})")
+    shape = shape_problems(steps)
+    if shape:
+        raise PlanRejected("; ".join(shape[:6]))
     toks = date_tokens(anchor_date(df)[0])
     roles = prof["roles"]
     fixed = plan.setdefault("_repaired", [])
@@ -864,7 +923,13 @@ def plan(message: str, df: pd.DataFrame, memory: dict) -> dict:
         try:
             obj = parse(text)
             if obj["action"] == "program":
-                steps = check(obj, df, inputs, message, prof)
+                try:
+                    steps = check(obj, df, inputs, message, prof)
+                except (PlanRejected, Ambiguous):
+                    raise
+                except Exception as e:  # noqa: BLE001 - a model plan Silt cannot read is a rejected plan, not a crash
+                    logger.exception("plan check failed on a malformed plan")
+                    raise PlanRejected(f"the plan could not be read ({type(e).__name__})") from e
                 # executable is not enough: the program must compute what was asked, and every part of it
                 req = intent.read(message, df, prof)
                 steps = intent.complete(steps, req, df, prof, obj["_repaired"])

@@ -261,6 +261,17 @@ def test_alert_read_state_and_team_scoping(client, ws, other):
 
 # ------------------------------------------------------------------------ chat --
 
+@pytest.fixture(autouse=True)
+def _cloud_chat_path(request):
+    """These tests cover the cloud-provider path; the local analyst model (if one happens to be served on this
+    machine) is switched off for them. The local path has its own tests below."""
+    if "local_chat" in request.node.name:
+        yield
+        return
+    with patch.object(chat, "_local_url", return_value=None):
+        yield
+
+
 def _patch_chat(answer, check=None, check_error=None):
     ans = patch.object(chat.llm_client, "call_tool", return_value=answer)
     if check_error:
@@ -361,3 +372,18 @@ def test_correlations_endpoint_scoped_to_team(client, ws, other):
     r = client.get(f"/api/datasets/{ws['ds']}/correlations", headers=ws["h"])
     assert r.status_code == 200 and "pairs" in r.json()
     assert client.get(f"/api/datasets/{ws['ds']}/correlations", headers=other).status_code == 404
+
+
+def test_local_chat_answers_from_the_analysis_and_checks_its_numbers(client, ws):
+    qid, _ = _dash(ws)
+    good = {"answer": "Revenue is $100.", "sources": ["KPI: Revenue"], "needs_new_analysis": False, "suggested_question": ""}
+    with patch.object(chat, "_local_url", return_value="http://127.0.0.1:8080/v1"), \
+            patch.object(chat, "_local_answer", return_value=good) as la, \
+            patch.object(chat.llm_client, "call_tool", side_effect=AssertionError("cloud provider must not be called")):
+        body = client.post(f"/api/questions/{qid}/chat", json={"message": "what is revenue?"}, headers=ws["h"]).json()
+    assert body["verified"] is True and body["unsupported_claims"] == [] and "CONTEXT:" in la.call_args.args[1]
+    bad = {**good, "answer": "Revenue is $100 and grew 37.5% year on year."}
+    with patch.object(chat, "_local_url", return_value="http://127.0.0.1:8080/v1"), \
+            patch.object(chat, "_local_answer", return_value=bad):
+        body = client.post(f"/api/questions/{qid}/chat", json={"message": "growth?"}, headers=ws["h"]).json()
+    assert body["verified"] is False and any("37.5" in c for c in body["unsupported_claims"])

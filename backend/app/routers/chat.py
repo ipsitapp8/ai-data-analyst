@@ -50,4 +50,6 @@ def chat_with_dashboard(
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001 - provider/quota failures are the common case
-        raise HTTPException(502, f"The assistant is unavailable right now ({type(e).__name__}). Try again shortly.")
+        raise HTTPException(502, "The assistant is unavailable right now: the local analyst model is not running "
+                                 "(start it with training/scripts/start_demo.sh) and the cloud providers did not answer "
+                                 f"({type(e).__name__}).")

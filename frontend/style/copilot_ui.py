@@ -166,12 +166,51 @@ def chart(spec: dict, theme: str = "light") -> alt.Chart | None:
     kind, x, y = spec.get("type", "bar"), spec.get("x"), spec.get("y")
     tip = [alt.Tooltip(c, format=",.2f") if pd.api.types.is_float_dtype(df[c]) else alt.Tooltip(c)
            for c in df.columns if c != "start"]
+    if kind == "line" and spec.get("series") in df.columns:
+        order = list(dict.fromkeys(df[x].astype(str)))
+        c = alt.Chart(df).mark_line(point=True, strokeWidth=2).encode(
+            x=alt.X(f"{x}:N", title=None, sort=order, axis=alt.Axis(labelAngle=-30)),
+            y=alt.Y(f"{y}:Q", title=y, scale=alt.Scale(zero=False)),
+            color=alt.Color(f"{spec['series']}:N", title=None, scale=alt.Scale(range=pal), legend=alt.Legend(orient="top")),
+            tooltip=tip)
+        return _base(c, spec, theme, 300)
     if kind == "line":
         c = alt.Chart(df).mark_line(point=alt.OverlayMarkDef(size=70, filled=True, color=pal[0]), color=pal[0],
                                     strokeWidth=2).encode(
             x=alt.X(f"{x}:N", title=None, sort=None, axis=alt.Axis(labelAngle=-30)),
             y=alt.Y(f"{y}:Q", title=y), tooltip=tip)
         return _base(c, spec, theme, 300)
+    if kind == "forecast":
+        # actual history (solid), forecast (dashed, open points), the likely range (band) and the target (rule)
+        y_title = spec.get("y_title") or y
+        df["kind"] = df["kind"].map({"actual": "actual", "forecast": "forecast"}).fillna(df["kind"])
+        order = list(dict.fromkeys(df[x].astype(str)))
+        base = alt.Chart(df).encode(x=alt.X(f"{x}:N", title=None, sort=order, axis=alt.Axis(labelAngle=-30)))
+        colors = alt.Scale(domain=["actual", "forecast"], range=[pal[0], pal[1] if len(pal) > 1 else pal[0]])
+        layers = []
+        band = df.dropna(subset=["lower", "upper"]) if {"lower", "upper"} <= set(df.columns) else df.iloc[0:0]
+        if not band.empty:
+            layers.append(alt.Chart(band).mark_area(opacity=0.18, color=pal[1] if len(pal) > 1 else pal[0]).encode(
+                x=alt.X(f"{x}:N", sort=order), y=alt.Y("lower:Q", title=y_title), y2="upper:Q",
+                tooltip=[alt.Tooltip(f"{x}:N"), alt.Tooltip("lower:Q", format=",.2f"), alt.Tooltip("upper:Q", format=",.2f")]))
+        # the forecast line starts at the last actual so the two read as one series
+        last_actual = df[df["kind"] == "actual"].tail(1).assign(kind="forecast")
+        fc_line = pd.concat([last_actual, df[df["kind"] == "forecast"]]) if not last_actual.empty else df[df["kind"] == "forecast"]
+        layers.append(alt.Chart(df[df["kind"] == "actual"]).mark_line(strokeWidth=2.2, point=True).encode(
+            x=alt.X(f"{x}:N", sort=order), y=alt.Y("value:Q", title=y_title, scale=alt.Scale(zero=False)),
+            color=alt.Color("kind:N", scale=colors, title=None, legend=alt.Legend(orient="top")), tooltip=tip))
+        if not fc_line.empty:
+            layers.append(alt.Chart(fc_line).mark_line(strokeWidth=2.2, strokeDash=[6, 4],
+                                                       point=alt.OverlayMarkDef(filled=False, size=70)).encode(
+                x=alt.X(f"{x}:N", sort=order), y=alt.Y("value:Q", scale=alt.Scale(zero=False)),
+                color=alt.Color("kind:N", scale=colors, title=None), tooltip=tip))
+        if spec.get("target") is not None:
+            tgt = pd.DataFrame({"target": [float(spec["target"])], "label": [spec.get("target_label") or "target"]})
+            layers.append(alt.Chart(tgt).mark_rule(strokeDash=[2, 2], color=t["muted"], strokeWidth=1.6).encode(
+                y="target:Q", tooltip=[alt.Tooltip("label:N", title="")]))
+            layers.append(alt.Chart(tgt).mark_text(align="left", dx=4, dy=-6, color=t["muted"]).encode(
+                y="target:Q", text="label:N", x=alt.value(0)))
+        return _base(alt.layer(*layers), spec, theme, 320)
     if kind == "pie":
         c = alt.Chart(df).mark_arc(innerRadius=60, stroke=t["surface_solid"], strokeWidth=2).encode(
             theta=alt.Theta(f"{y}:Q"), color=alt.Color(f"{x}:N", title=x, sort=None,
