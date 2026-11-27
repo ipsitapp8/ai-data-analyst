@@ -23,6 +23,7 @@ class Concept:
     kind: str = "numeric"           # numeric | category | id
     weight: float = 1.0             # how much a match counts as evidence for the domain
     multi: bool = False             # several columns may express it (one per subject)
+    excludes: frozenset = frozenset()   # words that show a matching column means something else ("attendance_percentage" is not a mark)
 
 
 @dataclass(frozen=True)

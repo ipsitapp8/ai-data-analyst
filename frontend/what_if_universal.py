@@ -1,4 +1,9 @@
-"""What-if, any domain: choose a domain and a starting point, discover questions, build a scenario, run it, read the result.
+"""What-if, any domain: choose a domain and a starting point, then follow that starting point's own workflow to a result.
+
+    Explore suggestions        discover the domain's questions, grouped by what Silt can calculate
+    Use my dataset             inspect a table's columns and pick a question built from them
+    Build a scenario manually  define objective, variables, values, formulas and constraints (what_if_manual)
+    Brainstorm with Silt AI    describe a goal; a language model proposes ranked ideas, or the page says it could not
 
 Everything here calls the backend's /api/whatif routes. Calculation, validation and explanation happen there; this page
 only collects inputs and shows results. It never needs the Copilot's language model to run a scenario."""
@@ -8,12 +13,12 @@ import re
 import uuid
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
-from api_client import (ApiError, analyst_ask, whatif_compare, whatif_delete, whatif_domains, whatif_get, whatif_profile, whatif_run, whatif_save,
-                        whatif_saved, whatif_suggest)
-from style.theme import esc, html, plot
+import what_if_manual as manual
+from api_client import (ApiError, analyst_ask, whatif_brainstorm, whatif_compare, whatif_delete, whatif_domains, whatif_get, whatif_profile,
+                        whatif_run, whatif_saved, whatif_suggest)
+from style.theme import esc, html
 from what_if_result import render as render_result
 
 S = st.session_state
@@ -31,6 +36,15 @@ START_UI = {"Explore suggestions": ("lightbulb", "See questions worth asking bas
             "Build a scenario manually": ("edit_note", "Define your own values, assumptions and constraints.", ""),
             "Brainstorm with Silt AI": ("lightbulb", "Describe your goal and get a ranked list of scenarios.", "")}
 START = ["Explore suggestions", "Use my dataset", "Build a scenario manually", "Brainstorm with Silt AI"]
+EXPLORE, DATASET, MANUAL, BRAINSTORM = START
+# what steps 2 and 3 are called, and the way on from step 1, for each starting point
+FLOW = {EXPLORE: ("2 · Suggestions", "3 · Scenario", "Continue to suggestions  →", "suggestions"),
+        DATASET: ("2 · Your data", "3 · Scenario", "Continue to your data  →", "your data"),
+        MANUAL: ("2 · Build", "3 · Result", "Continue to builder  →", "builder"),
+        BRAINSTORM: ("2 · AI ideas", "3 · Scenario", "Continue to brainstorm  →", "ideas")}
+# state that belongs to one choice of (starting point, domain, dataset); it is dropped when that choice changes
+_WORK = ("wxu_sel", "wxu_result", "wxu_scn", "wxu_ideas", "wxu_ai_error", "wxu_fallback", "wxu_save_name")
+_WORK_PREFIXES = ("wxu_in_", "wxu_cols_", "wxu_col_", "wxu_method_", "wxu_unc_", "wxu_sd_", "wxu_seed_", "wxu_gs_", "wxu_f_", "wxb_")
 METHOD_LABEL = {"deterministic": "Exact calculation", "regression": "Estimate from my data", "forecast": "Trend forecast", "monte_carlo": "Monte Carlo simulation",
                 "sensitivity": "Sensitivity analysis", "break_even": "Break-even", "goal_seek": "Goal seek"}
 
@@ -59,92 +73,119 @@ def _goto(step: str) -> None:
     st.rerun()
 
 
+def _reset_work() -> None:
+    """Forget every question, selection, typed scenario value, AI idea and result. The manual draft is the person's own and stays."""
+    for k in list(S):
+        if k in _WORK or str(k).startswith(_WORK_PREFIXES):
+            del S[k]
+
+
 def _context(datasets: list[dict]) -> tuple[str, str, dict | None, str | None]:
     """The choices made in Setup, read from session state so every step sees them even while Setup is not on screen."""
     domain = S.get("wxu_pick_domain", "auto")
     start = S.get("wxu_pick_start", START[0])
-    can_use_data = start in ("Explore suggestions", "Use my dataset", "Brainstorm with Silt AI") or domain == "auto"
-    ds = S.get("wxu_ds") if can_use_data and datasets else None
-    objective = S.get("wxu_obj") if start == "Brainstorm with Silt AI" else None
+    ds = S.get("wxu_ds") if start != MANUAL and datasets else None
+    objective = (S.get("wxu_obj") or "").strip() or None if start == BRAINSTORM else None
     return domain, start, ds, objective
 
 
-def _setup_step(datasets: list[dict], ui: dict) -> None:
-    def _reset() -> None:
-        S["wxu_sel"], S["wxu_result"] = None, None
+def _sync(datasets: list[dict]) -> None:
+    """Nothing produced under one starting point, domain or dataset may show up under another."""
+    domain, start, ds, _ = _context(datasets)
+    signature = (start, domain, ds["id"] if ds else None)
+    if S.get("wxu_ctx", signature) != signature:
+        _reset_work()
+    S["wxu_ctx"] = signature
 
+
+def _setup_step(datasets: list[dict], ui: dict) -> None:
     left, right = st.columns([1, 1], gap="medium")
     with left:
         with st.container(border=True, key="wxu_panel_domain"):
             html('<div class="wx-ph"><div><div class="wx-pk">Step 1a · Context</div><div class="wx-pt">Domain</div>'
                  '<div class="wx-ps">Choose the context for your analysis.</div></div></div>')
-            domain = st.radio("Domain", list(ui), format_func=lambda k: ui[k][1], key="wxu_pick_domain", on_change=_reset, label_visibility="collapsed")
+            domain = st.radio("Domain", list(ui), format_func=lambda k: ui[k][1], key="wxu_pick_domain", on_change=_reset_work, label_visibility="collapsed")
             html(f'<div class="wx-detail">{esc(ui[domain][2])}</div>')
     with right:
         with st.container(border=True, key="wxu_panel_start"):
             html('<div class="wx-ph"><div><div class="wx-pk">Step 1b · How to begin</div><div class="wx-pt">Starting point</div>'
                  '<div class="wx-ps">How would you like to begin your scenario?</div></div></div>')
             start = st.radio("Starting point", START, format_func=lambda k: k, captions=[START_UI[k][1] for k in START], key="wxu_pick_start",
-                             on_change=_reset, label_visibility="collapsed")
+                             on_change=_reset_work, label_visibility="collapsed")
     S["wxu_domain"], S["wxu_start"] = domain, start      # the names the rest of the page (and its tests) read
-    needs_data = start == "Use my dataset" or (domain == "auto" and start != "Build a scenario manually")
-    can_use_data = start in ("Explore suggestions", "Use my dataset", "Brainstorm with Silt AI") or domain == "auto"
+    needs_data = start == DATASET or (domain == "auto" and start == EXPLORE)
     ds = None
     with st.container(border=True, key="wxu_panel_data"):
         html('<div class="wx-ph"><div><div class="wx-pk">Step 1c · Data</div><div class="wx-pt">Dataset</div>'
              '<div class="wx-ps">The table Silt reads to find questions it can answer.</div></div></div>')
-        if can_use_data and datasets:
-            none_label = "Choose a dataset…" if needs_data else "None: use the domain's templates (optional)"
+        if start == MANUAL:
+            st.caption("This starting point does not use a dataset: you define every variable yourself in the next step.")
+        elif datasets:
+            none_label = ("Choose a dataset…" if needs_data else "None: brainstorm without data (optional)" if start == BRAINSTORM
+                          else "None: use the domain's templates (optional)")
             ds = st.selectbox("Dataset", [None] + datasets, format_func=lambda d: none_label if d is None else d["filename"], key="wxu_ds",
                               label_visibility="collapsed")
-        elif can_use_data and needs_data:
+        elif needs_data:
             st.info("No dataset yet. Upload one on the Datasets page, or choose “Build a scenario manually”.")
         else:
-            st.caption("This starting point does not use a dataset.")
-        if can_use_data and S.get("wxu_hidden"):
+            st.caption("No dataset uploaded. You can continue without one.")
+        if start != MANUAL and S.get("wxu_hidden"):
             st.caption(f"{S['wxu_hidden']} older dataset(s) are not listed because their file is no longer on the server. Upload them again to use them.")
-        if ds and start != "Build a scenario manually":
+        if ds and start != MANUAL:
             _profile_panel(ds["id"], None if domain == "auto" else domain)
-    if start == "Brainstorm with Silt AI":
+    if start == BRAINSTORM:
         with st.container(border=True, key="wxu_panel_goal"):
             html('<div class="wx-ph"><div><div class="wx-pk">Step 1d · Goal</div><div class="wx-pt">What do you want to decide?</div>'
                  '<div class="wx-ps">Describe your role and goal, or ask a question about your data.</div></div></div>')
-            st.text_area("Describe your role and what you want to decide", key="wxu_obj", height=80, label_visibility="collapsed",
+            st.text_area("Describe your role and what you want to decide", key="wxu_obj", height=80, max_chars=1000, on_change=_reset_work,
+                         label_visibility="collapsed",
                          placeholder="I am a college administrator. Help me identify important scenarios to evaluate before the next academic year.")
-    manual = start == "Build a scenario manually" and domain == "custom"
-    if st.button("Continue to scenario  →" if manual else "Continue to questions  →", type="primary", key="wxu_next_setup"):
-        _goto(STEPS[2] if manual else STEPS[1])
+    if st.button(FLOW[start][2], type="primary", key="wxu_next_setup"):
+        _goto(STEPS[1])
 
 
 def _questions_step(datasets: list[dict]) -> None:
     domain, start, ds, objective = _context(datasets)
-    if start == "Build a scenario manually" and domain == "custom":
-        st.info("Custom scenarios are defined by you, so there are no suggested questions.")
-        if st.button("Go to the scenario builder  →", key="wxu_to_builder"):
-            _goto(STEPS[2])
-        return
     ds_id = ds["id"] if ds else None
-    _suggestions(ds_id, None if domain == "auto" else domain, objective, start)
+    key = None if domain == "auto" else domain
+    if start == MANUAL:
+        if manual.builder(MANUAL):
+            _goto(STEPS[2])
+    elif start == DATASET:
+        _dataset_view(ds_id, key)
+    elif start == BRAINSTORM:
+        _brainstorm_view(ds_id, key, objective)
+    else:
+        _explore_view(ds_id, key)
 
 
 def _scenario_step(datasets: list[dict]) -> None:
     domain, start, ds, _ = _context(datasets)
     ds_id = ds["id"] if ds else None
     sel = S.get("wxu_sel")
-    if sel and sel["id"] != "custom":
-        if st.button("←  Back to questions", key="wxu_back"):
-            S["wxu_sel"], S["wxu_result"] = None, None
+    saved = bool(sel) and str(sel["id"]).startswith("saved")
+    if sel and not saved and sel.get("workflow") != start:
+        _reset_work()
+        sel = None
+    if sel:
+        back = "←  Edit assumptions" if start == MANUAL and not saved else f"←  Back to {FLOW[start][3]}"
+        if st.button(back, key="wxu_back"):
+            if start != MANUAL or saved:
+                S["wxu_sel"], S["wxu_result"] = None, None
             _goto(STEPS[1])
-        if str(sel["id"]).startswith("saved"):
-            if S.get("wxu_result"):
-                _result(S["wxu_result"], (S["wxu_scn"].get("dataset") or {}).get("dataset_id"), sel)
-        else:
-            _builder(sel, ds_id)
-    elif start == "Build a scenario manually" and domain == "custom":
-        _custom_builder()
+    if saved or (sel and start == MANUAL):
+        if S.get("wxu_result"):
+            _result(S["wxu_result"], (S["wxu_scn"].get("dataset") or {}).get("dataset_id") if saved else None, sel)
+    elif sel and sel.get("custom_model"):
+        manual.idea_builder(sel)
+        if S.get("wxu_result"):
+            _result(S["wxu_result"], None, sel)
+    elif sel:
+        _builder(sel, ds_id)
     else:
-        st.info("No question chosen yet. Pick one in step 2, or press “Use” on a suggested question.")
-        if st.button("←  Go to questions", key="wxu_to_questions"):
+        st.info("Nothing has been run yet. Define your scenario in step 2 and press Run." if start == MANUAL
+                else "No question chosen yet. Pick one in step 2 by pressing “Use”.")
+        if st.button(f"←  Go to {FLOW[start][3]}", key="wxu_to_questions"):
             _goto(STEPS[1])
 
 
@@ -161,15 +202,18 @@ def explore_tab(datasets: list[dict]) -> None:
     ui = {**DOMAIN_UI}
     for d in domains:                                   # the backend's own domain list decides which domains exist
         ui.setdefault(d["key"], ("category", d["title"], d["description"]))
-    for k in _KEEP:                                     # a widget that is not on screen would otherwise lose its value
-        if k in S:
+    for k in list(S):                                   # a widget that is not on screen would otherwise lose its value
+        if k in _KEEP or str(k).startswith(manual.KEEP_PREFIX):
             S[k] = S[k]
+    _sync(datasets)
     if S.get("wxu_goto"):
         S["wxu_step"] = S.pop("wxu_goto")
     elif S.get("wxu_step") is None:
         S["wxu_step"] = STEPS[0]
-    step = st.segmented_control("Step", STEPS, key="wxu_step", label_visibility="collapsed", selection_mode="single") or STEPS[0]
     domain, start, ds, _ = _context(datasets)
+    names = {STEPS[1]: FLOW[start][0], STEPS[2]: FLOW[start][1]}
+    step = st.segmented_control("Step", STEPS, format_func=lambda s: names.get(s, s), key="wxu_step", label_visibility="collapsed",
+                                selection_mode="single") or STEPS[0]
     if step != STEPS[0]:
         st.caption(" · ".join(x for x in (ui.get(domain, ("", ""))[1], start, ds["filename"] if ds else None) if x) + "  —  change this in step 1")
     if step == STEPS[0]:
@@ -231,50 +275,173 @@ def _answer_data_question(ds_id: int, question: str) -> None:
     st.caption("Answered by the Copilot's analyst from your data. The scenario ideas below are what-if questions you could run next.")
 
 
-def _suggestions(ds_id, domain, objective, start) -> None:
-    if domain is None and ds_id is None:
-        st.caption("Choose a domain or a dataset to see suggestions.")
-        return
-    if start == "Brainstorm with Silt AI" and not objective:
-        st.caption("Describe your objective in step 1, then press Suggest.")
-    go_btn = st.button("Suggest questions" if start != "Brainstorm with Silt AI" else "Suggest for my objective", key="wxu_go") if start == "Brainstorm with Silt AI" else True
-    if not go_btn:
-        return
+def _card(row: str, s: dict, workflow: str, title: str, lines: list[tuple[str, str]]) -> None:
+    """One scenario in a list: its name, whether it can run, what it explores and needs, and the button that picks it."""
+    label, cls = STATE[s["feasibility"]]
+    with st.container(key=f"wxu_row_{row}"):
+        a, b = st.columns([6, 1], vertical_alignment="center")
+        body = "".join(f'<div class="wx-meta">{f"<b>{esc(k)}</b> " if k else ""}{esc(v)}</div>' for k, v in lines if v)
+        a.markdown(f'<div class="wx-q">{esc(title)}</div>'
+                   f'<div><span class="wx-state {cls}">{label}</span><span class="wx-meta">{esc(METHOD_LABEL.get(s["method"], s["method"]))}</span></div>'
+                   + body, unsafe_allow_html=True)
+        if s["feasibility"] in ("ready", "needs_assumptions") and b.button("Use", key=f"wxu_use_{s['id']}"):
+            _reset_work_for_choice()
+            S["wxu_sel"], S["wxu_result"] = {**s, "workflow": workflow}, None
+            _goto(STEPS[2])
+
+
+def _reset_work_for_choice() -> None:
+    """A newly chosen question starts clean: no value or column choice carried over from an earlier one."""
+    for k in list(S):
+        if str(k).startswith(_WORK_PREFIXES) and not str(k).startswith("wxu_f_"):
+            del S[k]
+
+
+def _fetch(ds_id, domain, mode: str) -> dict | None:
     try:
-        out = _cached(("suggest", ds_id, domain, objective, start == "Brainstorm with Silt AI"),
-                      lambda: whatif_suggest(ds_id, domain, objective, use_model=start == "Brainstorm with Silt AI"))
+        return _cached((mode, ds_id, domain), lambda: whatif_suggest(ds_id, domain, mode))
     except ApiError as e:
         st.error(str(e))
+        return None
+
+
+def _explore_lines(s: dict) -> list[tuple[str, str]]:
+    return [("Explores", s["reason"]), ("Data needed", " · ".join(s["needs"])), ("Missing now", "; ".join(s["missing_inputs"])),
+            ("Limit", (s["limitations"] or [""])[0])]
+
+
+def _explore_view(ds_id, domain) -> None:
+    """Discovery: the domain's questions, arranged by the kind of calculation behind them."""
+    if domain is None and ds_id is None:
+        st.info("Choose a domain, or a dataset to detect it from, in step 1.")
+        return
+    out = _fetch(ds_id, domain, "explore")
+    if out is None:
+        return
+    dom = out["domain"]
+    html(f'<div class="wx-section">Discover what you could explore in {esc(dom["title"])}</div>')
+    st.caption(dom["description"] + (f" Typical measures: {', '.join(dom['metrics'])}." if dom["metrics"] else ""))
+    if domain is None and dom.get("detection"):
+        st.caption(dom["detection"]["explanation"])
+    if not out["meta"]["with_data"]:
+        st.caption("No dataset chosen: questions that read a table show what they would need.")
+    if not out["suggestions"]:
+        st.info(f"{dom['title']} has no ready-made questions. Choose another domain or a dataset, or build a scenario manually.")
+        return
+    caps = {c["key"]: c for c in out["capabilities"]}
+    pick = st.selectbox("Kind of question", [None, *caps], key="wxu_f_capability",
+                        format_func=lambda k: f"All kinds ({len(out['suggestions'])})" if k is None else f"{caps[k]['title']} ({caps[k]['count']})")
+    n = 0
+    for key, cap in caps.items():
+        if pick not in (None, key):
+            continue
+        html(f'<div class="wx-section">{esc(cap["title"])}</div>')
+        st.caption(cap["what"])
+        for s in (x for x in out["suggestions"] if x["capability"] == key):
+            _card(str(n), s, EXPLORE, f"{s['title']}: {s['question']}", _explore_lines(s))
+            n += 1
+
+
+def _dataset_view(ds_id, domain) -> None:
+    """The table first (what each column is and whether a scenario can use it), then only the questions its columns support."""
+    if ds_id is None:
+        st.info("Choose a dataset in step 1. These scenarios are built from its columns.")
+        if st.button("←  Choose a dataset", key="wxu_to_setup"):
+            _goto(STEPS[0])
+        return
+    out = _fetch(ds_id, domain, "dataset")
+    if out is None:
         return
     meta = out["meta"]
-    if start == "Brainstorm with Silt AI" and ds_id and _is_data_question(objective):
+    html(f'<div class="wx-section">What is in {esc(meta["filename"] or "your data")}</div>')
+    st.caption(f"{meta['rows']:,} records · {len(out['columns'])} columns · read as {out['domain']['title']}")
+    st.dataframe(pd.DataFrame(out["columns"]).rename(columns={"column": "Column", "type": "Type", "missing": "Blank", "observed": "Values seen",
+                                                              "use": "How a scenario can use it"}), hide_index=True, use_container_width=True)
+    for r in meta["relationships"]:
+        st.caption(f"Moves together: {r['a']} and {r['b']} (correlation {r['pearson']:+.2f} over {r['n']} rows)")
+    for note in meta["notes"]:
+        st.caption(note)
+    used = [c["column"] for c in out["columns"] if any(c["column"] in s["used_columns"] for s in out["suggestions"])]
+    html('<div class="wx-section">Scenarios built from these columns</div>')
+    if not out["suggestions"]:
+        st.info("No calculation can use these columns: none is numeric or a date. Build a scenario manually instead.")
+        return
+    column = st.selectbox("Show scenarios using", [None, *used], key="wxu_f_column", format_func=lambda c: "Any column" if c is None else c)
+    n = 0
+    for g in out["groups"]:
+        rows = [s for s in out["suggestions"] if s["group"] == g["key"] and (column is None or column in s["used_columns"])]
+        if not rows:
+            continue
+        html(f'<div class="wx-section">{esc(g["title"])}</div>')
+        for s in rows:
+            needs = "; ".join(s["missing_inputs"]) or ", ".join(i["label"].lower() for i in s["inputs"] if i["default"] is None and not i["optional"])
+            _card(str(n), s, DATASET, s["question"], [("Columns", ", ".join(s["used_columns"])), ("Why", s["reason"]), ("You provide", needs),
+                                                       ("Limit", (s["limitations"] or [""])[0])])
+            n += 1
+
+
+def _brainstorm_view(ds_id, domain, objective) -> None:
+    """Ideas written by the language model for this objective. If it cannot answer, that is said; the rules-based list is a
+    separate choice, labelled as not AI."""
+    if not objective or len(objective) < 5:
+        st.info("Describe your objective in step 1, then brainstorm here.")
+        if st.button("←  Describe my objective", key="wxu_to_setup"):
+            _goto(STEPS[0])
+        return
+    signature = (objective, ds_id, domain)
+    html('<div class="wx-section">Brainstorm with Silt AI</div>')
+    st.caption(f"Objective: {objective}")
+    made = S.get("wxu_ideas") if (S.get("wxu_ideas") or {}).get("signature") == signature else None
+    if st.button("Brainstorm scenarios", key="wxu_go", type="primary"):      # one label: a button that renames itself loses its click
+        _reset_work()
+        made = None
+        try:
+            with st.spinner("Silt AI is thinking about your objective…"):
+                made = S["wxu_ideas"] = {"signature": signature, "out": whatif_brainstorm(objective, ds_id, domain)}
+        except ApiError as e:
+            S["wxu_ai_error"] = {"signature": signature, "message": re.sub(r"^\d{3}:\s*", "", str(e))}
+    failed = S.get("wxu_ai_error") if (S.get("wxu_ai_error") or {}).get("signature") == signature else None
+    if ds_id and _is_data_question(objective) and (made or failed):
         _answer_data_question(ds_id, objective)
-        meta = {**meta, "message": None}      # the "no scenario matches" notice is misleading once the question has been answered
-    if meta.get("message"):
-        st.info(meta["message"])
-    if meta.get("llm") == "unavailable":
-        st.caption("Silt AI is unavailable right now; these were ranked by rules and are just as valid.")
-    html('<div class="wx-section">Questions to explore</div>')
-    shown = len(out["suggestions"])
-    st.caption(f"{shown} questions for {out['domain']['title']}. Each one says whether it can be answered now, needs something from you, or cannot be answered reliably.")
-    for i, s in enumerate(out["suggestions"]):
-        label, cls = STATE[s["feasibility"]]
-        with st.container(key=f"wxu_row_{i}"):
-            a, b = st.columns([6, 1], vertical_alignment="center")
-            a.markdown(f'<div class="wx-q">{esc(s["question"])}</div>'
-                       f'<div><span class="wx-state {cls}">{label}</span><span class="wx-meta">{esc(METHOD_LABEL.get(s["method"], s["method"]))}</span></div>'
-                       f'<div class="wx-meta">{esc(s["reason"])}</div>'
-                       + (f'<div class="wx-meta"><b>Needs</b> {esc("; ".join(s["missing_inputs"]))}</div>' if s["missing_inputs"] else "")
-                       + (f'<div class="wx-meta"><b>Limit</b> {esc(s["limitations"][0])}</div>' if s["limitations"] else ""), unsafe_allow_html=True)
-            if s["feasibility"] in ("ready", "needs_assumptions"):
-                if b.button("Use", key=f"wxu_use_{s['id']}"):
-                    S["wxu_sel"], S["wxu_result"] = s, None
-                    _goto(STEPS[2])
+    if failed:
+        st.error(failed["message"])
+        _fallback(ds_id, domain, signature)
+    if not made:
+        return
+    out, meta = made["out"], made["out"]["meta"]
+    html('<div class="wx-section">Ideas from Silt AI</div>')
+    st.caption(f"{len(out['suggestions'])} ideas written by {meta['generated_by']} for your objective, ranked by {meta['ranked_by']}. "
+               "Silt checked each against your data and calculations."
+               + (f" {meta['dropped']} idea(s) were left out because they referred to something that does not exist." if meta["dropped"] else ""))
+    for n, s in enumerate(out["suggestions"]):
+        ai = s["ai"]
+        runs = s["question"] if s["feasibility"] in ("ready", "needs_assumptions") and not s.get("custom_model") else ""
+        _card(str(n), s, BRAINSTORM, f"{s['rank']}. {ai['title']}: {ai['question']}",
+              [("Why (Silt AI)", ai["why"]), ("Usefulness", f"{ai['usefulness']} of 5, rated by Silt AI"), ("Data needed", " · ".join(s["needs"])),
+               ("Missing now", "; ".join(s["missing_inputs"])), ("Silt will calculate", runs), ("Limit", (s["limitations"] or [""])[0])])
+
+
+def _fallback(ds_id, domain, signature) -> None:
+    if ds_id is None and domain is None:
+        st.caption("Choose a dataset or a domain in step 1 to see rules-based scenarios instead, or try again shortly.")
+        return
+    if S.get("wxu_fallback") != signature:
+        if st.button("Show rules-based scenarios instead (not AI)", key="wxu_fallback_btn"):
+            S["wxu_fallback"] = signature
+            st.rerun()
+        return
+    out = _fetch(ds_id, domain, "dataset" if ds_id else "explore")
+    if out is None:
+        return
+    html('<div class="wx-section">Rules-based scenarios (not written by Silt AI)</div>')
+    st.caption("These come from your " + ("dataset's columns" if ds_id else "domain") + ". They have not been chosen or ranked for your objective.")
+    for n, s in enumerate(out["suggestions"]):
+        _card(str(n), s, BRAINSTORM, s["question"], _explore_lines(s))
 
 
 def _inputs_form(sel: dict) -> tuple[dict, dict]:
     inputs, uncertainty = {}, {}
-    groups = {"value": "Question", "baseline": "Starting values", "assumption": "Assumptions", "change": "What changes"}
+    groups = {"value": "Your values", "baseline": "Starting values", "assumption": "Assumptions", "change": "What changes"}
     for role, title in groups.items():
         specs = [i for i in sel["inputs"] if i["role"] == role]
         if not specs:
@@ -284,7 +451,8 @@ def _inputs_form(sel: dict) -> tuple[dict, dict]:
         for col, i in zip(cols * 3, specs):
             key = f"wxu_in_{sel['id']}_{i['name']}"
             label = f"{i['label']}" + (f" ({i['unit']})" if i["unit"] else "") + (" — optional" if i["optional"] else "")
-            v = col.number_input(label, min_value=i["min"], max_value=i["max"], value=i["default"], key=key, help=i["help"] or None, step=None, format="%g")
+            lo, hi, default = (None if i[k] is None else float(i[k]) for k in ("min", "max", "default"))
+            v = col.number_input(label, min_value=lo, max_value=hi, value=default, key=key, help=i["help"] or None, step=None, format="%g")
             if v is not None:
                 inputs[i["name"]] = float(v)
     return inputs, uncertainty
@@ -317,9 +485,9 @@ def _builder(sel: dict, ds_id) -> None:
         scenario["columns"].update(sel["columns"])
     if method == "goal_seek":
         t1, t2, t3 = st.columns(3)
-        scenario["target"] = {"output": t1.text_input("Output to reach (e.g. profit)", "profit", key=f"wxu_to_{sel['id']}"),
-                              "value": t2.number_input("Target value", value=0.0, key=f"wxu_tv_{sel['id']}"),
-                              "solve_for": t3.text_input("Input to solve for (e.g. price)", "price", key=f"wxu_ts_{sel['id']}")}
+        scenario["target"] = {"output": t1.text_input("Output to reach (e.g. profit)", "profit", key=f"wxu_gs_o_{sel['id']}"),
+                              "value": t2.number_input("Target value", value=0.0, key=f"wxu_gs_v_{sel['id']}"),
+                              "solve_for": t3.text_input("Input to solve for (e.g. price)", "price", key=f"wxu_gs_s_{sel['id']}")}
     if st.button("Run scenario", type="primary", key=f"wxu_run_{sel['id']}"):
         try:
             S["wxu_result"] = whatif_run(scenario, ds_id)
@@ -340,41 +508,12 @@ def _result(res: dict, ds_id, sel) -> None:
             st.error(e)
         for m in v["missing_inputs"]:
             if m["kind"] == "column":
-                pick = st.selectbox(m["label"], m["candidates"], key=f"wxu_pick_{m['name']}")
+                pick = st.selectbox(m["label"], m["candidates"], key=f"wxu_col_{sel['id']}_{m['name']}")
                 S.setdefault(f"wxu_cols_{sel['id']}", {})[m["name"].split(":", 1)[1]] = [pick]
             else:
                 st.markdown(f"- **{m['label']}** — {m.get('why', '')}")
         return
     render_result(res, S.get("wxu_scn") or {}, ds_id, sel)
-
-
-def _custom_builder() -> None:
-    html('<div class="ds-section-title" style="margin-top:8px;">Define your own model</div>')
-    st.caption("Name your variables with starting values, then give each output a formula using those names. Allowed: + − × ÷, powers, min, max, abs, sqrt, log, exp.")
-    vars_ = st.data_editor(pd.DataFrame({"name": ["price", "volume"], "label": ["Price", "Volume"], "baseline": [10.0, 100.0], "change_pct": [0.0, 0.0]}),
-                           num_rows="dynamic", key="wxu_vars", use_container_width=True)
-    outs = st.data_editor(pd.DataFrame({"name": ["revenue"], "label": ["Revenue"], "formula": ["price * volume"]}), num_rows="dynamic", key="wxu_outs", use_container_width=True)
-    cons = st.text_area("Constraints (one per line: expression | message)", "price >= 1 | Price must be at least 1", key="wxu_cons", height=70)
-    method = st.selectbox("Method", ["deterministic", "sensitivity"], format_func=lambda m: METHOD_LABEL[m], key="wxu_cm")
-    vars_ = vars_.dropna(subset=["name"])
-    outs = outs.dropna(subset=["name", "formula"])
-    if st.button("Run my model", type="primary", key="wxu_cr") and len(vars_) and len(outs):
-        defn = {"inputs": {r["name"]: {"label": r["label"] or r["name"], "unit": "", "min": 0} for _, r in vars_.iterrows()},
-                "outputs": {r["name"]: {"label": r["label"] or r["name"], "unit": "", "formula": r["formula"]} for _, r in outs.iterrows()},
-                "primary_output": outs.iloc[0]["name"],
-                "constraints": [{"expr": a.strip(), "message": (b or a).strip(), "severity": "error"} for a, _, b in (ln.partition("|") for ln in cons.splitlines() if ln.strip())]}
-        scenario = {"id": uuid.uuid4().hex[:12], "name": "Custom model", "domain": "custom", "template_id": "custom_model", "question": "My own model", "method": method,
-                    "inputs": {}, "columns": {}, "uncertainty": {}, "assumptions": {}, "constraints": [], "target": None, "custom_model": defn,
-                    "baseline": {r["name"]: float(r["baseline"]) for _, r in vars_.iterrows()},
-                    "changes": {r["name"]: {"type": "pct", "value": float(r["change_pct"])} for _, r in vars_.iterrows() if r["change_pct"]}}
-        try:
-            S["wxu_result"], S["wxu_scn"] = whatif_run(scenario, None), scenario
-            S["wxu_sel"] = {"id": "custom", "question": "My own model", "inputs": [], "domain": "custom", "template_id": "custom_model", "method": method}
-        except ApiError as e:
-            st.error(str(e))
-    if S.get("wxu_result") and (S.get("wxu_sel") or {}).get("id") == "custom":
-        _result(S["wxu_result"], None, S["wxu_sel"])
-        S["wxu_sel"] = None
 
 
 def _saved_panel() -> None:
@@ -393,6 +532,7 @@ def _saved_panel() -> None:
             picked.append(r["id"])
         if b.button("Open", key=f"wxu_open_{r['id']}"):
             full = whatif_get(r["id"])["scenario"]
+            _reset_work()
             S["wxu_result"], S["wxu_scn"] = full, full
             S["wxu_sel"] = {"id": f"saved{r['id']}", "question": full.get("question") or r["name"], "inputs": [], "domain": full["domain"],
                             "template_id": full["template_id"], "method": full["method"]}

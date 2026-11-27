@@ -4,7 +4,7 @@ the same service the Copilot adapter calls. Saved universal scenarios live in th
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ from app.analyst.data import load_table
 from app.database import get_db
 from app.dataset_versions import latest_version
 from app.models import Scenario, Team, User
+from app.rate_limit import enforce as rate_limit
 from app.routers._common import team_dataset
 from app.routers._text import refuse_nul
 from app.security import get_current_team, get_current_user
@@ -36,6 +37,13 @@ class SuggestRequest(BaseModel):
     domain: str | None = Field(default=None, max_length=40)
     objective: str | None = Field(default=None, max_length=1000)
     use_model: bool = False
+    mode: Literal["explore", "dataset"] | None = None
+
+
+class BrainstormRequest(BaseModel):
+    objective: str = Field(min_length=5, max_length=1000)
+    dataset_id: int | None = None
+    domain: str | None = Field(default=None, max_length=40)
 
 
 class ScenarioRequest(BaseModel):
@@ -123,14 +131,38 @@ def profile(payload: ProfileRequest, db: Session = Depends(get_db), user: User =
 @router.post("/suggest")
 def suggest(payload: SuggestRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
     info, df = _frame(db, team, payload.dataset_id)
+    if payload.mode == "dataset" and df is None:
+        raise HTTPException(422, "Choose a dataset: these scenarios are built from its columns")
     ranker = None
     if payload.use_model and payload.objective:
         from app.whatif import llm
         ranker = llm.ranker
     try:
-        return service.suggest(df, payload.domain, filename=info["filename"] if info else None, objective=payload.objective, ranker=ranker)
+        filename = info["filename"] if info else None
+        if payload.mode == "explore":
+            return service.explore(df, payload.domain, filename=filename)
+        if payload.mode == "dataset":
+            return service.dataset_scenarios(df, payload.domain, filename=filename)
+        return service.suggest(df, payload.domain, filename=filename, objective=payload.objective, ranker=ranker)
     except KeyError as e:
         raise HTTPException(422, str(e).strip("'\"")) from e
+
+
+@router.post("/brainstorm")
+def brainstorm(payload: BrainstormRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user), team: Team = Depends(get_current_team)):
+    """Scenario ideas written by the configured language model for a free-text objective, each checked against the data before it is
+    offered. There is no rules fallback here: if the model cannot answer, the caller is told so (503, or 502 for an unusable answer)."""
+    from app.whatif import brainstorm as ai
+    rate_limit(f"whatif-brainstorm:{team.id}:{user.id}", max_attempts=10, window_seconds=60)
+    info, df = _frame(db, team, payload.dataset_id)
+    try:
+        return service.brainstorm(payload.objective, df, payload.domain, filename=info["filename"] if info else None)
+    except KeyError as e:
+        raise HTTPException(422, str(e).strip("'\"")) from e
+    except ai.AIUnavailable as e:
+        raise HTTPException(503, str(e)) from e
+    except ai.AIUnusable as e:
+        raise HTTPException(502, str(e)) from e
 
 
 @router.post("/from-question")

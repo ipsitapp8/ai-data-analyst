@@ -81,9 +81,11 @@ def explain(s: dict, template, domain) -> dict:
         result.append(f"{m['label']}: {_n(m['baseline'])} → {_n(m['scenario'])}{d}")
     if r["status"] != "ok":
         result = [r.get("reason") or "No result."]
+    stated = s.get("stated_assumptions")
+    stated = [f"Stated by you (recorded, not used in the calculation): {str(a)[:300]}" for a in stated[:20]] if isinstance(stated, list) else []
     return {"headline": headline, "evidence_kind": kind, "evidence_label": KIND_LABEL.get(kind, kind),
             "sections": {"changed": changed, "held_constant": r.get("held_constant") or [], "data_used": data, "method": [METHOD_TEXT.get(s["method"], s["method"])],
-                         "assumptions": r.get("assumptions") or [], "result": result, "reliability": [RELIABILITY.get(kind, ""), *( [unc] if unc else [])],
+                         "assumptions": [*(r.get("assumptions") or []), *stated], "result": result, "reliability": [RELIABILITY.get(kind, ""), *( [unc] if unc else [])],
                          "cannot_conclude": cannot},
             "warnings": r.get("warnings") or []}
 

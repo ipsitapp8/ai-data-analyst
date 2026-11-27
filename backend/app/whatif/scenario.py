@@ -26,7 +26,7 @@ from typing import Any
 import pandas as pd
 
 from app.whatif import ENGINE_VERSION, operations
-from app.whatif.domains import find_template, get_domain
+from app.whatif.domains import GENERIC_TEMPLATES, find_template, get_domain
 from app.whatif.domains.base import Template
 from app.whatif.profile import build_profile, map_concepts
 
@@ -63,7 +63,9 @@ def resolve_columns(scenario: dict, template: Template, profile: dict | None) ->
     if profile is None:
         return chosen, []
     names = {c["name"] for c in profile["columns"]}
-    mapped = {k: v["columns"] for k, v in map_concepts(profile, scenario["domain"]).items()} if scenario["domain"] != "custom" else {}
+    # a column-based template uses only the columns named for it, so the domain's own concept mapping is not reported as "used"
+    by_domain = scenario["domain"] != "custom" and template.id not in GENERIC_TEMPLATES
+    mapped = {k: v["columns"] for k, v in map_concepts(profile, scenario["domain"]).items()} if by_domain else {}
     cols = {**mapped, **{k: v for k, v in chosen.items() if v}}
     for k, v in chosen.items():
         bad = [c for c in v if c not in names]
@@ -74,7 +76,7 @@ def resolve_columns(scenario: dict, template: Template, profile: dict | None) ->
         concept = template.params.get(param)
         if concept and len(cols.get(concept) or []) > 1:
             choices.append({"concept": concept, "candidates": cols[concept]})
-    candidates = (map_concepts(profile, scenario["domain"]) if scenario["domain"] != "custom" else {})
+    candidates = map_concepts(profile, scenario["domain"]) if by_domain else {}
     for key, m in candidates.items():
         if m["ambiguous"] and key not in chosen and key in {template.params.get(p) for p in ("concept", "x", "y", "date", "value")}:
             choices.append({"concept": key, "candidates": m["candidates"]})
