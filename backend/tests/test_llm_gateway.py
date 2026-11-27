@@ -446,7 +446,15 @@ def test_retries_stop_when_the_budget_is_spent(providers, monkeypatch):
      K.CONTEXT_LIMIT),
     (openai_error(openai.BadRequestError, 400, {"code": "context_length_exceeded"}), K.CONTEXT_LIMIT),
     (openai_error(openai.APIStatusError, 413, None), K.CONTEXT_LIMIT),
-    (gemini_error(404, "NOT_FOUND"), K.BAD_REQUEST),
+    # A model (or endpoint) that does not exist is a configuration error, not a bad request: never retried, the next
+    # provider takes the step. Mistral and OpenRouter say so with a 400 that names the model.
+    (gemini_error(404, "NOT_FOUND"), K.MODEL_NOT_FOUND),
+    (openai_error(openai.NotFoundError, 404, {"message": "The model `x` does not exist"}), K.MODEL_NOT_FOUND),
+    (openai_error(openai.BadRequestError, 400, {"type": "invalid_model", "message": "Invalid model: x"}), K.MODEL_NOT_FOUND),
+    (gemini_error(400, "INVALID_ARGUMENT"), K.BAD_REQUEST),
+    (openai_error(openai.BadRequestError, 400, {"type": "invalid_request_error"}), K.BAD_REQUEST),
+    # 402: no billing on the account
+    (openai_error(openai.APIStatusError, 402, {"type": "billing_no_api_budget_configured"}), K.BILLING),
 ])
 def test_every_provider_failure_maps_to_one_normalized_kind(exc, kind):
     assert llm_gateway.classify(exc) == kind

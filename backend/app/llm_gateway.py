@@ -3,8 +3,10 @@
 Every model call in Silt goes through one of three adapters:
 
 - ``gemini``: the Gemini API (app/agents/llm_client.py), the primary cloud provider;
-- ``llama``: an OpenAI-compatible endpoint (app/agents/llm_client_llama.py, Groq by default), used only when
+- ``llama``: the legacy OpenAI-compatible endpoint (app/agents/llm_client_llama.py, LLAMA_* settings), used only when
   LLAMA_API_KEY is set;
+- ``groq``, ``nvidia``, ``mistral``, ``openrouter``: the hybrid-routing providers (app/llm/), used only when
+  LLM_HYBRID_ROUTING_ENABLED is on and the provider has a key and a model;
 - ``local``: the local Qwen3 + Silt LoRA server (ANALYST_MODEL_URL), which only the Copilot's own prompts use.
 
 This module does not call any provider itself. It gives those adapters:
@@ -43,8 +45,13 @@ class ErrorKind(str, Enum):
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     INVALID_OUTPUT = "INVALID_OUTPUT"
     CONTEXT_LIMIT = "CONTEXT_LIMIT"
-    # Not a provider fault: the request itself was refused (400/404/422, a model name that does not exist).
+    # Not a provider fault: the request itself was refused (400/422).
     BAD_REQUEST = "BAD_REQUEST"
+    # The configured model (or endpoint) does not exist for this key: 404, or a 400 that names an invalid model.
+    # A configuration error: never retried, the next provider takes the step.
+    MODEL_NOT_FOUND = "MODEL_NOT_FOUND"
+    # 402: the account has no billing / API budget. Never retried; the provider is held for LLM_BILLING_HOLD_SECONDS.
+    BILLING = "BILLING"
 
 
 # Failures that say "this provider is struggling right now". Only these count towards opening a circuit.
@@ -131,7 +138,10 @@ def retry_after_seconds(exc: BaseException) -> float | None:
 _QUOTA_IDS = re.compile(r"insufficient_quota|PerDay|PerMonth|billing", re.I)
 _KEY_REJECTED = {"API_KEY_INVALID", "API_KEY_EXPIRED", "API_KEY_SERVICE_BLOCKED", "API_KEY_HTTP_REFERRER_BLOCKED",
                  "API_KEY_IP_ADDRESS_BLOCKED", "invalid_api_key", "UNAUTHENTICATED", "PERMISSION_DENIED"}
-# Matched against the error text without recording it: providers report a too-long prompt only in prose.
+# Matched against the error text without recording it: providers report a too-long prompt, and some an unknown
+# model (Mistral, OpenRouter: HTTP 400), only in prose.
+_MODEL_TEXT = re.compile(r"invalid[_ ]model|not a valid model|model_not_found|unknown model|"
+                         r"model .{0,120}(does not exist|not found|is not available)", re.I)
 _CONTEXT_TEXT = re.compile(r"context[_ ](length|window)|maximum context|too many tokens|prompt is too long|"
                            r"token count .{0,40}exceeds|exceeds the maximum number of tokens", re.I)
 
@@ -154,6 +164,11 @@ def classify(exc: BaseException) -> ErrorKind:
         return ErrorKind.RATE_LIMITED
     if status in (401, 403) or ids & _KEY_REJECTED:
         return ErrorKind.AUTH_ERROR
+    if status == 402:
+        return ErrorKind.BILLING
+    if status == 404 or (status == 400 and ("model_not_found" in ids or "invalid_model" in ids
+                                            or _MODEL_TEXT.search(str(exc)[:600]))):
+        return ErrorKind.MODEL_NOT_FOUND
     if status in (408, 504):
         return ErrorKind.TIMEOUT
     if status is not None and status >= 500:
@@ -198,6 +213,7 @@ class CircuitBreaker:
         self._open_until = 0.0
         self._not_before = 0.0          # Retry-After of a rate limit that did not (yet) open the circuit
         self._auth_until = 0.0          # the provider refused its key: not a transient failure, but not worth calling
+        self._billing_until = 0.0       # 402: no billing on the account; nothing will work until someone fixes it
         self._probe_out = False
         self.opened_count = 0
 
@@ -225,6 +241,11 @@ class CircuitBreaker:
         with self._lock:
             return self.clock() < self._auth_until
 
+    def billing_held(self) -> bool:
+        """The provider answered 402 (no billing / API budget) within the last LLM_BILLING_HOLD_SECONDS."""
+        with self._lock:
+            return self.clock() < self._billing_until
+
     def allow(self) -> bool:
         """Whether a call may be made now. In half-open state this claims the single probe."""
         with self._lock:
@@ -251,6 +272,7 @@ class CircuitBreaker:
             self._failures.clear()
             self._not_before = 0.0
             self._auth_until = 0.0
+            self._billing_until = 0.0
 
     def record_failure(self, kind: ErrorKind, retry_after: float | None = None) -> None:
         with self._lock:
@@ -262,6 +284,8 @@ class CircuitBreaker:
                 return
             if kind == ErrorKind.AUTH_ERROR:
                 self._auth_until = now + config.LLM_AUTH_HOLD_SECONDS
+            if kind == ErrorKind.BILLING:
+                self._billing_until = now + config.LLM_BILLING_HOLD_SECONDS
             if kind not in TRANSIENT:
                 self._probe_out = False          # the probe told us nothing about availability: let another one try
                 return
@@ -413,7 +437,8 @@ def note_request(ok: bool, *, fallback: bool = False) -> None:
 
 def admit(provider: str, deadline: Deadline | None = None, *, min_seconds: float | None = None,
           wait_ok: bool = True) -> str | None:
-    """None when ``provider`` may be called now; otherwise why not ("circuit_open", "rate_limited", "no_time").
+    """None when ``provider`` may be called now; otherwise why not ("circuit_open", "rate_limited", "no_time",
+    "auth_rejected", "billing_hold").
     A rate limit's Retry-After still running is waited out only when ``wait_ok`` (no other provider can take the
     step) and the wait fits the deadline; otherwise the provider is skipped."""
     b = breaker(provider)
@@ -424,6 +449,8 @@ def admit(provider: str, deadline: Deadline | None = None, *, min_seconds: float
         return "circuit_open"
     if b.credentials_rejected():
         return "auth_rejected"
+    if b.billing_held():
+        return "billing_hold"
     wait = b.blocked_for()
     if wait > 0:
         if not wait_ok or deadline is None or not deadline.fits(wait + need):
@@ -440,7 +467,7 @@ def guarded(provider: str, fn: Callable[[], Any], *, deadline: Deadline | None =
     if why is not None:
         note_skipped(provider, why)
         kind = {"no_time": ErrorKind.TIMEOUT, "rate_limited": ErrorKind.RATE_LIMITED,
-                "auth_rejected": ErrorKind.AUTH_ERROR}.get(why, ErrorKind.PROVIDER_UNAVAILABLE)
+                "auth_rejected": ErrorKind.AUTH_ERROR, "billing_hold": ErrorKind.BILLING}.get(why, ErrorKind.PROVIDER_UNAVAILABLE)
         raise ProviderError(provider, kind, f"{provider} was not called ({why.replace('_', ' ')})")
     per_call = deadline.attempt_timeout(timeout) if (deadline is not None and timeout) else timeout
     started = time.monotonic()
@@ -479,7 +506,7 @@ def status() -> dict:
     for n in names:
         b = _breakers[n]
         providers[n] = {"configured": configured.get(n.split(":")[0], True), "circuit": b.state(),
-                        "credentials_rejected": b.credentials_rejected(),
+                        "credentials_rejected": b.credentials_rejected(), "billing_held": b.billing_held(),
                         "blocked_for_s": round(b.blocked_for(), 1), "times_opened": b.opened_count, **snap[n]}
     order = ["llama", "gemini"] if config.LLM_PRIMARY == "llama" else ["gemini", "llama"]
     return {"primary": order[0], "fallback": order[1] if configured[order[1]] else None,
@@ -487,4 +514,15 @@ def status() -> dict:
             "auth_hold_s": config.LLM_AUTH_HOLD_SECONDS,
             "breaker": {"failures": config.LLM_BREAKER_FAILURES, "window_s": config.LLM_BREAKER_WINDOW_SECONDS,
                         "cooldown_s": config.LLM_BREAKER_COOLDOWN_SECONDS},
-            "providers": providers, "requests": totals}
+            "providers": providers, "requests": totals,
+            # Hybrid routing (app/llm/): every provider's configuration state and each agent's route. Off by default.
+            "hybrid": _hybrid_status()}
+
+
+def _hybrid_status() -> dict:
+    try:
+        from app.llm import routing
+        return routing.status()
+    except Exception:  # noqa: BLE001 - health must answer even if this part cannot
+        logger.debug("hybrid routing status unavailable", exc_info=True)
+        return {"enabled": False, "error": "unavailable"}

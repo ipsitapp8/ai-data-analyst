@@ -11,6 +11,7 @@ model re-checking its own work.
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 
 from app import config, knowledge, llm_gateway, runtime
 from app.agents import llm_client
@@ -32,6 +33,10 @@ def _critic_call_tool(**kwargs) -> tuple[dict, str]:
     """
     if runtime.get_provider_override() is not None:
         return llama_client.call_tool(**kwargs), "scripted-critic"
+    if config.LLM_HYBRID_ROUTING_ENABLED:
+        out, label, info = _hybrid_critic_call(kwargs)
+        _last_verifier.set(info)
+        return out, label
     # Both calls go through the gateway: each provider's circuit breaker, one deadline for the pair.
     deadline = llm_gateway.Deadline()
     if config.LLAMA_API_KEY:
@@ -51,6 +56,68 @@ def _critic_call_tool(**kwargs) -> tuple[dict, str]:
     return out, f"gemini-fallback:{config.GEMINI_MODEL}"
 
 logger = logging.getLogger(__name__)
+
+# What served the most recent hybrid Critic call (families, independence); read by critic_node for the audit record.
+_last_verifier: ContextVar[dict | None] = ContextVar("critic_last_verifier", default=None)
+# Whose output the Critic checks, most direct first: the Executor's code, else the step that produced the answer.
+_CHECKED_AGENTS = ("executor", "planner", "chat", "narrator", "default")
+
+
+def executor_family() -> tuple[str, str]:
+    """(family, where it came from) of the model whose work is being verified: what actually served it in this run,
+    else what the Executor's chain would use first. "unknown" when neither is known -- never treated as different."""
+    from app.llm import families, routing
+    for agent in _CHECKED_AGENTS:
+        info = routing.served_for(agent)
+        if info:
+            return info["family"], f"served:{agent}"
+    for provider, pinned in routing.chain("executor"):
+        if routing.usable(provider):
+            return routing.family_for(provider, pinned), "configured:executor"
+    return families.UNKNOWN, "unknown"
+
+
+def _hybrid_critic_call(kwargs: dict) -> tuple[dict, str, dict]:
+    """The Critic under hybrid routing. Providers whose model family differs from the Executor's (both known) go
+    first, in the Critic's chain order; if none serves, a same-family (or unknown-family) model is used and the
+    verification is recorded as NOT independent -- or, with LLM_CRITIC_REQUIRE_INDEPENDENT, the step fails.
+
+    Labels keep the existing audit vocabulary: "<provider>:<model>" for independent verification,
+    "<provider>-fallback:<model>" (e.g. "gemini-fallback:<model>") when it is not."""
+    from app.llm import families, routing
+
+    exec_family, source = executor_family()
+    entries = routing.chain("critic")
+    independent_first = [(p, m) for p, m in entries if families.independent(routing.family_for(p, m), exec_family)]
+    rest = [(p, m) for p, m in entries if (p, m) not in independent_first]
+    deadline = llm_gateway.Deadline()
+    failures: list[str] = []
+    reasons: list[dict] = []
+    out, info = routing.run_chain("critic", independent_first, kwargs, deadline=deadline, failures=failures,
+                                  reasons=reasons)
+    if out is routing.NOT_SERVED:
+        if config.LLM_CRITIC_REQUIRE_INDEPENDENT:
+            llm_gateway.note_request(False)
+            raise runtime.ProviderUnavailable(
+                "No model of a different family than the Executor's could verify this step.\n  - " + "\n  - ".join(
+                    failures or [f"no Critic provider outside the {exec_family} family is configured"]),
+                failures=reasons)
+        logger.warning("Critic: no provider outside the Executor's model family (%s) served the call; "
+                       "verification will NOT be independent.", exec_family)
+        same_family = rest + ([("gemini", None)] if not any(p == "gemini" for p, _ in rest) else [])
+        out, info = routing.run_chain("critic", same_family, kwargs, deadline=deadline, failures=failures,
+                                      reasons=reasons, fallback_from_start=bool(independent_first))
+    if out is routing.NOT_SERVED:
+        llm_gateway.note_request(False)
+        raise runtime.ProviderUnavailable("No model provider could run the Critic.\n  - " + "\n  - ".join(failures),
+                                          failures=reasons)
+    llm_gateway.note_request(True, fallback=bool(info.get("fallback")))
+    independent = families.independent(info["family"], exec_family)
+    label = f"{info['provider']}{'' if independent else '-fallback'}:{info['model']}"
+    return out, label, {"independent": independent, "verifier_family": info["family"], "executor_family": exec_family,
+                        "executor_family_source": source, "requested_model": info["model"],
+                        "served_model": info["served_model"], "provider": info["provider"], "label": label}
+
 
 VERIFY_CODE_TOOL_SCHEMA = {
     "type": "object",
@@ -137,6 +204,7 @@ Executor's plan and claimed results (DO NOT TRUST these numbers without verifica
 {_steps_summary(successful_steps)}
 """
 
+    _last_verifier.set(None)
     verify_output, verifier_model = _critic_call_tool(
         system=prompts.CRITIC_VERIFY_SYSTEM,
         user_content=verify_user_content,
@@ -168,7 +236,9 @@ verification recomputed result: {sandbox_result.result}
     if state.get("failed"):
         review_user_content += f"\nNote: the executor pipeline reported a hard failure before reaching you: {state.get('failure_reason')}\n"
 
-    review_output, _ = _critic_call_tool(
+    verify_info = _last_verifier.get()
+    _last_verifier.set(None)
+    review_output, review_model = _critic_call_tool(
         system=prompts.CRITIC_REVIEW_SYSTEM,
         user_content=review_user_content,
         tool_name="submit_review",
@@ -185,9 +255,25 @@ verification recomputed result: {sandbox_result.result}
         "success": sandbox_result.success,
         "verifier_model": verifier_model,
     }]
+    review_info = _last_verifier.get()
+    if verify_info is not None:
+        # Hybrid routing: which family checked which, and whether that counts as independent. Both Critic calls
+        # must be independent for the verification to be called independent.
+        independent = bool(verify_info["independent"]) and bool((review_info or verify_info)["independent"])
+        checks[0].update({"verifier_independent": independent, "verifier_family": verify_info["verifier_family"],
+                          "executor_family": verify_info["executor_family"],
+                          "verifier_requested_model": verify_info["requested_model"],
+                          "verifier_served_model": verify_info["served_model"], "review_verifier_model": review_model})
 
     summary = review_output.get("summary", "")
-    if verifier_model.startswith("gemini-fallback"):
+    if verify_info is not None:
+        if not checks[0]["verifier_independent"]:
+            summary += (
+                f"\n\n[Note: the Critic ran on the same model family as the Executor or on a model whose family is "
+                f"unknown (verifier: {verify_info['verifier_family']}, executor: {verify_info['executor_family']}), so "
+                "this verification is independent in context and code, but not cross-model.]"
+            )
+    elif verifier_model.startswith("gemini-fallback"):
         summary += (
             "\n\n[Note: the Critic ran on the same model family as the Executor "
             "(Llama unavailable), so this verification is independent in context "

@@ -74,6 +74,9 @@ class ProviderUnavailable(RunAborted, RuntimeError):
         "bad_request": "the provider rejected the request",
         "malformed_output": "the model did not return a usable answer",
         "quota_exhausted": "its usage quota is used up",
+        "billing": "the account has no active billing or API budget",
+        "billing_hold": "not called, because it reported no active billing a short while ago",
+        "model_config": "the configured model or endpoint does not exist for this key",
         "circuit_open": "not called, because it failed repeatedly in the last minute (it is retried after a short pause)",
         "no_time": "not called, because the time allowed for this step was used up",
         "auth_rejected": "not called, because it refused the configured API key a few minutes ago",
@@ -118,6 +121,9 @@ class RunContext:
     cost_usd: float = 0.0
     providers: list[str] = field(default_factory=list)
     fallbacks: int = 0
+    # agent -> what actually served its last model call under hybrid routing: provider, requested model, served model
+    # and model family (app/llm/families.py). The Critic reads the Executor's entry to stay on a different family.
+    served: dict[str, dict] = field(default_factory=dict)
     record: bool = True
 
     def usage(self) -> dict[str, Any]:
@@ -212,7 +218,8 @@ def is_cancel_requested() -> bool:
 
 
 def _price(provider: str) -> tuple[float, float]:
-    raw = config.LLM_PRICE_GEMINI if provider.startswith("gemini") else config.LLM_PRICE_LLAMA
+    own = getattr(config, f"LLM_PRICE_{provider.split(':')[0].upper()}", "") if provider.isidentifier() else ""
+    raw = config.LLM_PRICE_GEMINI if provider.startswith("gemini") else (own or config.LLM_PRICE_LLAMA)
     try:
         a, b = (float(x) for x in raw.split(","))
         return a, b
@@ -251,8 +258,9 @@ def record_event(kind: str, name: str = "", detail: dict | None = None, duration
 
 
 def note_llm_call(provider: str, model: str, tool_name: str, tokens_in: int | None, tokens_out: int | None,
-                  duration_ms: int, fallback: bool = False, ok: bool = True) -> None:
-    """Called by the provider adapters after every model call."""
+                  duration_ms: int, fallback: bool = False, ok: bool = True, served_model: str | None = None) -> None:
+    """Called by the provider adapters after every model call. ``served_model`` is the model the provider reports
+    it actually ran, when that can differ from the requested ``model`` (NVIDIA, OpenRouter); recorded separately."""
     ctx = _current.get()
     t_in, t_out = int(tokens_in or 0), int(tokens_out or 0)
     cost = estimate_cost(provider, t_in, t_out)
@@ -269,7 +277,7 @@ def note_llm_call(provider: str, model: str, tool_name: str, tokens_in: int | No
     record_event("llm_call", tool_name, {
         "provider": provider, "model": model, "tokens_in": t_in, "tokens_out": t_out,
         "tokens_known": tokens_in is not None, "estimated_cost_usd": round(cost, 6),
-        "fallback": fallback, "ok": ok,
+        "fallback": fallback, "ok": ok, **({"served_model": served_model} if served_model else {}),
     }, duration_ms)
 
 
