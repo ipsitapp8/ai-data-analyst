@@ -942,8 +942,14 @@ def whatif_profile(dataset_id: int, domain: str | None = None) -> dict:
     return _post("/api/whatif/profile", {"dataset_id": dataset_id, "domain": domain})
 
 
-def whatif_suggest(dataset_id: int | None, domain: str | None, objective: str | None = None, use_model: bool = False) -> dict:
-    return _post("/api/whatif/suggest", {"dataset_id": dataset_id, "domain": domain, "objective": objective, "use_model": use_model}, timeout=90)
+def whatif_suggest(dataset_id: int | None, domain: str | None, mode: str) -> dict:
+    """Rules-based scenarios: mode "explore" starts from the domain, "dataset" from the table's columns."""
+    return _post("/api/whatif/suggest", {"dataset_id": dataset_id, "domain": domain, "mode": mode}, timeout=90)
+
+
+def whatif_brainstorm(objective: str, dataset_id: int | None, domain: str | None) -> dict:
+    # Generous timeout: one language-model call, which may wait out a rate-limit backoff or fail over to the backup.
+    return _post("/api/whatif/brainstorm", {"objective": objective, "dataset_id": dataset_id, "domain": domain}, timeout=240)
 
 
 def whatif_from_question(message: str, dataset_id: int | None, domain: str | None = None) -> dict:

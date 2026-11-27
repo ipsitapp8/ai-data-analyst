@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from api_client import ApiError, whatif_run, whatif_save
 from style.theme import esc, html, plot
@@ -62,8 +63,9 @@ def _is_rate(m: dict) -> bool:
 
 
 def _fig_base(fig: go.Figure, height: int, legend: bool = False) -> go.Figure:
-    fig.update_layout(height=height, showlegend=legend, margin=dict(l=4, r=24, t=6, b=4), bargap=.42,
-                      font=dict(color=INK_C, size=12), legend=dict(orientation="h", y=1.14, x=0, font=dict(size=12)))
+    fig.update_layout(height=height, showlegend=legend, margin=dict(l=4, r=24, t=40 if legend else 6, b=4), bargap=.42,
+                      font=dict(color=INK_C, size=12),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=12)))
     fig.update_xaxes(gridcolor=GRID_C, zeroline=False, automargin=True, tickfont=dict(size=11), ticks="outside", tickcolor="rgba(0,0,0,0)")
     fig.update_yaxes(automargin=True, showgrid=False, tickfont=dict(size=12.5), ticks="outside", tickcolor="rgba(0,0,0,0)")
     return fig
@@ -74,7 +76,7 @@ def _fig_base(fig: go.Figure, height: int, legend: bool = False) -> go.Figure:
 def _header(res: dict, scn: dict, sel: dict, ds_id) -> None:
     r, e = res["results"], res["explanation"]
     domain = DOMAIN_LABEL.get(scn.get("domain") or sel.get("domain"), (scn.get("domain") or "").title())
-    ds = scn.get("dataset") or {}
+    ds = res.get("dataset") or scn.get("dataset") or {}     # the server names the dataset it used on the result
     meta = [domain]
     if ds:
         meta.append(esc(ds.get("filename") or f"dataset {ds.get('dataset_id')}"))
@@ -195,11 +197,19 @@ def _compare_chart(metrics: list[dict], primary: dict) -> go.Figure | None:
                                text=[num(m["scenario"]), num(m["baseline"])], textposition="outside", cliponaxis=False, textfont=dict(color="#ece9fb", size=13)))
         fig.update_xaxes(rangemode="tozero")
         return _fig_base(fig, 170)
-    names = [m["label"] for m in same][::-1]
-    fig = go.Figure([go.Bar(name="Baseline", y=names, x=[m["baseline"] for m in same][::-1], orientation="h", marker_color=BASE_C),
-                     go.Bar(name="Simulated", y=names, x=[m["scenario"] for m in same][::-1], orientation="h", marker_color=SIM_C)])
-    fig.update_layout(barmode="group", bargap=.35)
-    return _fig_base(fig, max(190, 62 * len(same) + 60), legend=True)
+    # One panel per measure, each with its own scale. Measures that share a unit label (often none at all) can differ
+    # thousands of times over, and on one axis the smaller ones vanish.
+    height = 112 * len(same)
+    fig = make_subplots(rows=len(same), cols=1, subplot_titles=[m["label"] for m in same], vertical_spacing=34 / height)
+    for row, m in enumerate(same, start=1):
+        fig.add_trace(go.Bar(y=["Simulated", "Baseline"], x=[m["scenario"], m["baseline"]], orientation="h", marker_color=[SIM_C, BASE_C],
+                             text=[num(m["scenario"]), num(m["baseline"])], textposition="outside", cliponaxis=False,
+                             textfont=dict(color="#ece9fb", size=13)), row=row, col=1)
+    fig = _fig_base(fig, height)
+    fig.update_xaxes(rangemode="tozero", showticklabels=False, showgrid=False, ticks="")
+    fig.update_annotations(x=0, xanchor="left", font=dict(size=12.5, color=INK_C))
+    fig.update_layout(margin=dict(l=4, r=72, t=26, b=4))
+    return fig
 
 
 def _histogram(sim: dict) -> go.Figure | None:
@@ -238,7 +248,7 @@ def _primary(res: dict) -> tuple[go.Figure | None, str]:
         html(_ledger(r["metrics"], r.get("primary")))
         if not any(x.get("delta") for x in r["metrics"]):       # nothing was changed: a baseline-against-itself chart says nothing
             return None, ""
-        return _compare_chart(r["metrics"], m), "Baseline against simulated, for measures in the same unit."
+        return _compare_chart(r["metrics"], m), "Baseline against simulated. Where several measures are shown, each has its own scale."
     return None, ""
 
 
@@ -306,10 +316,17 @@ def _analysis(res: dict) -> None:
         for col, (title, cap, fig) in zip(st.columns(len(row), gap="large"), row):
             with col:
                 html(f'<div class="wr-sub">{esc(title)}</div>' + (f'<div class="wr-cap">{esc(cap)}</div>' if cap else ""))
-                plot(fig, height=fig.layout.height, showlegend=bool(fig.layout.showlegend), restyle_traces=False)
+                _draw(fig)
 
 
-# --------------------------------------------------------------- reading, assumptions, detail --
+def _draw(fig: go.Figure) -> None:
+    """The shared chart style resets margins, which pushes legends and labels onto the bars: keep this figure's own."""
+    margin = fig.layout.margin.to_plotly_json()
+    plot(fig, height=fig.layout.height, showlegend=bool(fig.layout.showlegend), restyle_traces=False,
+         finish=lambda styled: styled.update_layout(margin=margin))
+
+
+#--------------------------------------------------------------- reading, assumptions, detail --
 
 def _rows(items: list[tuple[str, list[str]]]) -> None:
     out = "".join(f'<div class="wr-row"><div class="wr-rk">{esc(k)}</div><div class="wr-rv">{"".join(f"<p>{esc(i)}</p>" for i in v)}</div></div>' for k, v in items if v)
@@ -335,7 +352,7 @@ def render(res: dict, scn: dict, ds_id, sel: dict) -> None:
         if chart is not None:
             with left:
                 html('<div class="wr-sub">Baseline and simulated</div>' if not r["details"].get("simulation") else '<div class="wr-sub">Range of outcomes</div>')
-                plot(chart, height=chart.layout.height, showlegend=bool(chart.layout.showlegend), restyle_traces=False)
+                _draw(chart)
                 html(f'<div class="wr-cap">{esc(caption)}</div>')
         with right:
             unc = sec.get("reliability") or []

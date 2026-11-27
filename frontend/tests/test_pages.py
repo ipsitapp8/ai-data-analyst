@@ -1557,8 +1557,7 @@ def test_universal_tab_works_without_a_dataset_for_travel(api, monkeypatch):
     ws = _students_ws(api)
     at = _explore(page("14_What_If.py", ws))
     at.radio(key="wxu_pick_domain").set_value("travel").run()
-    at.radio(key="wxu_pick_start").set_value("Build a scenario manually").run()
-    at.button(key="wxu_next_setup").click().run()
+    at.button(key="wxu_next_setup").click().run()          # Explore suggestions, the default start
     at = _explore(at)
     assert "Needs assumptions" in text_of(at) and "Extend the trip" not in at.session_state["wxu_domain"]
     assert any("extend my trip" in str(m.value) for m in at.markdown)

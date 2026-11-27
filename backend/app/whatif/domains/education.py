@@ -8,7 +8,7 @@ CONCEPTS = (
     Concept("attendance", "Attendance", frozenset({"attendance", "attended", "present", "presence"}), "numeric", 1.5),
     Concept("marks", "Marks / scores", frozenset({"marks", "mark", "maths", "math", "mathematics", "science", "physics", "chemistry", "biology",
                                                   "english", "history", "exam", "exams", "grade", "grades", "gpa", "cgpa", "percentage", "result"}),
-            "numeric", 1.0, multi=True),
+            "numeric", 1.0, multi=True, excludes=frozenset({"attendance", "attended", "presence", "completion", "assignment", "assignments", "study"})),
     Concept("study_hours", "Study hours", frozenset({"study", "studying", "homework", "revision"}), "numeric", 1.0),
     Concept("faculty", "Faculty", frozenset({"faculty", "teacher", "teachers", "lecturer", "instructor", "professor"}), "category", 1.0),
     Concept("classroom", "Class / section", frozenset({"class", "section", "classroom", "semester", "course", "subject", "department"}), "category", 0.5),

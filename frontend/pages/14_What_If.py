@@ -43,7 +43,7 @@ except ApiError as e:
 html(f'<div class="wx-note">{esc(catalog["disclaimer"])}</div>')
 from style.theme import page_intro
 page_intro("Test a change before you make it. For example: what happens to profit if price goes up 5%, or to bed use if admissions double?",
-           ["Step 1: choose your field (domain) and how to begin; pick a dataset if you have one", "Step 2: pick a question, or type your own goal", "Step 3: enter the numbers, press Run, and read the result"],
+           ["Step 1: choose your field (domain) and how to begin; pick a dataset if you have one", "Step 2: pick a suggestion, build your own, or brainstorm with Silt AI", "Step 3: enter the numbers, press Run, and read the result"],
            tip="Results are calculations from your numbers and assumptions. They are not predictions.")
 models = model_choices(catalog["models"], custom_models)
 explore_tab_, build_tab, segments_tab_, periods_tab, models_tab, saved_tab = st.tabs(["Explore any scenario", "Business scenario", "Segments", "Compare periods",

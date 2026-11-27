@@ -69,7 +69,8 @@ def map_concepts(profile: dict, domain_key: str) -> dict:
     result = {}
     for c in dom.concepts:
         want = set(c.tokens) | {t[:-1] for t in c.tokens if len(t) > 3 and t.endswith("s")}
-        hits = [col["name"] for col in profile["columns"] if _compatible(c.kind, col["role"], col) and tokens_of(col["name"]) & want]
+        hits = [col["name"] for col in profile["columns"] if _compatible(c.kind, col["role"], col) and tokens_of(col["name"]) & want
+                and not tokens_of(col["name"]) & c.excludes]
         result[c.key] = {"columns": hits if (c.multi or len(hits) == 1) else [], "candidates": hits, "ambiguous": len(hits) > 1 and not c.multi}
     return result
 

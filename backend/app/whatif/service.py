@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.whatif import discovery, engine, scenario as sc
+from app.whatif import brainstorm as ai, discovery, engine, scenario as sc, workflows
 from app.whatif.domains import get_domain, list_domains
 from app.whatif.parse import extract_values
 from app.whatif.profile import build_profile
@@ -33,6 +33,37 @@ def suggest(df: pd.DataFrame | None, domain: str | None, *, filename: str | None
     out = discovery.suggest(profile, key, df=df, objective=objective, ranker=ranker)
     out["domain"] = {"key": key, "title": get_domain(key).title, **({"detection": {k: profile["domain"][k] for k in ("source", "explanation", "scores", "detected")}} if profile else {})}
     return out
+
+
+def _context(df: pd.DataFrame | None, domain: str | None, filename: str | None) -> tuple[dict | None, str]:
+    """(profile, domain key): with a dataset and no domain given, the detected domain is used."""
+    profile = build_profile(df, filename=filename, domain=domain) if df is not None else None
+    return profile, domain or (profile["domain"]["key"] if profile else "custom")
+
+
+def _domain_info(profile: dict | None, key: str) -> dict:
+    d = get_domain(key)
+    return {"key": key, "title": d.title, "description": d.description, "metrics": list(d.metrics),
+            **({"detection": {k: profile["domain"][k] for k in ("source", "explanation", "scores", "detected")}} if profile else {})}
+
+
+def explore(df: pd.DataFrame | None, domain: str | None, *, filename: str | None = None) -> dict:
+    """Discovery: what can be explored in a domain, grouped by what Silt can calculate."""
+    profile, key = _context(df, domain, filename)
+    return {**workflows.explore(profile, key, df), "domain": _domain_info(profile, key)}
+
+
+def dataset_scenarios(df: pd.DataFrame, domain: str | None, *, filename: str | None = None) -> dict:
+    """Scenarios built from the columns this table actually holds."""
+    profile, key = _context(df, domain, filename)
+    return {**workflows.dataset_scenarios(profile, key, df), "domain": _domain_info(profile, key)}
+
+
+def brainstorm(objective: str, df: pd.DataFrame | None, domain: str | None, *, filename: str | None = None) -> dict:
+    """AI-written scenario ideas for an objective. Raises brainstorm.AIUnavailable / AIUnusable; never substitutes rules."""
+    profile, key = _context(df, domain, filename)
+    chosen = key if domain or (profile and key != "custom") else None      # with nothing to go on, every domain's calculations are offered
+    return ai.brainstorm(objective, profile, chosen, df)
 
 
 def build(domain: str, template_id: str, **kw) -> dict:
