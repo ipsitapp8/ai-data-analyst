@@ -27,6 +27,7 @@ CODE_TOOL_SCHEMA = {
         },
         "code": {
             "type": "string",
+            "minLength": 1,          # an empty script is rejected at the provider, before the sandbox
             "description": "Complete, self-contained Python script following the sandbox contract.",
         },
     },

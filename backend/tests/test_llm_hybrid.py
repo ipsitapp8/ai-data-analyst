@@ -493,7 +493,7 @@ def test_the_critic_prefers_groq_when_the_executor_ran_on_gemini(hybrid, monkeyp
         info = critic._last_verifier.get()
     assert out == GOOD and label == "groq:openai/gpt-oss-120b", "the existing '<provider>:<model>' label"
     assert info["independent"] is True and info["verifier_family"] == "openai-gpt-oss"
-    assert info["executor_family"] == "google-gemini" and info["executor_family_source"] == "served:executor"
+    assert info["checked_families"] == ["google-gemini"] and info["executor_family_source"] == "served:run"
 
 
 def test_the_critic_skips_the_executors_actual_family(hybrid, monkeypatch):
@@ -612,7 +612,7 @@ def test_a_failed_legacy_llama_attempt_is_never_recorded_as_a_served_response(hy
 
 
 def test_the_critic_follows_the_executors_family_as_it_changes_within_a_run(hybrid, monkeypatch):
-    """Same run, two Executor steps on different families: the Critic's choice follows the latest one."""
+    """Same run, two Executor steps on different families: after the second, the Critic must avoid BOTH."""
     ctx = runtime.RunContext(question_id=0, record=False)
     with runtime.run_context(ctx):
         run_executor(hybrid, monkeypatch, ("gemini", {"code": "x"}))
@@ -621,7 +621,7 @@ def test_the_critic_follows_the_executors_family_as_it_changes_within_a_run(hybr
         run_executor(hybrid, monkeypatch, ("groq", reply(tool="submit_code")))
         hybrid.script("nvidia", reply(tool="submit_review"))
         assert critic._critic_call_tool(**kwargs("submit_review"))[1].startswith("nvidia:")
-        assert critic._last_verifier.get()["executor_family"] == "openai-gpt-oss"
+        assert critic._last_verifier.get()["checked_families"] == ["google-gemini", "openai-gpt-oss"]
 
 
 def test_the_run_manifest_keeps_the_requested_and_the_served_model(client):
@@ -653,3 +653,280 @@ def test_the_run_manifest_keeps_the_requested_and_the_served_model(client):
     others = {k: v for k, v in m["models"].items() if k != "nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b"}
     assert all("served_models" not in v for v in others.values()), "unchanged where nothing differs"
     assert m["config"]["hybrid_routing_enabled"] is False and "failover_enabled" in m["config"]
+
+
+# ---------------------------------------------- P0: run-scoped history, and every family that shaped the work --
+
+def serve(hybrid, monkeypatch, role, provider, model=None):
+    """Serve one Planner ("planner") or Executor ("executor") call on ``provider`` inside the current run."""
+    tool = {"planner": "submit_plan", "executor": "submit_code"}[role]
+    monkeypatch.setenv(f"LLM_{role.upper()}_PROVIDERS", provider)
+    if provider == "gemini":
+        hybrid.gemini(GOOD)
+    else:
+        hybrid.script(provider, reply(tool=tool, model=model))
+    assert llm_client.call_tool(**kwargs(tool)) == GOOD
+
+
+def critic_on(hybrid, expected):
+    """Run one Critic call where only ``expected`` may serve (any other provider fails the test if called)."""
+    for p in ("groq", "nvidia", "openrouter"):
+        hybrid.script(p, *([reply(tool="submit_review")] if p == expected else []))
+    hybrid.gemini()
+    out, label = critic._critic_call_tool(**kwargs("submit_review"))
+    info = critic._last_verifier.get()
+    for p in ("groq", "nvidia", "openrouter"):
+        if p != expected:
+            assert hybrid.fakes[p].calls == [], f"{p} must not be asked to verify"
+    return label, info
+
+
+@pytest.mark.parametrize("planner,executor,critic_provider,checked", [
+    ("gemini", "gemini", "groq", ["google-gemini"]),                                  # 1
+    ("gemini", "groq", "nvidia", ["google-gemini", "openai-gpt-oss"]),                # 2
+    ("groq", "gemini", "nvidia", ["google-gemini", "openai-gpt-oss"]),                # 3: the Planner counts too
+    (None, "nvidia", "groq", ["nvidia-nemotron"]),                                    # NVIDIA Executor -> Groq Critic
+])
+def test_the_critic_avoids_every_family_that_planned_or_executed(hybrid, monkeypatch, planner, executor,
+                                                                  critic_provider, checked):
+    ctx = runtime.RunContext(question_id=0, record=False)
+    with runtime.run_context(ctx):
+        if planner:
+            serve(hybrid, monkeypatch, "planner", planner)
+        serve(hybrid, monkeypatch, "executor", executor)
+        label, info = critic_on(hybrid, critic_provider)
+    assert label.startswith(f"{critic_provider}:") and info["independent"] is True
+    assert info["checked_families"] == checked and info["verifier_family"] not in checked
+
+
+def test_every_executor_step_counts_not_only_the_latest(hybrid, monkeypatch):
+    """Executor steps on Groq, then Gemini (it recovered): Groq wrote part of the analysis, so Groq may not verify
+    it, even though the latest step was Gemini's."""
+    ctx = runtime.RunContext(question_id=0, record=False)
+    with runtime.run_context(ctx):
+        serve(hybrid, monkeypatch, "executor", "groq")
+        serve(hybrid, monkeypatch, "executor", "gemini")
+        label, info = critic_on(hybrid, "nvidia")
+    assert label.startswith("nvidia:") and info["independent"] is True
+    assert info["checked_families"] == ["google-gemini", "openai-gpt-oss"]
+    assert [e["family"] for e in ctx.served_history if e["agent"] == "executor"] == ["openai-gpt-oss", "google-gemini"]
+
+
+def test_an_unknown_family_in_the_work_makes_no_verifier_independent(hybrid, monkeypatch):
+    """The Executor ran on a router alias whose model is unknown: no Critic can be shown to differ from it."""
+    monkeypatch.setattr(config, "OPENROUTER_MODEL", "openrouter/free")
+    ctx = runtime.RunContext(question_id=0, record=False)
+    with runtime.run_context(ctx):
+        serve(hybrid, monkeypatch, "executor", "openrouter", model="openrouter/free")
+        for p in ("groq", "nvidia"):
+            hybrid.script(p, reply(tool="submit_review"))
+        hybrid.script("openrouter")
+        out, label = critic._critic_call_tool(**kwargs("submit_review"))
+        info = critic._last_verifier.get()
+    assert info["checked_families"] == ["unknown"] and info["independent"] is False
+    assert "-fallback:" in label, "served, but recorded as not independent"
+
+
+def test_a_previous_run_cannot_lend_its_history_to_the_next(hybrid, monkeypatch):
+    """Two jobs on the same worker thread: the first ran its Executor on Groq. The second records no Planner or
+    Executor call before its Critic runs -- it must see "unknown", not the first run's Groq family."""
+    first = runtime.RunContext(question_id=1, record=False)
+    with runtime.run_context(first):
+        serve(hybrid, monkeypatch, "executor", "groq")
+    second = runtime.RunContext(question_id=2, record=False)
+    with runtime.run_context(second):
+        assert routing.served_for("executor") is None, "no fallback to another run's record"
+        assert critic.checked_families() == (frozenset({"unknown"}), "unknown:no_run_history")
+        hybrid.script("nvidia", reply(tool="submit_review"))
+        hybrid.script("groq", reply(tool="submit_review"))
+        out, label = critic._critic_call_tool(**kwargs("submit_review"))
+        info = critic._last_verifier.get()
+    assert info["independent"] is False and "-fallback:" in label
+
+
+def test_a_previous_runs_family_does_not_block_the_next_runs_critic(hybrid, monkeypatch):
+    """Run 1: Executor on Groq. Run 2: Executor on Gemini. Run 2's Critic may use Groq: run 1 is not its work."""
+    with runtime.run_context(runtime.RunContext(question_id=1, record=False)):
+        serve(hybrid, monkeypatch, "executor", "groq")
+    with runtime.run_context(runtime.RunContext(question_id=2, record=False)):
+        serve(hybrid, monkeypatch, "executor", "gemini")
+        label, info = critic_on(hybrid, "groq")
+    assert label.startswith("groq:") and info["independent"] is True and info["checked_families"] == ["google-gemini"]
+
+
+def test_history_recorded_outside_a_run_is_never_read_inside_one(hybrid, monkeypatch):
+    """A chat answer served on this thread outside any run leaves a context-wide record; a run must ignore it."""
+    monkeypatch.setenv("LLM_CHAT_PROVIDERS", "nvidia")
+    hybrid.script("nvidia", reply(tool="submit_answer"))
+    llm_client.call_tool(**kwargs("submit_answer"))
+    assert routing.served_for("chat")["family"] == "nvidia-nemotron"
+    with runtime.run_context(runtime.RunContext(question_id=3, record=False)):
+        assert routing.served_for("chat") is None and routing.families_served(("chat", "executor")) == set()
+
+
+def test_outside_a_run_the_chat_check_is_judged_against_the_answers_family(hybrid, monkeypatch):
+    monkeypatch.setenv("LLM_CHAT_PROVIDERS", "groq")
+    hybrid.script("groq", reply(tool="submit_answer"))
+    llm_client.call_tool(**kwargs("submit_answer"))
+    assert critic.checked_families() == (frozenset({"openai-gpt-oss"}), "served:chat")
+    label, info = critic_on(hybrid, "nvidia")
+    assert label.startswith("nvidia:") and info["independent"] is True
+
+
+def test_same_family_nemotron_through_openrouter_and_nvidia_is_never_independent(hybrid, monkeypatch):
+    monkeypatch.setenv("LLM_CRITIC_PROVIDERS", "openrouter")
+    ctx = runtime.RunContext(question_id=0, record=False)
+    with runtime.run_context(ctx):
+        serve(hybrid, monkeypatch, "planner", "gemini")
+        serve(hybrid, monkeypatch, "executor", "nvidia", model="private/nvidia/nemotron-3.5-super-120b-a12b")
+        hybrid.script("openrouter", reply(tool="submit_review", model="nvidia/nemotron-3.5-super-vl:free"))
+        hybrid.gemini()
+        out, label = critic._critic_call_tool(**kwargs("submit_review"))
+        info = critic._last_verifier.get()
+    assert info["independent"] is False and label == "openrouter-fallback:nvidia/nemotron-3.5-super-vl:free"
+    assert info["checked_families"] == ["google-gemini", "nvidia-nemotron"]
+
+
+def test_with_no_independent_provider_the_fallback_is_marked_not_independent(hybrid, monkeypatch):
+    """Planner on Gemini, Executor on Groq and NVIDIA: only OpenRouter (Nemotron, same as NVIDIA) and Gemini are
+    left, both families in the work. The existing fallback still verifies, labelled and recorded as NOT independent."""
+    ctx = runtime.RunContext(question_id=0, record=False)
+    with runtime.run_context(ctx):
+        serve(hybrid, monkeypatch, "planner", "gemini")
+        serve(hybrid, monkeypatch, "executor", "groq")
+        serve(hybrid, monkeypatch, "executor", "nvidia")
+        for p in ("groq", "nvidia"):
+            hybrid.script(p, http_error(openai.InternalServerError, 503), http_error(openai.InternalServerError, 503))
+        hybrid.script("openrouter", reply(tool="submit_review"))
+        hybrid.gemini()
+        out, label = critic._critic_call_tool(**kwargs("submit_review"))
+        info = critic._last_verifier.get()
+    # every Critic provider is in a family that shaped the work, so none goes first; Groq and NVIDIA are down,
+    # OpenRouter serves as the same-family fallback
+    assert label == "openrouter-fallback:nvidia/nemotron-3.5-super-vl:free" and info["independent"] is False
+    assert len(hybrid.fakes["groq"].calls) == 2 and len(hybrid.fakes["nvidia"].calls) == 2
+    assert info["checked_families"] == ["google-gemini", "nvidia-nemotron", "openai-gpt-oss"]
+
+
+# ------------------------------------------------- critic_node under hybrid routing: the persisted audit record --
+
+VERIFY_ARGS = {"what_it_checks": "total revenue per region", "code": "print({'North': 2700, 'South': 1600})"}
+REVIEW_ARGS = {"verdict": "verified", "confidence": 0.9, "issues": [], "summary": "The totals check out."}
+
+
+class FakeRunner:
+    """The sandbox stand-in: the Critic's verification script 'runs' and recomputes the claimed totals."""
+
+    def seed_input_data(self, question_id, csv_path):
+        return None
+
+    def run(self, question_id, code, step_index, attempt):
+        return types.SimpleNamespace(success=True, stdout="{'North': 2700, 'South': 1600}", stderr="",
+                                     result={"North": 2700, "South": 1600})
+
+
+def critic_state(question_id):
+    return {"question_id": question_id, "question_text": "Total revenue by region", "csv_path": "unused.csv",
+            "profile": {"row_count": 4, "col_count": 3, "columns": [{"name": "region", "dtype": "object"}]},
+            "step_results": [{"step_index": 0, "description": "Total revenue per region", "code": "df.groupby(...)",
+                              "result": {"North": 2700, "South": 1600}, "chart_paths": [], "success": True}],
+            "revision_count": 0, "failed": False}
+
+
+def persisted_review(review_id):
+    from app.database import SessionLocal
+    from app.models import CriticReview
+    db = SessionLocal()
+    try:
+        row = db.get(CriticReview, review_id)
+        return row.checks_json[0], row.summary, row.verdict
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def question_id(client):
+    from platform_helpers import ask, workspace
+    return ask(client, workspace(client), "Total revenue by region")["question_id"]
+
+
+def test_critic_node_persists_an_independent_verification(hybrid, monkeypatch, question_id):
+    monkeypatch.setattr(critic, "get_runner", FakeRunner)
+    with runtime.run_context(runtime.RunContext(question_id=question_id, record=False)):
+        serve(hybrid, monkeypatch, "planner", "gemini")
+        serve(hybrid, monkeypatch, "executor", "gemini")
+        hybrid.script("groq", reply(VERIFY_ARGS, tool="submit_verification_code", model="openai/gpt-oss-120b"),
+                      reply(REVIEW_ARGS, tool="submit_review", model="openai/gpt-oss-120b"))
+        out = critic.critic_node(critic_state(question_id))
+    assert out["critic_verdict"] == "verified" and out["critic_review_id"]
+    check, summary, verdict = persisted_review(out["critic_review_id"])
+    assert check["verifier_model"] == "groq:openai/gpt-oss-120b"
+    assert check["verifier_independent"] is True
+    assert check["checked_families"] == ["google-gemini"]
+    assert check["verifier_family"] == "openai-gpt-oss" and check["review_verifier_family"] == "openai-gpt-oss"
+    assert check["verifier_requested_model"] == "openai/gpt-oss-120b"
+    assert check["verifier_served_model"] == "openai/gpt-oss-120b"
+    assert check["review_verifier_model"] == "groq:openai/gpt-oss-120b"
+    assert summary == "The totals check out.", "no 'not cross-model' note on an independent check"
+    assert verdict == "verified"
+
+
+def test_critic_node_persists_a_non_independent_fallback_with_its_note(hybrid, monkeypatch, question_id):
+    """Gemini planned, Groq and NVIDIA executed: no Critic provider is outside the work's families. Groq and NVIDIA
+    are down, OpenRouter (Nemotron, same as NVIDIA) verifies -- recorded, labelled and summarised as NOT independent."""
+    monkeypatch.setattr(critic, "get_runner", FakeRunner)
+    with runtime.run_context(runtime.RunContext(question_id=question_id, record=False)):
+        serve(hybrid, monkeypatch, "planner", "gemini")
+        serve(hybrid, monkeypatch, "executor", "groq")
+        serve(hybrid, monkeypatch, "executor", "nvidia")
+        down = [http_error(openai.InternalServerError, 503)] * 4
+        hybrid.script("groq", *down)
+        hybrid.script("nvidia", *down)
+        hybrid.script("openrouter", reply(VERIFY_ARGS, tool="submit_verification_code"),
+                      reply(REVIEW_ARGS, tool="submit_review"))
+        hybrid.gemini()
+        out = critic.critic_node(critic_state(question_id))
+    check, summary, verdict = persisted_review(out["critic_review_id"])
+    assert check["verifier_model"] == "openrouter-fallback:nvidia/nemotron-3.5-super-vl:free"
+    assert check["review_verifier_model"] == "openrouter-fallback:nvidia/nemotron-3.5-super-vl:free"
+    assert check["verifier_independent"] is False
+    assert check["checked_families"] == ["google-gemini", "nvidia-nemotron", "openai-gpt-oss"]
+    assert check["verifier_family"] == "nvidia-nemotron" and check["review_verifier_family"] == "nvidia-nemotron"
+    assert check["verifier_requested_model"] == "nvidia/nemotron-3.5-super-vl:free"
+    assert summary.startswith("The totals check out.")
+    assert "not cross-model" in summary and "verifier: nvidia-nemotron" in summary
+    assert "google-gemini, nvidia-nemotron, openai-gpt-oss" in summary
+    assert verdict == "verified", "the verdict itself is the Critic's; only its independence is qualified"
+
+
+def test_critic_node_needs_both_calls_independent(hybrid, monkeypatch, question_id):
+    """The verification script comes from Groq (independent of NVIDIA's work), but the review falls to OpenRouter's
+    Nemotron -- the Executor's own family. One non-independent call makes the whole check non-independent."""
+    monkeypatch.setattr(critic, "get_runner", FakeRunner)
+    monkeypatch.setenv("LLM_CRITIC_PROVIDERS", "groq,openrouter")
+    with runtime.run_context(runtime.RunContext(question_id=question_id, record=False)):
+        serve(hybrid, monkeypatch, "executor", "nvidia")
+        hybrid.script("groq", reply(VERIFY_ARGS, tool="submit_verification_code"),
+                      http_error(openai.AuthenticationError, 401))
+        hybrid.script("openrouter", reply(REVIEW_ARGS, tool="submit_review"))
+        out = critic.critic_node(critic_state(question_id))
+    check, summary, _ = persisted_review(out["critic_review_id"])
+    assert check["verifier_model"] == "groq:openai/gpt-oss-120b", "the verify call alone was independent"
+    assert check["review_verifier_model"] == "openrouter-fallback:nvidia/nemotron-3.5-super-vl:free"
+    assert check["verifier_family"] == "openai-gpt-oss" and check["review_verifier_family"] == "nvidia-nemotron"
+    assert check["verifier_independent"] is False and "not cross-model" in summary
+
+
+def test_critic_node_writes_no_hybrid_fields_when_hybrid_is_off(monkeypatch, question_id):
+    """Existing audit records are unchanged with hybrid routing off: the legacy label, no new fields."""
+    monkeypatch.setattr(config, "LLM_HYBRID_ROUTING_ENABLED", False)
+    monkeypatch.setattr(config, "LLAMA_API_KEY", "")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "g")
+    monkeypatch.setattr(critic, "get_runner", FakeRunner)
+    answers = iter([VERIFY_ARGS, REVIEW_ARGS])
+    monkeypatch.setattr(llm_client, "call_tool_gemini", lambda **kw: next(answers))
+    out = critic.critic_node(critic_state(question_id))
+    check, summary, _ = persisted_review(out["critic_review_id"])
+    assert check["verifier_model"] == f"gemini-fallback:{config.GEMINI_MODEL}"
+    assert not {"verifier_independent", "checked_families", "review_verifier_family"} & set(check)
+    assert "(Llama unavailable)" in summary, "the existing note, unchanged"

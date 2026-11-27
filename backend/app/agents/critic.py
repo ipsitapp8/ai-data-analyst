@@ -59,36 +59,46 @@ logger = logging.getLogger(__name__)
 
 # What served the most recent hybrid Critic call (families, independence); read by critic_node for the audit record.
 _last_verifier: ContextVar[dict | None] = ContextVar("critic_last_verifier", default=None)
-# Whose output the Critic checks, most direct first: the Executor's code, else the step that produced the answer.
-_CHECKED_AGENTS = ("executor", "planner", "chat", "narrator", "default")
+# The agents whose models materially shaped the work the Critic checks: the Planner's plan and the Executor's code.
+# Outside a run (the chat answer check) the checked work is the chat answer, with these as the fallback.
+_RUN_AGENTS = ("planner", "executor")
 
 
-def executor_family() -> tuple[str, str]:
-    """(family, where it came from) of the model whose work is being verified: what actually served it in this run,
-    else what the Executor's chain would use first. "unknown" when neither is known -- never treated as different."""
+def checked_families() -> tuple[frozenset[str], str]:
+    """(every model family that contributed to the work being verified, where that came from).
+
+    Inside a run: every family that served the Planner or the Executor in THIS run -- each step, not only the latest.
+    If this run has no such record, the result is {unknown}: nothing is independent of work whose models are unknown,
+    and another run's history is never used instead. Outside a run (chat): the answer's family, else what the
+    Executor's chain would use first."""
     from app.llm import families, routing
-    for agent in _CHECKED_AGENTS:
-        info = routing.served_for(agent)
-        if info:
-            return info["family"], f"served:{agent}"
+    if runtime.current() is not None:
+        found = routing.families_served(_RUN_AGENTS)
+        return (frozenset(found), "served:run") if found else (frozenset({families.UNKNOWN}), "unknown:no_run_history")
+    for agents in (("chat",), _RUN_AGENTS):
+        found = routing.families_served(agents)
+        if found:
+            return frozenset(found), f"served:{'+'.join(agents)}"
     for provider, pinned in routing.chain("executor"):
         if routing.usable(provider):
-            return routing.family_for(provider, pinned), "configured:executor"
-    return families.UNKNOWN, "unknown"
+            return frozenset({routing.family_for(provider, pinned)}), "configured:executor"
+    return frozenset({families.UNKNOWN}), "unknown"
 
 
 def _hybrid_critic_call(kwargs: dict) -> tuple[dict, str, dict]:
-    """The Critic under hybrid routing. Providers whose model family differs from the Executor's (both known) go
-    first, in the Critic's chain order; if none serves, a same-family (or unknown-family) model is used and the
-    verification is recorded as NOT independent -- or, with LLM_CRITIC_REQUIRE_INDEPENDENT, the step fails.
+    """The Critic under hybrid routing. Providers whose model family is known and differs from EVERY family that
+    served the Planner or the Executor in this run go first, in the Critic's chain order; if none serves, another
+    model is used and the verification is recorded as NOT independent -- or, with LLM_CRITIC_REQUIRE_INDEPENDENT,
+    the step fails.
 
     Labels keep the existing audit vocabulary: "<provider>:<model>" for independent verification,
     "<provider>-fallback:<model>" (e.g. "gemini-fallback:<model>") when it is not."""
     from app.llm import families, routing
 
-    exec_family, source = executor_family()
+    checked, source = checked_families()
+    exec_family = ", ".join(sorted(checked))            # for messages and the audit record
     entries = routing.chain("critic")
-    independent_first = [(p, m) for p, m in entries if families.independent(routing.family_for(p, m), exec_family)]
+    independent_first = [(p, m) for p, m in entries if families.independent_of_all(routing.family_for(p, m), checked)]
     rest = [(p, m) for p, m in entries if (p, m) not in independent_first]
     deadline = llm_gateway.Deadline()
     failures: list[str] = []
@@ -112,11 +122,12 @@ def _hybrid_critic_call(kwargs: dict) -> tuple[dict, str, dict]:
         raise runtime.ProviderUnavailable("No model provider could run the Critic.\n  - " + "\n  - ".join(failures),
                                           failures=reasons)
     llm_gateway.note_request(True, fallback=bool(info.get("fallback")))
-    independent = families.independent(info["family"], exec_family)
+    independent = families.independent_of_all(info["family"], checked)      # judged on what actually served
     label = f"{info['provider']}{'' if independent else '-fallback'}:{info['model']}"
     return out, label, {"independent": independent, "verifier_family": info["family"], "executor_family": exec_family,
-                        "executor_family_source": source, "requested_model": info["model"],
-                        "served_model": info["served_model"], "provider": info["provider"], "label": label}
+                        "checked_families": sorted(checked), "executor_family_source": source,
+                        "requested_model": info["model"], "served_model": info["served_model"],
+                        "provider": info["provider"], "label": label}
 
 
 VERIFY_CODE_TOOL_SCHEMA = {
@@ -128,6 +139,7 @@ VERIFY_CODE_TOOL_SCHEMA = {
         },
         "code": {
             "type": "string",
+            "minLength": 1,          # an empty script is rejected at the provider, before the sandbox
             "description": "Complete, self-contained Python script following the sandbox contract.",
         },
     },
@@ -262,6 +274,8 @@ verification recomputed result: {sandbox_result.result}
         independent = bool(verify_info["independent"]) and bool((review_info or verify_info)["independent"])
         checks[0].update({"verifier_independent": independent, "verifier_family": verify_info["verifier_family"],
                           "executor_family": verify_info["executor_family"],
+                          "checked_families": verify_info["checked_families"],
+                          "review_verifier_family": (review_info or verify_info)["verifier_family"],
                           "verifier_requested_model": verify_info["requested_model"],
                           "verifier_served_model": verify_info["served_model"], "review_verifier_model": review_model})
 

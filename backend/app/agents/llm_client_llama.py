@@ -123,10 +123,16 @@ def _checked_args(raw: str, schema: dict[str, Any]) -> tuple[dict | None, str | 
         return None, "the arguments were not valid JSON"
     if not isinstance(args, dict):
         return None, "the arguments were not a JSON object"
+    # "required" means present and not null. It does not mean non-empty: a schema may define an empty string as a
+    # valid value (Triage's "reason" is empty when a question is accepted). A field that must not be empty says so
+    # with minLength, which is enforced below for every string field present.
     for key in schema.get("required") or []:
+        if args.get(key) is None:
+            return None, f"the required field '{key}' was missing"
+    for key, prop in (schema.get("properties") or {}).items():
         value = args.get(key)
-        if value is None or (isinstance(value, str) and not value.strip()):
-            return None, f"the required field '{key}' was missing or empty"
+        if isinstance(prop, dict) and isinstance(value, str) and len(value) < int(prop.get("minLength") or 0):
+            return None, f"the field '{key}' was shorter than its minimum length"
     return args, None
 
 

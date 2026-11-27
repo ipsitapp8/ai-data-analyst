@@ -319,7 +319,7 @@ def test_the_llama_adapter_rejects_arguments_missing_a_required_field(monkeypatc
             class completions:  # noqa: N801
                 @staticmethod
                 def create(**kw):
-                    call = pytypes.SimpleNamespace(function=pytypes.SimpleNamespace(name="submit_x", arguments='{"a": ""}'))
+                    call = pytypes.SimpleNamespace(function=pytypes.SimpleNamespace(name="submit_x", arguments='{}'))
                     return pytypes.SimpleNamespace(usage=None, choices=[pytypes.SimpleNamespace(
                         message=pytypes.SimpleNamespace(tool_calls=[call]))])
     monkeypatch.setattr(llm_client_llama, "get_client", lambda: Fake())

@@ -43,6 +43,20 @@ def _column_summary(profile: dict) -> str:
     return ", ".join(f"{c['name']} ({c['kind']})" for c in cols) or "(no columns)"
 
 
+_USAGE_LIMIT_KINDS = ("rate_limited", "quota_exhausted")
+
+
+def _hit_usage_limit(e: Exception) -> bool:
+    """True when the failure is a provider's usage limit. Read from the structured record, never from message text:
+    a ProviderUnavailable carries one {"provider", "kind", "status"} per provider (so it works whichever provider hit
+    the limit, Gemini or not), and a raw SDK error carries its own status code. Text such as a model name that
+    happens to contain "429" is not a rate limit."""
+    for f in getattr(e, "failures", None) or []:
+        if f.get("kind") in _USAGE_LIMIT_KINDS or f.get("status") == 429:
+            return True
+    return any(getattr(e, a, None) == 429 for a in ("status_code", "code"))
+
+
 def triage_node(state: AgentState) -> dict:
     question_id = state["question_id"]
     question = (state.get("question_text") or "").strip()
@@ -77,8 +91,7 @@ User's question: {question!r}
     except Exception as e:  # noqa: BLE001 - a triage outage must not block real questions
         if isinstance(e, runtime.RunAborted) and not isinstance(e, runtime.ProviderUnavailable):
             raise  # cancelled, past deadline or over budget: stop here
-        text = str(e)
-        if "429" in text or "RESOURCE_EXHAUSTED" in text:
+        if _hit_usage_limit(e):
             # Letting this through would spend the remaining quota on a run that
             # is going to die at the planner anyway, with a far uglier error.
             return {
