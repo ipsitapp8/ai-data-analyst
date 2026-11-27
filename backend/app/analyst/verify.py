@@ -872,6 +872,11 @@ def _check_group_comparison(r: dict, d: pd.DataFrame, same) -> tuple[str, list[d
         vals = pd.to_numeric(data[y], errors="coerce")
         groups = {str(k): vals.loc[v.index].dropna().to_numpy(dtype=float)
                   for k, v in data.groupby(data[g].astype(str), sort=True)}
+        # the test is recomputed over the groups the answer compares ("public and private" of 17 company types);
+        # every group's figures are still recomputed from the records
+        shown = [str(row["group"]) for row in r["summary"]]
+        if shown and set(shown) <= set(groups):
+            groups = {k: groups[k] for k in groups if k in shown}
         for row in r["summary"]:
             x = groups.get(str(row["group"]))
             if x is None:

@@ -76,8 +76,33 @@ def _expire_session() -> None:
         st.rerun()
 
 
+def client_ip() -> str | None:
+    """The visitor's address, for the API's per-visitor rate limits. Behind the reverse proxy the browser's address is
+    the last X-Forwarded-For entry -- the one the proxy itself added (Caddy replaces any the visitor sent); without
+    a proxy it is the connection's own address. None outside a browser session."""
+    import ipaddress
+    try:
+        fwd = st.context.headers.get("X-Forwarded-For")
+        candidates = [str(fwd).split(",")[-1].strip()] if isinstance(fwd, str) and fwd.strip() else []
+        if isinstance(st.context.ip_address, str):
+            candidates.append(st.context.ip_address)
+    except Exception:  # noqa: BLE001 - no browser session (tests, scripts)
+        return None
+    for ip in candidates:
+        try:
+            return str(ipaddress.ip_address(ip))
+        except ValueError:
+            continue
+    return None
+
+
+def _ip_header() -> dict:
+    ip = client_ip()
+    return {"X-Silt-Client-IP": ip} if ip else {}
+
+
 def _headers(with_team: bool = True) -> dict:
-    headers = {}
+    headers = _ip_header()
     token = st.session_state.get("auth_token")
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -111,7 +136,7 @@ def signup(email: str, password: str, display_name: str) -> dict:
     resp = requests.post(
         f"{BACKEND_BASE_URL}/api/auth/signup",
         json={"email": email, "password": password, "display_name": display_name},
-        timeout=TIMEOUT,
+        headers=_ip_header(), timeout=TIMEOUT,
     )
     return _handle(resp)
 
@@ -120,7 +145,7 @@ def login(email: str, password: str) -> dict:
     resp = requests.post(
         f"{BACKEND_BASE_URL}/api/auth/login",
         json={"email": email, "password": password},
-        timeout=TIMEOUT,
+        headers=_ip_header(), timeout=TIMEOUT,
     )
     return _handle(resp)
 
@@ -129,7 +154,7 @@ def google_exchange(email: str, name: str, email_verified: bool, secret: str) ->
     resp = requests.post(
         f"{BACKEND_BASE_URL}/api/auth/google-exchange",
         json={"email": email, "name": name, "email_verified": email_verified},
-        headers={"X-Internal-Secret": secret}, timeout=TIMEOUT,
+        headers={"X-Internal-Secret": secret, **_ip_header()}, timeout=TIMEOUT,
     )
     return _handle(resp)
 

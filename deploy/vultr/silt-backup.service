@@ -1,0 +1,7 @@
+[Unit]
+Description=Silt backup (Postgres dump + data directory)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/silt/deploy/vultr/backup.sh

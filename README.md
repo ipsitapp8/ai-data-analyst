@@ -205,6 +205,13 @@ frontend/
   api_client.py                   requests wrapper around the backend
 ```
 
+## Deployment (your own server, e.g. Vultr)
+
+On a server you control (Ubuntu 22.04 with Docker), Silt runs with the **full Docker sandbox** for AI-generated
+code. The sandbox containers are started through a rootless Docker daemon, and no container gets the Docker
+socket. Postgres listens on loopback only, Caddy is the only public entry point, and a shared access password
+gates the site. One script sets it up: see [deploy/vultr/README.md](deploy/vultr/README.md).
+
 ## Deployment (Hugging Face Spaces)
 
 The repo builds as a single container: FastAPI on internal `127.0.0.1:8000`, Streamlit public on

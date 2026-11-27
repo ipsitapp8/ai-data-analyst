@@ -569,7 +569,7 @@ _CMP = ((r"at least|no less than|no fewer than|a minimum of|minimum of|>=|≥", 
 _CMP_ALT = "|".join(p for p, _ in _CMP)
 _NUMBER = r"[$£€₹]?\s*(-?\d[\d,]*(?:\.\d+)?)(?:\s*(k\b|m\b|%|percent\b))?"
 _COND = re.compile(rf"(?P<before>(?:[a-z_]+[\s-]+){{0,4}})(?P<neg>not\s+)?(?<![a-z])(?P<cmp>{_CMP_ALT})\s*{_NUMBER}"
-                   rf"(?P<after>(?:\s+[a-z_]+){{0,3}})", re.I)
+                   rf"(?P<after>(?:\s+(?!(?:and|or|but)\b)[a-z_]+){{0,3}})", re.I)   # never across "and more than 1000 reviews"
 _COND_TAIL = re.compile(rf"(?P<before>(?:[a-z_]+[\s-]+){{1,4}}?)(?:of\s+|is\s+|are\s+|was\s+|were\s+|=\s*)?{_NUMBER}\s+"
                         r"(?:or|and)\s+(?P<dir>more|above|over|higher|greater|up|less|fewer|below|under|lower)\b", re.I)
 _NOT_A_THRESHOLD = re.compile(r"^\s*(?:days?|weeks?|months?|years?|quarters?)\s+(?:ago|back|old)\b|^\s*(?:january|february|"

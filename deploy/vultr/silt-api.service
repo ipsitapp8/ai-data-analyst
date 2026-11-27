@@ -1,0 +1,31 @@
+# Silt API (FastAPI). Installed by deploy/vultr/setup.sh, which replaces @SILT_UID@.
+# Listens on loopback only; the public entry point is Caddy -> Streamlit.
+[Unit]
+Description=Silt API (FastAPI)
+After=network-online.target user@@SILT_UID@.service
+Wants=network-online.target user@@SILT_UID@.service
+
+[Service]
+Type=simple
+User=silt
+Group=silt
+# API keys, database URL, sandbox settings. Mode 0640 root:silt.
+EnvironmentFile=/etc/silt/api.env
+WorkingDirectory=/opt/silt/backend
+# One process: the job queue workers and the scheduler run inside it (JOB_WORKERS threads).
+ExecStart=/opt/silt/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+# Workspace files must be readable by the sandbox container's (mapped) user.
+UMask=0022
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
