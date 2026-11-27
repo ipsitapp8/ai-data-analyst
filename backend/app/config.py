@@ -66,6 +66,14 @@ LLAMA_API_KEY = _secret("LLAMA_API_KEY")
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "openai/gpt-oss-20b"
 LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.groq.com/openai/v1"
 
+# --- Further provider keys (loaded only) ---
+# Read from the environment so they are available to the backend; nothing routes to these
+# providers yet, and no model name or endpoint is assumed for them.
+GROQ_API_KEY = _secret("GROQ_API_KEY")
+MISTRAL_API_KEY = _secret("MISTRAL_API_KEY")
+OPENROUTER_API_KEY = _secret("OPENROUTER_API_KEY")
+NVIDIA_API_KEY = _secret("NVIDIA_API_KEY")
+
 # --- Sandbox ---
 # "docker" (recommended, isolated) or "subprocess" (dev-only fallback, NOT isolated)
 SANDBOX_BACKEND = os.getenv("SANDBOX_BACKEND", "docker")
