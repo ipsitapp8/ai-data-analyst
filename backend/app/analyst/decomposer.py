@@ -481,10 +481,15 @@ def model_chat(messages: list[dict], max_tokens: int = 900) -> str:
     if not url:
         return planner.model_chat(messages, max_tokens=max_tokens)
     from openai import OpenAI
-    client = OpenAI(base_url=url, api_key=os.getenv("ANALYST_MODEL_KEY", "local"), timeout=planner.MODEL_TIMEOUT)
-    r = client.chat.completions.create(model=os.getenv("ANALYST_DECOMPOSER_MODEL", "default_model"),
-                                       messages=messages, temperature=0.0, max_tokens=max_tokens)
-    return r.choices[0].message.content or ""
+    from app import llm_gateway
+    client = OpenAI(base_url=url, api_key=os.getenv("ANALYST_MODEL_KEY", "local"), timeout=planner.MODEL_TIMEOUT,
+                    max_retries=0)
+
+    def call() -> str:
+        r = client.chat.completions.create(model=os.getenv("ANALYST_DECOMPOSER_MODEL", "default_model"),
+                                           messages=messages, temperature=0.0, max_tokens=max_tokens)
+        return r.choices[0].message.content or ""
+    return llm_gateway.guarded(llm_gateway.local_provider(url), call)
 
 
 def enabled() -> bool:

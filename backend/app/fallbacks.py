@@ -31,6 +31,10 @@ _WHY = {
     "network": "the AI model could not be reached",
     "malformed_output": "the AI model did not return a usable answer",
     "not_configured": "no AI model API key is configured",
+    "quota_exhausted": "the AI model's usage quota is used up",
+    "circuit_open": "the AI model failed repeatedly in the last minute, so it was not called",
+    "no_time": "there was no time left in this step to call the AI model",
+    "auth_rejected": "the AI model refused the configured credentials a few minutes ago, so it was not called",
 }
 _WHY_GENERIC = "the AI model was unavailable"
 _TRACE_MARKER = "fell back from the hypothesis engine"

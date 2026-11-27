@@ -16,7 +16,7 @@ from typing import Any
 from google import genai
 from google.genai import errors, types
 
-from app import config, runtime
+from app import config, llm_gateway, runtime
 from app.agents import llm_client_llama
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ def get_client() -> genai.Client:
     return _client
 
 
-class MalformedOutput(RuntimeError):
+class MalformedOutput(llm_gateway.InvalidOutput):
     """The provider answered, but not with the structured output that was
     required. `diagnosis` says what came back instead (never its content)."""
 
@@ -205,6 +205,12 @@ def _failed(provider: str, model: str, exc: BaseException) -> dict:
     return {"provider": provider, "kind": failure["kind"], "status": failure["status"], "model": model}
 
 
+def not_called_kind(exc: "llm_gateway.ProviderError") -> str:
+    """Why the gateway did not call a provider at all, as a failure kind (see runtime.ProviderUnavailable.WHY)."""
+    return {"PROVIDER_UNAVAILABLE": "circuit_open", "RATE_LIMITED": "rate_limited", "AUTH_ERROR": "auth_rejected",
+            "BILLING": "billing_hold"}.get(exc.kind.value, "no_time")
+
+
 def classify_failure(exc: BaseException) -> dict:
     """A provider failure as a category a person can act on, plus its HTTP
     status when there is one. Built from the exception's type and status code
@@ -214,18 +220,28 @@ def classify_failure(exc: BaseException) -> dict:
     status = next((v for v in (getattr(exc, "code", None), getattr(exc, "status_code", None))
                    if isinstance(v, int) and not isinstance(v, bool)), None)
     name = type(exc).__name__
+    if isinstance(exc, llm_gateway.ProviderError):     # never called: circuit open, rate limited, out of time
+        kind = not_called_kind(exc)
+        return {"kind": kind, "category": kind, "status": None, "finish_reasons": None, "retryable": False,
+                "provider_status": STATUS_UNSPECIFIED}
     if isinstance(exc, MalformedOutput):
         return {"kind": "malformed_output", "category": exc.diagnosis.get("category"), "status": None,
                 "finish_reasons": exc.diagnosis.get("finish_reasons"), "retryable": False,
                 "provider_status": STATUS_UNSPECIFIED}
     if status == 429:
-        kind = "rate_limited"
+        # a spent daily/monthly quota is not a burst limit: it is never retried (app/llm_gateway.py)
+        quota = llm_gateway.classify(exc) == llm_gateway.ErrorKind.QUOTA_EXHAUSTED
+        kind = "quota_exhausted" if quota else "rate_limited"
     elif status == 503:
         kind = "overloaded"
     elif status is not None and status >= 500:
         kind = "server_error"
     elif status in (401, 403) or _key_rejected(exc):
         kind = "authentication"      # Gemini reports a bad key as 400 with reason API_KEY_INVALID
+    elif status == 402:
+        kind = "billing"             # no billing / API budget on the account: never retried, the provider is held
+    elif status == 400 and llm_gateway.classify(exc) == llm_gateway.ErrorKind.MODEL_NOT_FOUND:
+        kind = "model_not_found"     # Mistral and OpenRouter answer an unknown model with 400, not 404
     elif status == 400:
         kind = "bad_request"
     elif status == 404:
@@ -236,7 +252,8 @@ def classify_failure(exc: BaseException) -> dict:
         kind = "invalid_schema"
     elif any(word in name for word in ("Timeout", "Connect", "Network", "Transport")):
         kind = "network"
-    elif isinstance(exc, RuntimeError) and "did not return the expected" in str(exc):
+    elif isinstance(exc, llm_gateway.InvalidOutput) or (
+            isinstance(exc, RuntimeError) and "did not return the expected" in str(exc)):
         kind = "malformed_output"
     else:
         kind = "other"
@@ -283,6 +300,11 @@ def _output_limit(max_tokens: int) -> int:
     return max_tokens + 2048 if str(config.GEMINI_MODEL).startswith("gemini-3") else max_tokens
 
 
+def _attempt_http_options():
+    seconds = llm_gateway.current_attempt_timeout()
+    return types.HttpOptions(timeout=int(seconds * 1000)) if seconds else None
+
+
 def call_tool_gemini(
     system: str,
     user_content: str,
@@ -319,6 +341,8 @@ def call_tool_gemini(
             system_instruction=system,
             max_output_tokens=_output_limit(max_tokens),
             thinking_config=_thinking_config(),
+            # the gateway's per-attempt timeout: the configured one, cut to what is left of the step's budget
+            http_options=_attempt_http_options(),
             tools=[types.Tool(function_declarations=[function_decl])],
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
@@ -392,6 +416,19 @@ def call_tool(
         LAST_PROVIDER = "scripted"
         return call_tool_gemini(**kwargs)
 
+    if config.LLM_HYBRID_ROUTING_ENABLED:
+        # Agent-specific provider chains (app/llm/routing.py). Off by default: the path below is then unchanged.
+        from app.llm import routing
+        try:
+            out, info = routing.call_tool(kwargs)
+        except runtime.ProviderUnavailable:
+            LAST_PROVIDER = "none"
+            raise
+        LAST_PROVIDER = f"{info['provider']}:{info['model']}"
+        return out
+
+    # The whole step -- retries and the fallback together -- has one time budget (app/llm_gateway.py).
+    deadline = llm_gateway.Deadline()
     # What follows a Gemini failure that is not retried, and the total number of tries allowed.
     backup = bool(config.LLAMA_API_KEY) and config.LLM_FAILOVER_ENABLED
     next_step = "failover_to_llama" if backup else "give_up_no_backup_provider"
@@ -401,85 +438,21 @@ def call_tool(
     llama_tried = False
     if config.LLM_PRIMARY == "llama" and config.LLAMA_API_KEY:
         llama_tried = True
-        started = time.monotonic()
-        try:
-            out = llm_client_llama.call_tool(**kwargs)
+        out = _try_llama(kwargs, deadline, failures, reasons, call_kwargs={},
+                         give_up_action="failover_to_gemini" if config.GEMINI_API_KEY else "give_up",
+                         wait_ok=not config.GEMINI_API_KEY)
+        if out is not _NOT_SERVED:
             LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
+            llm_gateway.note_request(True)
             return out
-        except runtime.RunAborted:
-            raise
-        except Exception as e:  # noqa: BLE001 - hand the step to Gemini
-            failures.append(f"llama({config.LLAMA_MODEL}): {e}")
-            reasons.append(_failed("llama", config.LLAMA_MODEL, e))
-            log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1,
-                               action="failover_to_gemini" if config.GEMINI_API_KEY else "give_up",
-                               error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
 
     if config.GEMINI_API_KEY:
-        attempt = 0
-        malformed_retries = 0
-        while True:
-            started = time.monotonic()
-            try:
-                out = call_tool_gemini(**kwargs)
-                LAST_PROVIDER = f"gemini:{config.GEMINI_MODEL}"
-                return out
-            except runtime.RunAborted:
-                raise  # cancelled / over budget: not a provider failure, never fail over
-            except errors.ClientError as e:
-                failure = classify_failure(e)
-                if e.code == 429 and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
-                    wait_s = _retry_delay_seconds(e, attempt)
-                    attempt += 1
-                    log_provider_event("gemini", tool_name, failure, attempt=attempt, max_attempts=tries, action="retry",
-                                       wait_s=wait_s, error_type=type(e).__name__, model=config.GEMINI_MODEL,
-                                       elapsed_ms=_elapsed_ms(started))
-                    time.sleep(wait_s)
-                    continue
-                failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
-                reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
-                log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
-                                   action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
-                                   elapsed_ms=_elapsed_ms(started))
-                break
-            except errors.ServerError as e:
-                # Transient 5xx: the provider's side, and usually brief. Retried with spaced,
-                # jittered waits inside the same attempt bound as rate limits (one counter for
-                # both, so a call never makes more than `tries` requests whatever the mix).
-                failure = classify_failure(e)
-                if e.code in _RETRYABLE_SERVER_STATUS and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
-                    wait_s = _server_retry_delay_seconds(e, attempt)
-                    attempt += 1
-                    log_provider_event("gemini", tool_name, failure, attempt=attempt, max_attempts=tries, action="retry",
-                                       wait_s=wait_s, error_type=type(e).__name__, model=config.GEMINI_MODEL,
-                                       elapsed_ms=_elapsed_ms(started))
-                    time.sleep(wait_s)
-                    continue
-                failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
-                reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
-                log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
-                                   action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
-                                   elapsed_ms=_elapsed_ms(started))
-                break
-            except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
-                # MalformedOutput: the model answered without the required structured output. A transient
-                # kind (empty reply, prose, a malformed call) gets a bounded retry on Gemini first; anything
-                # else, or once that is used up, hands the step to the backup provider.
-                if (isinstance(e, MalformedOutput) and e.diagnosis.get("category") in MALFORMED_RETRYABLE
-                        and malformed_retries < config.GEMINI_MALFORMED_RETRIES):
-                    malformed_retries += 1
-                    wait_s = _MALFORMED_RETRY_WAIT_SECONDS * _jitter()
-                    log_provider_event("gemini", tool_name, classify_failure(e), attempt=malformed_retries,
-                                       max_attempts=config.GEMINI_MALFORMED_RETRIES + 1, action="retry", wait_s=wait_s,
-                                       error_type=type(e).__name__, model=config.GEMINI_MODEL, elapsed_ms=_elapsed_ms(started))
-                    time.sleep(wait_s)
-                    continue
-                failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
-                reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
-                log_provider_event("gemini", tool_name, classify_failure(e), attempt=attempt + 1, max_attempts=tries,
-                                   action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
-                                   elapsed_ms=_elapsed_ms(started))
-                break
+        out = _try_gemini(kwargs, deadline, failures, reasons, backup=backup, next_step=next_step,
+                          wait_ok=not (backup and not llama_tried), fallback=llama_tried)
+        if out is not _NOT_SERVED:
+            LAST_PROVIDER = f"gemini:{config.GEMINI_MODEL}"
+            llm_gateway.note_request(True, fallback=llama_tried)
+            return out
     else:
         failures.append("gemini: no GEMINI_API_KEY set")
         reasons.append(_not_tried("gemini", "not_configured"))
@@ -490,32 +463,189 @@ def call_tool(
         failures.append("llama: failover disabled (LLM_FAILOVER_ENABLED=false)")
         reasons.append(_not_tried("llama", "disabled"))
     elif config.LLAMA_API_KEY:
-        started = time.monotonic()
-        try:
-            out = llm_client_llama.call_tool(**kwargs, _fallback=bool(config.GEMINI_API_KEY))
+        served_as_fallback = bool(config.GEMINI_API_KEY)
+        out = _try_llama(kwargs, deadline, failures, reasons, call_kwargs={"_fallback": served_as_fallback},
+                         give_up_action="give_up", fallback=served_as_fallback)
+        if out is not _NOT_SERVED:
             LAST_PROVIDER = f"llama:{config.LLAMA_MODEL}"
             logger.info("Served by Llama (%s).", config.LLAMA_MODEL)
+            llm_gateway.note_request(True, fallback=served_as_fallback)
             return out
-        except runtime.RunAborted:
-            raise
-        except Exception as e:  # noqa: BLE001 - report both failures together below
-            failures.append(f"llama({config.LLAMA_MODEL}): {e}")
-            reasons.append(_failed("llama", config.LLAMA_MODEL, e))
-            log_provider_event("llama", tool_name, classify_failure(e), attempt=1, max_attempts=1, action="give_up",
-                               error_type=type(e).__name__, model=config.LLAMA_MODEL, elapsed_ms=_elapsed_ms(started))
     else:
         failures.append("llama: no LLAMA_API_KEY set")
         reasons.append(_not_tried("llama", "not_configured"))
 
     LAST_PROVIDER = "none"
+    llm_gateway.note_request(False)
     _log_not_tried(tool_name, reasons)
     raise runtime.ProviderUnavailable(
         "Both model providers failed for this step.\n  - " + "\n  - ".join(failures), failures=reasons,
     )
 
 
+_NOT_SERVED = object()
+
+
+def _try_gemini(kwargs: dict, deadline: "llm_gateway.Deadline", failures: list[str], reasons: list[dict], *,
+                backup: bool, next_step: str, wait_ok: bool, fallback: bool = False) -> Any:
+    """Gemini under the gateway, with its bounded retries: 429 burst limits (RetryInfo first), transient 5xx
+    (spaced, jittered waits) and transient malformed output -- all inside the step's deadline, keeping time back for
+    the backup when there is one. Returns the tool arguments, or _NOT_SERVED after recording why.
+
+    The existing Gemini -> Llama path and the hybrid router (app/llm/routing.py) both call this, so Gemini behaves
+    identically under either."""
+    tool_name = kwargs["tool_name"]
+    tries = config.GEMINI_RATE_LIMIT_RETRIES + 1
+    attempt = 0
+    malformed_retries = 0
+    while True:
+        # wait out a running Retry-After only when Gemini is the last provider that can take the step
+        why = llm_gateway.admit("gemini", deadline, wait_ok=wait_ok)
+        if why is not None:
+            # circuit open, rate limit still in force, or no time left: not called at all
+            llm_gateway.note_skipped("gemini", why)
+            failures.append(f"gemini({config.GEMINI_MODEL}): not called ({why.replace('_', ' ')})")
+            reasons.append({"provider": "gemini", "kind": why, "status": None, "model": config.GEMINI_MODEL})
+            log_provider_event("gemini", tool_name, _skip_failure(why), attempt=attempt, max_attempts=tries,
+                               action=next_step, model=config.GEMINI_MODEL)
+            break
+        started = time.monotonic()
+        try:
+            with llm_gateway.attempt_timeout(deadline.attempt_timeout(config.GEMINI_REQUEST_TIMEOUT_SECONDS)):
+                out = call_tool_gemini(**kwargs)
+            llm_gateway.note_success("gemini", _elapsed_ms(started), fallback=fallback)
+            return out
+        except runtime.RunAborted:
+            llm_gateway.breaker("gemini").release()
+            raise  # cancelled / over budget: not a provider failure, never fail over
+        except errors.ClientError as e:
+            failure = classify_failure(e)
+            kind = llm_gateway.note_failure("gemini", e, _elapsed_ms(started))
+            # a burst limit is retried, inside the budget; an exhausted quota never is
+            if e.code == 429 and kind == llm_gateway.ErrorKind.RATE_LIMITED and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
+                wait_s = _retry_delay_seconds(e, attempt)
+                if _retry_fits(deadline, wait_s, backup):
+                    attempt += 1
+                    log_provider_event("gemini", tool_name, failure, attempt=attempt, max_attempts=tries, action="retry",
+                                       wait_s=wait_s, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+                                       elapsed_ms=_elapsed_ms(started))
+                    time.sleep(wait_s)
+                    continue
+            failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+            reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
+            log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
+                               action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+                               elapsed_ms=_elapsed_ms(started))
+            break
+        except errors.ServerError as e:
+            # Transient 5xx: the provider's side, and usually brief. Retried with spaced,
+            # jittered waits inside the same attempt bound as rate limits (one counter for
+            # both, so a call never makes more than `tries` requests whatever the mix).
+            failure = classify_failure(e)
+            llm_gateway.note_failure("gemini", e, _elapsed_ms(started))
+            if e.code in _RETRYABLE_SERVER_STATUS and attempt < config.GEMINI_RATE_LIMIT_RETRIES:
+                wait_s = _server_retry_delay_seconds(e, attempt)
+                if _retry_fits(deadline, wait_s, backup):
+                    attempt += 1
+                    log_provider_event("gemini", tool_name, failure, attempt=attempt, max_attempts=tries, action="retry",
+                                       wait_s=wait_s, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+                                       elapsed_ms=_elapsed_ms(started))
+                    time.sleep(wait_s)
+                    continue
+            failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+            reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
+            log_provider_event("gemini", tool_name, failure, attempt=attempt + 1, max_attempts=tries,
+                               action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+                               elapsed_ms=_elapsed_ms(started))
+            break
+        except Exception as e:  # noqa: BLE001 - any other Gemini failure should try the backup
+            # MalformedOutput: the model answered without the required structured output. A transient
+            # kind (empty reply, prose, a malformed call) gets a bounded retry on Gemini first; anything
+            # else, or once that is used up, hands the step to the backup provider. A timeout is not
+            # retried on Gemini: the time goes to the backup instead.
+            llm_gateway.note_failure("gemini", e, _elapsed_ms(started))
+            if (isinstance(e, MalformedOutput) and e.diagnosis.get("category") in MALFORMED_RETRYABLE
+                    and malformed_retries < config.GEMINI_MALFORMED_RETRIES
+                    and _retry_fits(deadline, _MALFORMED_RETRY_WAIT_SECONDS, backup)):
+                malformed_retries += 1
+                wait_s = _MALFORMED_RETRY_WAIT_SECONDS * _jitter()
+                log_provider_event("gemini", tool_name, classify_failure(e), attempt=malformed_retries,
+                                   max_attempts=config.GEMINI_MALFORMED_RETRIES + 1, action="retry", wait_s=wait_s,
+                                   error_type=type(e).__name__, model=config.GEMINI_MODEL, elapsed_ms=_elapsed_ms(started))
+                time.sleep(wait_s)
+                continue
+            failures.append(f"gemini({config.GEMINI_MODEL}): {e}")
+            reasons.append(_failed("gemini", config.GEMINI_MODEL, e))
+            log_provider_event("gemini", tool_name, classify_failure(e), attempt=attempt + 1, max_attempts=tries,
+                               action=next_step, error_type=type(e).__name__, model=config.GEMINI_MODEL,
+                               elapsed_ms=_elapsed_ms(started))
+            break
+    return _NOT_SERVED
+
+
+def _retry_fits(deadline: "llm_gateway.Deadline", wait_s: float, backup: bool) -> bool:
+    """A retry on the same provider only if its wait and one attempt still fit, keeping time back for the backup."""
+    need = wait_s + config.LLM_MIN_ATTEMPT_SECONDS + (config.LLM_FALLBACK_RESERVE_SECONDS if backup else 0.0)
+    return deadline.fits(need)
+
+
+def _skip_failure(why: str) -> dict:
+    return {"kind": why, "category": why, "status": None, "finish_reasons": None, "retryable": False,
+            "provider_status": STATUS_UNSPECIFIED}
+
+
+def _try_llama(kwargs: dict, deadline: "llm_gateway.Deadline", failures: list[str], reasons: list[dict], *,
+               call_kwargs: dict, give_up_action: str, fallback: bool = False, wait_ok: bool = True) -> Any:
+    """One Llama attempt under the gateway (circuit breaker, deadline, per-request timeout), with at most
+    LLAMA_TRANSIENT_RETRIES jittered retries of a timeout / rate limit / outage that fit the budget.
+    Returns the tool arguments, or _NOT_SERVED after recording why."""
+    tool_name = kwargs["tool_name"]
+    attempts = 1 + max(0, config.LLAMA_TRANSIENT_RETRIES)
+    for attempt in range(1, attempts + 1):
+        started = time.monotonic()
+        try:
+            return llm_gateway.guarded("llama", lambda: llm_client_llama.call_tool(**kwargs, **call_kwargs),
+                                       deadline=deadline, timeout=config.LLAMA_REQUEST_TIMEOUT_SECONDS, fallback=fallback,
+                                       wait_ok=wait_ok)
+        except runtime.RunAborted:
+            raise
+        except llm_gateway.ProviderError as e:      # not called: circuit open, rate limited, or out of time
+            why = not_called_kind(e)
+            failures.append(f"llama({config.LLAMA_MODEL}): not called ({why.replace('_', ' ')})")
+            reasons.append({"provider": "llama", "kind": why, "status": None, "model": config.LLAMA_MODEL})
+            log_provider_event("llama", tool_name, _skip_failure(why), attempt=attempt - 1, max_attempts=attempts,
+                               action=give_up_action, model=config.LLAMA_MODEL)
+            return _NOT_SERVED
+        except Exception as e:  # noqa: BLE001 - recorded; retried once if transient, else the next provider
+            kind = llm_gateway.classify(e)
+            wait_s = llm_gateway.jittered(min(llm_gateway.retry_after_seconds(e) or 2.0,
+                                              float(config.GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS)))
+            if (kind in llm_gateway.TRANSIENT and kind != llm_gateway.ErrorKind.TIMEOUT and attempt < attempts
+                    and deadline.fits(wait_s + config.LLM_MIN_ATTEMPT_SECONDS)):
+                log_provider_event("llama", tool_name, classify_failure(e), attempt=attempt, max_attempts=attempts,
+                                   action="retry", wait_s=wait_s, error_type=type(e).__name__, model=config.LLAMA_MODEL,
+                                   elapsed_ms=_elapsed_ms(started))
+                time.sleep(wait_s)
+                continue
+            failures.append(f"llama({config.LLAMA_MODEL}): {e}")
+            reasons.append(_failed("llama", config.LLAMA_MODEL, e))
+            log_provider_event("llama", tool_name, classify_failure(e), attempt=attempt, max_attempts=attempts,
+                               action=give_up_action, error_type=type(e).__name__, model=config.LLAMA_MODEL,
+                               elapsed_ms=_elapsed_ms(started))
+            return _NOT_SERVED
+    return _NOT_SERVED
+
+
 def call_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
-    """Plain text completion, used for the narrative summary."""
+    """Plain text completion, used for the narrative summary. Under hybrid routing it walks the Narrator's chain,
+    each provider through its plain chat call (never the tool-call path)."""
+    if config.LLM_HYBRID_ROUTING_ENABLED and runtime.get_provider_override() is None:
+        from app.llm import routing
+        return routing.call_text(system, user_content, max_tokens)
+    return _gemini_text(system, user_content, max_tokens)
+
+
+def _gemini_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
     client = get_client()
     response = client.models.generate_content(
         model=config.GEMINI_MODEL,
@@ -524,6 +654,7 @@ def call_text(system: str, user_content: str, max_tokens: int = 2048) -> str:
             system_instruction=system,
             max_output_tokens=_output_limit(max_tokens),
             thinking_config=_thinking_config(),
+            http_options=_attempt_http_options(),
         ),
     )
     return (response.text or "").strip()
@@ -541,5 +672,17 @@ def provider_available(tool_name: str | None = None) -> bool:
     if override is not None:
         can = getattr(override, "can_answer", None)
         return bool(can(tool_name)) if callable(can) and tool_name else True
-    return bool(config.GEMINI_API_KEY or (config.LLAMA_API_KEY and config.LLM_FAILOVER_ENABLED) or
-                (config.LLAMA_API_KEY and not config.GEMINI_API_KEY))
+    if config.LLM_HYBRID_ROUTING_ENABLED:
+        from app.llm import routing
+        return routing.provider_available(tool_name)
+    # A provider whose circuit is open is not available now: callers then take their deterministic paths at
+    # once instead of waiting on a provider that has just failed repeatedly.
+    gemini = bool(config.GEMINI_API_KEY) and _circuit_closed_enough("gemini")
+    llama = bool(config.LLAMA_API_KEY) and (config.LLM_FAILOVER_ENABLED or not config.GEMINI_API_KEY) \
+        and _circuit_closed_enough("llama")
+    return gemini or llama
+
+
+def _circuit_closed_enough(provider: str) -> bool:
+    b = llm_gateway.breaker(provider)
+    return b.state() != llm_gateway.CircuitBreaker.OPEN and not b.credentials_rejected() and not b.billing_held()

@@ -883,11 +883,15 @@ def _stated(x, message: str) -> bool:
 def _chat(messages: list[dict], temperature: float = 0.0) -> str:
     from app.analyst import planner
     from openai import OpenAI
-    client = OpenAI(base_url=PLANNER_URL or planner.MODEL_URL, api_key=os.getenv("ANALYST_MODEL_KEY", "local"),
-                    timeout=PLAN_TIMEOUT, max_retries=0)
-    r = client.chat.completions.create(model=PLANNER_MODEL or planner.MODEL_NAME, messages=messages, temperature=temperature,
-                                       max_tokens=MAX_TOKENS)
-    return r.choices[0].message.content or ""
+    from app import llm_gateway
+    url = PLANNER_URL or planner.MODEL_URL
+    client = OpenAI(base_url=url, api_key=os.getenv("ANALYST_MODEL_KEY", "local"), timeout=PLAN_TIMEOUT, max_retries=0)
+
+    def call() -> str:
+        r = client.chat.completions.create(model=PLANNER_MODEL or planner.MODEL_NAME, messages=messages,
+                                           temperature=temperature, max_tokens=MAX_TOKENS)
+        return r.choices[0].message.content or ""
+    return llm_gateway.guarded(llm_gateway.local_provider(url), call)
 
 
 model_chat = _chat                   # replaced in tests

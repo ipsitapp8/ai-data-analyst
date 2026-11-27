@@ -66,6 +66,31 @@ LLAMA_API_KEY = _secret("LLAMA_API_KEY")
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "").strip() or "openai/gpt-oss-20b"
 LLAMA_BASE_URL = os.getenv("LLAMA_BASE_URL", "").strip() or "https://api.groq.com/openai/v1"
 
+# --- Hybrid-routing providers (app/llm/) ---
+# Used only when LLM_HYBRID_ROUTING_ENABLED is on, and each only once it has a key AND a model: a key alone never
+# changes routing. No model ID has a default (a default the provider retires fails every request); the base URLs
+# default to each provider's documented OpenAI-compatible endpoint and can be overridden. These are separate from
+# the legacy LLAMA_* settings above, which keep working exactly as before and are never read as Groq settings.
+def _model(name: str) -> str:
+    return os.getenv(name, "").strip()
+
+
+GROQ_API_KEY = _secret("GROQ_API_KEY")
+GROQ_MODEL = _model("GROQ_MODEL")
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "").strip() or "https://api.groq.com/openai/v1"
+NVIDIA_API_KEY = _secret("NVIDIA_API_KEY")
+NVIDIA_MODEL = _model("NVIDIA_MODEL")
+NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "").strip() or "https://integrate.api.nvidia.com/v1"
+MISTRAL_API_KEY = _secret("MISTRAL_API_KEY")
+MISTRAL_MODEL = _model("MISTRAL_MODEL")
+MISTRAL_BASE_URL = os.getenv("MISTRAL_BASE_URL", "").strip() or "https://api.mistral.ai/v1"
+OPENROUTER_API_KEY = _secret("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = _model("OPENROUTER_MODEL")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "").strip() or "https://openrouter.ai/api/v1"
+# Optional OpenRouter attribution headers (HTTP-Referer, X-Title). Sent only when set.
+OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER", "").strip()
+OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "").strip()
+
 # --- Sandbox ---
 # "docker" (recommended, isolated) or "subprocess" (dev-only fallback, NOT isolated)
 SANDBOX_BACKEND = os.getenv("SANDBOX_BACKEND", "docker")
@@ -221,6 +246,51 @@ LLM_FAILOVER_ENABLED = _bool("LLM_FAILOVER_ENABLED", "true")
 # USD per 1M tokens, "input,output". Estimates only; override per deployment.
 LLM_PRICE_GEMINI = os.getenv("LLM_PRICE_GEMINI", "0.30,2.50")
 LLM_PRICE_LLAMA = os.getenv("LLM_PRICE_LLAMA", "0.20,0.60")
+# The hybrid providers: blank = the Llama estimate above, as every non-Gemini provider was priced before.
+LLM_PRICE_GROQ = os.getenv("LLM_PRICE_GROQ", "").strip()
+LLM_PRICE_NVIDIA = os.getenv("LLM_PRICE_NVIDIA", "").strip()
+LLM_PRICE_MISTRAL = os.getenv("LLM_PRICE_MISTRAL", "").strip()
+LLM_PRICE_OPENROUTER = os.getenv("LLM_PRICE_OPENROUTER", "").strip()
+
+# --- LLM gateway (app/llm_gateway.py) ---
+# One model step (all retries and the fallback together) never takes longer than this, nor past the run's deadline.
+LLM_REQUEST_DEADLINE_SECONDS = float(os.getenv("LLM_REQUEST_DEADLINE_SECONDS", "120"))
+# An attempt is not started with less time than this left; a retry also keeps this much back for the fallback.
+LLM_MIN_ATTEMPT_SECONDS = float(os.getenv("LLM_MIN_ATTEMPT_SECONDS", "5"))
+LLM_FALLBACK_RESERVE_SECONDS = float(os.getenv("LLM_FALLBACK_RESERVE_SECONDS", "15"))
+# Circuit breaker, per provider: this many timeouts / rate limits / outages within the window open it for the cooldown;
+# then a single probe call decides whether it closes again.
+LLM_BREAKER_FAILURES = int(os.getenv("LLM_BREAKER_FAILURES", "5"))
+LLM_BREAKER_WINDOW_SECONDS = float(os.getenv("LLM_BREAKER_WINDOW_SECONDS", "30"))
+LLM_BREAKER_COOLDOWN_SECONDS = float(os.getenv("LLM_BREAKER_COOLDOWN_SECONDS", "30"))
+# An exhausted quota opens the circuit at once, for the provider's Retry-After or this long; never retried in a loop.
+LLM_QUOTA_COOLDOWN_SECONDS = float(os.getenv("LLM_QUOTA_COOLDOWN_SECONDS", "300"))
+# A 429 asking to wait longer than this is treated as an exhausted quota rather than a short burst limit.
+LLM_QUOTA_RETRY_AFTER_SECONDS = float(os.getenv("LLM_QUOTA_RETRY_AFTER_SECONDS", "120"))
+# A provider that refused its API key is skipped for this long (not a circuit failure: a key does not fix itself).
+LLM_AUTH_HOLD_SECONDS = float(os.getenv("LLM_AUTH_HOLD_SECONDS", "300"))
+# The Llama-compatible endpoint: per-request timeout, and retries of a transient failure (the gateway's, not the SDK's).
+LLAMA_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLAMA_REQUEST_TIMEOUT_SECONDS", "60"))
+LLAMA_TRANSIENT_RETRIES = int(os.getenv("LLAMA_TRANSIENT_RETRIES", "1"))
+
+# --- Hybrid multi-provider routing (app/llm/routing.py) ---
+# Off by default: with it off, every call takes the existing Gemini -> Llama path unchanged.
+LLM_HYBRID_ROUTING_ENABLED = _bool("LLM_HYBRID_ROUTING_ENABLED", "false")
+# Global provider order for every agent without its own LLM_<AGENT>_PROVIDERS (blank: gemini,groq,nvidia,openrouter).
+# The Critic has its own default (groq,nvidia,openrouter). Entries may pin a model: "groq=openai/gpt-oss-120b".
+LLM_PROVIDER_PRIORITY = os.getenv("LLM_PROVIDER_PRIORITY", "").strip()
+# At most this many providers are tried for one step (the step's deadline still applies on top).
+LLM_MAX_PROVIDER_ATTEMPTS = int(os.getenv("LLM_MAX_PROVIDER_ATTEMPTS", "4"))
+LLM_PROVIDER_TIMEOUT_SECONDS = float(os.getenv("LLM_PROVIDER_TIMEOUT_SECONDS", "60"))
+# Retries of a timeout-free transient failure (429 burst, 5xx, network) on the same provider before the next one.
+LLM_PROVIDER_TRANSIENT_RETRIES = int(os.getenv("LLM_PROVIDER_TRANSIENT_RETRIES", "1"))
+# Mistral is implemented but stays out of every route until its billing is active and this is turned on.
+MISTRAL_ENABLED = _bool("MISTRAL_ENABLED", "false")
+# true: the Critic fails rather than verify on the Executor's own model family. false (the existing behaviour): it
+# falls back to a same-family model and records the verification as NOT independent.
+LLM_CRITIC_REQUIRE_INDEPENDENT = _bool("LLM_CRITIC_REQUIRE_INDEPENDENT", "false")
+# A provider that answered 402 (no billing) is not called again for this long.
+LLM_BILLING_HOLD_SECONDS = float(os.getenv("LLM_BILLING_HOLD_SECONDS", "3600"))
 
 # --- Retention ---
 # Sandbox workspaces of finished analyses older than this are deleted. Database

@@ -160,6 +160,11 @@ def build_manifest(db: Session, question: Question, usage: dict | None = None) -
         m["tokens_in"] += int(d.get("tokens_in") or 0)
         m["tokens_out"] += int(d.get("tokens_out") or 0)
         m["fallback_calls"] += 1 if d.get("fallback") else 0
+        if d.get("served_model"):
+            # the model the provider reports it ran, when it differs from the one requested (NVIDIA, OpenRouter)
+            served = m.setdefault("served_models", [])
+            if d["served_model"] not in served:
+                served.append(d["served_model"])
     verifiers = sorted({(chk or {}).get("verifier_model", "") for r in reviews for chk in (r.checks_json or [])} - {""})
     statuses: dict[str, int] = {}
     for e in evidence:
@@ -187,6 +192,7 @@ def build_manifest(db: Session, question: Question, usage: dict | None = None) -
                    "max_critic_revisions": config.MAX_CRITIC_REVISIONS,
                    "gemini_model": config.GEMINI_MODEL, "llama_model": config.LLAMA_MODEL,
                    "failover_enabled": config.LLM_FAILOVER_ENABLED,
+                   "hybrid_routing_enabled": config.LLM_HYBRID_ROUTING_ENABLED,
                    "verify_rel_tolerance": config.VERIFY_REL_TOLERANCE},
         "outcome": {"status": question.status, "job_state": job.state if job else None,
                     "failure_class": job.failure_class if job else None,

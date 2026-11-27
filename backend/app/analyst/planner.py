@@ -61,6 +61,9 @@ CONCEPTS = {
 # ------------------------------------------------------------------- model --
 
 def model_available() -> bool:
+    from app import llm_gateway
+    if llm_gateway.local_unavailable(MODEL_URL):
+        return False              # failed repeatedly just now: answer deterministically until the cooldown ends
     try:
         import urllib.request
         with urllib.request.urlopen(MODEL_URL.rstrip("/") + "/models", timeout=1.5) as r:
@@ -83,9 +86,15 @@ def build_prompt(message: str, df: pd.DataFrame, memory: dict) -> list[dict]:
 
 def model_chat(messages: list[dict], max_tokens: int = 700) -> str:
     from openai import OpenAI
-    client = OpenAI(base_url=MODEL_URL, api_key=os.getenv("ANALYST_MODEL_KEY", "local"), timeout=MODEL_TIMEOUT)
-    r = client.chat.completions.create(model=MODEL_NAME, messages=messages, temperature=0.0, max_tokens=max_tokens)
-    return r.choices[0].message.content or ""
+    from app import llm_gateway
+    # max_retries=0: one call per request; a failure goes to the deterministic planner, not to a hidden retry
+    client = OpenAI(base_url=MODEL_URL, api_key=os.getenv("ANALYST_MODEL_KEY", "local"), timeout=MODEL_TIMEOUT,
+                    max_retries=0)
+
+    def call() -> str:
+        r = client.chat.completions.create(model=MODEL_NAME, messages=messages, temperature=0.0, max_tokens=max_tokens)
+        return r.choices[0].message.content or ""
+    return llm_gateway.guarded(llm_gateway.local_provider(MODEL_URL), call)
 
 
 def parse_plan(text: str) -> dict | None:
