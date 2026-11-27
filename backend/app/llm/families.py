@@ -54,3 +54,9 @@ def family_of(provider: str, model: str | None, served_model: str | None = None)
 def independent(a: str, b: str) -> bool:
     """True only when both families are known and different."""
     return a != UNKNOWN and b != UNKNOWN and a != b
+
+
+def independent_of_all(family: str, checked: set[str] | frozenset[str]) -> bool:
+    """True only when ``family`` is known and differs from every family in ``checked``, and every family in
+    ``checked`` is itself known. An empty set means nothing is known about the work, so nothing is independent of it."""
+    return bool(checked) and family != UNKNOWN and UNKNOWN not in checked and family not in checked

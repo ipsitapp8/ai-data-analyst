@@ -113,11 +113,15 @@ def family_for(provider: str, pinned: str | None = None) -> str:
 # ------------------------------------------------------------------------------------------------ served record --
 
 def note_served(agent: str, provider: str, model: str, served_model: str | None) -> dict:
+    """Record what served a call. Inside a run it goes to that run only (RunContext.served / served_history); the
+    context-wide record is kept only for calls made outside any run (chat, insights), and is never read by a run."""
     info = {"provider": provider, "model": model, "served_model": served_model or model,
             "family": families.family_of(provider, model, served_model)}
     ctx = runtime.current()
     if ctx is not None:
         ctx.served[agent] = info
+        ctx.served_history.append({"agent": agent, **info})
+        return info
     record = dict(_last_served.get() or {})
     record[agent] = info
     _last_served.set(record)
@@ -125,11 +129,22 @@ def note_served(agent: str, provider: str, model: str, served_model: str | None)
 
 
 def served_for(agent: str) -> dict | None:
-    """What served ``agent``'s last call in this run (or, outside a run, in this context)."""
+    """What served ``agent``'s last call. Inside a run: that run's record only -- None when this run has none, never
+    another run's (a job worker thread runs many jobs one after another). Outside a run: this context's record."""
     ctx = runtime.current()
-    if ctx is not None and agent in ctx.served:
-        return ctx.served[agent]
+    if ctx is not None:
+        return ctx.served.get(agent)
     return (_last_served.get() or {}).get(agent)
+
+
+def families_served(agents: tuple[str, ...]) -> set[str]:
+    """Every model family that served any of ``agents`` -- in this run when inside one (its whole history, not just
+    the latest call), else in this context. Empty when nothing is recorded."""
+    ctx = runtime.current()
+    if ctx is not None:
+        return {e["family"] for e in ctx.served_history if e["agent"] in agents}
+    record = _last_served.get() or {}
+    return {record[a]["family"] for a in agents if a in record}
 
 
 # ------------------------------------------------------------------------------------------ the failover engine --

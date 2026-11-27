@@ -121,9 +121,12 @@ class RunContext:
     cost_usd: float = 0.0
     providers: list[str] = field(default_factory=list)
     fallbacks: int = 0
-    # agent -> what actually served its last model call under hybrid routing: provider, requested model, served model
-    # and model family (app/llm/families.py). The Critic reads the Executor's entry to stay on a different family.
+    # agent -> what actually served its LATEST model call under hybrid routing: provider, requested model, served
+    # model and model family (app/llm/families.py). The Critic uses served_history below, not this.
     served: dict[str, dict] = field(default_factory=dict)
+    # Every hybrid-routed call this run served, in order: {"agent", "provider", "model", "served_model", "family"}.
+    # The Critic's independence is judged against this run's history only, never another run's.
+    served_history: list[dict] = field(default_factory=list)
     record: bool = True
 
     def usage(self) -> dict[str, Any]:
